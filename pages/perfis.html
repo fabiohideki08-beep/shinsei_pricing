@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Perfis</title>
+  <style>
+    :root {
+      --bg:#0b1020; --panel:#11182d; --line:rgba(255,255,255,.08); --text:#eef2ff; --muted:#aeb8d6; --green:#22c55e; --red:#ef4444; --blue:#60a5fa; --radius:18px;
+    }
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,Arial,sans-serif;background:linear-gradient(180deg,#0b1020 0%,#0f172a 100%);color:var(--text)}
+    .wrap{max-width:1320px;margin:0 auto;padding:24px}
+    .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:24px}
+    .brand{display:flex;align-items:flex-start;gap:18px}
+    .logo{width:72px;height:72px;border-radius:20px;background:rgba(255,255,255,.04);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;letter-spacing:.08em}
+    .title h1{margin:0;font-size:32px} .title p{margin:8px 0 0;color:var(--muted)}
+    .nav{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+    .btn,button,input,select,textarea{background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--text);border-radius:14px;padding:12px 14px;text-decoration:none;outline:none}
+    textarea{min-height:110px;width:100%} input,select{width:100%}
+    button,.btn{cursor:pointer} .btn{display:inline-block}
+    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:16px}
+    .card{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+    .meta{color:var(--muted);font-size:13px} .table-wrap{overflow:auto}
+    table{width:100%;border-collapse:collapse} th,td{border-bottom:1px solid var(--line);padding:10px;text-align:left;font-size:14px}
+    .row{display:grid;grid-template-columns:repeat(2,1fr);gap:12px} .actions{display:flex;gap:10px;flex-wrap:wrap}
+    pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.2);padding:12px;border-radius:12px;border:1px solid var(--line)}
+    @media (max-width:1000px){.grid,.row{grid-template-columns:1fr} .topbar{flex-direction:column}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo">神</div>
+        <div class="title">
+          <h1>Perfis</h1>
+          <p>Módulo do Shinsei Pricing</p>
+        </div>
+      </div>
+      <div class="nav">
+        <a class="btn" href="/">Dashboard</a>
+        <a class="btn" href="/simulador">Simulador</a>
+        <a class="btn" href="/regras-calculo">Regras</a>
+        <a class="btn" href="/perfis">Perfis</a>
+        <a class="btn" href="/fila-aprovacao">Fila</a>
+        <a class="btn" href="/cost-engine">Cost Engine</a>
+        <a class="btn" href="/cost-allocation">Cost Allocation</a>
+        <a class="btn" href="/sie">SIE</a>
+        <a class="btn" href="/oee">OEE</a>
+        <a class="btn" href="/integracoes">Integrações</a>
+      </div>
+    </div>
+    
+<div class="card">
+  <h3>Perfis de estratégia</h3>
+  <div class="row">
+    <div><label>Perfil salvo</label><select id="selPerfil"></select></div>
+    <div><label>ID do perfil</label><input id="perfilId" type="text"></div>
+    <div><label>Nome</label><input id="perfilNome" type="text"></div>
+    <div><label><input id="usarLucro" type="checkbox"> Usar lucro mínimo</label></div>
+    <div><label>Lucro mínimo</label><input id="lucroMin" type="number" step="0.01"></div>
+    <div><label>Margem mínima</label><input id="margemMin" type="number" step="0.01"></div>
+    <div><label>SIE mínimo</label><input id="sieMin" type="number" step="0.01"></div>
+    <div><label>Variação máxima</label><input id="variacaoMax" type="number" step="0.01"></div>
+    <div><label>Estoque mínimo fila</label><input id="estoqueMin" type="number" step="1"></div>
+    <div><label><input id="filaPrecoZero" type="checkbox"> Fila se preço atual = 0</label></div>
+    <div><label><input id="bloqMargem" type="checkbox"> Bloquear margem negativa</label></div>
+    <div><label><input id="bloqLucro" type="checkbox"> Bloquear lucro negativo</label></div>
+  </div>
+  <div class="actions" style="margin-top:12px">
+    <button onclick="novo()">Novo perfil</button>
+    <button onclick="salvarPerfil()">Salvar</button>
+    <button onclick="ativar()">Ativar perfil</button>
+  </div>
+</div>
+
+  </div>
+  <script>
+let perfisData={regra_ativa:'',perfis:{}};
+function preencher(id){
+  const p = perfisData.perfis[id] || {};
+  document.getElementById('perfilId').value=id||''; document.getElementById('perfilNome').value=p.nome||''; document.getElementById('usarLucro').checked=!!p.usar_lucro_minimo_auto;
+  document.getElementById('lucroMin').value=p.lucro_minimo_auto??0; document.getElementById('margemMin').value=p.margem_minima_auto??20; document.getElementById('sieMin').value=p.sie_minimo_auto??0.5;
+  document.getElementById('variacaoMax').value=p.variacao_maxima??50; document.getElementById('estoqueMin').value=p.estoque_minimo_fila??1; document.getElementById('filaPrecoZero').checked=!!p.fila_se_preco_atual_zero;
+  document.getElementById('bloqMargem').checked=!!p.bloquear_margem_negativa; document.getElementById('bloqLucro').checked=!!p.bloquear_lucro_negativo;
+}
+async function carregar(){
+  const res=await fetch('/config/regras-precificacao'); perfisData=await res.json(); const sel=document.getElementById('selPerfil'); sel.innerHTML='';
+  Object.entries(perfisData.perfis||{}).forEach(([id,p])=>{const o=document.createElement('option'); o.value=id; o.textContent=`${p.nome} (${id})`; if(id===perfisData.regra_ativa)o.selected=true; sel.appendChild(o);});
+  preencher(sel.value);
+}
+function novo(){ preencher(''); }
+async function salvarPerfil(){
+  const id=(document.getElementById('perfilId').value||'').trim(); if(!id){alert('Informe o ID do perfil'); return;}
+  perfisData.perfis = perfisData.perfis || {};
+  perfisData.perfis[id]={nome:document.getElementById('perfilNome').value||id, usar_lucro_minimo_auto:document.getElementById('usarLucro').checked, lucro_minimo_auto:Number(document.getElementById('lucroMin').value||0), margem_minima_auto:Number(document.getElementById('margemMin').value||0), sie_minimo_auto:Number(document.getElementById('sieMin').value||0), variacao_maxima:Number(document.getElementById('variacaoMax').value||0), estoque_minimo_fila:Number(document.getElementById('estoqueMin').value||0), fila_se_preco_atual_zero:document.getElementById('filaPrecoZero').checked, bloquear_margem_negativa:document.getElementById('bloqMargem').checked, bloquear_lucro_negativo:document.getElementById('bloqLucro').checked};
+  const res=await fetch('/config/regras-precificacao',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(perfisData)}); const data=await res.json(); alert(data.status==='ok'?'Perfil salvo com sucesso':'Erro ao salvar'); await carregar();
+}
+async function ativar(){ const id=document.getElementById('selPerfil').value; const res=await fetch(`/config/regras-precificacao/ativar/${id}`,{method:'POST'}); const data=await res.json(); alert(data.status==='ok'?'Perfil ativado com sucesso':'Erro ao ativar'); await carregar(); }
+document.addEventListener('DOMContentLoaded',()=>{carregar(); document.getElementById('selPerfil').addEventListener('change',e=>preencher(e.target.value));});
+</script>
+</body>
+</html>

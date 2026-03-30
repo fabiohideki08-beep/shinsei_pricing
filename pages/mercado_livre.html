@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configurações Mercado Livre</title>
+  <style>
+    body{font-family:Arial,sans-serif;background:#f6f7fb;margin:0;padding:24px;color:#222}
+    .wrap{max-width:900px;margin:0 auto}
+    .card{background:#fff;border-radius:16px;padding:24px;box-shadow:0 10px 25px rgba(0,0,0,.08);margin-bottom:20px}
+    h1{margin:0 0 8px;font-size:28px}.sub{color:#666;margin-bottom:24px}
+    label{display:block;font-weight:700;margin:14px 0 6px}
+    input{width:100%;padding:12px 14px;border:1px solid #d8dce7;border-radius:10px;font-size:14px;box-sizing:border-box}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:18px}
+    button,a.btn{background:#111827;color:#fff;border:none;border-radius:10px;padding:12px 16px;font-size:14px;cursor:pointer;text-decoration:none;display:inline-block}
+    a.btn.secondary,button.secondary{background:#e5e7eb;color:#111827}
+    .status{padding:14px;border-radius:12px;background:#f3f4f6;margin-top:10px}
+    .ok{background:#ecfdf5;color:#065f46}.bad{background:#fef2f2;color:#991b1b}
+    code{background:#f3f4f6;padding:2px 6px;border-radius:6px}
+    @media(max-width:700px){.row{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Mercado Livre</h1>
+      <div class="sub">Configure a conexão e mantenha a automação em modo manual.</div>
+      <div class="row">
+        <div>
+          <label>Client ID</label>
+          <input id="client_id" placeholder="Ex.: 7778060735093672">
+        </div>
+        <div>
+          <label>Client Secret</label>
+          <input id="client_secret" type="password" placeholder="Cole aqui seu Client Secret">
+        </div>
+      </div>
+      <label>Redirect / Callback URI</label>
+      <input id="redirect_uri" placeholder="Ex.: https://seu-ngrok.ngrok-free.app/ml/callback">
+      <div class="actions">
+        <button onclick="salvarConfig()">Salvar configurações</button>
+        <a class="btn" href="/ml/login">Conectar Mercado Livre</a>
+        <button class="secondary" onclick="renovarToken()">Renovar token</button>
+        <button class="secondary" onclick="carregarTudo()">Atualizar status</button>
+      </div>
+      <div id="status" class="status">Carregando status...</div>
+    </div>
+
+    <div class="card">
+      <h2>Como usar</h2>
+      <p>1. Preencha o Client ID, Client Secret e o Callback.</p>
+      <p>2. Salve.</p>
+      <p>3. Clique em <strong>Conectar Mercado Livre</strong>.</p>
+      <p>4. Depois confira o status abaixo.</p>
+      <p>5. O modo do sistema continua <code>manual</code>. Só aplica no ML ao aprovar a fila.</p>
+    </div>
+  </div>
+
+  <script>
+    async function carregarConfig(){
+      const r = await fetch('/ml/config');
+      const data = await r.json();
+      document.getElementById('client_id').value = data.client_id || '';
+      document.getElementById('redirect_uri').value = data.redirect_uri || '';
+    }
+
+    async function carregarStatus(){
+      const box = document.getElementById('status');
+      try {
+        const r = await fetch('/ml/status');
+        const data = await r.json();
+        box.className = 'status ' + (data.conexao_ativa ? 'ok' : 'bad');
+        box.innerHTML = `
+          <div><strong>Configurado:</strong> ${data.configurado ? 'Sim' : 'Não'}</div>
+          <div><strong>Conectado:</strong> ${data.conexao_ativa ? 'Sim' : 'Não'}</div>
+          <div><strong>Client ID:</strong> ${data.client_id || '-'}</div>
+          <div><strong>Callback:</strong> ${data.callback || '-'}</div>
+        `;
+      } catch (e) {
+        box.className = 'status bad';
+        box.textContent = 'Falha ao carregar status.';
+      }
+    }
+
+    async function salvarConfig(){
+      const payload = {
+        client_id: document.getElementById('client_id').value.trim(),
+        client_secret: document.getElementById('client_secret').value.trim(),
+        redirect_uri: document.getElementById('redirect_uri').value.trim()
+      };
+      const r = await fetch('/ml/config', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const data = await r.json();
+      alert(data.success ? 'Configurações salvas com sucesso.' : 'Erro ao salvar.');
+      document.getElementById('client_secret').value = '';
+      carregarStatus();
+    }
+
+    async function renovarToken(){
+      const r = await fetch('/ml/refresh', {method:'POST'});
+      const data = await r.json();
+      alert(data.success ? 'Token renovado com sucesso.' : (data.detail || data.error || 'Falha ao renovar token.'));
+      carregarStatus();
+    }
+
+    async function carregarTudo(){
+      await carregarConfig();
+      await carregarStatus();
+    }
+    carregarTudo();
+  </script>
+</body>
+</html>

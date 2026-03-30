@@ -1,0 +1,137 @@
+
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Shinsei Pricing</title>
+<style>
+:root{--red:#ef0030;--navy:#08162f;--bg:#edf0f4;--card:#f8fafc;--line:#d9e0ea;--text:#11284a;--muted:#657994;--success:#0e9f6e;--danger:#d32649}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}.topbar{background:var(--red);color:#fff;padding:22px 28px}.topbar-inner{display:flex;justify-content:space-between;align-items:center;gap:20px}.brand{display:flex;align-items:center;gap:18px}.brand img{height:74px;max-width:100%;background:#fff;border-radius:18px;padding:8px}.brand-copy h1{margin:0;font-size:34px;font-weight:800}.brand-copy p{margin:8px 0 0 0;font-size:17px}.header-actions{display:flex;align-items:center;gap:16px}.bell-wrap{position:relative;cursor:pointer;background:#fff;border-radius:16px;padding:14px 18px;color:var(--red);font-size:24px;font-weight:700}.badge{position:absolute;top:-6px;right:-6px;background:#fff;color:var(--red);border:2px solid var(--red);border-radius:999px;min-width:24px;height:24px;padding:0 6px;font-size:12px;display:flex;align-items:center;justify-content:center;font-weight:800}.panel-notifications{display:none;position:absolute;right:28px;top:96px;width:520px;max-height:70vh;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.12);z-index:1000}.panel-notifications.active{display:block}.wrap{max-width:1600px;margin:22px auto;padding:0 16px 30px}.tabs{display:flex;gap:14px;margin-bottom:18px;flex-wrap:wrap}.tab-btn{border:none;background:#fff;color:#111;padding:18px 30px;border-radius:16px;font-size:16px;font-weight:700;cursor:pointer}.tab-btn.active{background:var(--red);color:#fff}.panel{display:none}.panel.active{display:block}.card{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:24px;margin-bottom:18px}h2{margin:0 0 16px 0;font-size:28px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}.field{display:flex;flex-direction:column}.field label{margin-bottom:8px;font-size:15px;font-weight:700}.field input,.field select{height:48px;border-radius:14px;border:1px solid var(--line);padding:0 16px;background:#fff;font-size:15px;color:var(--text)}.actions{display:flex;gap:14px;flex-wrap:wrap;margin-top:22px}.btn{border-radius:16px;padding:14px 22px;font-size:15px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}.btn-primary{border:none;background:var(--red);color:#fff}.btn-outline{background:#fff;color:var(--red);border:2px solid var(--red)}.btn-small{padding:8px 12px;font-size:13px;border-radius:12px}table{width:100%;border-collapse:collapse;border-radius:20px;overflow:hidden}thead th{background:var(--navy);color:#fff;padding:14px;text-align:left;font-size:15px}tbody td{padding:12px;background:#fff;border-bottom:1px solid #e8edf3;font-size:14px;vertical-align:top}tbody tr.best td{background:#f0fff8}.profit-good{color:var(--success);font-weight:700}.profit-bad{color:var(--danger);font-weight:700}.tag{display:inline-block;background:#eef3ff;color:#203a6b;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700}pre{white-space:pre-wrap;background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:16px;min-height:120px}.muted{color:var(--muted);font-size:13px}.upload-box{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-top:16px}.rules-filter{width:320px;max-width:100%;height:44px;border:1px solid var(--line);border-radius:12px;padding:0 14px}.rules-table input[type="text"],.rules-table input[type="number"]{width:100%;padding:8px 10px;border-radius:10px;border:1px solid var(--line)}.center{display:flex;align-items:center;justify-content:center}.toggle{width:20px;height:20px}.split{display:grid;grid-template-columns:1fr 1fr;gap:18px}.note-card{border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;background:#fafcff}@media (max-width:1100px){.grid,.split{grid-template-columns:1fr}.topbar-inner{flex-direction:column;align-items:flex-start}.brand{align-items:flex-start;flex-direction:column}.panel-notifications{position:static;width:auto;max-height:none;margin-top:12px}}
+</style></head><body>
+<div class="topbar"><div class="topbar-inner"><div class="brand"><img src="/logo" alt="Shinsei logo"><div class="brand-copy"><h1>Shinsei Pricing 🚀</h1><p>Versão mestra consolidada com fila de aprovação manual e sino de alertas</p></div></div><div class="header-actions"><div class="bell-wrap" onclick="toggleNotifications()">🔔<span id="bellBadge" class="badge">0</span></div><a class="btn btn-outline" href="/bling/login">Conectar com Bling</a><a class="btn btn-primary" href="/bling/status">Status Bling</a></div></div><div id="notificationsPanel" class="panel-notifications"><h3 style="margin:0 0 12px 0;color:#08162f">Fila de aprovação</h3><div id="notificationsList">Carregando...</div></div></div>
+<div class="wrap"><div class="tabs"><button class="tab-btn active" onclick="showTab('simulador', this)">Simulador</button><button class="tab-btn" onclick="showTab('regras', this)">Regras de cálculo</button><button class="tab-btn" onclick="showTab('busca', this)">Busca Bling</button><button class="tab-btn" onclick="showTab('precificacao', this)">Precificação Bling</button></div>
+<div id="simulador" class="panel active"><div class="card"><h2>Simulação rápida</h2><div class="grid"><div class="field"><label>Preço de compra</label><input id="precoCompra" type="number" step="0.01" value="23.90"></div><div class="field"><label>Embalagem</label><input id="embalagem" type="number" step="0.01" value="1.50"></div><div class="field"><label>Peso (kg)</label><input id="peso" type="number" step="0.001" value="0.300"></div><div class="field"><label>Imposto</label><input id="imposto" type="number" step="0.01" value="4"></div><div class="field"><label>Quantidade</label><input id="quantidade" type="number" step="1" value="1"></div><div class="field"><label>Objetivo</label><select id="objetivo"><option value="lucro_liquido">Lucro líquido</option><option value="markup">Markup</option><option value="margem">Margem</option></select></div><div class="field"><label>Tipo do alvo</label><select id="tipoAlvo"><option value="nominal">Valor nominal</option><option value="percentual">Percentual</option></select></div><div class="field"><label>Valor alvo</label><input id="valorAlvo" type="number" step="0.01" value="10"></div></div><div class="actions"><button class="btn btn-primary" onclick="calcular()">Calcular</button></div></div><div class="card"><h2>Resultado</h2><div id="statusCalc">Aguardando cálculo</div><table><thead><tr><th>Canal</th><th>Preço final</th><th>Receita líquida</th><th>Lucro líquido</th><th>Índice</th><th>Faixa</th></tr></thead><tbody id="resultadoBody"><tr><td colspan="6">Nenhum cálculo ainda.</td></tr></tbody></table></div></div>
+<div id="regras" class="panel"><div class="card"><h2>Regras de cálculo</h2><div class="actions"><button class="btn btn-outline" onclick="carregarRegras()">Recarregar</button><button class="btn btn-outline" onclick="adicionarLinha()">Adicionar linha</button><button class="btn btn-primary" onclick="salvarRegrasFront()">Salvar regras</button></div><div style="margin-top:14px"><input id="filtroCanal" class="rules-filter" type="text" placeholder="Filtrar por canal..." onkeyup="filtrarRegras()"></div><div class="upload-box"><input type="file" id="excelFile" accept=".xlsx,.xls"><div class="actions"><button class="btn btn-primary" onclick="uploadExcel()">Importar Excel</button></div></div><table class="rules-table" style="margin-top:18px"><thead><tr><th>Canal</th><th>Peso mín</th><th>Peso máx</th><th>Preço mín</th><th>Preço máx</th><th>Taxa fixa</th><th>Frete</th><th>Comissão</th><th>Ativo</th><th>Ações</th></tr></thead><tbody id="regrasBody"><tr><td colspan="10">Nenhuma regra cadastrada.</td></tr></tbody></table></div></div>
+<div id="busca" class="panel"><div class="card"><h2>Busca de produto no Bling</h2><div class="grid"><div class="field"><label>ID interno</label><input id="produtoId" type="text"></div><div class="field"><label>EAN / GTIN</label><input id="produtoEan" type="text"></div><div class="field"><label>SKU / Código</label><input id="produtoSku" type="text"></div></div><div class="actions"><button class="btn btn-outline" onclick="buscarPorId()">Buscar por ID</button><button class="btn btn-outline" onclick="buscarPorEan()">Buscar por EAN</button><button class="btn btn-outline" onclick="buscarPorSku()">Buscar por SKU</button></div><pre id="blingBuscaSaida">Nenhuma busca realizada ainda.</pre></div></div>
+<div id="precificacao" class="panel"><div class="split"><div class="card"><h2>Regra geral da integração</h2><div class="grid"><div class="field"><label>Embalagem</label><input id="cfgEmbalagem" type="number" step="0.01"></div><div class="field"><label>Imposto</label><input id="cfgImposto" type="number" step="0.01"></div><div class="field"><label>Quantidade</label><input id="cfgQuantidade" type="number" step="1"></div><div class="field"><label>Objetivo</label><select id="cfgObjetivo"><option value="lucro_liquido">Lucro líquido</option><option value="markup">Markup</option><option value="margem">Margem</option></select></div><div class="field"><label>Tipo do alvo</label><select id="cfgTipoAlvo"><option value="nominal">Valor nominal</option><option value="percentual">Percentual</option></select></div><div class="field"><label>Valor alvo</label><input id="cfgValorAlvo" type="number" step="0.01"></div><div class="field"><label>Modo aprovação</label><select id="cfgModoAprovacao"><option value="manual">Manual</option><option value="automatico">Automático</option></select></div><div class="field"><label>Preço compra anterior</label><input id="cfgPrecoAnterior" type="number" step="0.01"></div><div class="field"><label>Modo preço virtual</label><select id="cfgModoVirtual"><option value="percentual_acima">Percentual acima</option><option value="valor_acima">Valor acima</option><option value="manual">Manual</option></select></div><div class="field"><label>Acréscimo percentual</label><input id="cfgAcrescimoPercentual" type="number" step="0.01"></div><div class="field"><label>Acréscimo nominal</label><input id="cfgAcrescimoNominal" type="number" step="0.01"></div><div class="field"><label>Preço virtual manual</label><input id="cfgPrecoManual" type="number" step="0.01"></div><div class="field"><label>Arredondamento</label><select id="cfgArredondamento"><option value="sem">Sem</option><option value="90">,90</option><option value="99">,99</option><option value="97">,97</option></select></div><div class="field"><label>Regra estoque baixo ativa</label><div class="center" style="height:48px"><input class="toggle" id="cfgRegraEstoqueAtivo" type="checkbox"></div></div><div class="field"><label>Estoque limite</label><input id="cfgEstoqueLimite" type="number" step="1"></div><div class="field"><label>Tipo do ajuste</label><select id="cfgAjusteEstoqueTipo"><option value="percentual">Percentual</option><option value="nominal">Nominal</option></select></div><div class="field"><label>Valor do ajuste</label><input id="cfgAjusteEstoqueValor" type="number" step="0.01"></div></div><div class="actions"><button class="btn btn-primary" onclick="salvarConfiguracaoIntegracao()">Salvar regra geral</button></div></div><div class="card"><div class="card">
+  <h2>Precificação automática via Bling</h2>
+
+  <div class="grid">
+    <div class="field">
+      <label>Critério</label>
+      <select id="pb_criterio">
+        <option value="ean">EAN</option>
+        <option value="sku">SKU</option>
+        <option value="id">ID</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Valor da busca</label>
+      <input id="pb_valor_busca" type="text">
+    </div>
+
+    <div class="field">
+      <label>Peso override</label>
+      <input id="pb_peso_override" type="number" step="0.001" value="0">
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-primary" onclick="buscarProdutoBling()">
+      Buscar produto
+    </button>
+
+    <button class="btn btn-primary" id="btnPrecificarBling" disabled onclick="precificarProdutoBling()">
+      Precificar produto do Bling
+    </button>
+  </div>
+
+  <div id="pb_alerta"></div>
+
+  <div id="pb_produto_box" style="display:none;">
+    <h3>Produto encontrado</h3>
+    <div id="pb_produto"></div>
+  </div>
+
+  <div id="pb_previa_box" style="display:none;">
+    <h3>Prévia</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Canal</th>
+          <th>Preço</th>
+          <th>Lucro</th>
+        </tr>
+      </thead>
+      <tbody id="pb_previa"></tbody>
+    </table>
+  </div>
+
+  <pre id="pb_resultado">Nenhuma ação ainda.</pre>
+</div>Nenhuma precificação realizada ainda.</pre></div></div></div></div>
+<script>
+function showTab(id, btn){document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));document.getElementById(id).classList.add("active");btn.classList.add("active");}
+function money(v){return Number(v).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});}
+function n(v,c=2){return Number(v).toLocaleString("pt-BR",{minimumFractionDigits:c,maximumFractionDigits:c});}
+function scoreConfig(){return {peso_forca:0.40,peso_equilibrio:0.40,peso_lucro:0.20,forcas_canais:{"Mercado Livre Classico":1.00,"Mercado Livre Premium":0.95,"Shopee":0.90,"Amazon":0.80,"Shein":0.75,"Shopfy":0.60}};}
+async function jsonFetch(url, options={}){const res=await fetch(url,options);const text=await res.text();let data={};try{data=JSON.parse(text);}catch{throw new Error(text||"Resposta inválida");}if(!res.ok) throw new Error(data.detail||data.message||"Erro inesperado"); return data;}
+async function loadApprovals(){const data=await jsonFetch("/aprovacoes");const pendentes=data.filter(x=>x.status_aprovacao==="pendente");document.getElementById("bellBadge").innerText=String(pendentes.length);const list=document.getElementById("notificationsList");if(!data.length){list.innerHTML="<div class='muted'>Nenhuma pendência.</div>";return;}list.innerHTML=data.map(item=>`<div class="note-card"><div><strong>${item.produto_nome||item.valor_busca||"Item"}</strong></div><div class="muted">SKU/EAN/ID: ${item.valor_busca||""}</div><div class="muted">Motivo: ${item.motivo||"recalculo_manual"}</div><div class="muted">Status: ${item.status_aprovacao}</div><div class="muted">Criado em: ${item.data_criacao||""}</div><div style="margin-top:8px"><button class="btn btn-outline btn-small" onclick="aprovarItem('${item.id}')">Aprovar</button><button class="btn btn-outline btn-small" onclick="reprovarItem('${item.id}')">Reprovar</button></div></div>`).join("");}
+function toggleNotifications(){document.getElementById("notificationsPanel").classList.toggle("active");}
+async function aprovarItem(id){await jsonFetch(`/aprovacoes/${id}/aprovar`,{method:"POST"});await loadApprovals();}
+async function reprovarItem(id){await jsonFetch(`/aprovacoes/${id}/reprovar`,{method:"POST"});await loadApprovals();}
+async function calcular(){try{const payload={preco_compra:parseFloat(document.getElementById("precoCompra").value||0),embalagem:parseFloat(document.getElementById("embalagem").value||0),peso:parseFloat(document.getElementById("peso").value||0),imposto:parseFloat(document.getElementById("imposto").value||0),quantidade:parseInt(document.getElementById("quantidade").value||1),objetivo:document.getElementById("objetivo").value,tipo_alvo:document.getElementById("tipoAlvo").value,valor_alvo:parseFloat(document.getElementById("valorAlvo").value||0),score_config:scoreConfig()};const data=await jsonFetch("/calcular",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const body=document.getElementById("resultadoBody");document.getElementById("statusCalc").innerText="Cálculo realizado";body.innerHTML="";data.canais.forEach(item=>{body.innerHTML+=`<tr class="${item.canal===data.melhor_canal?'best':''}"><td>${item.canal}</td><td>${money(item.preco_final)}</td><td>${money(item.receita_liquida)}</td><td class="${item.lucro_liquido>=0?'profit-good':'profit-bad'}">${money(item.lucro_liquido)}</td><td><span class="tag">${n(item.indice_final,4)}</span></td><td>${item.faixa_aplicada||""}</td></tr>`;});}catch(e){document.getElementById("statusCalc").innerText=e.message;}}
+async function carregarRegras(){try{const regras=await jsonFetch("/regras");const tbody=document.getElementById("regrasBody");tbody.innerHTML="";if(!regras.length){tbody.innerHTML="<tr><td colspan='10'>Nenhuma regra cadastrada.</td></tr>";return;}regras.forEach(regra=>{const tr=document.createElement("tr");tr.innerHTML=`<td><input type="text" value="${regra.canal??""}"></td><td><input type="number" step="0.001" value="${regra.peso_min??""}"></td><td><input type="number" step="0.001" value="${regra.peso_max??""}"></td><td><input type="number" step="0.01" value="${regra.preco_min??""}"></td><td><input type="number" step="0.01" value="${regra.preco_max??""}"></td><td><input type="number" step="0.01" value="${regra.taxa_fixa??""}"></td><td><input type="number" step="0.01" value="${regra.taxa_frete??""}"></td><td><input type="number" step="0.0001" value="${regra.comissao??""}"></td><td class="center"><input class="toggle" type="checkbox" ${regra.ativo!==false?"checked":""}></td><td><button class="btn btn-outline btn-small" onclick="excluirLinha(this)">Excluir</button></td>`;tbody.appendChild(tr);});filtrarRegras();}catch(e){alert(e.message);}}
+function adicionarLinha(){const tbody=document.getElementById("regrasBody");if(tbody.innerText.includes("Nenhuma regra")) tbody.innerHTML="";const tr=document.createElement("tr");tr.innerHTML=`<td><input type="text"></td><td><input type="number" step="0.001"></td><td><input type="number" step="0.001"></td><td><input type="number" step="0.01"></td><td><input type="number" step="0.01"></td><td><input type="number" step="0.01"></td><td><input type="number" step="0.01"></td><td><input type="number" step="0.0001"></td><td class="center"><input class="toggle" type="checkbox" checked></td><td><button class="btn btn-outline btn-small" onclick="excluirLinha(this)">Excluir</button></td>`;tbody.appendChild(tr);}
+function excluirLinha(btn){btn.closest("tr").remove();}
+function filtrarRegras(){const filtro=document.getElementById("filtroCanal").value.toLowerCase();document.querySelectorAll("#regrasBody tr").forEach(tr=>{const input=tr.querySelector('input[type="text"]');if(!input) return;tr.style.display=input.value.toLowerCase().includes(filtro)?"":"none";});}
+async function salvarRegrasFront(){const regras=[...document.querySelectorAll("#regrasBody tr")].map(tr=>{const inputs=tr.querySelectorAll("input");return {canal:inputs[0]?.value||"",peso_min:parseFloat(inputs[1]?.value||0),peso_max:parseFloat(inputs[2]?.value||0),preco_min:parseFloat(inputs[3]?.value||0),preco_max:parseFloat(inputs[4]?.value||0),taxa_fixa:parseFloat(inputs[5]?.value||0),taxa_frete:parseFloat(inputs[6]?.value||0),comissao:parseFloat(inputs[7]?.value||0),ativo:inputs[8]?.checked??true};}).filter(r=>r.canal.trim()!=="");await jsonFetch("/regras",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(regras)});alert("Regras salvas com sucesso.");carregarRegras();}
+async function uploadExcel(){const file=document.getElementById("excelFile").files[0];if(!file){alert("Selecione um arquivo Excel.");return;}const formData=new FormData();formData.append("file",file);const data=await jsonFetch("/upload-excel",{method:"POST",body:formData});alert(data.message||"Importado");carregarRegras();}
+async function buscar(url,targetId){const out=document.getElementById(targetId);out.textContent="Buscando...";try{const data=await jsonFetch(url);out.textContent=JSON.stringify(data,null,2);}catch(e){out.textContent=e.message;}}
+function buscarPorId(){const id=document.getElementById("produtoId").value.trim();if(!id){alert("Informe o ID.");return;}buscar(`/bling/produto/${encodeURIComponent(id)}`,"blingBuscaSaida");}
+function buscarPorEan(){const ean=document.getElementById("produtoEan").value.trim();if(!ean){alert("Informe o EAN.");return;}buscar(`/bling/produto-por-ean/${encodeURIComponent(ean)}`,"blingBuscaSaida");}
+function buscarPorSku(){const sku=document.getElementById("produtoSku").value.trim();if(!sku){alert("Informe o SKU.");return;}buscar(`/bling/produto-por-sku/${encodeURIComponent(sku)}`,"blingBuscaSaida");}
+async function carregarConfiguracaoIntegracao(){const cfg=await jsonFetch("/integracao-config");document.getElementById("cfgEmbalagem").value=cfg.embalagem;document.getElementById("cfgImposto").value=cfg.imposto;document.getElementById("cfgQuantidade").value=cfg.quantidade;document.getElementById("cfgObjetivo").value=cfg.objetivo;document.getElementById("cfgTipoAlvo").value=cfg.tipo_alvo;document.getElementById("cfgValorAlvo").value=cfg.valor_alvo;document.getElementById("cfgModoAprovacao").value=cfg.modo_aprovacao;document.getElementById("cfgPrecoAnterior").value=cfg.preco_compra_anterior_bling;document.getElementById("cfgModoVirtual").value=cfg.modo_preco_virtual;document.getElementById("cfgAcrescimoPercentual").value=cfg.acrescimo_percentual;document.getElementById("cfgAcrescimoNominal").value=cfg.acrescimo_nominal;document.getElementById("cfgPrecoManual").value=cfg.preco_manual;document.getElementById("cfgArredondamento").value=cfg.arredondamento;document.getElementById("cfgRegraEstoqueAtivo").checked=!!cfg.regra_estoque_ativo;document.getElementById("cfgEstoqueLimite").value=cfg.estoque_limite;document.getElementById("cfgAjusteEstoqueTipo").value=cfg.ajuste_estoque_tipo;document.getElementById("cfgAjusteEstoqueValor").value=cfg.ajuste_estoque_valor;}
+function montarConfigIntegracao(){return {embalagem:parseFloat(document.getElementById("cfgEmbalagem").value||0),imposto:parseFloat(document.getElementById("cfgImposto").value||0),quantidade:parseInt(document.getElementById("cfgQuantidade").value||1),objetivo:document.getElementById("cfgObjetivo").value,tipo_alvo:document.getElementById("cfgTipoAlvo").value,valor_alvo:parseFloat(document.getElementById("cfgValorAlvo").value||0),modo_aprovacao:document.getElementById("cfgModoAprovacao").value,preco_compra_anterior_bling:parseFloat(document.getElementById("cfgPrecoAnterior").value||0),modo_preco_virtual:document.getElementById("cfgModoVirtual").value,acrescimo_percentual:parseFloat(document.getElementById("cfgAcrescimoPercentual").value||0),acrescimo_nominal:parseFloat(document.getElementById("cfgAcrescimoNominal").value||0),preco_manual:parseFloat(document.getElementById("cfgPrecoManual").value||0),arredondamento:document.getElementById("cfgArredondamento").value,regra_estoque_ativo:document.getElementById("cfgRegraEstoqueAtivo").checked,estoque_limite:parseInt(document.getElementById("cfgEstoqueLimite").value||2),ajuste_estoque_tipo:document.getElementById("cfgAjusteEstoqueTipo").value,ajuste_estoque_valor:parseFloat(document.getElementById("cfgAjusteEstoqueValor").value||0)};}
+async function salvarConfiguracaoIntegracao(){await jsonFetch("/integracao-config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(montarConfigIntegracao())});alert("Regra geral salva com sucesso.");}
+async function precificarProdutoBling(){const cfg=montarConfigIntegracao();const payload={criterio:document.getElementById("criterioBusca").value,valor_busca:document.getElementById("valorBusca").value.trim(),embalagem:cfg.embalagem,imposto:cfg.imposto,quantidade:cfg.quantidade,objetivo:cfg.objetivo,tipo_alvo:cfg.tipo_alvo,valor_alvo:cfg.valor_alvo,peso_override:parseFloat(document.getElementById("pesoOverride").value||0),score_config:scoreConfig(),modo_aprovacao:cfg.modo_aprovacao,preco_compra_anterior_bling:cfg.preco_compra_anterior_bling,modo_preco_virtual:cfg.modo_preco_virtual,acrescimo_percentual:cfg.acrescimo_percentual,acrescimo_nominal:cfg.acrescimo_nominal,preco_manual:cfg.preco_manual,arredondamento:cfg.arredondamento,regra_estoque_ativo:cfg.regra_estoque_ativo,estoque_limite:cfg.estoque_limite,ajuste_estoque_tipo:cfg.ajuste_estoque_tipo,ajuste_estoque_valor:cfg.ajuste_estoque_valor};const out=document.getElementById("blingPrecificacaoSaida");out.textContent="Precificando...";try{const data=await jsonFetch("/bling/precificar-produto",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});out.textContent=JSON.stringify(data,null,2);await loadApprovals();}catch(e){out.textContent=e.message;}}
+window.onload=function(){carregarRegras();carregarConfiguracaoIntegracao();loadApprovals();};
+</script></body></html>
+<script>
+async function buscarProdutoBling(){
+  const payload = {
+    criterio: document.getElementById("pb_criterio").value,
+    valor_busca: document.getElementById("pb_valor_busca").value,
+    peso_override: parseFloat(document.getElementById("pb_peso_override").value || 0)
+  }
+
+  const res = await fetch("/bling/pre-visualizar-produto", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(payload)
+  })
+
+  const data = await res.json()
+
+  if(data.erro){
+    document.getElementById("pb_alerta").innerText = data.erro
+    return
+  }
+
+  document.getElementById("pb_produto_box").style.display = "block"
+  document.getElementById("pb_produto").innerText = data.produto_bling.nome
+
+  const tbody = document.getElementById("pb_previa")
+  tbody.innerHTML = ""
+
+  data.itens_precificacao.forEach(i => {
+    tbody.innerHTML += `<tr>
+      <td>${i.canal}</td>
+      <td>${i.preco_promocional}</td>
+      <td>${i.lucro_liquido}</td>
+    </tr>`
+  })
+
+  document.getElementById("btnPrecificarBling").disabled = false
+}
+
+async function precificarProdutoBling(){
+  alert("Precificação enviada")
+}
+</script>

@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Shinsei Pricing V4</title>
+<style>
+:root{--bg:#dfe4ea;--card:#eef2f6;--border:#c9d3df;--text:#0a2d63;--muted:#64748b;--primary:#ff0038;--blue:#1976d2;--ok:#22c55e}
+*{box-sizing:border-box} body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+.topbar{height:16px;background:var(--primary)} .wrap{padding:10px 26px 26px}
+.tabs{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}.tab{border:none;background:#fff;color:#000;padding:12px 22px;border-radius:16px;font-weight:700;cursor:pointer}.tab.active{background:var(--primary);color:#fff}
+.panel{display:none}.panel.active{display:block}.grid-2{display:grid;grid-template-columns:1.15fr .85fr;gap:16px}.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.card{background:rgba(255,255,255,.25);border:1px solid var(--border);border-radius:26px;padding:16px 18px}.title{font-size:24px;margin:0 0 10px;font-weight:900}.sub{color:var(--muted);font-size:12px;margin:4px 0 12px}.form-grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px 18px}.form-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px 18px}.form-grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:12px 18px}.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap} label{display:block;font-size:12px;font-weight:700;margin-bottom:4px} input,select,textarea{width:100%;padding:9px 12px;border-radius:14px;border:1px solid #b8c4d6;background:#f8fafc;font-size:14px} textarea{min-height:120px;resize:vertical;font-family:Consolas,monospace}.btn{border:none;border-radius:16px;padding:12px 20px;background:var(--primary);color:#fff;font-weight:800;cursor:pointer}.btn.secondary{background:var(--blue)} .btn.light{background:#fff;color:var(--text);border:1px solid var(--border)}
+.mono{font-family:Consolas,monospace;white-space:pre-wrap} .result{min-height:160px;max-height:420px;overflow:auto;background:#f8fafc;border:1px solid var(--border);border-radius:18px;padding:12px}.metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px}.metric{background:#f8fafc;border:1px solid var(--border);border-radius:16px;padding:12px}.metric .label{font-size:11px;color:var(--muted)} .metric .value{font-size:14px;font-weight:900;margin-top:6px}.badge{display:inline-block;padding:8px 14px;border-radius:16px;font-weight:800}.badge.ok{background:#dcfce7;color:#166534}.badge.off{background:#e2e8f0;color:#475569}.badge.warn{background:#fef3c7;color:#92400e}.table-wrap{overflow:auto;background:#f8fafc;border:1px solid var(--border);border-radius:18px}.table{width:100%;border-collapse:collapse;font-size:13px}.table th,.table td{padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:left}.table th{background:#f1f5f9;position:sticky;top:0}.small{font-size:12px}.pill-high{color:#991b1b;background:#fee2e2;padding:4px 8px;border-radius:10px;font-weight:700}.pill-med{color:#92400e;background:#fef3c7;padding:4px 8px;border-radius:10px;font-weight:700}.pill-low{color:#166534;background:#dcfce7;padding:4px 8px;border-radius:10px;font-weight:700}
+@media (max-width: 1200px){.grid-2,.form-grid-4,.form-grid-3{grid-template-columns:1fr 1fr}.metric-grid{grid-template-columns:1fr 1fr}}
+@media (max-width: 760px){.grid-2,.form-grid-4,.form-grid-3,.form-grid-2,.metric-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="topbar"></div>
+<div class="wrap">
+  <div class="tabs">
+    <button class="tab active" data-tab="simulador">Simulador</button>
+    <button class="tab" data-tab="regras">Regras de cálculo</button>
+    <button class="tab" data-tab="bling">Precificação Bling</button>
+    <button class="tab" data-tab="inteligencia">Inteligência de vendas</button>
+    <button class="tab" data-tab="fila">Fila de aprovação</button>
+  </div>
+
+  <section id="tab-simulador" class="panel active">
+    <div class="grid-2">
+      <div class="card">
+        <h2 class="title">Simulador</h2>
+        <div class="form-grid-4">
+          <div><label>SKU / EAN opcional</label><input id="sim_sku"></div>
+          <div><label>Preço de compra</label><input type="number" step="0.01" id="sim_preco_compra"></div>
+          <div><label>Embalagem</label><input type="number" step="0.01" id="sim_embalagem"></div>
+          <div><label>Peso</label><input type="number" step="0.001" id="sim_peso"></div>
+          <div><label>Imposto</label><input type="number" step="0.01" id="sim_imposto"></div>
+          <div><label>Quantidade</label><input type="number" step="1" id="sim_quantidade"></div>
+          <div><label>Objetivo</label><select id="sim_objetivo"><option value="markup">Markup</option><option value="margem">Margem</option><option value="lucro_liquido">Lucro líquido</option></select></div>
+          <div><label>Tipo do alvo</label><select id="sim_tipo_alvo"><option value="percentual">Percentual</option><option value="nominal">Nominal</option></select></div>
+          <div><label>Valor alvo</label><input type="number" step="0.01" id="sim_valor_alvo"></div>
+        </div>
+        <div class="row" style="margin-top:14px"><button class="btn" onclick="calcularSimulador()">Calcular</button></div>
+      </div>
+      <div class="card">
+        <h2 class="title">Resultado do simulador</h2>
+        <div class="result mono" id="resultado_simulador">Nenhum cálculo realizado ainda.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-regras" class="panel">
+    <div class="grid-2">
+      <div class="card">
+        <h2 class="title">Regras de cálculo</h2>
+        <p class="sub">Edite diretamente na tabela e salve, ou importe uma planilha Excel com as regras.</p>
+        <div class="row">
+          <input type="file" id="arquivo_excel" accept=".xlsx,.xls" style="max-width:320px">
+          <button class="btn secondary" onclick="importarExcel()">Importar Excel</button>
+          <button class="btn light" onclick="adicionarRegra()">Adicionar linha</button>
+          <button class="btn" onclick="salvarRegras()">Salvar regras</button>
+        </div>
+        <div class="table-wrap" style="margin-top:12px; max-height:520px">
+          <table class="table" id="tabela_regras"><thead><tr><th>Canal</th><th>Peso min</th><th>Peso max</th><th>Preço min</th><th>Preço max</th><th>Taxa fixa</th><th>Taxa frete</th><th>Comissão</th><th>Ativo</th><th></th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+      <div class="card">
+        <h2 class="title">Status das regras</h2>
+        <div class="metric-grid">
+          <div class="metric"><div class="label">Total</div><div class="value" id="m_regras_total">0</div></div>
+          <div class="metric"><div class="label">Ativas</div><div class="value" id="m_regras_ativas">0</div></div>
+          <div class="metric"><div class="label">Canais</div><div class="value" id="m_regras_canais">0</div></div>
+          <div class="metric"><div class="label">Arquivo</div><div class="value small">regras.json</div></div>
+        </div>
+        <div class="result mono" id="regras_info">Carregando...</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-bling" class="panel">
+    <div class="grid-2">
+      <div class="card">
+        <h2 class="title">Regra geral da integração</h2>
+        <div class="form-grid-4">
+          <div><label>Embalagem</label><input type="number" step="0.01" id="cfg_embalagem"></div>
+          <div><label>Imposto</label><input type="number" step="0.01" id="cfg_imposto"></div>
+          <div><label>Quantidade</label><input type="number" step="1" id="cfg_quantidade"></div>
+          <div><label>Objetivo</label><select id="cfg_objetivo"><option value="markup">Markup</option><option value="margem">Margem</option><option value="lucro_liquido">Lucro líquido</option></select></div>
+          <div><label>Tipo do alvo</label><select id="cfg_tipo_alvo"><option value="percentual">Percentual</option><option value="nominal">Nominal</option></select></div>
+          <div><label>Valor alvo</label><input type="number" step="0.01" id="cfg_valor_alvo"></div>
+          <div><label>Modo aprovação</label><select id="cfg_modo_aprovacao"><option value="manual">Manual</option><option value="automatico">Automático</option></select></div>
+          <div><label>Preço compra anterior</label><input type="number" step="0.01" id="cfg_preco_compra_anterior_bling"></div>
+          <div><label>Modo preço virtual</label><select id="cfg_modo_preco_virtual"><option value="percentual_acima">Percentual acima</option><option value="valor_acima">Valor acima</option><option value="manual">Manual</option></select></div>
+          <div><label>Acréscimo percentual</label><input type="number" step="0.01" id="cfg_acrescimo_percentual"></div>
+          <div><label>Acréscimo nominal</label><input type="number" step="0.01" id="cfg_acrescimo_nominal"></div>
+          <div><label>Preço virtual manual</label><input type="number" step="0.01" id="cfg_preco_manual"></div>
+          <div><label>Arredondamento</label><select id="cfg_arredondamento"><option value="sem">Sem</option><option value="90">,90</option><option value="99">,99</option><option value="97">,97</option></select></div>
+          <div><label>Estoque limite</label><input type="number" step="1" id="cfg_estoque_limite"></div>
+          <div><label>Tipo do ajuste</label><select id="cfg_ajuste_estoque_tipo"><option value="percentual">Percentual</option><option value="nominal">Nominal</option></select></div>
+          <div><label>Valor do ajuste</label><input type="number" step="0.01" id="cfg_ajuste_estoque_valor"></div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <input type="checkbox" id="cfg_regra_estoque_ativo" style="width:18px;height:18px"><label for="cfg_regra_estoque_ativo" style="margin:0">Regra estoque baixo ativa</label>
+          <button class="btn" onclick="salvarCfg()">Salvar regra geral</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2 class="title">Precificação automática via Bling</h2>
+        <div class="form-grid-2">
+          <div><label>Critério</label><select id="bling_criterio"><option value="ean">EAN</option><option value="sku">SKU</option><option value="id">ID</option></select></div>
+          <div><label>Valor da busca</label><input type="text" id="bling_valor_busca"></div>
+          <div><label>Peso override (opcional)</label><input type="number" step="0.001" id="bling_peso_override" value="0"></div>
+        </div>
+        <div class="row" style="margin-top:16px"><button class="btn" onclick="precificarBling()">Precificar produto do Bling</button></div>
+        <p class="sub">A precificação usará a inteligência de vendas salva acima. Se não houver histórico suficiente, o sistema cai automaticamente para a lógica padrão.</p>
+        <div class="result mono" id="resultado_bling">Nenhuma precificação realizada ainda.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-inteligencia" class="panel">
+    <div class="grid-2">
+      <div class="card">
+        <h2 class="title">Inteligência de vendas</h2>
+        <p class="sub">Aqui você configura a inteligência comercial que usa histórico por SKU e por canal para moderar o preço final com base em liquidez, share de lucro líquido histórico e velocidade de vendas.</p>
+        <div class="form-grid-4">
+          <div><label><input type="checkbox" id="intel_ativo" style="width:18px;height:18px"> Ativar inteligência</label></div>
+          <div><label>Data inicial</label><input type="date" id="intel_data_inicio"></div>
+          <div><label>Data final</label><input type="date" id="intel_data_fim"></div>
+          <div><label>Peso lucro</label><input type="number" step="0.01" id="intel_peso_lucro"></div>
+          <div><label>Peso liquidez</label><input type="number" step="0.01" id="intel_peso_liquidez"></div>
+          <div><label>Mínimo de pedidos</label><input type="number" step="1" id="intel_min_pedidos"></div>
+          <div><label>Mínimo de unidades</label><input type="number" step="1" id="intel_min_unidades"></div>
+          <div><label>Peso máximo por canal</label><input type="number" step="0.01" id="intel_peso_maximo_canal"></div>
+          <div><label>Ajuste máximo permitido (%)</label><input type="number" step="0.01" id="intel_ajuste_maximo_percentual"></div>
+          <div><label>SKU para filtrar resumo</label><input id="intel_sku_filtro" placeholder="Ex.: SKU ou EAN"></div>
+          <div><label><input type="checkbox" id="intel_ignorar_prejuizo" style="width:18px;height:18px"> Ignorar canais com lucro negativo</label></div>
+          <div><label><input type="checkbox" id="intel_usar_share_lucro" style="width:18px;height:18px"> Usar share de lucro líquido</label></div>
+        </div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn" onclick="salvarInteligencia()">Salvar inteligência</button>
+          <button class="btn secondary" onclick="carregarResumoInteligencia()">Atualizar resumo</button>
+          <button class="btn light" onclick="mostrarHistoricoExemplo()">Modelo do historico.json</button>
+        </div>
+        <div class="result mono" id="modelo_historico" style="display:none;margin-top:12px"></div>
+      </div>
+      <div class="card">
+        <h2 class="title">Resumo do histórico</h2>
+        <div class="metric-grid">
+          <div class="metric"><div class="label">Status</div><div class="value"><span id="m_ativo" class="badge off">Inativa</span></div></div>
+          <div class="metric"><div class="label">Registros</div><div class="value" id="m_registros">0</div></div>
+          <div class="metric"><div class="label">SKUs</div><div class="value" id="m_skus">0</div></div>
+          <div class="metric"><div class="label">Dias no período</div><div class="value" id="m_dias">0</div></div>
+        </div>
+        <div class="metric"><div class="label">Lucro líquido positivo no período</div><div class="value" id="m_lucro_total">R$ 0,00</div></div>
+        <p class="sub">O resumo abaixo usa o período configurado acima e mostra os canais com quantidade, pedidos, lucro líquido, share de lucro e velocidade diária.</p>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h2 class="title">Canais do histórico</h2>
+      <div class="table-wrap"><table class="table"><thead><tr><th>Canal</th><th>Quantidade</th><th>Pedidos</th><th>Receita</th><th>Lucro líquido</th><th>Share lucro</th><th>Velocidade/dia</th></tr></thead><tbody id="tbody_resumo_inteligencia"></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="tab-fila" class="panel">
+    <div class="grid-2">
+      <div class="card">
+        <h2 class="title">Resumo da fila</h2>
+        <div class="metric-grid">
+          <div class="metric"><div class="label">Pendentes</div><div class="value" id="f_pendentes">0</div></div>
+          <div class="metric"><div class="label">Aprovados</div><div class="value" id="f_aprovados">0</div></div>
+          <div class="metric"><div class="label">Reprovados</div><div class="value" id="f_reprovados">0</div></div>
+          <div class="metric"><div class="label">Erros</div><div class="value" id="f_erros">0</div></div>
+        </div>
+        <div class="row"><button class="btn secondary" onclick="carregarFila()">Atualizar fila</button></div>
+      </div>
+      <div class="card">
+        <h2 class="title">Ajuda rápida</h2>
+        <p class="sub">Na reprovação, a observação é obrigatória. Na aprovação, a observação é opcional.</p>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h2 class="title">Itens da fila</h2>
+      <div class="table-wrap"><table class="table"><thead><tr><th>Data</th><th>Produto</th><th>Canal</th><th>Preço atual</th><th>Preço sugerido</th><th>Dif. %</th><th>Prioridade</th><th>Status</th><th>Ação</th></tr></thead><tbody id="tbody_fila"></tbody></table></div>
+    </div>
+  </section>
+</div>
+
+<script>
+const modeloHistorico = `[
+  {
+    "data": "2026-03-20",
+    "sku": "7899884225714",
+    "canal": "Amazon",
+    "quantidade": 10,
+    "pedidos": 5,
+    "receita": 500,
+    "custo_total": 300,
+    "lucro_liquido": 200,
+    "margem_liquida_percentual": 40,
+    "preco_medio": 50
+  },
+  {
+    "data": "2026-03-20",
+    "sku": "7899884225714",
+    "canal": "Mercado Livre Classico",
+    "quantidade": 5,
+    "pedidos": 5,
+    "receita": 250,
+    "custo_total": 180,
+    "lucro_liquido": 70,
+    "margem_liquida_percentual": 28,
+    "preco_medio": 50
+  }
+]`;
+
+function money(v){return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));}
+function byId(id){return document.getElementById(id);}
+function escapeHtml(s){return String(s ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function priorityPill(p){if(p==='alta') return '<span class="pill-high">Alta</span>'; if(p==='media') return '<span class="pill-med">Média</span>'; return '<span class="pill-low">Baixa</span>';}
+
+function bindTabs(){document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));btn.classList.add('active');byId(`tab-${btn.dataset.tab}`).classList.add('active');}));}
+
+async function api(url, opts={}){const r = await fetch(url, opts); const j = await r.json().catch(()=>({message:'Resposta inválida'})); if(!r.ok) throw new Error(j.detail || j.message || 'Erro'); return j;}
+
+async function carregarCfg(){const cfg=await api('/integracao-config'); ['embalagem','imposto','quantidade','valor_alvo','preco_compra_anterior_bling','acrescimo_percentual','acrescimo_nominal','preco_manual','estoque_limite','ajuste_estoque_valor'].forEach(k=>{const el=byId('cfg_'+k); if(el) el.value = cfg[k] ?? el.value;}); byId('cfg_objetivo').value=cfg.objetivo||'markup'; byId('cfg_tipo_alvo').value=cfg.tipo_alvo||'percentual'; byId('cfg_modo_aprovacao').value=cfg.modo_aprovacao||'manual'; byId('cfg_modo_preco_virtual').value=cfg.modo_preco_virtual||'percentual_acima'; byId('cfg_arredondamento').value=cfg.arredondamento||'sem'; byId('cfg_regra_estoque_ativo').checked=!!cfg.regra_estoque_ativo; byId('cfg_ajuste_estoque_tipo').value=cfg.ajuste_estoque_tipo||'percentual';
+  byId('sim_embalagem').value = cfg.embalagem ?? 0; byId('sim_imposto').value = cfg.imposto ?? 0; byId('sim_quantidade').value = cfg.quantidade ?? 1; byId('sim_objetivo').value = cfg.objetivo || 'markup'; byId('sim_tipo_alvo').value = cfg.tipo_alvo || 'percentual'; byId('sim_valor_alvo').value = cfg.valor_alvo ?? 0;}
+
+async function salvarCfg(){const intelAtual=await api('/inteligencia-config'); const payload={embalagem:Number(byId('cfg_embalagem').value||0),imposto:Number(byId('cfg_imposto').value||0),quantidade:Number(byId('cfg_quantidade').value||1),objetivo:byId('cfg_objetivo').value,tipo_alvo:byId('cfg_tipo_alvo').value,valor_alvo:Number(byId('cfg_valor_alvo').value||0),modo_aprovacao:byId('cfg_modo_aprovacao').value,preco_compra_anterior_bling:Number(byId('cfg_preco_compra_anterior_bling').value||0),modo_preco_virtual:byId('cfg_modo_preco_virtual').value,acrescimo_percentual:Number(byId('cfg_acrescimo_percentual').value||0),acrescimo_nominal:Number(byId('cfg_acrescimo_nominal').value||0),preco_manual:Number(byId('cfg_preco_manual').value||0),arredondamento:byId('cfg_arredondamento').value,regra_estoque_ativo:byId('cfg_regra_estoque_ativo').checked,estoque_limite:Number(byId('cfg_estoque_limite').value||2),ajuste_estoque_tipo:byId('cfg_ajuste_estoque_tipo').value,ajuste_estoque_valor:Number(byId('cfg_ajuste_estoque_valor').value||0),inteligencia_vendas:intelAtual}; const res=await api('/integracao-config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); alert(res.message||'Configuração salva.');}
+
+async function carregarInteligencia(){const cfg=await api('/inteligencia-config'); byId('intel_ativo').checked=!!cfg.ativo; byId('intel_data_inicio').value=cfg.data_inicio||''; byId('intel_data_fim').value=cfg.data_fim||''; byId('intel_peso_lucro').value=cfg.peso_lucro??0.6; byId('intel_peso_liquidez').value=cfg.peso_liquidez??0.4; byId('intel_min_pedidos').value=cfg.min_pedidos??3; byId('intel_min_unidades').value=cfg.min_unidades??5; byId('intel_peso_maximo_canal').value=cfg.peso_maximo_canal??0.7; byId('intel_ajuste_maximo_percentual').value=cfg.ajuste_maximo_percentual??3; byId('intel_ignorar_prejuizo').checked=!!cfg.ignorar_canais_prejuizo; byId('intel_usar_share_lucro').checked=!!cfg.usar_share_lucro;}
+
+async function salvarInteligencia(){const payload={ativo:byId('intel_ativo').checked,data_inicio:byId('intel_data_inicio').value||null,data_fim:byId('intel_data_fim').value||null,peso_lucro:Number(byId('intel_peso_lucro').value||0.6),peso_liquidez:Number(byId('intel_peso_liquidez').value||0.4),min_pedidos:Number(byId('intel_min_pedidos').value||3),min_unidades:Number(byId('intel_min_unidades').value||5),ignorar_canais_prejuizo:byId('intel_ignorar_prejuizo').checked,peso_maximo_canal:Number(byId('intel_peso_maximo_canal').value||0.7),ajuste_maximo_percentual:Number(byId('intel_ajuste_maximo_percentual').value||3),usar_share_lucro:byId('intel_usar_share_lucro').checked}; const res=await api('/inteligencia-config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); alert(res.message||'Inteligência salva.'); await carregarResumoInteligencia();}
+
+async function carregarResumoInteligencia(){const qs=new URLSearchParams(); if(byId('intel_data_inicio').value) qs.set('data_inicio',byId('intel_data_inicio').value); if(byId('intel_data_fim').value) qs.set('data_fim',byId('intel_data_fim').value); if(byId('intel_sku_filtro').value) qs.set('sku',byId('intel_sku_filtro').value.trim()); const res=await api('/inteligencia/resumo?'+qs.toString()); byId('m_ativo').textContent=res.ativo?'Ativa':'Inativa'; byId('m_ativo').className=res.ativo?'badge ok':'badge off'; byId('m_registros').textContent=res.total_registros||0; byId('m_skus').textContent=res.total_skus||0; byId('m_dias').textContent=res.dias_periodo||0; byId('m_lucro_total').textContent=money(res.lucro_total_positivo||0); const tbody=byId('tbody_resumo_inteligencia'); if(!res.canais||!res.canais.length){tbody.innerHTML='<tr><td colspan="7">Nenhum dado encontrado no período selecionado.</td></tr>'; return;} tbody.innerHTML=res.canais.map(c=>`<tr><td>${escapeHtml(c.canal)}</td><td>${c.quantidade}</td><td>${c.pedidos}</td><td>${money(c.receita)}</td><td>${money(c.lucro_liquido)}</td><td>${(Number(c.share_lucro||0)*100).toFixed(2)}%</td><td>${c.velocidade_dia}</td></tr>`).join('');}
+
+function mostrarHistoricoExemplo(){const el=byId('modelo_historico'); el.style.display='block'; el.textContent=modeloHistorico;}
+
+async function calcularSimulador(){const intel = await api('/inteligencia-config'); const payload={sku:byId('sim_sku').value.trim()||null,preco_compra:Number(byId('sim_preco_compra').value||0),embalagem:Number(byId('sim_embalagem').value||0),peso:Number(byId('sim_peso').value||0),imposto:Number(byId('sim_imposto').value||0),quantidade:Number(byId('sim_quantidade').value||1),objetivo:byId('sim_objetivo').value,tipo_alvo:byId('sim_tipo_alvo').value,valor_alvo:Number(byId('sim_valor_alvo').value||0),inteligencia_vendas:intel}; const el=byId('resultado_simulador'); el.textContent='Calculando...'; try{const res=await api('/calcular',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); el.textContent=JSON.stringify(res,null,2);}catch(e){el.textContent='Erro: '+e.message;}}
+
+async function carregarRegras(){const regras=await api('/regras'); const tbody=byId('tabela_regras').querySelector('tbody'); tbody.innerHTML=''; regras.forEach((r,i)=>tbody.appendChild(criarLinhaRegra(r,i))); byId('m_regras_total').textContent=regras.length; byId('m_regras_ativas').textContent=regras.filter(r=>r.ativo!==false).length; byId('m_regras_canais').textContent=new Set(regras.map(r=>r.canal)).size; byId('regras_info').textContent=`Total de regras: ${regras.length}\nCanais únicos: ${new Set(regras.map(r=>r.canal)).size}`;}
+function criarLinhaRegra(r={},i=0){const tr=document.createElement('tr'); tr.innerHTML=`<td><input value="${escapeHtml(r.canal||'')}" data-k="canal"></td><td><input type="number" step="0.001" value="${r.peso_min??0}" data-k="peso_min"></td><td><input type="number" step="0.001" value="${r.peso_max??0}" data-k="peso_max"></td><td><input type="number" step="0.01" value="${r.preco_min??0}" data-k="preco_min"></td><td><input type="number" step="0.01" value="${r.preco_max??0}" data-k="preco_max"></td><td><input type="number" step="0.01" value="${r.taxa_fixa??0}" data-k="taxa_fixa"></td><td><input type="number" step="0.01" value="${r.taxa_frete??0}" data-k="taxa_frete"></td><td><input type="number" step="0.01" value="${r.comissao??0}" data-k="comissao"></td><td><input type="checkbox" ${r.ativo!==false?'checked':''} data-k="ativo"></td><td><button class="btn light small" onclick="this.closest('tr').remove()">Excluir</button></td>`; return tr;}
+function adicionarRegra(){byId('tabela_regras').querySelector('tbody').appendChild(criarLinhaRegra({ativo:true}));}
+async function salvarRegras(){const regras=[...byId('tabela_regras').querySelectorAll('tbody tr')].map(tr=>{const o={}; tr.querySelectorAll('[data-k]').forEach(el=>{const k=el.dataset.k; o[k]=el.type==='checkbox'?el.checked:(el.type==='number'?Number(el.value||0):el.value);}); return o;}); const res=await api('/regras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(regras)}); alert(res.message||'Regras salvas.'); await carregarRegras();}
+async function importarExcel(){const input=byId('arquivo_excel'); if(!input.files.length){alert('Selecione um arquivo Excel.'); return;} const fd=new FormData(); fd.append('file',input.files[0]); const res=await api('/upload-excel',{method:'POST',body:fd}); alert(res.message||'Importado.'); await carregarRegras();}
+
+async function precificarBling(){const intel=await api('/inteligencia-config'); const payload={criterio:byId('bling_criterio').value,valor_busca:byId('bling_valor_busca').value.trim(),embalagem:Number(byId('cfg_embalagem').value||0),imposto:Number(byId('cfg_imposto').value||0),quantidade:Number(byId('cfg_quantidade').value||1),objetivo:byId('cfg_objetivo').value,tipo_alvo:byId('cfg_tipo_alvo').value,valor_alvo:Number(byId('cfg_valor_alvo').value||0),peso_override:Number(byId('bling_peso_override').value||0),inteligencia_vendas:intel,modo_aprovacao:byId('cfg_modo_aprovacao').value,preco_compra_anterior_bling:Number(byId('cfg_preco_compra_anterior_bling').value||0),modo_preco_virtual:byId('cfg_modo_preco_virtual').value,acrescimo_percentual:Number(byId('cfg_acrescimo_percentual').value||0),acrescimo_nominal:Number(byId('cfg_acrescimo_nominal').value||0),preco_manual:Number(byId('cfg_preco_manual').value||0),arredondamento:byId('cfg_arredondamento').value,regra_estoque_ativo:byId('cfg_regra_estoque_ativo').checked,estoque_limite:Number(byId('cfg_estoque_estoque_limite')?.value||byId('cfg_estoque_limite').value||2),ajuste_estoque_tipo:byId('cfg_ajuste_estoque_tipo').value,ajuste_estoque_valor:Number(byId('cfg_ajuste_estoque_valor').value||0)}; const el=byId('resultado_bling'); el.textContent='Processando...'; try{const res=await api('/bling/precificar-produto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); el.textContent=JSON.stringify(res,null,2); await carregarFila();}catch(e){el.textContent='Erro: '+e.message;}}
+
+async function carregarFila(){const resumo=await api('/aprovacoes/resumo'); byId('f_pendentes').textContent=resumo.pendente||0; byId('f_aprovados').textContent=resumo.aprovado||0; byId('f_reprovados').textContent=resumo.reprovado||0; byId('f_erros').textContent=resumo.erro||0; const itens=await api('/aprovacoes'); const tbody=byId('tbody_fila'); if(!itens.length){tbody.innerHTML='<tr><td colspan="9">Nenhum item na fila.</td></tr>'; return;} tbody.innerHTML=itens.map(item=>`<tr><td>${escapeHtml((item.data_criacao||'').slice(0,19).replace('T',' '))}</td><td>${escapeHtml(item.produto_nome||'')}</td><td>${escapeHtml(item.canal||'')}</td><td>${money(item.preco_atual||0)}</td><td>${money(item.preco_sugerido||0)}</td><td>${Number(item.diferenca_percentual||0).toFixed(2)}%</td><td>${priorityPill(item.prioridade||'baixa')}</td><td>${escapeHtml(item.status_aprovacao||'')}</td><td>${item.status_aprovacao==='pendente'?`<button class="btn secondary small" onclick="aprovarItem('${item.id}')">Aprovar</button> <button class="btn light small" onclick="reprovarItem('${item.id}')">Reprovar</button>`:'-'}</td></tr>`).join('');}
+async function aprovarItem(id){try{await api('/aprovacoes/'+id+'/aprovar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({observacao:''})}); await carregarFila();}catch(e){alert(e.message);}}
+async function reprovarItem(id){const observacao=prompt('Informe o motivo da reprovação:'); if(!observacao) return; try{await api('/aprovacoes/'+id+'/reprovar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({observacao})}); await carregarFila();}catch(e){alert(e.message);}}
+
+async function init(){bindTabs(); await Promise.all([carregarCfg(), carregarInteligencia(), carregarRegras(), carregarResumoInteligencia(), carregarFila()]);}
+init();
+</script>
+</body>
+</html>

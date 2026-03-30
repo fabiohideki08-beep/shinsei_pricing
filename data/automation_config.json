@@ -1,0 +1,39 @@
+{
+  "auto_apply_enabled": true,
+  "allow_webhook_pricing": true,
+  "default_criterio": "auto",
+  "embalagem": 2.0,
+  "insumos": 0.0,
+  "frete": 0.0,
+  "taxa_fixa": 0.0,
+  "imposto": 4.0,
+  "comissao_percentual": 12.0,
+  "valor_alvo": 30.0,
+  "devolucao_defeito": 0.02,
+  "devolucao_transporte": 0.01,
+  "estoque_minimo_alerta": 2,
+  "variacao_maxima_auto_aplicacao": 8.0,
+  "margem_minima_auto_aplicacao": 12.0,
+  "bloquear_preco_abaixo_custo": true,
+  "bloquear_margem_negativa": true,
+  "allocation_strategy": "vendido_por_faturamento",
+  "custo_fixo_total_periodo": 0.0,
+  "oee": {
+    "custo_hora_funcionario": 0.0,
+    "pedidos_por_hora": 1.0,
+    "tempo_medio_tarefa_min": 0.0,
+    "custo_fixo_endereco": 0.0,
+    "custo_logistica_endereco": 0.0,
+    "custo_seguranca_endereco": 0.0,
+    "acessibilidade_cliente": 5.0,
+    "pedidos_mes": 1.0,
+    "reducao_avaria_embalagem_segura": 0.0
+  },
+  "sie": {
+    "velocidade_venda": 0.0,
+    "share_faturamento": 0.0,
+    "prazo_entrega_fornecedor": 30.0,
+    "prazo_pagamento_fornecedor": 30.0,
+    "tempo_para_vender": 30.0
+  }
+}

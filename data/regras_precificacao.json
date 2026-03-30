@@ -1,0 +1,41 @@
+{
+  "regra_ativa": "padrao",
+  "perfis": {
+    "padrao": {
+      "nome": "Padrão",
+      "usar_lucro_minimo_auto": false,
+      "lucro_minimo_auto": 2.0,
+      "margem_minima_auto": 20.0,
+      "sie_minimo_auto": 0.4,
+      "variacao_maxima": 50.0,
+      "estoque_minimo_fila": 1,
+      "fila_se_preco_atual_zero": false,
+      "bloquear_margem_negativa": true,
+      "bloquear_lucro_negativo": true
+    },
+    "varejo_volume": {
+      "nome": "Varejo volume",
+      "usar_lucro_minimo_auto": false,
+      "lucro_minimo_auto": 1.0,
+      "margem_minima_auto": 12.0,
+      "sie_minimo_auto": 0.35,
+      "variacao_maxima": 60.0,
+      "estoque_minimo_fila": 0,
+      "fila_se_preco_atual_zero": false,
+      "bloquear_margem_negativa": true,
+      "bloquear_lucro_negativo": true
+    },
+    "premium_margem": {
+      "nome": "Premium margem alta",
+      "usar_lucro_minimo_auto": false,
+      "lucro_minimo_auto": 5.0,
+      "margem_minima_auto": 30.0,
+      "sie_minimo_auto": 0.6,
+      "variacao_maxima": 30.0,
+      "estoque_minimo_fila": 1,
+      "fila_se_preco_atual_zero": true,
+      "bloquear_margem_negativa": true,
+      "bloquear_lucro_negativo": true
+    }
+  }
+}

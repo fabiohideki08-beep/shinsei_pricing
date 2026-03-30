@@ -1,0 +1,19 @@
+{
+  "funcionarios": {
+    "custo_hora_funcionario": 0.0,
+    "pedidos_por_hora": 1.0,
+    "tempo_medio_tarefa_min": 0.0
+  },
+  "materiais": {
+    "custo_embalagem": 0.0,
+    "taxa_avaria": 0.01,
+    "reducao_avaria_embalagem_segura": 0.0
+  },
+  "endereco": {
+    "custo_fixo_endereco": 0.0,
+    "custo_logistica_endereco": 0.0,
+    "custo_seguranca_endereco": 0.0,
+    "acessibilidade_cliente": 5.0,
+    "pedidos_mes": 1.0
+  }
+}

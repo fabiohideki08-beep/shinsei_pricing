@@ -1,0 +1,10 @@
+{
+  "velocidade_venda": 0.0,
+  "share_faturamento": 0.0,
+  "margem_real": 0.0,
+  "prazo_entrega_fornecedor": 30.0,
+  "prazo_pagamento_fornecedor": 30.0,
+  "tempo_para_vender": 30.0,
+  "devolucao_defeito": 0.02,
+  "devolucao_transporte": 0.01
+}

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Simulador</title>
+</head>
+<body style="background:#0b132b;color:white;font-family:Arial;padding:30px">
+
+<h1>Simulador</h1>
+
+<label>Nome</label>
+<input id="nome" style="width:100%;padding:10px"><br><br>
+
+<label>Margem (%)</label>
+<input id="margem" type="number" value="20" style="width:100%;padding:10px"><br><br>
+
+<label>Custo</label>
+<input id="custo" type="number" value="50" style="width:100%;padding:10px"><br><br>
+
+<button onclick="calcular()" style="padding:15px;background:#3b82f6;color:white;border:none">
+Calcular
+</button>
+
+<div id="resultado" style="margin-top:30px"></div>
+
+<script>
+async function calcular(){
+
+  const payload = {
+    nome: document.getElementById("nome").value,
+    margem: document.getElementById("margem").value,
+    custo: document.getElementById("custo").value
+  };
+
+  const res = await fetch("/simular", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(payload)
+  });
+
+  const data = await res.json();
+
+  if(!data.success){
+    alert("Erro");
+    return;
+  }
+
+  document.getElementById("resultado").innerHTML = `
+    <h2>${data.produto}</h2>
+    <p>Preço: R$ ${data.preco_base}</p>
+    <p>Lucro: R$ ${data.marketplaces.mercado_livre_classico.lucro}</p>
+  `;
+}
+</script>
+
+</body>
+</html>

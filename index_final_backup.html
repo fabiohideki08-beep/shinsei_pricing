@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head><title>Shinsei Pricing</title></head>
+<body>
+<h2>Precificação Bling</h2>
+
+<input id="codigo" placeholder="EAN / SKU">
+<input id="peso" placeholder="Peso override">
+
+<button onclick="buscar()">Buscar produto</button>
+<button onclick="precificar()" id="btnPrecificar" disabled>Precificar</button>
+
+<h3>Prévia</h3>
+<div id="resultado"></div>
+
+<script>
+async function buscar(){
+    let codigo = document.getElementById("codigo").value
+    let peso = document.getElementById("peso").value
+
+    let res = await fetch("/bling/pre-visualizar-produto", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({codigo: codigo, peso_override: parseFloat(peso)})
+    })
+
+    let data = await res.json()
+
+    if(data.erro){
+        document.getElementById("resultado").innerHTML = data.erro
+        return
+    }
+
+    let html = "<b>" + data.produto.nome + "</b><br>"
+
+    data.canais.forEach(c => {
+        html += c.canal + ": " + c.preco_sugerido + "<br>"
+    })
+
+    document.getElementById("resultado").innerHTML = html
+    document.getElementById("btnPrecificar").disabled = false
+}
+
+async function precificar(){
+    alert("Preço aplicado")
+}
+</script>
+</body>
+</html>

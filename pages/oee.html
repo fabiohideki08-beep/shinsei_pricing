@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OEE</title>
+  <style>
+    :root {
+      --bg:#0b1020; --panel:#11182d; --line:rgba(255,255,255,.08); --text:#eef2ff; --muted:#aeb8d6; --green:#22c55e; --red:#ef4444; --blue:#60a5fa; --radius:18px;
+    }
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,Arial,sans-serif;background:linear-gradient(180deg,#0b1020 0%,#0f172a 100%);color:var(--text)}
+    .wrap{max-width:1320px;margin:0 auto;padding:24px}
+    .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:24px}
+    .brand{display:flex;align-items:flex-start;gap:18px}
+    .logo{width:72px;height:72px;border-radius:20px;background:rgba(255,255,255,.04);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;letter-spacing:.08em}
+    .title h1{margin:0;font-size:32px} .title p{margin:8px 0 0;color:var(--muted)}
+    .nav{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+    .btn,button,input,select,textarea{background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--text);border-radius:14px;padding:12px 14px;text-decoration:none;outline:none}
+    textarea{min-height:110px;width:100%} input,select{width:100%}
+    button,.btn{cursor:pointer} .btn{display:inline-block}
+    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:16px}
+    .card{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+    .meta{color:var(--muted);font-size:13px} .table-wrap{overflow:auto}
+    table{width:100%;border-collapse:collapse} th,td{border-bottom:1px solid var(--line);padding:10px;text-align:left;font-size:14px}
+    .row{display:grid;grid-template-columns:repeat(2,1fr);gap:12px} .actions{display:flex;gap:10px;flex-wrap:wrap}
+    pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.2);padding:12px;border-radius:12px;border:1px solid var(--line)}
+    @media (max-width:1000px){.grid,.row{grid-template-columns:1fr} .topbar{flex-direction:column}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo">神</div>
+        <div class="title">
+          <h1>OEE</h1>
+          <p>Módulo do Shinsei Pricing</p>
+        </div>
+      </div>
+      <div class="nav">
+        <a class="btn" href="/">Dashboard</a>
+        <a class="btn" href="/simulador">Simulador</a>
+        <a class="btn" href="/regras-calculo">Regras</a>
+        <a class="btn" href="/perfis">Perfis</a>
+        <a class="btn" href="/fila-aprovacao">Fila</a>
+        <a class="btn" href="/cost-engine">Cost Engine</a>
+        <a class="btn" href="/cost-allocation">Cost Allocation</a>
+        <a class="btn" href="/sie">SIE</a>
+        <a class="btn" href="/oee">OEE</a>
+        <a class="btn" href="/integracoes">Integrações</a>
+      </div>
+    </div>
+    
+<div class="card">
+  <h3>Dados do OEE</h3>
+  <div class="row">
+    <div><label>Custo hora funcionário</label><input id="custo_hora_funcionario" type="number" step="0.01"></div>
+    <div><label>Pedidos por hora</label><input id="pedidos_por_hora" type="number" step="0.01"></div>
+    <div><label>Tempo médio tarefa</label><input id="tempo_medio_tarefa_min" type="number" step="0.01"></div>
+    <div><label>Custo fixo endereço</label><input id="custo_fixo_endereco" type="number" step="0.01"></div>
+    <div><label>Custo logística endereço</label><input id="custo_logistica_endereco" type="number" step="0.01"></div>
+    <div><label>Custo segurança endereço</label><input id="custo_seguranca_endereco" type="number" step="0.01"></div>
+    <div><label>Acessibilidade cliente</label><input id="acessibilidade_cliente" type="number" step="0.01"></div>
+    <div><label>Pedidos por mês</label><input id="pedidos_mes" type="number" step="0.01"></div>
+    <div><label>Redução avaria embalagem segura</label><input id="reducao_avaria_embalagem_segura" type="number" step="0.01"></div>
+  </div>
+  <div class="actions" style="margin-top:12px"><button onclick="salvar()">Salvar</button></div>
+</div>
+
+  </div>
+  <script>
+async function carregar(){const res=await fetch('/config/automacao'); const d=await res.json(); const o=d.oee||{}; Object.keys(o).forEach(k=>{const el=document.getElementById(k); if(el) el.value=o[k];});}
+async function salvar(){const payload={oee:{}}; ['custo_hora_funcionario','pedidos_por_hora','tempo_medio_tarefa_min','custo_fixo_endereco','custo_logistica_endereco','custo_seguranca_endereco','acessibilidade_cliente','pedidos_mes','reducao_avaria_embalagem_segura'].forEach(k=>payload.oee[k]=Number(document.getElementById(k).value||0)); await fetch('/config/automacao',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); alert('OEE salvo');}
+document.addEventListener('DOMContentLoaded', carregar);
+</script>
+</body>
+</html>

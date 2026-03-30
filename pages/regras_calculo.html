@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Regras de cálculo</title>
+  <style>
+    :root {
+      --bg:#0b1020; --panel:#11182d; --line:rgba(255,255,255,.08); --text:#eef2ff; --muted:#aeb8d6; --green:#22c55e; --red:#ef4444; --blue:#60a5fa; --radius:18px;
+    }
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,Arial,sans-serif;background:linear-gradient(180deg,#0b1020 0%,#0f172a 100%);color:var(--text)}
+    .wrap{max-width:1320px;margin:0 auto;padding:24px}
+    .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:24px}
+    .brand{display:flex;align-items:flex-start;gap:18px}
+    .logo{width:72px;height:72px;border-radius:20px;background:rgba(255,255,255,.04);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;letter-spacing:.08em}
+    .title h1{margin:0;font-size:32px} .title p{margin:8px 0 0;color:var(--muted)}
+    .nav{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+    .btn,button,input,select,textarea{background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--text);border-radius:14px;padding:12px 14px;text-decoration:none;outline:none}
+    textarea{min-height:110px;width:100%} input,select{width:100%}
+    button,.btn{cursor:pointer} .btn{display:inline-block}
+    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:16px}
+    .card{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+    .meta{color:var(--muted);font-size:13px} .table-wrap{overflow:auto}
+    table{width:100%;border-collapse:collapse} th,td{border-bottom:1px solid var(--line);padding:10px;text-align:left;font-size:14px}
+    .row{display:grid;grid-template-columns:repeat(2,1fr);gap:12px} .actions{display:flex;gap:10px;flex-wrap:wrap}
+    pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.2);padding:12px;border-radius:12px;border:1px solid var(--line)}
+    @media (max-width:1000px){.grid,.row{grid-template-columns:1fr} .topbar{flex-direction:column}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo">神</div>
+        <div class="title">
+          <h1>Regras de cálculo</h1>
+          <p>Módulo do Shinsei Pricing</p>
+        </div>
+      </div>
+      <div class="nav">
+        <a class="btn" href="/">Dashboard</a>
+        <a class="btn" href="/simulador">Simulador</a>
+        <a class="btn" href="/regras-calculo">Regras</a>
+        <a class="btn" href="/perfis">Perfis</a>
+        <a class="btn" href="/fila-aprovacao">Fila</a>
+        <a class="btn" href="/cost-engine">Cost Engine</a>
+        <a class="btn" href="/cost-allocation">Cost Allocation</a>
+        <a class="btn" href="/sie">SIE</a>
+        <a class="btn" href="/oee">OEE</a>
+        <a class="btn" href="/integracoes">Integrações</a>
+      </div>
+    </div>
+    
+<div class="card">
+  <h3>Tabela de regras de cálculo</h3>
+  <div class="actions" style="margin-bottom:12px">
+    <button onclick="addRow()">Adicionar linha</button>
+    <button onclick="salvar()">Salvar regras</button>
+    <button onclick="carregar()">Recarregar</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Canal</th><th>Peso min</th><th>Peso max</th><th>Preço min</th><th>Preço max</th><th>Taxa fixa</th><th>Taxa frete</th><th>Comissão</th><th></th></tr>
+      </thead>
+      <tbody id="tbodyRegras"></tbody>
+    </table>
+  </div>
+</div>
+
+  </div>
+  <script>
+function makeCell(value=''){const td=document.createElement('td'); const input=document.createElement('input'); input.value=value ?? ''; td.appendChild(input); return td;}
+function addRow(item={}){
+  const tbody=document.getElementById('tbodyRegras'); const tr=document.createElement('tr');
+  tr.appendChild(makeCell(item.canal||'')); tr.appendChild(makeCell(item.peso_min||0)); tr.appendChild(makeCell(item.peso_max||0));
+  tr.appendChild(makeCell(item.preco_min||0)); tr.appendChild(makeCell(item.preco_max||0)); tr.appendChild(makeCell(item.taxa_fixa||0));
+  tr.appendChild(makeCell(item.taxa_frete||0)); tr.appendChild(makeCell(item.comissao||0));
+  const td=document.createElement('td'); const btn=document.createElement('button'); btn.textContent='Excluir'; btn.onclick=()=>tr.remove(); td.appendChild(btn); tr.appendChild(td);
+  tbody.appendChild(tr);
+}
+async function carregar(){
+  const res=await fetch('/regras'); const data=await res.json(); const tbody=document.getElementById('tbodyRegras'); tbody.innerHTML=''; (data||[]).forEach(addRow);
+}
+async function salvar(){
+  const rows=[...document.querySelectorAll('#tbodyRegras tr')].map(tr=>{const inputs=tr.querySelectorAll('input'); return {canal:inputs[0].value,peso_min:inputs[1].value,peso_max:inputs[2].value,preco_min:inputs[3].value,preco_max:inputs[4].value,taxa_fixa:inputs[5].value,taxa_frete:inputs[6].value,comissao:inputs[7].value};});
+  const res=await fetch('/regras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rows)}); const data=await res.json(); alert(data.message||'Regras salvas');
+}
+document.addEventListener('DOMContentLoaded', carregar);
+</script>
+</body>
+</html>

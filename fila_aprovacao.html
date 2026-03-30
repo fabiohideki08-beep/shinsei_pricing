@@ -1,0 +1,44 @@
+
+<!DOCTYPE html>
+<html>
+<body style="background:#0b1020;color:white;font-family:Arial;padding:20px">
+<h1>Fila</h1>
+<div id="lista"></div>
+<script>
+function money(v){ return "R$ " + Number(v || 0).toFixed(2) }
+async function carregar(){
+    const res = await fetch('/fila')
+    const data = await res.json()
+    let html = ""
+    data.itens.forEach(item=>{
+        html += `<div style="border:1px solid white;margin:10px;padding:10px">
+            <b>${item.nome || "Sem nome"}</b><br>
+            Produto ID: ${item.produto_id || "-"}<br>`
+        for(const [k,m] of Object.entries(item.marketplaces || {})){
+            html += `${m.label}: ${money(m.preco)}`
+            if (m.preco_promocional && Number(m.preco_promocional) > 0){
+                html += ` | promo ${money(m.preco_promocional)}`
+            }
+            html += `<br>`
+        }
+        html += `
+        <button onclick="aprovar('${item.id}')">Aprovar</button>
+        <button onclick="rejeitar('${item.id}')">Rejeitar</button>
+        </div>`
+    })
+    document.getElementById('lista').innerHTML = html || "<div>Nenhum item na fila.</div>"
+}
+async function aprovar(id){
+    const res = await fetch('/fila/aprovar/'+id,{method:'POST'})
+    const data = await res.json()
+    alert(JSON.stringify(data, null, 2))
+    carregar()
+}
+async function rejeitar(id){
+    await fetch('/fila/rejeitar/'+id,{method:'POST'})
+    carregar()
+}
+carregar()
+</script>
+</body>
+</html>

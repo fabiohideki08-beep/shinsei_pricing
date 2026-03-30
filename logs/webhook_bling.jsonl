@@ -1,0 +1,22 @@
+{"timestamp": "2026-03-27T23:22:29.562025", "acao": "webhook_recebido", "payload": {"criterio": "sku", "valor": "TESTE"}}
+{"timestamp": "2026-03-27T23:25:21.832605", "acao": "webhook_recebido", "payload": {"criterio": "sku", "valor": "TESTE"}}
+{"timestamp": "2026-03-27T23:27:30.688192", "acao": "webhook_recebido", "payload": {"criterio": "sku", "valor": "23811551239829960"}}
+{"timestamp": "2026-03-27T23:27:42.830463", "acao": "webhook_recebido", "payload": {"criterio": "sku", "valor": "23811551239829960"}}
+{"timestamp": "2026-03-27T23:34:08.209104", "acao": "webhook_recebido", "payload": {"criterio": "sku", "valor_busca": "TESTE"}}
+{"timestamp": "2026-03-27T23:56:47.775737", "acao": "webhook_recebido", "payload": {"criterio": "sku", "valor_busca": "TESTE"}}
+{"timestamp": "2026-03-27T23:56:48.847028", "acao": "webhook_erro", "erro": "{'erro': 'Produto não encontrado', 'resposta_bling': {'data': []}}", "payload": {"criterio": "sku", "valor_busca": "TESTE"}}
+{"timestamp": "2026-03-28T00:08:49.311557", "acao": "webhook_recebido", "payload": {"criterio": "sku", "valor_busca": "23811551239829960E"}}
+{"timestamp": "2026-03-28T00:08:50.700540", "acao": "webhook_erro", "erro": "{'erro': 'Produto não encontrado', 'resposta_bling': {'data': []}}", "payload": {"criterio": "sku", "valor_busca": "23811551239829960E"}}
+{"timestamp": "2026-03-28T00:09:04.960658", "acao": "webhook_recebido", "payload": {"criterio": "sku", "valor_busca": "23811551239829960"}}
+{"timestamp": "2026-03-28T00:09:11.608861", "acao": "webhook_recebido", "payload": {"criterio": "sku", "valor_busca": "23811551239829960"}}
+{"timestamp": "2026-03-28T00:09:51.471463", "acao": "webhook_recebido", "payload": {"criterio": "sku", "valor_busca": "7898524348745"}}
+{"timestamp": "2026-03-28T00:09:54.314486", "acao": "webhook_recebido", "payload": {"criterio": "sku", "valor_busca": "7898524348745"}}
+{"timestamp": "2026-03-28T00:21:35.722288", "acao": "webhook_recebido", "payload": {"criterio": "sku", "valor_busca": "7898524348745"}}
+{"timestamp": "2026-03-28T00:21:39.336008", "acao": "webhook_recebido", "payload": {"criterio": "sku", "valor_busca": "7898524348745"}}
+{"timestamp": "2026-03-28T09:58:02.644883", "acao": "webhook_recebido", "payload": {"criterio": "sku", "valor_busca": "7898524348745"}}
+{"timestamp": "2026-03-28T09:58:04.966973", "acao": "webhook_erro", "erro": "{'erro': 'Produto não encontrado', 'resposta_bling': {'data': []}}", "payload": {"criterio": "sku", "valor_busca": "7898524348745"}}
+{"timestamp": "2026-03-28T09:58:26.849322", "acao": "webhook_recebido", "payload": {"criterio": "sku", "valor_busca": "7898524348745"}}
+{"timestamp": "2026-03-28T09:58:28.407660", "acao": "webhook_erro", "erro": "{'erro': 'Produto não encontrado', 'resposta_bling': {'data': []}}", "payload": {"criterio": "sku", "valor_busca": "7898524348745"}}
+{"timestamp": "2026-03-28T09:59:34.375389", "acao": "webhook_recebido", "payload": {"criterio": "sku", "valor_busca": "7900083017892"}}
+{"timestamp": "2026-03-28T09:59:41.274472", "acao": "webhook_recebido", "payload": {"criterio": "sku", "valor_busca": "7900083017892"}}
+{"timestamp": "2026-03-28T09:59:48.135929", "acao": "webhook_recebido", "payload": {"criterio": "sku", "valor_busca": "7900083017892"}}

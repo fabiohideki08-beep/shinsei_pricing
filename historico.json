@@ -1,0 +1,38 @@
+[
+  {
+    "data": "2026-03-01",
+    "sku": "SKU-EXEMPLO-001",
+    "canal": "Amazon",
+    "quantidade": 10,
+    "pedidos": 5,
+    "receita": 500.0,
+    "custo_total": 280.0,
+    "lucro_liquido": 120.0,
+    "margem_liquida_percentual": 24.0,
+    "preco_medio": 50.0
+  },
+  {
+    "data": "2026-03-01",
+    "sku": "SKU-EXEMPLO-001",
+    "canal": "Mercado Livre",
+    "quantidade": 8,
+    "pedidos": 6,
+    "receita": 392.0,
+    "custo_total": 240.0,
+    "lucro_liquido": 88.0,
+    "margem_liquida_percentual": 22.45,
+    "preco_medio": 49.0
+  },
+  {
+    "data": "2026-03-01",
+    "sku": "SKU-EXEMPLO-001",
+    "canal": "Shopee",
+    "quantidade": 4,
+    "pedidos": 3,
+    "receita": 176.0,
+    "custo_total": 120.0,
+    "lucro_liquido": 28.0,
+    "margem_liquida_percentual": 15.91,
+    "preco_medio": 44.0
+  }
+]

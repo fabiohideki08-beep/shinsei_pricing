@@ -1,0 +1,4952 @@
+[
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.001,
+    "peso_max": 0.299,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 5.65,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.3,
+    "peso_max": 0.499,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 5.95,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.5,
+    "peso_max": 0.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.05,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 1,
+    "peso_max": 1.499,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.15,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 1.5,
+    "peso_max": 1.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.25,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 2,
+    "peso_max": 2.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.35,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 3,
+    "peso_max": 3.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.45,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 4,
+    "peso_max": 4.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.55,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 5,
+    "peso_max": 5.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.65,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 6,
+    "peso_max": 6.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.75,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 7,
+    "peso_max": 7.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.85,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 8,
+    "peso_max": 8.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.95,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 9,
+    "peso_max": 10.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.05,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 11,
+    "peso_max": 12.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.15,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 13,
+    "peso_max": 14.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.25,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 15,
+    "peso_max": 16.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.35,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 17,
+    "peso_max": 19.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.45,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 20,
+    "peso_max": 24.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.65,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 25,
+    "peso_max": 29.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.75,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 30,
+    "peso_max": 30.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.85,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 40,
+    "peso_max": 49.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.95,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 50,
+    "peso_max": 59.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.05,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 60,
+    "peso_max": 69.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.15,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 70,
+    "peso_max": 79.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.25,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 80,
+    "peso_max": 89.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.35,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 90,
+    "peso_max": 99.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.45,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 100,
+    "peso_max": 124.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.55,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 125,
+    "peso_max": 149.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.65,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 150,
+    "peso_max": 99999999999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.75,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.1,
+    "peso_max": 0.299,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.55,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.3,
+    "peso_max": 0.499,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.65,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.5,
+    "peso_max": 0.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.75,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 1,
+    "peso_max": 1.499,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.85,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 1.5,
+    "peso_max": 1.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.95,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 2,
+    "peso_max": 2.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.95,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 3,
+    "peso_max": 3.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.15,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 4,
+    "peso_max": 4.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.35,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 5,
+    "peso_max": 5.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.55,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 6,
+    "peso_max": 6.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.75,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 7,
+    "peso_max": 7.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.95,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 8,
+    "peso_max": 8.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 9.15,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 9,
+    "peso_max": 10.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 9.55,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 11,
+    "peso_max": 12.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 9.95,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 13,
+    "peso_max": 14.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 10.15,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 15,
+    "peso_max": 16.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 10.35,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 17,
+    "peso_max": 19.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 10.55,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 20,
+    "peso_max": 24.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 10.95,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 25,
+    "peso_max": 29.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 11.15,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 30,
+    "peso_max": 30.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 11.35,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 40,
+    "peso_max": 49.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 11.55,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 50,
+    "peso_max": 59.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 11.75,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 60,
+    "peso_max": 69.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 11.95,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 70,
+    "peso_max": 79.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.15,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 80,
+    "peso_max": 89.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.35,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 90,
+    "peso_max": 99.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.55,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 100,
+    "peso_max": 124.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.75,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 125,
+    "peso_max": 149.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.75,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 150,
+    "peso_max": 99999999999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.75,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.001,
+    "peso_max": 0.299,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.75,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.3,
+    "peso_max": 0.499,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.85,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.5,
+    "peso_max": 0.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.95,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 1,
+    "peso_max": 1.499,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.05,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 1.5,
+    "peso_max": 1.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.15,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 2,
+    "peso_max": 2.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.55,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 3,
+    "peso_max": 3.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.95,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 4,
+    "peso_max": 4.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 9.75,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 5,
+    "peso_max": 5.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 9.95,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 6,
+    "peso_max": 6.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 10.15,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 7,
+    "peso_max": 7.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 10.35,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 8,
+    "peso_max": 8.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 10.55,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 9,
+    "peso_max": 10.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 10.95,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 11,
+    "peso_max": 12.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 11.35,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 13,
+    "peso_max": 14.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 11.55,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 15,
+    "peso_max": 16.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 11.75,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 17,
+    "peso_max": 19.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 11.95,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 20,
+    "peso_max": 24.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.15,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 25,
+    "peso_max": 29.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.35,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 30,
+    "peso_max": 30.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.55,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 40,
+    "peso_max": 49.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.75,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 50,
+    "peso_max": 59.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.95,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 60,
+    "peso_max": 69.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 13.15,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 70,
+    "peso_max": 79.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 13.35,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 80,
+    "peso_max": 89.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 13.55,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 90,
+    "peso_max": 99.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 13.75,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 100,
+    "peso_max": 124.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 13.95,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 125,
+    "peso_max": 149.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 14.15,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 150,
+    "peso_max": 99999999999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 14.35,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.1,
+    "peso_max": 0.299,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 18.52,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.3,
+    "peso_max": 0.499,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 19.87,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.5,
+    "peso_max": 0.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 20.77,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 1,
+    "peso_max": 1.499,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 21.22,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 1.5,
+    "peso_max": 1.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 21.67,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 2,
+    "peso_max": 2.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 23.62,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 3,
+    "peso_max": 3.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 25.57,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 4,
+    "peso_max": 4.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 27.67,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 5,
+    "peso_max": 5.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 38.17,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 6,
+    "peso_max": 6.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 40.57,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 7,
+    "peso_max": 7.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 43.27,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 8,
+    "peso_max": 8.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 44.47,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 9,
+    "peso_max": 10.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 61.87,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 11,
+    "peso_max": 12.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 63.22,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 13,
+    "peso_max": 14.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 67.57,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 15,
+    "peso_max": 16.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 72.82,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 17,
+    "peso_max": 19.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 82.12,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 20,
+    "peso_max": 24.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 96.07,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 25,
+    "peso_max": 29.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 98.92,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 30,
+    "peso_max": 30.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 101.62,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 40,
+    "peso_max": 49.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 105.37,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 50,
+    "peso_max": 59.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 112.42,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 60,
+    "peso_max": 69.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 120.37,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 70,
+    "peso_max": 79.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 125.92,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 80,
+    "peso_max": 89.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 139.87,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 90,
+    "peso_max": 99.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 159.82,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 100,
+    "peso_max": 124.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 178.87,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 125,
+    "peso_max": 149.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 189.82,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 150,
+    "peso_max": 99999999999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 249.22,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.001,
+    "peso_max": 0.299,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 21.52,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.3,
+    "peso_max": 0.499,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 23.17,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.5,
+    "peso_max": 0.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 24.22,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 1,
+    "peso_max": 1.499,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 24.67,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 1.5,
+    "peso_max": 1.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 25.27,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 2,
+    "peso_max": 2.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 27.52,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 3,
+    "peso_max": 3.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 29.77,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 4,
+    "peso_max": 4.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 32.32,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 5,
+    "peso_max": 5.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 42.82,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 6,
+    "peso_max": 6.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 46.57,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 7,
+    "peso_max": 7.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 50.47,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 8,
+    "peso_max": 8.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 51.82,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 9,
+    "peso_max": 10.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 72.07,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 11,
+    "peso_max": 12.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 73.87,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 13,
+    "peso_max": 14.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 78.67,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 15,
+    "peso_max": 16.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 84.07,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 17,
+    "peso_max": 19.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 95.77,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 20,
+    "peso_max": 24.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 112.57,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 25,
+    "peso_max": 29.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 113.17,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 30,
+    "peso_max": 30.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 118.42,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 40,
+    "peso_max": 49.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 121.57,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 50,
+    "peso_max": 59.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 129.67,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 60,
+    "peso_max": 69.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 139.42,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 70,
+    "peso_max": 79.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 145.57,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 80,
+    "peso_max": 89.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 161.17,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 90,
+    "peso_max": 99.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 185.92,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 100,
+    "peso_max": 124.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 207.07,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 125,
+    "peso_max": 149.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 219.22,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 150,
+    "peso_max": 99999999999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 288.67,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.001,
+    "peso_max": 0.299,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 24.67,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.3,
+    "peso_max": 0.499,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 26.47,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.5,
+    "peso_max": 0.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 27.67,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 1,
+    "peso_max": 1.499,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 28.27,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 1.5,
+    "peso_max": 1.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 28.87,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 2,
+    "peso_max": 2.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 31.57,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 3,
+    "peso_max": 3.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 33.97,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 4,
+    "peso_max": 4.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 36.97,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 5,
+    "peso_max": 5.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 48.97,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 6,
+    "peso_max": 6.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 54.07,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 7,
+    "peso_max": 7.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 57.67,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 8,
+    "peso_max": 8.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 59.32,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 9,
+    "peso_max": 10.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 82.42,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 11,
+    "peso_max": 12.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 84.37,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 13,
+    "peso_max": 14.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 89.92,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 15,
+    "peso_max": 16.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 95.32,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 17,
+    "peso_max": 19.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 109.42,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 20,
+    "peso_max": 24.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 127.12,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 25,
+    "peso_max": 29.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 128.32,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 30,
+    "peso_max": 30.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 133.42,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 40,
+    "peso_max": 49.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 138.07,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 50,
+    "peso_max": 59.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 147.22,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 60,
+    "peso_max": 69.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 157.57,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 70,
+    "peso_max": 79.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 164.77,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 80,
+    "peso_max": 89.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 183.07,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 90,
+    "peso_max": 99.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 209.32,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 100,
+    "peso_max": 124.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 234.07,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 125,
+    "peso_max": 149.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 248.47,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 150,
+    "peso_max": 99999999999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 326.32,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.001,
+    "peso_max": 0.299,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 27.67,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.3,
+    "peso_max": 0.499,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 29.77,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.5,
+    "peso_max": 0.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 31.12,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 1,
+    "peso_max": 1.499,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 31.72,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 1.5,
+    "peso_max": 1.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 32.47,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 2,
+    "peso_max": 2.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 35.47,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 3,
+    "peso_max": 3.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 38.32,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 4,
+    "peso_max": 4.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 41.62,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 5,
+    "peso_max": 5.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 53.62,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 6,
+    "peso_max": 6.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 60.07,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 7,
+    "peso_max": 7.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 64.87,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 8,
+    "peso_max": 8.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 66.67,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 9,
+    "peso_max": 10.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 92.62,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 11,
+    "peso_max": 12.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 94.87,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 13,
+    "peso_max": 14.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 101.17,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 15,
+    "peso_max": 16.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 106.12,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 17,
+    "peso_max": 19.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 123.07,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 20,
+    "peso_max": 24.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 143.02,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 25,
+    "peso_max": 29.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 144.37,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 30,
+    "peso_max": 30.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 148.72,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 40,
+    "peso_max": 49.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 153.82,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 50,
+    "peso_max": 59.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 164.02,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 60,
+    "peso_max": 69.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 175.72,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 70,
+    "peso_max": 79.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 183.67,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 80,
+    "peso_max": 89.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 204.07,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 90,
+    "peso_max": 99.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 233.32,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 100,
+    "peso_max": 124.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 260.92,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 125,
+    "peso_max": 149.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 276.97,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 150,
+    "peso_max": 99999999999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 363.82,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.001,
+    "peso_max": 0.299,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 31.42,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.3,
+    "peso_max": 0.499,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 33.82,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 0.5,
+    "peso_max": 0.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 35.47,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 1,
+    "peso_max": 1.499,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 36.97,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 1.5,
+    "peso_max": 1.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 36.97,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 2,
+    "peso_max": 2.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 39.37,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 3,
+    "peso_max": 3.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 42.52,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 4,
+    "peso_max": 4.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 46.12,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 5,
+    "peso_max": 5.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 59.62,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 6,
+    "peso_max": 6.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 66.07,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 7,
+    "peso_max": 7.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 72.07,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 8,
+    "peso_max": 8.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 74.02,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 9,
+    "peso_max": 10.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 102.97,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 11,
+    "peso_max": 12.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 105.37,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 13,
+    "peso_max": 14.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 112.42,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 15,
+    "peso_max": 16.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 117.97,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 17,
+    "peso_max": 19.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 136.72,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 20,
+    "peso_max": 24.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 158.92,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 25,
+    "peso_max": 29.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 160.42,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 30,
+    "peso_max": 30.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 160.57,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 40,
+    "peso_max": 49.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 166.12,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 50,
+    "peso_max": 59.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 177.22,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 60,
+    "peso_max": 69.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 189.82,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 70,
+    "peso_max": 79.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 198.37,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 80,
+    "peso_max": 89.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 220.42,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 90,
+    "peso_max": 99.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 251.92,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 100,
+    "peso_max": 124.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 281.92,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 125,
+    "peso_max": 149.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 299.17,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Classico",
+    "peso_min": 150,
+    "peso_max": 99999999999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 392.92,
+    "comissao": 0.12
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.001,
+    "peso_max": 0.299,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 5.65,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.3,
+    "peso_max": 0.499,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 5.95,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.5,
+    "peso_max": 0.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.05,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 1,
+    "peso_max": 1.499,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.15,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 1.5,
+    "peso_max": 1.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.25,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 2,
+    "peso_max": 2.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.35,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 3,
+    "peso_max": 3.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.45,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 4,
+    "peso_max": 4.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.55,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 5,
+    "peso_max": 5.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.65,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 6,
+    "peso_max": 6.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.75,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 7,
+    "peso_max": 7.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.85,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 8,
+    "peso_max": 8.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.95,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 9,
+    "peso_max": 10.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.05,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 11,
+    "peso_max": 12.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.15,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 13,
+    "peso_max": 14.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.25,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 15,
+    "peso_max": 16.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.35,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 17,
+    "peso_max": 19.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.45,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 20,
+    "peso_max": 24.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.65,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 25,
+    "peso_max": 29.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.75,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 30,
+    "peso_max": 30.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.85,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 40,
+    "peso_max": 49.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.95,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 50,
+    "peso_max": 59.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.05,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 60,
+    "peso_max": 69.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.15,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 70,
+    "peso_max": 79.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.25,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 80,
+    "peso_max": 89.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.35,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 90,
+    "peso_max": 99.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.45,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 100,
+    "peso_max": 124.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.55,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 125,
+    "peso_max": 149.999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.65,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 150,
+    "peso_max": 99999999999,
+    "preco_min": 0.01,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.75,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.001,
+    "peso_max": 0.299,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.55,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.3,
+    "peso_max": 0.499,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.65,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.5,
+    "peso_max": 0.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.75,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 1,
+    "peso_max": 1.499,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.85,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 1.5,
+    "peso_max": 1.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6.95,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 2,
+    "peso_max": 2.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.95,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 3,
+    "peso_max": 3.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.15,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 4,
+    "peso_max": 4.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.35,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 5,
+    "peso_max": 5.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.55,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 6,
+    "peso_max": 6.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.75,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 7,
+    "peso_max": 7.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.95,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 8,
+    "peso_max": 8.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 9.15,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 9,
+    "peso_max": 10.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 9.55,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 11,
+    "peso_max": 12.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 9.95,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 13,
+    "peso_max": 14.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 10.15,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 15,
+    "peso_max": 16.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 10.35,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 17,
+    "peso_max": 19.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 10.55,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 20,
+    "peso_max": 24.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 10.95,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 25,
+    "peso_max": 29.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 11.15,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 30,
+    "peso_max": 30.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 11.35,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 40,
+    "peso_max": 49.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 11.55,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 50,
+    "peso_max": 59.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 11.75,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 60,
+    "peso_max": 69.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 11.95,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 70,
+    "peso_max": 79.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.15,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 80,
+    "peso_max": 89.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.35,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 90,
+    "peso_max": 99.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.55,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 100,
+    "peso_max": 124.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.75,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 125,
+    "peso_max": 149.999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.75,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 150,
+    "peso_max": 99999999999,
+    "preco_min": 19,
+    "preco_max": 48.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.75,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.001,
+    "peso_max": 0.299,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.75,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.3,
+    "peso_max": 0.499,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.85,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.5,
+    "peso_max": 0.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 7.95,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 1,
+    "peso_max": 1.499,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.05,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 1.5,
+    "peso_max": 1.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.15,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 2,
+    "peso_max": 2.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.55,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 3,
+    "peso_max": 3.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 8.95,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 4,
+    "peso_max": 4.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 9.75,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 5,
+    "peso_max": 5.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 9.95,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 6,
+    "peso_max": 6.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 10.15,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 7,
+    "peso_max": 7.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 10.35,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 8,
+    "peso_max": 8.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 10.55,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 9,
+    "peso_max": 10.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 10.95,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 11,
+    "peso_max": 12.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 11.35,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 13,
+    "peso_max": 14.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 11.55,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 15,
+    "peso_max": 16.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 11.75,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 17,
+    "peso_max": 19.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 11.95,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 20,
+    "peso_max": 24.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.15,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 25,
+    "peso_max": 29.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.35,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 30,
+    "peso_max": 30.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.55,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 40,
+    "peso_max": 49.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.75,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 50,
+    "peso_max": 59.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 12.95,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 60,
+    "peso_max": 69.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 13.15,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 70,
+    "peso_max": 79.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 13.35,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 80,
+    "peso_max": 89.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 13.55,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 90,
+    "peso_max": 99.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 13.75,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 100,
+    "peso_max": 124.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 13.95,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 125,
+    "peso_max": 149.999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 14.15,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 150,
+    "peso_max": 99999999999,
+    "preco_min": 49,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 14.35,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.001,
+    "peso_max": 0.299,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 18.52,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.3,
+    "peso_max": 0.499,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 19.87,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.5,
+    "peso_max": 0.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 20.77,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 1,
+    "peso_max": 1.499,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 21.22,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 1.5,
+    "peso_max": 1.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 21.67,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 2,
+    "peso_max": 2.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 23.62,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 3,
+    "peso_max": 3.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 25.57,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 4,
+    "peso_max": 4.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 27.67,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 5,
+    "peso_max": 5.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 38.17,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 6,
+    "peso_max": 6.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 40.57,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 7,
+    "peso_max": 7.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 43.27,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 8,
+    "peso_max": 8.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 44.47,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 9,
+    "peso_max": 10.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 61.87,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 11,
+    "peso_max": 12.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 63.22,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 13,
+    "peso_max": 14.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 67.57,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 15,
+    "peso_max": 16.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 72.82,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 17,
+    "peso_max": 19.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 82.12,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 20,
+    "peso_max": 24.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 96.07,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 25,
+    "peso_max": 29.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 98.92,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 30,
+    "peso_max": 30.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 101.62,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 40,
+    "peso_max": 49.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 105.37,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 50,
+    "peso_max": 59.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 112.42,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 60,
+    "peso_max": 69.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 120.37,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 70,
+    "peso_max": 79.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 125.92,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 80,
+    "peso_max": 89.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 139.87,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 90,
+    "peso_max": 99.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 159.82,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 100,
+    "peso_max": 124.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 178.87,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 125,
+    "peso_max": 149.999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 189.82,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 150,
+    "peso_max": 99999999999,
+    "preco_min": 79,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 249.22,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.001,
+    "peso_max": 0.299,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 21.52,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.3,
+    "peso_max": 0.499,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 23.17,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.5,
+    "peso_max": 0.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 24.22,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 1,
+    "peso_max": 1.499,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 24.67,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 1.5,
+    "peso_max": 1.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 25.27,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 2,
+    "peso_max": 2.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 27.52,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 3,
+    "peso_max": 3.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 29.77,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 4,
+    "peso_max": 4.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 32.32,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 5,
+    "peso_max": 5.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 42.82,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 6,
+    "peso_max": 6.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 46.57,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 7,
+    "peso_max": 7.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 50.47,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 8,
+    "peso_max": 8.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 51.82,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 9,
+    "peso_max": 10.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 72.07,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 11,
+    "peso_max": 12.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 73.87,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 13,
+    "peso_max": 14.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 78.67,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 15,
+    "peso_max": 16.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 84.07,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 17,
+    "peso_max": 19.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 95.77,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 20,
+    "peso_max": 24.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 112.57,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 25,
+    "peso_max": 29.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 113.17,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 30,
+    "peso_max": 30.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 118.42,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 40,
+    "peso_max": 49.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 121.57,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 50,
+    "peso_max": 59.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 129.67,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 60,
+    "peso_max": 69.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 139.42,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 70,
+    "peso_max": 79.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 145.57,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 80,
+    "peso_max": 89.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 161.17,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 90,
+    "peso_max": 99.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 185.92,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 100,
+    "peso_max": 124.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 207.07,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 125,
+    "peso_max": 149.999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 219.22,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 150,
+    "peso_max": 99999999999,
+    "preco_min": 100,
+    "preco_max": 119.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 288.67,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.001,
+    "peso_max": 0.299,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 24.67,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.3,
+    "peso_max": 0.499,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 26.47,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.5,
+    "peso_max": 0.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 27.67,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 1,
+    "peso_max": 1.499,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 28.27,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 1.5,
+    "peso_max": 1.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 28.87,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 2,
+    "peso_max": 2.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 31.57,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 3,
+    "peso_max": 3.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 33.97,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 4,
+    "peso_max": 4.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 36.97,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 5,
+    "peso_max": 5.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 48.97,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 6,
+    "peso_max": 6.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 54.07,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 7,
+    "peso_max": 7.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 57.67,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 8,
+    "peso_max": 8.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 59.32,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 9,
+    "peso_max": 10.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 82.42,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 11,
+    "peso_max": 12.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 84.37,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 13,
+    "peso_max": 14.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 89.92,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 15,
+    "peso_max": 16.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 95.32,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 17,
+    "peso_max": 19.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 109.42,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 20,
+    "peso_max": 24.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 127.12,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 25,
+    "peso_max": 29.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 128.32,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 30,
+    "peso_max": 30.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 133.42,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 40,
+    "peso_max": 49.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 138.07,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 50,
+    "peso_max": 59.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 147.22,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 60,
+    "peso_max": 69.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 157.57,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 70,
+    "peso_max": 79.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 164.77,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 80,
+    "peso_max": 89.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 183.07,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 90,
+    "peso_max": 99.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 209.32,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 100,
+    "peso_max": 124.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 234.07,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 125,
+    "peso_max": 149.999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 248.47,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 150,
+    "peso_max": 99999999999,
+    "preco_min": 120,
+    "preco_max": 149.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 326.32,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.1,
+    "peso_max": 0.299,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 27.67,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.3,
+    "peso_max": 0.499,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 29.77,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.5,
+    "peso_max": 0.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 31.12,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 1,
+    "peso_max": 1.499,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 31.72,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 1.5,
+    "peso_max": 1.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 32.47,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 2,
+    "peso_max": 2.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 35.47,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 3,
+    "peso_max": 3.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 38.32,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 4,
+    "peso_max": 4.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 41.62,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 5,
+    "peso_max": 5.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 53.62,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 6,
+    "peso_max": 6.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 60.07,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 7,
+    "peso_max": 7.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 64.87,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 8,
+    "peso_max": 8.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 66.67,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 9,
+    "peso_max": 10.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 92.62,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 11,
+    "peso_max": 12.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 94.87,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 13,
+    "peso_max": 14.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 101.17,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 15,
+    "peso_max": 16.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 106.12,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 17,
+    "peso_max": 19.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 123.07,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 20,
+    "peso_max": 24.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 143.02,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 25,
+    "peso_max": 29.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 144.37,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 30,
+    "peso_max": 30.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 148.72,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 40,
+    "peso_max": 49.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 153.82,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 50,
+    "peso_max": 59.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 164.02,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 60,
+    "peso_max": 69.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 175.72,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 70,
+    "peso_max": 79.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 183.67,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 80,
+    "peso_max": 89.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 204.07,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 90,
+    "peso_max": 99.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 233.32,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 100,
+    "peso_max": 124.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 260.92,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 125,
+    "peso_max": 149.999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 276.97,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 150,
+    "peso_max": 99999999999,
+    "preco_min": 150,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 363.82,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.001,
+    "peso_max": 0.299,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 31.42,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.3,
+    "peso_max": 0.499,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 33.82,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 0.5,
+    "peso_max": 0.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 35.47,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 1,
+    "peso_max": 1.499,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 36.97,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 1.5,
+    "peso_max": 1.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 36.97,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 2,
+    "peso_max": 2.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 39.37,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 3,
+    "peso_max": 3.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 42.52,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 4,
+    "peso_max": 4.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 46.12,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 5,
+    "peso_max": 5.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 59.62,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 6,
+    "peso_max": 6.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 66.07,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 7,
+    "peso_max": 7.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 72.07,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 8,
+    "peso_max": 8.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 74.02,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 9,
+    "peso_max": 10.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 102.97,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 11,
+    "peso_max": 12.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 105.37,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 13,
+    "peso_max": 14.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 112.42,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 15,
+    "peso_max": 16.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 117.97,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 17,
+    "peso_max": 19.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 136.72,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 20,
+    "peso_max": 24.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 158.92,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 25,
+    "peso_max": 29.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 160.42,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 30,
+    "peso_max": 30.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 160.57,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 40,
+    "peso_max": 49.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 166.12,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 50,
+    "peso_max": 59.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 177.22,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 60,
+    "peso_max": 69.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 189.82,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 70,
+    "peso_max": 79.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 198.37,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 80,
+    "peso_max": 89.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 220.42,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 90,
+    "peso_max": 99.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 251.92,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 100,
+    "peso_max": 124.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 281.92,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 125,
+    "peso_max": 149.999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 299.17,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Mercado Livre Premium",
+    "peso_min": 150,
+    "peso_max": 99999999999,
+    "preco_min": 200,
+    "preco_max": 9999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 392.92,
+    "comissao": 0.17
+  },
+  {
+    "canal": "Shopee",
+    "peso_min": 0,
+    "peso_max": 9999999,
+    "preco_min": 0.01,
+    "preco_max": 78.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 4,
+    "comissao": 0.215
+  },
+  {
+    "canal": "Shopee",
+    "peso_min": 0,
+    "peso_max": 9999999,
+    "preco_min": 80,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 16,
+    "comissao": 0.14
+  },
+  {
+    "canal": "Shopee",
+    "peso_min": 0,
+    "peso_max": 9999999,
+    "preco_min": 100,
+    "preco_max": 199.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 20,
+    "comissao": 0.14
+  },
+  {
+    "canal": "Shopee",
+    "peso_min": 0,
+    "peso_max": 9999999,
+    "preco_min": 200,
+    "preco_max": 99999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 26,
+    "comissao": 0.14
+  },
+  {
+    "canal": "Amazon",
+    "peso_min": 0,
+    "peso_max": 9999999,
+    "preco_min": 0,
+    "preco_max": 18.99,
+    "taxa_fixa": 4.5,
+    "taxa_frete": 0,
+    "comissao": 0.13
+  },
+  {
+    "canal": "Amazon",
+    "peso_min": 0,
+    "peso_max": 9999999,
+    "preco_min": 19,
+    "preco_max": 29.99,
+    "taxa_fixa": 4.5,
+    "taxa_frete": 0,
+    "comissao": 0.13
+  },
+  {
+    "canal": "Amazon",
+    "peso_min": 0,
+    "peso_max": 9999999,
+    "preco_min": 30,
+    "preco_max": 49.99,
+    "taxa_fixa": 6.5,
+    "taxa_frete": 0,
+    "comissao": 0.13
+  },
+  {
+    "canal": "Amazon",
+    "peso_min": 0,
+    "peso_max": 9999999,
+    "preco_min": 50,
+    "preco_max": 78.99,
+    "taxa_fixa": 6.75,
+    "taxa_frete": 0,
+    "comissao": 0.13
+  },
+  {
+    "canal": "Amazon",
+    "peso_min": 0,
+    "peso_max": 0.249,
+    "preco_min": 80,
+    "preco_max": 99.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 17.95,
+    "comissao": 0.13
+  },
+  {
+    "canal": "Amazon",
+    "peso_min": 0,
+    "peso_max": 0.249,
+    "preco_min": 100,
+    "preco_max": 9999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 17.95,
+    "comissao": 0.13
+  },
+  {
+    "canal": "Amazon",
+    "peso_min": 0.25,
+    "peso_max": 0.499,
+    "preco_min": 100,
+    "preco_max": 9999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 19.3,
+    "comissao": 0.13
+  },
+  {
+    "canal": "Amazon",
+    "peso_min": 0.5,
+    "peso_max": 0.999,
+    "preco_min": 100,
+    "preco_max": 9999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 20.2,
+    "comissao": 0.13
+  },
+  {
+    "canal": "Amazon",
+    "peso_min": 1,
+    "peso_max": 1.999,
+    "preco_min": 100,
+    "preco_max": 9999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 21.1,
+    "comissao": 0.13
+  },
+  {
+    "canal": "Amazon",
+    "peso_min": 2,
+    "peso_max": 2.999,
+    "preco_min": 100,
+    "preco_max": 9999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 22.4,
+    "comissao": 0.13
+  },
+  {
+    "canal": "Amazon",
+    "peso_min": 3,
+    "peso_max": 3.999,
+    "preco_min": 100,
+    "preco_max": 9999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 24.2,
+    "comissao": 0.13
+  },
+  {
+    "canal": "Amazon",
+    "peso_min": 4,
+    "peso_max": 4.999,
+    "preco_min": 100,
+    "preco_max": 9999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 25.6,
+    "comissao": 0.13
+  },
+  {
+    "canal": "Amazon",
+    "peso_min": 5,
+    "peso_max": 5.999,
+    "preco_min": 100,
+    "preco_max": 99999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 38,
+    "comissao": 0.13
+  },
+  {
+    "canal": "Amazon",
+    "peso_min": 6,
+    "peso_max": 10,
+    "preco_min": 100,
+    "preco_max": 99999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 59,
+    "comissao": 0.13
+  },
+  {
+    "canal": "Shein",
+    "peso_min": 0.001,
+    "peso_max": 0.299,
+    "preco_min": 0.01,
+    "preco_max": 99999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 4,
+    "comissao": 0.16
+  },
+  {
+    "canal": "Shein",
+    "peso_min": 0.3,
+    "peso_max": 0.599,
+    "preco_min": 0.01,
+    "preco_max": 99999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 5,
+    "comissao": 0.16
+  },
+  {
+    "canal": "Shein",
+    "peso_min": 0.6,
+    "peso_max": 0.899,
+    "preco_min": 0.01,
+    "preco_max": 99999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 6,
+    "comissao": 0.16
+  },
+  {
+    "canal": "Shein",
+    "peso_min": 0.9,
+    "peso_max": 1.199,
+    "preco_min": 0.01,
+    "preco_max": 99999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 8,
+    "comissao": 0.16
+  },
+  {
+    "canal": "Shein",
+    "peso_min": 1.2,
+    "peso_max": 1.499,
+    "preco_min": 0.01,
+    "preco_max": 99999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 10,
+    "comissao": 0.16
+  },
+  {
+    "canal": "Shein",
+    "peso_min": 1.5,
+    "peso_max": 1.999,
+    "preco_min": 0.01,
+    "preco_max": 99999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 10,
+    "comissao": 0.16
+  },
+  {
+    "canal": "Shein",
+    "peso_min": 2,
+    "peso_max": 4.999,
+    "preco_min": 0.01,
+    "preco_max": 99999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 15,
+    "comissao": 0.16
+  },
+  {
+    "canal": "Shein",
+    "peso_min": 5,
+    "peso_max": 8.999,
+    "preco_min": 0.01,
+    "preco_max": 99999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 32,
+    "comissao": 0.16
+  },
+  {
+    "canal": "Shein",
+    "peso_min": 9,
+    "peso_max": 12.999,
+    "preco_min": 0.01,
+    "preco_max": 99999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 63,
+    "comissao": 0.16
+  },
+  {
+    "canal": "Shein",
+    "peso_min": 13,
+    "peso_max": 9999999,
+    "preco_min": 0.01,
+    "preco_max": 99999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 63,
+    "comissao": 0.16
+  },
+  {
+    "canal": "Shopfy",
+    "peso_min": 0.001,
+    "peso_max": 99999999,
+    "preco_min": 0.01,
+    "preco_max": 9.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 4,
+    "comissao": 0.09
+  },
+  {
+    "canal": "Shopfy",
+    "peso_min": 0.001,
+    "peso_max": 99999999,
+    "preco_min": 10,
+    "preco_max": 18.99,
+    "taxa_fixa": 0,
+    "taxa_frete": 6,
+    "comissao": 0.09
+  },
+  {
+    "canal": "Shopfy",
+    "peso_min": 0.001,
+    "peso_max": 99999999,
+    "preco_min": 19,
+    "preco_max": 999999999,
+    "taxa_fixa": 0,
+    "taxa_frete": 6,
+    "comissao": 0.5
+  }
+]

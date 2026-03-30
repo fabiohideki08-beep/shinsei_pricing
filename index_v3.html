@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shinsei Pricing V3</title>
+  <style>
+    :root{--red:#ff003c;--bg:#dfe3e8;--card:#eef1f5;--text:#0b2b5c;--muted:#5f6f86;--line:#c8d0da;--blue:#1976d2;--green:#1c8c4a}
+    *{box-sizing:border-box} body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+    .top{height:16px;background:var(--red)} .wrap{max-width:1700px;margin:0 auto;padding:24px 28px 40px}
+    .tabs{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:22px}.tab{border:0;border-radius:18px;padding:18px 32px;background:#fff;font-weight:700;font-size:18px;cursor:pointer}.tab.active{background:var(--red);color:#fff}
+    .grid{display:grid;grid-template-columns:1.25fr .85fr;gap:18px}.card{background:var(--card);border:1px solid var(--line);border-radius:30px;padding:24px}.title{font-size:30px;font-weight:800;margin:0 0 16px}
+    .sub{font-size:15px;color:var(--muted);margin:6px 0 0}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:16px 18px}.form-grid-2{display:grid;grid-template-columns:repeat(2,minmax(220px,1fr));gap:16px 18px}
+    label{display:block;font-weight:700;font-size:14px;margin-bottom:8px} input,select,textarea{width:100%;padding:14px 16px;border-radius:16px;border:1px solid #c5ced8;background:#fff;font-size:14px} textarea{min-height:120px;resize:vertical}
+    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.btn{border:0;border-radius:18px;padding:16px 24px;background:var(--red);color:#fff;font-size:16px;font-weight:700;cursor:pointer}.btn.secondary{background:var(--blue)}.btn.ghost{background:#fff;color:var(--text);border:1px solid var(--line)}
+    .panel{display:none}.panel.active{display:block}.mono{font-family:Consolas,monospace}.result{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px;min-height:170px;white-space:pre-wrap;overflow:auto}
+    .metrics{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:12px;margin-bottom:14px}.metric{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px}.metric b{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}.metric span{font-size:22px;font-weight:800}
+    table{width:100%;border-collapse:collapse;background:#fff;border-radius:18px;overflow:hidden} th,td{padding:12px 10px;border-bottom:1px solid #e8edf2;text-align:left;font-size:14px} th{background:#f6f8fb}.badge{display:inline-block;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:700}.ok{background:#e6f6ec;color:#1c8c4a}.warn{background:#fff2dc;color:#996300}.off{background:#edf2f7;color:#5f6f86}
+    .full{grid-column:1/-1}.switch{display:flex;align-items:center;gap:12px;padding-top:34px}.hint{font-size:13px;color:var(--muted)}
+    @media(max-width:1200px){.grid{grid-template-columns:1fr}.form-grid{grid-template-columns:repeat(2,minmax(180px,1fr))}.metrics{grid-template-columns:repeat(2,minmax(120px,1fr))}}
+    @media(max-width:760px){.form-grid,.form-grid-2,.metrics{grid-template-columns:1fr}.wrap{padding:16px}}
+  </style>
+</head>
+<body>
+<div class="top"></div>
+<div class="wrap">
+  <div class="tabs">
+    <button class="tab" data-tab="simulador">Simulador</button>
+    <button class="tab" data-tab="regras">Regras de cálculo</button>
+    <button class="tab" data-tab="bling">Precificação Bling</button>
+    <button class="tab active" data-tab="inteligencia">Inteligência de vendas</button>
+  </div>
+
+  <section id="tab-inteligencia" class="panel active">
+    <div class="grid">
+      <div class="card">
+        <h2 class="title">Inteligência de vendas</h2>
+        <p class="sub">Aqui você configura a inteligência comercial que usa histórico por SKU e por canal para moderar o preço final com base em liquidez, share de lucro líquido histórico e velocidade de vendas.</p>
+        <div class="form-grid">
+          <div class="switch">
+            <input type="checkbox" id="intel_ativo" style="width:22px;height:22px">
+            <label for="intel_ativo" style="margin:0">Ativar inteligência de vendas</label>
+          </div>
+          <div>
+            <label>Data inicial</label>
+            <input type="date" id="intel_data_inicio">
+          </div>
+          <div>
+            <label>Data final</label>
+            <input type="date" id="intel_data_fim">
+          </div>
+          <div>
+            <label>Peso lucro</label>
+            <input type="number" step="0.01" id="intel_peso_lucro">
+          </div>
+          <div>
+            <label>Peso liquidez</label>
+            <input type="number" step="0.01" id="intel_peso_liquidez">
+          </div>
+          <div>
+            <label>Mínimo de pedidos</label>
+            <input type="number" step="1" id="intel_min_pedidos">
+          </div>
+          <div>
+            <label>Mínimo de unidades</label>
+            <input type="number" step="1" id="intel_min_unidades">
+          </div>
+          <div>
+            <label>Peso máximo por canal</label>
+            <input type="number" step="0.01" id="intel_peso_maximo_canal">
+          </div>
+          <div>
+            <label>Ajuste máximo permitido (%)</label>
+            <input type="number" step="0.1" id="intel_ajuste_maximo_percentual">
+          </div>
+          <div class="switch">
+            <input type="checkbox" id="intel_ignorar_prejuizo" style="width:22px;height:22px">
+            <label for="intel_ignorar_prejuizo" style="margin:0">Ignorar canais com lucro negativo</label>
+          </div>
+          <div class="switch">
+            <input type="checkbox" id="intel_usar_share_lucro" style="width:22px;height:22px">
+            <label for="intel_usar_share_lucro" style="margin:0">Usar share de lucro líquido</label>
+          </div>
+          <div>
+            <label>SKU para filtrar resumo (opcional)</label>
+            <input type="text" id="intel_sku_filtro" placeholder="Ex.: SKU ou EAN usado no histórico">
+          </div>
+        </div>
+        <div class="row" style="margin-top:18px">
+          <button class="btn" onclick="salvarInteligencia()">Salvar inteligência</button>
+          <button class="btn secondary" onclick="carregarResumoInteligencia()">Atualizar resumo</button>
+          <button class="btn ghost" onclick="mostrarHistoricoExemplo()">Modelo do historico.json</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="title">Resumo do histórico</h2>
+        <div class="metrics">
+          <div class="metric"><b>Status</b><span id="m_ativo">-</span></div>
+          <div class="metric"><b>Registros</b><span id="m_registros">0</span></div>
+          <div class="metric"><b>SKUs</b><span id="m_skus">0</span></div>
+          <div class="metric"><b>Dias no período</b><span id="m_dias">0</span></div>
+        </div>
+        <div class="metric" style="margin-bottom:14px"><b>Lucro líquido positivo no período</b><span id="m_lucro_total">R$ 0,00</span></div>
+        <div class="result mono" id="modelo_historico" style="display:none"></div>
+        <div class="hint">O resumo abaixo usa o período configurado acima e mostra os canais com quantidade, pedidos, lucro líquido, share de lucro e velocidade diária.</div>
+      </div>
+
+      <div class="card full">
+        <h2 class="title">Canais do histórico</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Canal</th><th>Quantidade</th><th>Pedidos</th><th>Receita</th><th>Lucro líquido</th><th>Share lucro</th><th>Velocidade/dia</th>
+            </tr>
+          </thead>
+          <tbody id="tbody_resumo_inteligencia">
+            <tr><td colspan="7">Nenhum resumo carregado ainda.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2 class="title">Regra geral da integração</h2>
+        <div class="form-grid">
+          <div><label>Embalagem</label><input type="number" step="0.01" id="cfg_embalagem"></div>
+          <div><label>Imposto</label><input type="number" step="0.01" id="cfg_imposto"></div>
+          <div><label>Quantidade</label><input type="number" step="1" id="cfg_quantidade"></div>
+          <div><label>Objetivo</label><select id="cfg_objetivo"><option value="markup">Markup</option><option value="margem">Margem</option><option value="lucro_liquido">Lucro líquido</option></select></div>
+          <div><label>Tipo do alvo</label><select id="cfg_tipo_alvo"><option value="percentual">Percentual</option><option value="nominal">Nominal</option></select></div>
+          <div><label>Valor alvo</label><input type="number" step="0.01" id="cfg_valor_alvo"></div>
+          <div><label>Modo aprovação</label><select id="cfg_modo_aprovacao"><option value="manual">Manual</option><option value="automatico">Automático</option></select></div>
+          <div><label>Preço compra anterior</label><input type="number" step="0.01" id="cfg_preco_compra_anterior_bling"></div>
+          <div><label>Modo preço virtual</label><select id="cfg_modo_preco_virtual"><option value="percentual_acima">Percentual acima</option><option value="valor_acima">Valor acima</option><option value="manual">Manual</option></select></div>
+          <div><label>Acréscimo percentual</label><input type="number" step="0.01" id="cfg_acrescimo_percentual"></div>
+          <div><label>Acréscimo nominal</label><input type="number" step="0.01" id="cfg_acrescimo_nominal"></div>
+          <div><label>Preço virtual manual</label><input type="number" step="0.01" id="cfg_preco_manual"></div>
+          <div><label>Arredondamento</label><select id="cfg_arredondamento"><option value="sem">Sem</option><option value="90">,90</option><option value="99">,99</option><option value="97">,97</option></select></div>
+          <div class="switch"><input type="checkbox" id="cfg_regra_estoque_ativo" style="width:22px;height:22px"><label for="cfg_regra_estoque_ativo" style="margin:0">Regra estoque baixo ativa</label></div>
+          <div><label>Estoque limite</label><input type="number" step="1" id="cfg_estoque_limite"></div>
+          <div><label>Tipo do ajuste</label><select id="cfg_ajuste_estoque_tipo"><option value="percentual">Percentual</option><option value="nominal">Nominal</option></select></div>
+          <div><label>Valor do ajuste</label><input type="number" step="0.01" id="cfg_ajuste_estoque_valor"></div>
+        </div>
+        <div class="row" style="margin-top:18px"><button class="btn" onclick="salvarCfg()">Salvar regra geral</button></div>
+      </div>
+
+      <div class="card">
+        <h2 class="title">Precificação automática via Bling</h2>
+        <div class="form-grid-2">
+          <div><label>Critério</label><select id="bling_criterio"><option value="ean">EAN</option><option value="sku">SKU</option><option value="id">ID</option></select></div>
+          <div><label>Valor da busca</label><input type="text" id="bling_valor_busca"></div>
+          <div><label>Peso override (opcional)</label><input type="number" step="0.001" id="bling_peso_override" value="0"></div>
+        </div>
+        <div class="row" style="margin-top:18px"><button class="btn" onclick="precificarBling()">Precificar produto do Bling</button></div>
+        <p class="sub">A precificação usará a inteligência de vendas salva acima. Se não houver histórico suficiente, o sistema cai automaticamente para a lógica padrão.</p>
+        <div class="result mono" id="resultado_bling">Nenhuma precificação realizada ainda.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-simulador" class="panel"><div class="card"><h2 class="title">Simulador</h2><p class="sub">Nesta versão o foco foi colocar a inteligência de vendas na interface. Você pode continuar usando o simulador atual e evoluí-lo depois.</p></div></section>
+  <section id="tab-regras" class="panel"><div class="card"><h2 class="title">Regras de cálculo</h2><p class="sub">As regras continuam sendo lidas normalmente do arquivo JSON e da importação via Excel.</p></div></section>
+  <section id="tab-bling" class="panel"><div class="card"><h2 class="title">Precificação Bling</h2><p class="sub">Use a aba de Inteligência de vendas, que agora concentra a regra geral e a precificação do Bling na mesma tela para facilitar o teste.</p></div></section>
+</div>
+<script>
+const modeloHistorico = `[
+  {
+    "data": "2026-03-20",
+    "sku": "7899884225714",
+    "canal": "Amazon",
+    "quantidade": 10,
+    "pedidos": 5,
+    "receita": 500,
+    "custo_total": 300,
+    "lucro_liquido": 200,
+    "margem_liquida_percentual": 40,
+    "preco_medio": 50
+  },
+  {
+    "data": "2026-03-20",
+    "sku": "7899884225714",
+    "canal": "Mercado Livre Classico",
+    "quantidade": 5,
+    "pedidos": 5,
+    "receita": 250,
+    "custo_total": 180,
+    "lucro_liquido": 70,
+    "margem_liquida_percentual": 28,
+    "preco_medio": 50
+  }
+]`;
+
+function money(v){return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));}
+function pct(v){return `${(Number(v||0)*100).toFixed(2)}%`;}
+function byId(id){return document.getElementById(id);}
+
+function bindTabs(){
+  document.querySelectorAll('.tab').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      byId(`tab-${btn.dataset.tab}`).classList.add('active');
+    });
+  });
+}
+
+async function carregarCfg(){
+  const cfg = await fetch('/integracao-config').then(r=>r.json());
+  byId('cfg_embalagem').value = cfg.embalagem ?? 0;
+  byId('cfg_imposto').value = cfg.imposto ?? 0;
+  byId('cfg_quantidade').value = cfg.quantidade ?? 1;
+  byId('cfg_objetivo').value = cfg.objetivo ?? 'markup';
+  byId('cfg_tipo_alvo').value = cfg.tipo_alvo ?? 'percentual';
+  byId('cfg_valor_alvo').value = cfg.valor_alvo ?? 0;
+  byId('cfg_modo_aprovacao').value = cfg.modo_aprovacao ?? 'manual';
+  byId('cfg_preco_compra_anterior_bling').value = cfg.preco_compra_anterior_bling ?? 0;
+  byId('cfg_modo_preco_virtual').value = cfg.modo_preco_virtual ?? 'percentual_acima';
+  byId('cfg_acrescimo_percentual').value = cfg.acrescimo_percentual ?? 0;
+  byId('cfg_acrescimo_nominal').value = cfg.acrescimo_nominal ?? 0;
+  byId('cfg_preco_manual').value = cfg.preco_manual ?? 0;
+  byId('cfg_arredondamento').value = cfg.arredondamento ?? 'sem';
+  byId('cfg_regra_estoque_ativo').checked = !!cfg.regra_estoque_ativo;
+  byId('cfg_estoque_limite').value = cfg.estoque_limite ?? 2;
+  byId('cfg_ajuste_estoque_tipo').value = cfg.ajuste_estoque_tipo ?? 'percentual';
+  byId('cfg_ajuste_estoque_valor').value = cfg.ajuste_estoque_valor ?? 0;
+}
+
+async function salvarCfg(){
+  const intelAtual = await fetch('/inteligencia-config').then(r=>r.json());
+  const payload = {
+    embalagem: Number(byId('cfg_embalagem').value||0),
+    imposto: Number(byId('cfg_imposto').value||0),
+    quantidade: Number(byId('cfg_quantidade').value||1),
+    objetivo: byId('cfg_objetivo').value,
+    tipo_alvo: byId('cfg_tipo_alvo').value,
+    valor_alvo: Number(byId('cfg_valor_alvo').value||0),
+    modo_aprovacao: byId('cfg_modo_aprovacao').value,
+    preco_compra_anterior_bling: Number(byId('cfg_preco_compra_anterior_bling').value||0),
+    modo_preco_virtual: byId('cfg_modo_preco_virtual').value,
+    acrescimo_percentual: Number(byId('cfg_acrescimo_percentual').value||0),
+    acrescimo_nominal: Number(byId('cfg_acrescimo_nominal').value||0),
+    preco_manual: Number(byId('cfg_preco_manual').value||0),
+    arredondamento: byId('cfg_arredondamento').value,
+    regra_estoque_ativo: byId('cfg_regra_estoque_ativo').checked,
+    estoque_limite: Number(byId('cfg_estoque_limite').value||2),
+    ajuste_estoque_tipo: byId('cfg_ajuste_estoque_tipo').value,
+    ajuste_estoque_valor: Number(byId('cfg_ajuste_estoque_valor').value||0),
+    inteligencia_vendas: intelAtual,
+  };
+  const res = await fetch('/integracao-config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(r=>r.json());
+  alert(res.message || 'Configuração salva.');
+}
+
+async function carregarInteligencia(){
+  const cfg = await fetch('/inteligencia-config').then(r=>r.json());
+  byId('intel_ativo').checked = !!cfg.ativo;
+  byId('intel_data_inicio').value = cfg.data_inicio || '';
+  byId('intel_data_fim').value = cfg.data_fim || '';
+  byId('intel_peso_lucro').value = cfg.peso_lucro ?? 0.6;
+  byId('intel_peso_liquidez').value = cfg.peso_liquidez ?? 0.4;
+  byId('intel_min_pedidos').value = cfg.min_pedidos ?? 3;
+  byId('intel_min_unidades').value = cfg.min_unidades ?? 5;
+  byId('intel_peso_maximo_canal').value = cfg.peso_maximo_canal ?? 0.70;
+  byId('intel_ajuste_maximo_percentual').value = cfg.ajuste_maximo_percentual ?? 3.0;
+  byId('intel_ignorar_prejuizo').checked = !!cfg.ignorar_canais_prejuizo;
+  byId('intel_usar_share_lucro').checked = !!cfg.usar_share_lucro;
+}
+
+async function salvarInteligencia(){
+  const payload = {
+    ativo: byId('intel_ativo').checked,
+    data_inicio: byId('intel_data_inicio').value || null,
+    data_fim: byId('intel_data_fim').value || null,
+    peso_lucro: Number(byId('intel_peso_lucro').value||0.6),
+    peso_liquidez: Number(byId('intel_peso_liquidez').value||0.4),
+    min_pedidos: Number(byId('intel_min_pedidos').value||3),
+    min_unidades: Number(byId('intel_min_unidades').value||5),
+    ignorar_canais_prejuizo: byId('intel_ignorar_prejuizo').checked,
+    peso_maximo_canal: Number(byId('intel_peso_maximo_canal').value||0.7),
+    ajuste_maximo_percentual: Number(byId('intel_ajuste_maximo_percentual').value||3),
+    usar_share_lucro: byId('intel_usar_share_lucro').checked,
+  };
+  const res = await fetch('/inteligencia-config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(r=>r.json());
+  alert(res.message || 'Inteligência salva.');
+  await carregarResumoInteligencia();
+}
+
+async function carregarResumoInteligencia(){
+  const qs = new URLSearchParams();
+  if(byId('intel_data_inicio').value) qs.set('data_inicio', byId('intel_data_inicio').value);
+  if(byId('intel_data_fim').value) qs.set('data_fim', byId('intel_data_fim').value);
+  if(byId('intel_sku_filtro').value) qs.set('sku', byId('intel_sku_filtro').value.trim());
+  const res = await fetch('/inteligencia/resumo?' + qs.toString()).then(r=>r.json());
+  byId('m_ativo').textContent = res.ativo ? 'Ativa' : 'Inativa';
+  byId('m_ativo').className = res.ativo ? 'badge ok' : 'badge off';
+  byId('m_registros').textContent = res.total_registros || 0;
+  byId('m_skus').textContent = res.total_skus || 0;
+  byId('m_dias').textContent = res.dias_periodo || 0;
+  byId('m_lucro_total').textContent = money(res.lucro_total_positivo || 0);
+  const tbody = byId('tbody_resumo_inteligencia');
+  if(!res.canais || !res.canais.length){
+    tbody.innerHTML = '<tr><td colspan="7">Nenhum dado encontrado no período selecionado.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = res.canais.map(c => `
+    <tr>
+      <td>${c.canal}</td>
+      <td>${c.quantidade}</td>
+      <td>${c.pedidos}</td>
+      <td>${money(c.receita)}</td>
+      <td>${money(c.lucro_liquido)}</td>
+      <td>${(Number(c.share_lucro||0)*100).toFixed(2)}%</td>
+      <td>${c.velocidade_dia}</td>
+    </tr>`).join('');
+}
+
+function mostrarHistoricoExemplo(){
+  const el = byId('modelo_historico');
+  el.style.display = 'block';
+  el.textContent = modeloHistorico;
+}
+
+async function precificarBling(){
+  const intel = await fetch('/inteligencia-config').then(r=>r.json());
+  const payload = {
+    criterio: byId('bling_criterio').value,
+    valor_busca: byId('bling_valor_busca').value.trim(),
+    embalagem: Number(byId('cfg_embalagem').value||0),
+    imposto: Number(byId('cfg_imposto').value||0),
+    quantidade: Number(byId('cfg_quantidade').value||1),
+    objetivo: byId('cfg_objetivo').value,
+    tipo_alvo: byId('cfg_tipo_alvo').value,
+    valor_alvo: Number(byId('cfg_valor_alvo').value||0),
+    peso_override: Number(byId('bling_peso_override').value||0),
+    inteligencia_vendas: intel,
+    modo_aprovacao: byId('cfg_modo_aprovacao').value,
+    preco_compra_anterior_bling: Number(byId('cfg_preco_compra_anterior_bling').value||0),
+    modo_preco_virtual: byId('cfg_modo_preco_virtual').value,
+    acrescimo_percentual: Number(byId('cfg_acrescimo_percentual').value||0),
+    acrescimo_nominal: Number(byId('cfg_acrescimo_nominal').value||0),
+    preco_manual: Number(byId('cfg_preco_manual').value||0),
+    arredondamento: byId('cfg_arredondamento').value,
+    regra_estoque_ativo: byId('cfg_regra_estoque_ativo').checked,
+    estoque_limite: Number(byId('cfg_estoque_limite').value||2),
+    ajuste_estoque_tipo: byId('cfg_ajuste_estoque_tipo').value,
+    ajuste_estoque_valor: Number(byId('cfg_ajuste_estoque_valor').value||0)
+  };
+  const el = byId('resultado_bling');
+  el.textContent = 'Processando...';
+  const res = await fetch('/bling/precificar-produto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(r=>r.json());
+  el.textContent = JSON.stringify(res, null, 2);
+}
+
+async function init(){
+  bindTabs();
+  await carregarCfg();
+  await carregarInteligencia();
+  await carregarResumoInteligencia();
+}
+init();
+</script>
+</body>
+</html>

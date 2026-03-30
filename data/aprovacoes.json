@@ -1,0 +1,2500 @@
+[
+  {
+    "id": "6a2c6fc8-7c5b-4e79-b3e8-1c01e7784cf0",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T15:00:51.223244",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d3074-cb9d-7617-04cc-b87c52d2e917",
+      "date": "2026-03-27T18:00:53Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16444737476
+        },
+        "saldoFisicoTotal": 12,
+        "saldoVirtualTotal": 12,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 12,
+            "saldoVirtual": 12
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "f0099a50-d6c2-4e92-a127-a7b50a81912f",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T15:00:51.202047",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d3074-cb74-7df4-d086-a62aa5e1fdde",
+      "date": "2026-03-27T18:00:53Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16461086372
+        },
+        "saldoFisicoTotal": 12,
+        "saldoVirtualTotal": 12,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 12,
+            "saldoVirtual": 12
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "6292e7c9-39e3-47c4-837a-eca0949671f0",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T15:00:51.190785",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d3074-cb43-7176-6051-d3ccde50aa66",
+      "date": "2026-03-27T18:00:53Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16461810053
+        },
+        "saldoFisicoTotal": 12,
+        "saldoVirtualTotal": 12,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 12,
+            "saldoVirtual": 12
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "ab9b85b9-6766-4f03-ade2-183849fd84a9",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T15:00:51.153222",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d3074-cb15-71a2-63aa-3461e5a9b146",
+      "date": "2026-03-27T18:00:53Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16510295529
+        },
+        "saldoFisicoTotal": 12,
+        "saldoVirtualTotal": 12,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 12,
+            "saldoVirtual": 12
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "86a48d11-1157-4d4b-ba9c-5dc5e32ad2d3",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T15:00:51.110879",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d3074-cae2-7a01-c6a1-17e7ca9f7d1d",
+      "date": "2026-03-27T18:00:53Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16510295528
+        },
+        "saldoFisicoTotal": 12,
+        "saldoVirtualTotal": 12,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 12,
+            "saldoVirtual": 12
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "04e0a90f-012a-49b1-b2b8-e80eb1de29a2",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T15:00:51.084113",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d3074-caaf-75ce-57d5-441a816ecc66",
+      "date": "2026-03-27T18:00:53Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16510295527
+        },
+        "saldoFisicoTotal": 12,
+        "saldoVirtualTotal": 12,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 12,
+            "saldoVirtual": 12
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "840439d7-11ed-46e6-aa2b-59d13f8cc4d3",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T15:00:51.046786",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d3074-ca84-7bb0-2cce-c550746feaa7",
+      "date": "2026-03-27T18:00:53Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16510299809
+        },
+        "saldoFisicoTotal": 12,
+        "saldoVirtualTotal": 12,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 12,
+            "saldoVirtual": 12
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "e1f3a61a-fa78-462e-aeff-ad62f6ad45fa",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T15:00:50.898663",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d3074-ca5d-7308-047d-1e3d8f63aac4",
+      "date": "2026-03-27T18:00:53Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16510031703
+        },
+        "saldoFisicoTotal": 12,
+        "saldoVirtualTotal": 12,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 12,
+            "saldoVirtual": 12
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "8293f54b-6799-42f2-b489-ce4668605e75",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T15:00:49.668375",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d3074-c4e7-7227-594b-0474e6ff63fe",
+      "date": "2026-03-27T18:00:52Z",
+      "version": "v1",
+      "event": "stock.created",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 15877041257
+        },
+        "saldoFisicoTotal": 12,
+        "saldoVirtualTotal": 12,
+        "deposito": {
+          "id": 14636070822,
+          "saldoFisico": 12,
+          "saldoVirtual": 12
+        },
+        "operacao": "S",
+        "quantidade": 3
+      }
+    }
+  },
+  {
+    "id": "1b8ab22c-dcfe-4f5d-8d23-dcee13cff3e9",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T14:58:18.210806",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d3072-75d4-7ee0-06ce-46430a187f30",
+      "date": "2026-03-27T17:58:20Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16594886162
+        },
+        "saldoFisicoTotal": 14,
+        "saldoVirtualTotal": 14,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 14,
+            "saldoVirtual": 14
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "7da2f100-845e-4760-80f8-f592e481a434",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T14:58:18.191693",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d3072-75ac-79b1-3176-92725326a085",
+      "date": "2026-03-27T17:58:20Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16444737445
+        },
+        "saldoFisicoTotal": 14,
+        "saldoVirtualTotal": 14,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 14,
+            "saldoVirtual": 14
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "29a5cc64-4111-410d-8c87-046fdbb19902",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T14:58:18.164357",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d3072-7588-79f5-f711-e0e761501d8d",
+      "date": "2026-03-27T17:58:20Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16461086357
+        },
+        "saldoFisicoTotal": 14,
+        "saldoVirtualTotal": 14,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 14,
+            "saldoVirtual": 14
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "9340f200-e318-4a84-ada1-e34f03d3d2d2",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T14:58:18.141138",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d3072-7562-7f55-9a14-343cdda234fe",
+      "date": "2026-03-27T17:58:20Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16461810039
+        },
+        "saldoFisicoTotal": 14,
+        "saldoVirtualTotal": 14,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 14,
+            "saldoVirtual": 14
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "89a5ec38-0385-4910-a127-e8898393c8f5",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T14:58:18.120814",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d3072-753c-77be-ab17-38887c08980e",
+      "date": "2026-03-27T17:58:20Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16510360209
+        },
+        "saldoFisicoTotal": 14,
+        "saldoVirtualTotal": 14,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 14,
+            "saldoVirtual": 14
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "540f641c-7b67-48fa-82dc-98cee0340666",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T14:58:18.101082",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d3072-7505-7cc6-e41b-a78af885a44c",
+      "date": "2026-03-27T17:58:20Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16510360208
+        },
+        "saldoFisicoTotal": 14,
+        "saldoVirtualTotal": 14,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 14,
+            "saldoVirtual": 14
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "9766facc-c695-4104-a90d-284a5617cc02",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T14:58:18.039891",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d3072-74d7-7999-0154-e6a3ad2edc2a",
+      "date": "2026-03-27T17:58:20Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16510360210
+        },
+        "saldoFisicoTotal": 14,
+        "saldoVirtualTotal": 14,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 14,
+            "saldoVirtual": 14
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "28b3ace6-44c7-4f23-a678-b004ba93b167",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T14:58:18.015816",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d3072-74ac-7783-c054-a06899744130",
+      "date": "2026-03-27T17:58:20Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16510360207
+        },
+        "saldoFisicoTotal": 14,
+        "saldoVirtualTotal": 14,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 14,
+            "saldoVirtual": 14
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "1249e041-b928-4c9f-b7bf-0b4b8f207133",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T14:58:17.859588",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d3072-7483-7e2f-5a10-b1c037189880",
+      "date": "2026-03-27T17:58:20Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16510031737
+        },
+        "saldoFisicoTotal": 14,
+        "saldoVirtualTotal": 14,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 14,
+            "saldoVirtual": 14
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "5173f232-8427-462b-83c9-d2cf3664a769",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T14:58:16.636406",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d3072-6f1c-7260-d7af-e537984d2bf4",
+      "date": "2026-03-27T17:58:19Z",
+      "version": "v1",
+      "event": "stock.created",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 15877041399
+        },
+        "saldoFisicoTotal": 14,
+        "saldoVirtualTotal": 14,
+        "deposito": {
+          "id": 14636070822,
+          "saldoFisico": 14,
+          "saldoVirtual": 14
+        },
+        "operacao": "E",
+        "quantidade": 5
+      }
+    }
+  },
+  {
+    "id": "1cb69e98-08f8-429e-83ca-6d3c25e0bb8c",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T14:52:41.912617",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d306d-53a2-7692-36d4-df897b1ee772",
+      "date": "2026-03-27T17:52:44Z",
+      "version": "v1",
+      "event": "stock.created",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16509181959
+        },
+        "saldoFisicoTotal": 36,
+        "saldoVirtualTotal": 36,
+        "deposito": {
+          "id": 14636070822,
+          "saldoFisico": 36,
+          "saldoVirtual": 36
+        },
+        "operacao": "E",
+        "quantidade": 2
+      }
+    }
+  },
+  {
+    "id": "d58e58b1-084d-4b5c-87d4-3be2e5d76358",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:12:02.211925",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-7b10-7a28-5089-0a46a50d8cbc",
+      "date": "2026-03-27T02:53:58Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422240
+        },
+        "saldoFisicoTotal": 4,
+        "saldoVirtualTotal": 4,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 4,
+            "saldoVirtual": 4
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "7d57d69a-faeb-4f6a-a5e7-2c00b1480038",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:12:02.182347",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-760f-7d94-bac4-b66db212dc9f",
+      "date": "2026-03-27T02:53:57Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422168
+        },
+        "saldoFisicoTotal": 0,
+        "saldoVirtualTotal": 0,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "3b8ac7e1-be37-42d5-93f6-bcee36e278ed",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:12:02.132638",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-7553-7f6c-3744-3fe9283ccd20",
+      "date": "2026-03-27T02:53:56Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422281
+        },
+        "saldoFisicoTotal": 1,
+        "saldoVirtualTotal": 1,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 1,
+            "saldoVirtual": 1
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "e256c92f-5025-4f22-8dc2-5fa411dfef53",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:12:02.102686",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-7c0f-7aac-1ba0-b075d0cdb657",
+      "date": "2026-03-27T02:53:58Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422273
+        },
+        "saldoFisicoTotal": 4,
+        "saldoVirtualTotal": 4,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 4,
+            "saldoVirtual": 4
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "49c86b6a-8906-44a8-bd00-aa7df7ba118d",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:12:02.071600",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-7aed-7787-c538-1a0204e3eb1d",
+      "date": "2026-03-27T02:53:58Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422252
+        },
+        "saldoFisicoTotal": 3,
+        "saldoVirtualTotal": 3,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 3,
+            "saldoVirtual": 3
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "8013a98f-4226-4e27-8d20-f39dd77a014d",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:12:02.036830",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-75a5-71ef-199b-79909f6f0d35",
+      "date": "2026-03-27T02:53:57Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422177
+        },
+        "saldoFisicoTotal": 5,
+        "saldoVirtualTotal": 5,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 5,
+            "saldoVirtual": 5
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "d4a74b4d-50e5-4e7f-be9f-7cdf714157ac",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:12:02.002886",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-7d9a-72f7-e222-b0bc30bbcaef",
+      "date": "2026-03-27T02:53:59Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16459633419
+        },
+        "saldoFisicoTotal": 0,
+        "saldoVirtualTotal": 0,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "3b853357-aa8e-4ff4-aa85-be30733dc422",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:12:01.959269",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-7151-7ce1-6025-a68339db777e",
+      "date": "2026-03-27T02:53:55Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16446671322
+        },
+        "saldoFisicoTotal": 31,
+        "saldoVirtualTotal": 31,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 31,
+            "saldoVirtual": 31
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "eb8cae0c-4051-40a2-a822-39a1dcafcd4c",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:12:01.835375",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-7b7c-794a-4f16-f9acd25b15fb",
+      "date": "2026-03-27T02:53:58Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422272
+        },
+        "saldoFisicoTotal": 3,
+        "saldoVirtualTotal": 3,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 3,
+            "saldoVirtual": 3
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "71da7d03-d085-46b1-bd15-db472457e711",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:12:01.795774",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-6b64-762e-a816-f53ddfb40131",
+      "date": "2026-03-27T02:53:54Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16463409878
+        },
+        "saldoFisicoTotal": 1,
+        "saldoVirtualTotal": 1,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 1,
+            "saldoVirtual": 1
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "0fada7a5-21b2-41dd-b4ed-3d9e9484d558",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.868599",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-7ba1-7f44-5d42-55dfbac14af4",
+      "date": "2026-03-27T02:53:58Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422180
+        },
+        "saldoFisicoTotal": 3,
+        "saldoVirtualTotal": 3,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 3,
+            "saldoVirtual": 3
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "33fb1af4-760e-4e80-81e9-33cb3a2e89e7",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.834606",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-7c59-7cbe-d9c8-ec9c7b7308da",
+      "date": "2026-03-27T02:53:58Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422293
+        },
+        "saldoFisicoTotal": 0,
+        "saldoVirtualTotal": 0,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "afc2e3ab-df66-4b51-a0f0-ffa9510774fb",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.805391",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-6fd3-7cc5-ebc1-1b062bcad3f9",
+      "date": "2026-03-27T02:53:55Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16518244184
+        },
+        "saldoFisicoTotal": 2,
+        "saldoVirtualTotal": 2,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 2,
+            "saldoVirtual": 2
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "552c1e37-ead9-4470-8b73-5c3a290aef25",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.776274",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-77d3-7a09-7707-4a43b406bd41",
+      "date": "2026-03-27T02:53:57Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422205
+        },
+        "saldoFisicoTotal": 2,
+        "saldoVirtualTotal": 2,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 2,
+            "saldoVirtual": 2
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "e30f6fd8-8a95-48ce-8426-704f19848d4b",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.747927",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-6b15-7079-3493-1feb25c2c8d7",
+      "date": "2026-03-27T02:53:54Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16518244175
+        },
+        "saldoFisicoTotal": 1,
+        "saldoVirtualTotal": 1,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 1,
+            "saldoVirtual": 1
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "fdb0bd74-9dec-4731-909b-53dc80032798",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.720343",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-7d6d-7912-ef81-34db16d32e16",
+      "date": "2026-03-27T02:53:59Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16459633418
+        },
+        "saldoFisicoTotal": 1,
+        "saldoVirtualTotal": 1,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 1,
+            "saldoVirtual": 1
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "b997100e-0d78-4b52-bb50-abd6c8169948",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.669588",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-75c7-7798-3b45-b9f1fcce8c66",
+      "date": "2026-03-27T02:53:57Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422253
+        },
+        "saldoFisicoTotal": 7,
+        "saldoVirtualTotal": 7,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 7,
+            "saldoVirtual": 7
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "e09714ce-67cb-433a-82bd-4c5682daa3d4",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.640093",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-7385-7533-561d-f0dab5a94d08",
+      "date": "2026-03-27T02:53:56Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448412703
+        },
+        "saldoFisicoTotal": 1,
+        "saldoVirtualTotal": 1,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 1,
+            "saldoVirtual": 1
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "4be33c93-5490-487f-85ed-35546f757487",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.613747",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-6f00-7dc0-9d74-13582f97a24b",
+      "date": "2026-03-27T02:53:55Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16518223843
+        },
+        "saldoFisicoTotal": 0,
+        "saldoVirtualTotal": 0,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "ff1dc525-ddc3-4775-8495-273ffa0e2d9f",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.587127",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-6f20-7e24-5c33-3507396ee6a0",
+      "date": "2026-03-27T02:53:55Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16518223849
+        },
+        "saldoFisicoTotal": 0,
+        "saldoVirtualTotal": 0,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "539515a6-9ac8-4fc7-8c4c-220e09aaa119",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.556746",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-795a-7b24-0a79-2111ee664a39",
+      "date": "2026-03-27T02:53:57Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422224
+        },
+        "saldoFisicoTotal": 1,
+        "saldoVirtualTotal": 1,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 1,
+            "saldoVirtual": 1
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "d662e324-4aa5-42fb-b17a-9837d677abed",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.529845",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-7466-70fb-3867-27e79d225188",
+      "date": "2026-03-27T02:53:56Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422280
+        },
+        "saldoFisicoTotal": 0,
+        "saldoVirtualTotal": 0,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "e7c026ff-326d-4b64-857d-fb61c5040713",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.499607",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-752a-7673-971c-92289284e42e",
+      "date": "2026-03-27T02:53:56Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422189
+        },
+        "saldoFisicoTotal": 4,
+        "saldoVirtualTotal": 4,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 4,
+            "saldoVirtual": 4
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "fe794319-a4df-4d67-bc88-7af064feff6a",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.466193",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-79f1-72a2-7fde-85720ae6eaed",
+      "date": "2026-03-27T02:53:58Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422228
+        },
+        "saldoFisicoTotal": 4,
+        "saldoVirtualTotal": 4,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 4,
+            "saldoVirtual": 4
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "7d7728a0-202b-4d1c-ac86-620cd8262609",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.433707",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-7496-7fe2-6b97-06db4e578aba",
+      "date": "2026-03-27T02:53:56Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422173
+        },
+        "saldoFisicoTotal": 2,
+        "saldoVirtualTotal": 2,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 2,
+            "saldoVirtual": 2
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "1aed0b13-1df7-402f-8d79-09ae9d05c894",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.402665",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-73b0-7bcd-6a99-47b90ed7d917",
+      "date": "2026-03-27T02:53:56Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422186
+        },
+        "saldoFisicoTotal": 3,
+        "saldoVirtualTotal": 3,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 3,
+            "saldoVirtual": 3
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "980b54ad-87d4-4d37-af3a-5bccca7641ef",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.375905",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-7c36-7f1b-bd64-58b2b6d8fbc0",
+      "date": "2026-03-27T02:53:58Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422299
+        },
+        "saldoFisicoTotal": 0,
+        "saldoVirtualTotal": 0,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "abb9ce86-5751-4d10-8fd7-35cf32ec850b",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.347333",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-6d98-7ac1-37b7-9077f667575e",
+      "date": "2026-03-27T02:53:54Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16518189757
+        },
+        "saldoFisicoTotal": 2,
+        "saldoVirtualTotal": 2,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 2,
+            "saldoVirtual": 2
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "96733251-4ef9-4adc-898e-13c852163ac5",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.319336",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-77f5-7777-341f-d3dea90e2655",
+      "date": "2026-03-27T02:53:57Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422295
+        },
+        "saldoFisicoTotal": 0,
+        "saldoVirtualTotal": 0,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "3ad59cf2-0878-4635-95ca-a82e9cdd2056",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.291980",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-6f84-7751-993c-88d235dffde6",
+      "date": "2026-03-27T02:53:55Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16518244177
+        },
+        "saldoFisicoTotal": 3,
+        "saldoVirtualTotal": 3,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 3,
+            "saldoVirtual": 3
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "2d634a9c-43f6-4a03-b8c2-2cfc9e8722d8",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.265381",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-72ee-7aae-d8db-d1c434815ca3",
+      "date": "2026-03-27T02:53:56Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422263
+        },
+        "saldoFisicoTotal": 2,
+        "saldoVirtualTotal": 2,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 2,
+            "saldoVirtual": 2
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "ba726ae5-c640-438e-b909-1417e42813ab",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.236235",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-7646-7bba-aa28-2de97f3def62",
+      "date": "2026-03-27T02:53:57Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422197
+        },
+        "saldoFisicoTotal": 1,
+        "saldoVirtualTotal": 1,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 1,
+            "saldoVirtual": 1
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "4aa2f1c2-2f9f-4a0d-8c0a-b73c7de9b8d3",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.208702",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-6ffc-7eb0-deba-7c1ae6949f7c",
+      "date": "2026-03-27T02:53:55Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16518244189
+        },
+        "saldoFisicoTotal": 5,
+        "saldoVirtualTotal": 5,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 5,
+            "saldoVirtual": 5
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "bc5ab333-1394-4e96-a86c-d7f9b7c48983",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.182160",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-712d-7d05-f3b1-be709bff747f",
+      "date": "2026-03-27T02:53:55Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16518244214
+        },
+        "saldoFisicoTotal": 2,
+        "saldoVirtualTotal": 2,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 2,
+            "saldoVirtual": 2
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "249781c6-7166-4f9c-afd3-006776ecd8fb",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.156755",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-7884-7a54-6f34-6c64fab8a838",
+      "date": "2026-03-27T02:53:57Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422274
+        },
+        "saldoFisicoTotal": 2,
+        "saldoVirtualTotal": 2,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 2,
+            "saldoVirtual": 2
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "cb7f2d2c-6b21-405d-bf31-61f9d995be53",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.128002",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-76ad-7ff5-1236-2c310e5d2e2f",
+      "date": "2026-03-27T02:53:57Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422282
+        },
+        "saldoFisicoTotal": 3,
+        "saldoVirtualTotal": 3,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 3,
+            "saldoVirtual": 3
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "5243b095-956d-4575-b48a-80c5de9586fd",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.097627",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-71e7-7a5f-1918-d0ebbd7fac5c",
+      "date": "2026-03-27T02:53:56Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16448422289
+        },
+        "saldoFisicoTotal": 2,
+        "saldoVirtualTotal": 2,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 2,
+            "saldoVirtual": 2
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "eaae0ee5-2cfd-40d4-868f-904a9cba0c8c",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.045369",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-6c04-7414-e3f0-5160afe22b79",
+      "date": "2026-03-27T02:53:54Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16473635864
+        },
+        "saldoFisicoTotal": 2,
+        "saldoVirtualTotal": 2,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 2,
+            "saldoVirtual": 2
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "c77151bd-9f79-4627-8611-4c8d5d7a75a5",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:56.013799",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-6cbd-7b1d-a23a-9c6cf45040f1",
+      "date": "2026-03-27T02:53:54Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16518189728
+        },
+        "saldoFisicoTotal": 1,
+        "saldoVirtualTotal": 1,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 1,
+            "saldoVirtual": 1
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "e1ecdb31-d8d2-4772-b2d7-e3213e0cc1d9",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:55.975840",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-59b1-702b-6409-ad71a3421e01",
+      "date": "2026-03-27T02:53:49Z",
+      "version": "v1",
+      "event": "stock.created",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 15877063160
+        },
+        "saldoFisicoTotal": 31,
+        "saldoVirtualTotal": 31,
+        "deposito": {
+          "id": 14636070822,
+          "saldoFisico": 31,
+          "saldoVirtual": 31
+        },
+        "operacao": "S",
+        "quantidade": 2
+      }
+    }
+  },
+  {
+    "id": "cbc0aac4-0003-4ae5-a240-d20ae161ade7",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:55.918246",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-70e2-784e-b6c0-75a8f0dafc44",
+      "date": "2026-03-27T02:53:55Z",
+      "version": "v1",
+      "event": "virtual_stock.updated",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16518244208
+        },
+        "saldoFisicoTotal": 6,
+        "saldoVirtualTotal": 6,
+        "vinculoComplexo": false,
+        "depositos": [
+          {
+            "id": 14636070822,
+            "saldoFisico": 6,
+            "saldoVirtual": 6
+          },
+          {
+            "id": 14888117244,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          },
+          {
+            "id": 14888147275,
+            "saldoFisico": 0,
+            "saldoVirtual": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "75fcbd3b-81b0-48a9-87e3-f919116fde86",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "pendente",
+    "data_criacao": "2026-03-27T04:10:55.763167",
+    "origem": "webhook",
+    "payload_webhook": {
+      "eventId": "019d2d36-9ccb-79f6-03fb-c1d4f1df170b",
+      "date": "2026-03-27T02:54:07Z",
+      "version": "v1",
+      "event": "stock.created",
+      "companyId": "f7503aa228fcccccd1c4ab94187453f6",
+      "data": {
+        "produto": {
+          "id": 16497071616
+        },
+        "saldoFisicoTotal": 27,
+        "saldoVirtualTotal": 27,
+        "deposito": {
+          "id": 14636070822,
+          "saldoFisico": 27,
+          "saldoVirtual": 27
+        },
+        "operacao": "S",
+        "quantidade": 1
+      }
+    }
+  },
+  {
+    "id": "1cd8941e-845f-491f-ad93-227303149a47",
+    "produto_nome": "Evento Bling",
+    "valor_busca": "",
+    "motivo": "evento_bling",
+    "status_aprovacao": "aprovado",
+    "data_criacao": "2026-03-27T00:18:10.797892",
+    "origem": "webhook",
+    "payload_webhook": {},
+    "data_aprovacao": "2026-03-27T01:47:10.107639"
+  }
+]

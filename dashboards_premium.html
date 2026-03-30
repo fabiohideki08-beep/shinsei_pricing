@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shinsei Pricing — Dashboards Estruturados</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #11182d;
+      --panel-2: #17203a;
+      --line: rgba(255,255,255,.08);
+      --text: #eef2ff;
+      --muted: #aeb8d6;
+      --green: #22c55e;
+      --yellow: #f59e0b;
+      --red: #ef4444;
+      --blue: #60a5fa;
+      --purple: #a78bfa;
+      --shadow: 0 20px 50px rgba(0,0,0,.25);
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, Arial, sans-serif;
+      background: linear-gradient(180deg, #0b1020 0%, #0f172a 100%);
+      color: var(--text);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 100vh;
+    }
+    .sidebar {
+      background: rgba(9,12,24,.7);
+      border-right: 1px solid var(--line);
+      padding: 22px 18px;
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      height: 100vh;
+    }
+    .brand {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: .3px;
+      margin-bottom: 4px;
+    }
+    .brand-sub {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 22px;
+    }
+    .nav-section {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .14em;
+      margin: 18px 10px 8px;
+    }
+    .nav-btn {
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      color: var(--text);
+      border: 1px solid transparent;
+      border-radius: 14px;
+      padding: 12px 14px;
+      margin: 6px 0;
+      cursor: pointer;
+      transition: .2s ease;
+      font-weight: 600;
+    }
+    .nav-btn:hover, .nav-btn.active {
+      background: rgba(255,255,255,.05);
+      border-color: var(--line);
+    }
+    .main {
+      padding: 26px;
+    }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .title h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.1;
+    }
+    .title p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .chipbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .chip {
+      background: rgba(255,255,255,.05);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 14px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .grid-kpi {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.02));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+    .kpi-label {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+    .kpi-value {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -.02em;
+      margin-bottom: 4px;
+    }
+    .kpi-delta {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .green { color: var(--green); }
+    .yellow { color: var(--yellow); }
+    .red { color: var(--red); }
+    .blue { color: var(--blue); }
+    .purple { color: var(--purple); }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .card h3 {
+      margin: 0 0 14px;
+      font-size: 16px;
+    }
+    .chart-placeholder {
+      height: 240px;
+      border-radius: 14px;
+      border: 1px dashed rgba(255,255,255,.14);
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      background:
+        linear-gradient(180deg, rgba(96,165,250,.08), transparent),
+        rgba(255,255,255,.02);
+      text-align: center;
+      padding: 16px;
+    }
+    .list {
+      display: grid;
+      gap: 10px;
+    }
+    .list-item {
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 14px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+    .list-item .meta {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 5px;
+    }
+    .badge {
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      white-space: nowrap;
+    }
+    .section-title {
+      margin: 4px 0 14px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .module-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .footer-note {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 8px;
+    }
+    .hidden {
+      display: none;
+    }
+    @media (max-width: 1200px) {
+      .grid-kpi { grid-template-columns: repeat(2, 1fr); }
+      .grid-2, .grid-3, .module-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar {
+        position: relative;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .main { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">Shinsei Pricing</div>
+      <div class="brand-sub">Estrutura premium de dashboards</div>
+
+      <div class="nav-section">Gerencial</div>
+      <button class="nav-btn active" data-view="vendas">Dashboard Principal de Vendas</button>
+      <button class="nav-btn" data-view="inteligente">Dashboard Inteligente Consolidado</button>
+
+      <div class="nav-section">Módulos</div>
+      <button class="nav-btn" data-view="pricing">Pricing Engine</button>
+      <button class="nav-btn" data-view="cost">Cost Engine</button>
+      <button class="nav-btn" data-view="sie">SIE</button>
+      <button class="nav-btn" data-view="allocation">Cost Allocation</button>
+      <button class="nav-btn" data-view="oee">OEE</button>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="title">
+          <h1 id="page-title">Dashboard Principal de Vendas</h1>
+          <p id="page-subtitle">Visão clássica da operação comercial, receita e canais.</p>
+        </div>
+        <div class="chipbar">
+          <div class="chip">Período: Últimos 30 dias</div>
+          <div class="chip">Origem: Estrutura inicial</div>
+          <div class="chip">Status: Base pronta para integração</div>
+        </div>
+      </div>
+
+      <!-- VENDAS -->
+      <section id="view-vendas" class="view">
+        <div class="grid-kpi">
+          <div class="card"><div class="kpi-label">Faturamento total</div><div class="kpi-value">R$ 182.450</div><div class="kpi-delta green">+8,4% vs período anterior</div></div>
+          <div class="card"><div class="kpi-label">Pedidos</div><div class="kpi-value">2.146</div><div class="kpi-delta blue">71,5 pedidos/dia</div></div>
+          <div class="card"><div class="kpi-label">Ticket médio</div><div class="kpi-value">R$ 84,93</div><div class="kpi-delta yellow">Monitorar mix e kits</div></div>
+          <div class="card"><div class="kpi-label">Produtos vendidos</div><div class="kpi-value">4.908</div><div class="kpi-delta green">Giro saudável</div></div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <h3>Faturamento por dia</h3>
+            <div class="chart-placeholder">Gráfico de linha<br>Receita diária / picos de campanha / sazonalidade</div>
+          </div>
+          <div class="card">
+            <h3>Receita por canal</h3>
+            <div class="list">
+              <div class="list-item"><div><strong>Mercado Livre</strong><div class="meta">Share 38%</div></div><span class="badge">R$ 69.331</span></div>
+              <div class="list-item"><div><strong>Shopee</strong><div class="meta">Share 24%</div></div><span class="badge">R$ 43.788</span></div>
+              <div class="list-item"><div><strong>Shopify</strong><div class="meta">Share 19%</div></div><span class="badge">R$ 34.666</span></div>
+              <div class="list-item"><div><strong>Amazon</strong><div class="meta">Share 12%</div></div><span class="badge">R$ 21.894</span></div>
+              <div class="list-item"><div><strong>Shein</strong><div class="meta">Share 7%</div></div><span class="badge">R$ 12.771</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <h3>Top produtos por receita</h3>
+            <div class="list">
+              <div class="list-item"><div><strong>Alfaparf Color Wear</strong><div class="meta">Maior participação em receita</div></div><span class="badge">R$ 18.240</span></div>
+              <div class="list-item"><div><strong>Igora Schwarzkopf</strong><div class="meta">Bom giro + ticket alto</div></div><span class="badge">R$ 14.990</span></div>
+              <div class="list-item"><div><strong>Kit Pistache</strong><div class="meta">Kits impulsionando ticket</div></div><span class="badge">R$ 12.140</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Leitura executiva</h3>
+            <div class="section-title">Objetivo deste painel</div>
+            <div class="list">
+              <div class="list-item"><div><strong>O que vendeu</strong><div class="meta">Receita e volume</div></div><span class="badge">Clássico</span></div>
+              <div class="list-item"><div><strong>Onde vendeu</strong><div class="meta">Canais e participação</div></div><span class="badge">Clássico</span></div>
+              <div class="list-item"><div><strong>Sem distorção de custo</strong><div class="meta">Visão comercial pura</div></div><span class="badge">Base</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- INTELIGENTE -->
+      <section id="view-inteligente" class="view hidden">
+        <div class="grid-kpi">
+          <div class="card"><div class="kpi-label">Lucro real total</div><div class="kpi-value">R$ 46.380</div><div class="kpi-delta green">Após custo real e rateio</div></div>
+          <div class="card"><div class="kpi-label">Margem real média</div><div class="kpi-value">25,4%</div><div class="kpi-delta blue">Considerando módulos integrados</div></div>
+          <div class="card"><div class="kpi-label">ICG médio</div><div class="kpi-value">1,42</div><div class="kpi-delta green">Vende antes de pagar em boa parte do mix</div></div>
+          <div class="card"><div class="kpi-label">OEE médio</div><div class="kpi-value">0,74</div><div class="kpi-delta yellow">Boa eficiência, ainda com espaço de ganho</div></div>
+        </div>
+        <div class="module-grid">
+          <div class="card">
+            <h3>Resumo dos módulos</h3>
+            <div class="list">
+              <div class="list-item"><div><strong>Pricing Engine</strong><div class="meta">Preço atual vs sugerido</div></div><span class="badge blue">Ativo</span></div>
+              <div class="list-item"><div><strong>Cost Engine</strong><div class="meta">Custo real ajustado</div></div><span class="badge green">Ativo</span></div>
+              <div class="list-item"><div><strong>SIE</strong><div class="meta">Inteligência do produto</div></div><span class="badge purple">Ativo</span></div>
+              <div class="list-item"><div><strong>Cost Allocation</strong><div class="meta">Rateio estrutural</div></div><span class="badge yellow">Ativo</span></div>
+              <div class="list-item"><div><strong>OEE</strong><div class="meta">Eficiência operacional</div></div><span class="badge red">Ativo</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Destaques estratégicos</h3>
+            <div class="list">
+              <div class="list-item"><div><strong>🏆 Melhor produto</strong><div class="meta">Maior equilíbrio entre margem, giro e risco</div></div><span class="badge">Color Wear 7.34</span></div>
+              <div class="list-item"><div><strong>🚨 Produto crítico</strong><div class="meta">Baixa margem real + maior incidência operacional</div></div><span class="badge">Kit Frágil X</span></div>
+              <div class="list-item"><div><strong>📦 Endereço em alerta</strong><div class="meta">Custo total operacional acima do alvo</div></div><span class="badge">Unidade atual</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <h3>Matriz de decisão</h3>
+            <div class="chart-placeholder">Gráfico 2x2<br>Lucro real × Risco / Estrela × Problema</div>
+          </div>
+          <div class="card">
+            <h3>Leitura consolidada</h3>
+            <div class="list">
+              <div class="list-item"><div><strong>Produtos estrela</strong><div class="meta">Escalar com cuidado de competitividade</div></div><span class="badge green">12</span></div>
+              <div class="list-item"><div><strong>Produtos atenção</strong><div class="meta">Revisar preço, custo ou operação</div></div><span class="badge yellow">19</span></div>
+              <div class="list-item"><div><strong>Produtos problema</strong><div class="meta">Margem falsa / risco / custo oculto</div></div><span class="badge red">7</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PRICING -->
+      <section id="view-pricing" class="view hidden">
+        <div class="grid-kpi">
+          <div class="card"><div class="kpi-label">Preço médio atual</div><div class="kpi-value">R$ 41,20</div><div class="kpi-delta">Base ERP</div></div>
+          <div class="card"><div class="kpi-label">Preço médio sugerido</div><div class="kpi-value">R$ 44,86</div><div class="kpi-delta green">+8,9%</div></div>
+          <div class="card"><div class="kpi-label">Itens autoaplicados</div><div class="kpi-value">118</div><div class="kpi-delta green">Dentro dos parâmetros seguros</div></div>
+          <div class="card"><div class="kpi-label">Pendências em fila</div><div class="kpi-value">14</div><div class="kpi-delta yellow">Revisão manual</div></div>
+        </div>
+        <div class="grid-2">
+          <div class="card"><h3>Preço atual vs preço sugerido</h3><div class="chart-placeholder">Scatter plot<br>Produtos distorcidos / oportunidades de correção</div></div>
+          <div class="card">
+            <h3>Itens com maior distorção</h3>
+            <div class="list">
+              <div class="list-item"><div><strong>Produto A</strong><div class="meta">Margem real abaixo do alvo</div></div><span class="badge red">+17,8%</span></div>
+              <div class="list-item"><div><strong>Produto B</strong><div class="meta">Preço atual comprimido</div></div><span class="badge yellow">+11,2%</span></div>
+              <div class="list-item"><div><strong>Produto C</strong><div class="meta">Preço acima do ideal</div></div><span class="badge blue">-6,5%</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- COST -->
+      <section id="view-cost" class="view hidden">
+        <div class="grid-kpi">
+          <div class="card"><div class="kpi-label">Custo base médio</div><div class="kpi-value">R$ 18,30</div><div class="kpi-delta">Produto + embalagem + taxas</div></div>
+          <div class="card"><div class="kpi-label">Custo risco médio</div><div class="kpi-value">R$ 1,84</div><div class="kpi-delta yellow">Avarias e devoluções</div></div>
+          <div class="card"><div class="kpi-label">Custo real médio</div><div class="kpi-value">R$ 20,14</div><div class="kpi-delta green">Base para margem real</div></div>
+          <div class="card"><div class="kpi-label">Custo oculto detectado</div><div class="kpi-value">R$ 6.920</div><div class="kpi-delta red">Período analisado</div></div>
+        </div>
+        <div class="grid-2">
+          <div class="card"><h3>Composição do custo</h3><div class="chart-placeholder">Pizza / barras empilhadas<br>Custo produto × embalagem × comissão × imposto × risco</div></div>
+          <div class="card">
+            <h3>Pontos de vazamento</h3>
+            <div class="list">
+              <div class="list-item"><div><strong>Devolução por defeito</strong><div class="meta">Custos de reposição / reputação</div></div><span class="badge red">Alto</span></div>
+              <div class="list-item"><div><strong>Avaria no transporte</strong><div class="meta">Embalagem subótima</div></div><span class="badge yellow">Médio</span></div>
+              <div class="list-item"><div><strong>Taxas por canal</strong><div class="meta">Comissão diluindo margem</div></div><span class="badge blue">Revisar</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SIE -->
+      <section id="view-sie" class="view hidden">
+        <div class="grid-kpi">
+          <div class="card"><div class="kpi-label">Produtos estrela</div><div class="kpi-value">12</div><div class="kpi-delta green">Priorizar e proteger</div></div>
+          <div class="card"><div class="kpi-label">Produtos saudáveis</div><div class="kpi-value">21</div><div class="kpi-delta blue">Operar com consistência</div></div>
+          <div class="card"><div class="kpi-label">Produtos atenção</div><div class="kpi-value">19</div><div class="kpi-delta yellow">Revisão tática</div></div>
+          <div class="card"><div class="kpi-label">Produtos problema</div><div class="kpi-value">7</div><div class="kpi-delta red">Intervenção imediata</div></div>
+        </div>
+        <div class="grid-2">
+          <div class="card"><h3>Ranking estratégico de produtos</h3><div class="chart-placeholder">Tabela/ranking<br>IEP, score comercial, score financeiro, score risco</div></div>
+          <div class="card">
+            <h3>Leitura do SIE</h3>
+            <div class="list">
+              <div class="list-item"><div><strong>Velocidade × prazo de pagamento</strong><div class="meta">ICG como vantagem competitiva</div></div><span class="badge green">Crítico</span></div>
+              <div class="list-item"><div><strong>Share no faturamento</strong><div class="meta">Peso econômico do SKU</div></div><span class="badge purple">Importante</span></div>
+              <div class="list-item"><div><strong>Risco por devolução</strong><div class="meta">Defeito e transporte</div></div><span class="badge yellow">Sensível</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ALLOCATION -->
+      <section id="view-allocation" class="view hidden">
+        <div class="grid-kpi">
+          <div class="card"><div class="kpi-label">Custo estrutural total</div><div class="kpi-value">R$ 32.000</div><div class="kpi-delta">Período analisado</div></div>
+          <div class="card"><div class="kpi-label">SKUs no rateio</div><div class="kpi-value">58</div><div class="kpi-delta">Base do cálculo</div></div>
+          <div class="card"><div class="kpi-label">Maior share no faturamento</div><div class="kpi-value">14,8%</div><div class="kpi-delta blue">Produto líder</div></div>
+          <div class="card"><div class="kpi-label">Custo estrutural médio unitário</div><div class="kpi-value">R$ 3,92</div><div class="kpi-delta yellow">Depende do mix</div></div>
+        </div>
+        <div class="grid-2">
+          <div class="card"><h3>Rateio por share</h3><div class="chart-placeholder">Barras<br>Share do faturamento × custo alocado por SKU</div></div>
+          <div class="card">
+            <h3>Quem paga a conta da empresa</h3>
+            <div class="list">
+              <div class="list-item"><div><strong>Produto líder</strong><div class="meta">Maior share e maior custo alocado</div></div><span class="badge">14,8%</span></div>
+              <div class="list-item"><div><strong>Produto subavaliado</strong><div class="meta">Baixa margem após rateio</div></div><span class="badge red">Alerta</span></div>
+              <div class="list-item"><div><strong>Produto eficiente</strong><div class="meta">Absorve bem custo estrutural</div></div><span class="badge green">Saudável</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- OEE -->
+      <section id="view-oee" class="view hidden">
+        <div class="grid-kpi">
+          <div class="card"><div class="kpi-label">Eficiência equipe</div><div class="kpi-value">0,78</div><div class="kpi-delta green">Tempo por tarefa sob controle</div></div>
+          <div class="card"><div class="kpi-label">Eficiência materiais</div><div class="kpi-value">0,61</div><div class="kpi-delta yellow">Embalagens ainda podem melhorar</div></div>
+          <div class="card"><div class="kpi-label">Eficiência endereço</div><div class="kpi-value">0,55</div><div class="kpi-delta red">Custo logístico e segurança pesando</div></div>
+          <div class="card"><div class="kpi-label">OEE consolidado</div><div class="kpi-value">0,66</div><div class="kpi-delta yellow">Ajustes operacionais trazem ganho real</div></div>
+        </div>
+        <div class="grid-3">
+          <div class="card">
+            <h3>Funcionários</h3>
+            <div class="list">
+              <div class="list-item"><div><strong>Custo por hora</strong><div class="meta">Base salarial + encargos</div></div><span class="badge">R$ 24,50</span></div>
+              <div class="list-item"><div><strong>Pedidos por hora</strong><div class="meta">Produtividade medida</div></div><span class="badge green">10,2</span></div>
+              <div class="list-item"><div><strong>Custo unitário</strong><div class="meta">Custo operacional por pedido</div></div><span class="badge blue">R$ 2,40</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Materiais</h3>
+            <div class="list">
+              <div class="list-item"><div><strong>Embalagem atual</strong><div class="meta">Menor custo, maior avaria</div></div><span class="badge red">Revisar</span></div>
+              <div class="list-item"><div><strong>Embalagem segura</strong><div class="meta">Maior custo, menor perda</div></div><span class="badge green">Comparar</span></div>
+              <div class="list-item"><div><strong>Eficiência financeira</strong><div class="meta">Custo extra × queda de avaria</div></div><span class="badge yellow">Analisar</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Endereço</h3>
+            <div class="list">
+              <div class="list-item"><div><strong>Acessibilidade</strong><div class="meta">Cliente, logística, operação</div></div><span class="badge blue">Média</span></div>
+              <div class="list-item"><div><strong>Custo segurança</strong><div class="meta">Impacto mensal da localização</div></div><span class="badge red">Elevado</span></div>
+              <div class="list-item"><div><strong>Decisão imobiliária</strong><div class="meta">Local caro × local distante</div></div><span class="badge purple">Estratégico</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="footer-note">
+        Estrutura pronta para integração com rotas FastAPI dedicadas. O conteúdo exibido é um modelo premium de layout e leitura executiva para o Shinsei Pricing.
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const meta = {
+      vendas: {
+        title: "Dashboard Principal de Vendas",
+        subtitle: "Visão clássica da operação comercial, receita e canais."
+      },
+      inteligente: {
+        title: "Dashboard Inteligente Consolidado",
+        subtitle: "Resultado combinado de Pricing Engine, Cost Engine, SIE, Cost Allocation e OEE."
+      },
+      pricing: {
+        title: "Dashboard — Pricing Engine",
+        subtitle: "Leitura de preço atual, preço sugerido, distorções e aprovação."
+      },
+      cost: {
+        title: "Dashboard — Cost Engine",
+        subtitle: "Custo base, custo oculto, risco e custo real por produto."
+      },
+      sie: {
+        title: "Dashboard — SIE",
+        subtitle: "Índice estratégico de produto, ICG, risco e prioridade comercial."
+      },
+      allocation: {
+        title: "Dashboard — Cost Allocation",
+        subtitle: "Rateio estrutural por share no faturamento e impacto por SKU."
+      },
+      oee: {
+        title: "Dashboard — OEE",
+        subtitle: "Eficiência operacional por equipe, materiais e endereço."
+      }
+    };
+
+    const buttons = document.querySelectorAll(".nav-btn");
+    const views = document.querySelectorAll(".view");
+    const title = document.getElementById("page-title");
+    const subtitle = document.getElementById("page-subtitle");
+
+    buttons.forEach(btn => {
+      btn.addEventListener("click", () => {
+        const view = btn.dataset.view;
+        buttons.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        views.forEach(v => v.classList.add("hidden"));
+        document.getElementById("view-" + view).classList.remove("hidden");
+        title.textContent = meta[view].title;
+        subtitle.textContent = meta[view].subtitle;
+      });
+    });
+  </script>
+</body>
+</html>

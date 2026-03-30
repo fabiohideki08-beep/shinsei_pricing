@@ -1,0 +1,58 @@
+{
+  "itens": [
+    {
+      "id": "9e659ca9-cd8d-491d-9aff-ded868942711",
+      "nome": "Produto teste",
+      "produto_id": null,
+      "sku": null,
+      "preco_base": 25,
+      "marketplaces": {
+        "mercado_livre_classico": {
+          "label": "ML Clássico",
+          "preco": 25,
+          "preco_promocional": 0,
+          "lucro": 5,
+          "margem": 20
+        },
+        "mercado_livre_premium": {
+          "label": "ML Premium",
+          "preco": 27.5,
+          "preco_promocional": 25,
+          "lucro": 7.5,
+          "margem": 27.27
+        },
+        "amazon": {
+          "label": "Amazon",
+          "preco": 25,
+          "preco_promocional": 0,
+          "lucro": 5,
+          "margem": 20
+        },
+        "shopee": {
+          "label": "Shopee",
+          "preco": 24.5,
+          "preco_promocional": 0,
+          "lucro": 4.5,
+          "margem": 18.37
+        },
+        "shein": {
+          "label": "Shein",
+          "preco": 24.25,
+          "preco_promocional": 0,
+          "lucro": 4.25,
+          "margem": 17.53
+        },
+        "shopify": {
+          "label": "Shopify",
+          "preco": 28,
+          "preco_promocional": 25,
+          "lucro": 8,
+          "margem": 28.57
+        }
+      },
+      "tipo": null,
+      "peso": null,
+      "estoque": null
+    }
+  ]
+}

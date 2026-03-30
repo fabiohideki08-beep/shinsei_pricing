@@ -1,0 +1,45 @@
+PATCH PARA app.py — REGRAS DE PRECIFICAÇÃO CONFIGURÁVEIS
+
+1) Imports no topo:
+from modulo_regras_precificacao import router as regras_router, build_regras_module
+
+2) Depois de criar DATA_DIR:
+load_regras_precificacao, save_regras_precificacao, get_regra_ativa = build_regras_module(DATA_DIR)
+app.include_router(regras_router)
+
+3) Dentro de analisar_decisao_hibrida(...), troque valores fixos por:
+
+regra = get_regra_ativa()
+
+lucro = float(prec.get("lucro") or 0.0)
+margem = float(prec.get("margem_real_percentual") or prec.get("margem") or 0.0)
+sie = float(enriched.get("sie", {}).get("sie") or 0.0)
+
+lucro_minimo_auto = float(regra.get("lucro_minimo_auto", 2.0))
+margem_minima_auto = float(regra.get("margem_minima_auto", 20.0))
+sie_minimo_auto = float(regra.get("sie_minimo_auto", 0.5))
+variacao_maxima = float(regra.get("variacao_maxima", 50.0))
+estoque_minimo_fila = float(regra.get("estoque_minimo_fila", 2))
+fila_se_preco_atual_zero = bool(regra.get("fila_se_preco_atual_zero", True))
+bloquear_margem_negativa = bool(regra.get("bloquear_margem_negativa", True))
+bloquear_lucro_negativo = bool(regra.get("bloquear_lucro_negativo", True))
+
+if fila_se_preco_atual_zero and preco_atual <= 0:
+    return {"acao": "fila", "motivo": "sem preço atual", "variacao": variacao}
+
+if estoque <= estoque_minimo_fila:
+    return {"acao": "fila", "motivo": "estoque baixo", "variacao": variacao}
+
+if abs(variacao) > variacao_maxima:
+    return {"acao": "bloqueado", "motivo": "variação extrema", "variacao": variacao}
+
+if bloquear_margem_negativa and margem < 0:
+    return {"acao": "bloqueado", "motivo": "margem negativa", "variacao": variacao}
+
+if bloquear_lucro_negativo and lucro < 0:
+    return {"acao": "bloqueado", "motivo": "lucro negativo", "variacao": variacao}
+
+if lucro >= lucro_minimo_auto and margem >= margem_minima_auto and sie >= sie_minimo_auto:
+    return {"acao": "auto", "motivo": "produto saudável", "variacao": variacao}
+
+return {"acao": "fila", "motivo": "fora dos critérios da regra ativa", "variacao": variacao}
