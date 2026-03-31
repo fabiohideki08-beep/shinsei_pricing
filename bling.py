@@ -14,6 +14,7 @@ def bling_page():
     </head>
     <body style="font-family: Arial; padding: 40px;">
         <h2>Bling - Integração</h2>
+        <p>Esta rota foi mantida apenas por compatibilidade.</p>
         <p>Use o botão abaixo para iniciar a autenticação OAuth correta.</p>
         <a href="/bling/auth">
             <button style="padding: 12px 18px; font-size: 16px; cursor: pointer;">
