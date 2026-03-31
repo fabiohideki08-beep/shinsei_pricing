@@ -1,217 +1,170 @@
-
 from __future__ import annotations
 
-import base64
+import requests
+import time
 import json
 import os
-import secrets
-import time
-import urllib.parse
 from pathlib import Path
-from typing import Any
 
-import requests
-from dotenv import load_dotenv
+BASE_DIR = Path(__file__).parent
+DATA_DIR = BASE_DIR / "data"
+TOKEN_PATH = DATA_DIR / "bling_tokens.json"
 
-load_dotenv()
-
-
-class BlingConfigError(RuntimeError):
-    pass
-
-
-class BlingAuthError(RuntimeError):
-    pass
-
-
-class BlingAPIError(RuntimeError):
-    pass
+DATA_DIR.mkdir(exist_ok=True)
 
 
 class BlingClient:
-    AUTH_BASE = "https://www.bling.com.br/Api/v3/oauth"
-    API_BASE = "https://api.bling.com.br/Api/v3"
-    TOKEN_FILE = Path("bling_token.json")
+    def __init__(self):
+        self.client_id = os.getenv("BLING_CLIENT_ID")
+        self.client_secret = os.getenv("BLING_CLIENT_SECRET")
+        self.redirect_uri = os.getenv("BLING_REDIRECT_URI")
 
-    def __init__(self) -> None:
-        self.client_id = os.getenv("BLING_CLIENT_ID", "").strip()
-        self.client_secret = os.getenv("BLING_CLIENT_SECRET", "").strip()
-        self.redirect_uri = os.getenv("BLING_REDIRECT_URI", "").strip()
+        self.base_url = "https://api.bling.com.br/Api/v3"
 
-    def _require_config(self) -> None:
-        if not self.client_id or not self.client_secret or not self.redirect_uri:
-            raise BlingConfigError(
-                "Configure BLING_CLIENT_ID, BLING_CLIENT_SECRET e BLING_REDIRECT_URI no .env."
-            )
+        self.tokens = self._load_tokens()
 
-    def has_local_tokens(self) -> bool:
-        return self.TOKEN_FILE.exists()
+    # ============================================================
+    # Token handling
+    # ============================================================
+    def _load_tokens(self):
+        if TOKEN_PATH.exists():
+            try:
+                return json.loads(TOKEN_PATH.read_text(encoding="utf-8"))
+            except:
+                return {}
+        return {}
 
-    def build_authorize_url(self) -> str:
-        self._require_config()
-        params = {
-            "response_type": "code",
-            "client_id": self.client_id,
-            "redirect_uri": self.redirect_uri,
-            "state": secrets.token_urlsafe(16),
-        }
-        return f"{self.AUTH_BASE}/authorize?{urllib.parse.urlencode(params)}"
+    def _save_tokens(self, data):
+        TOKEN_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        self.tokens = data
 
-    def _basic_auth_header(self) -> str:
-        self._require_config()
-        raw = f"{self.client_id}:{self.client_secret}".encode("utf-8")
-        return "Basic " + base64.b64encode(raw).decode("utf-8")
+    def has_local_tokens(self):
+        return bool(self.tokens.get("access_token"))
 
-    def _token_headers(self) -> dict[str, str]:
+    def _token_expired(self):
+        expires_at = self.tokens.get("expires_at", 0)
+        return time.time() > expires_at
+
+    def _refresh_token(self):
+        refresh_token = self.tokens.get("refresh_token")
+
+        url = "https://www.bling.com.br/Api/v3/oauth/token"
+
+        response = requests.post(
+            url,
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+            },
+            auth=(self.client_id, self.client_secret),
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Erro ao renovar token: {response.text}")
+
+        data = response.json()
+
+        data["expires_at"] = time.time() + data["expires_in"]
+
+        self._save_tokens(data)
+
+    def _get_headers(self):
+        if not self.tokens:
+            raise Exception("Cliente não autenticado com Bling.")
+
+        if self._token_expired():
+            self._refresh_token()
+
         return {
-            "Authorization": self._basic_auth_header(),
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Accept": "application/json",
-            "enable-jwt": "1",
-        }
-
-    def _api_headers(self, access_token: str) -> dict[str, str]:
-        return {
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/json",
+            "Authorization": f"Bearer {self.tokens['access_token']}",
             "Content-Type": "application/json",
-            "enable-jwt": "1",
         }
 
-    def _save_token(self, data: dict[str, Any]) -> dict[str, Any]:
-        expires_in = int(data.get("expires_in") or 0)
-        data["expires_at"] = int(time.time()) + max(expires_in - 60, 0)
-        self.TOKEN_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    # ============================================================
+    # OAuth
+    # ============================================================
+    def build_authorize_url(self):
+        return (
+            "https://www.bling.com.br/Api/v3/oauth/authorize?"
+            f"response_type=code&client_id={self.client_id}&redirect_uri={self.redirect_uri}"
+        )
+
+    def exchange_code_for_token(self, code):
+        url = "https://www.bling.com.br/Api/v3/oauth/token"
+
+        response = requests.post(
+            url,
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": self.redirect_uri,
+            },
+            auth=(self.client_id, self.client_secret),
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Erro ao obter token: {response.text}")
+
+        data = response.json()
+        data["expires_at"] = time.time() + data["expires_in"]
+
+        self._save_tokens(data)
         return data
 
-    def _load_token(self) -> dict[str, Any]:
-        if not self.TOKEN_FILE.exists():
-            raise BlingAuthError("Token do Bling não encontrado. Acesse /bling/auth primeiro.")
-        return json.loads(self.TOKEN_FILE.read_text(encoding="utf-8"))
+    # ============================================================
+    # Produtos
+    # ============================================================
+    def list_products(self):
+        url = f"{self.base_url}/produtos"
+        response = requests.get(url, headers=self._get_headers())
 
-    def exchange_code_for_token(self, code: str) -> dict[str, Any]:
-        self._require_config()
-        body = {"grant_type": "authorization_code", "code": code, "redirect_uri": self.redirect_uri}
-        resp = requests.post(f"{self.AUTH_BASE}/token", data=body, headers=self._token_headers(), timeout=30)
-        try:
-            data = resp.json()
-        except Exception:
-            raise BlingAuthError(f"Falha ao obter token do Bling: HTTP {resp.status_code} {resp.text}")
+        if response.status_code != 200:
+            raise Exception(response.text)
 
-        if resp.status_code >= 400 or "error" in data:
-            if data.get("error") == "invalid_grant" and self.TOKEN_FILE.exists():
-                token = self._load_token()
-                if token.get("access_token"):
-                    return token
-            raise BlingAuthError(f"Falha ao obter token do Bling: {data}")
-        return self._save_token(data)
+        return response.json()
 
-    def refresh_access_token(self) -> dict[str, Any]:
-        token = self._load_token()
-        refresh_token = token.get("refresh_token")
-        if not refresh_token:
-            raise BlingAuthError("Refresh token não encontrado. Refaça a autenticação em /bling/auth.")
-        body = {"grant_type": "refresh_token", "refresh_token": refresh_token}
-        resp = requests.post(f"{self.AUTH_BASE}/token", data=body, headers=self._token_headers(), timeout=30)
-        try:
-            data = resp.json()
-        except Exception:
-            raise BlingAuthError(f"Falha ao renovar token do Bling: HTTP {resp.status_code} {resp.text}")
-        if resp.status_code >= 400 or "error" in data:
-            raise BlingAuthError(f"Falha ao renovar token do Bling: {data}")
-        return self._save_token(data)
+    def get_product(self, product_id: int):
+        url = f"{self.base_url}/produtos/{product_id}"
+        response = requests.get(url, headers=self._get_headers())
 
-    def get_valid_access_token(self) -> str:
-        token = self._load_token()
-        if int(token.get("expires_at") or 0) <= int(time.time()):
-            token = self.refresh_access_token()
-        access_token = token.get("access_token")
-        if not access_token:
-            raise BlingAuthError("Access token inválido. Refaça a autenticação em /bling/auth.")
-        return access_token
+        if response.status_code != 200:
+            raise Exception(response.text)
 
-    def _request(self, method: str, path: str, *, params: dict[str, Any] | None = None, json_body: dict[str, Any] | None = None) -> dict[str, Any]:
-        access_token = self.get_valid_access_token()
-        url = f"{self.API_BASE}{path}"
-        resp = requests.request(method, url, params=params, json=json_body, headers=self._api_headers(access_token), timeout=30)
-        if resp.status_code == 401:
-            access_token = self.refresh_access_token()["access_token"]
-            resp = requests.request(method, url, params=params, json=json_body, headers=self._api_headers(access_token), timeout=30)
-        try:
-            data = resp.json()
-        except Exception:
-            raise BlingAPIError(f"Resposta inválida do Bling: HTTP {resp.status_code} {resp.text}")
-        if resp.status_code >= 400:
-            raise BlingAPIError(f"Erro na API do Bling: {data}")
-        return data
+        return response.json()
 
-    def search_product(self, criterio: str, valor: str) -> dict[str, Any]:
-        valor = (valor or "").strip()
-        if not valor:
-            raise BlingAPIError("Valor de busca vazio.")
+    def get_product_by_sku(self, sku: str):
+        produtos = self.list_products().get("data", [])
 
-        criterio = (criterio or "").strip().lower()
+        for item in produtos:
+            prod = item.get("produto", item)
+            if str(prod.get("codigo")) == str(sku):
+                return {"produto": prod}
 
-        if criterio == "id":
-            return self.obter_produto_completo(valor)
+        return {"encontrado": False}
 
-        params = {"codigo": valor}
-        if criterio == "ean":
-            params = {"gtin": valor}
+    def get_product_by_ean(self, ean: str):
+        produtos = self.list_products().get("data", [])
 
-        data = self._request("GET", "/produtos", params=params)
-        items = data.get("data", [])
-        if items:
-            item = items[0]
-            prod_id = item.get("id")
-            if prod_id:
-                try:
-                    return self.obter_produto_completo(prod_id)
-                except Exception:
-                    return item
-            return item
-        raise BlingAPIError("Produto não encontrado")
+        for item in produtos:
+            prod = item.get("produto", item)
+            if str(prod.get("gtin")) == str(ean):
+                return {"produto": prod}
 
+        return {"encontrado": False}
 
-    def obter_produto_completo(self, produto_id: int | str) -> dict[str, Any]:
-        data = self._request("GET", f"/produtos/{produto_id}")
-        return data.get("data", data)
+    # ============================================================
+    # Update produto (base)
+    # ============================================================
+    def update_product(self, product_id: int, payload: dict):
+        url = f"{self.base_url}/produtos/{product_id}"
 
-    def atualizar_preco(self, produto_id: int, novo_preco: float) -> dict[str, Any]:
-        produto = self._request("GET", f"/produtos/{produto_id}")
-        data = produto.get("data", produto)
-        payload = {
-            "nome": data.get("nome") or "",
-            "tipo": data.get("tipo") or "P",
-            "situacao": data.get("situacao") or "A",
-            "formato": data.get("formato") or "S",
-            "preco": round(float(novo_preco), 2),
-        }
-        return self._request("PUT", f"/produtos/{produto_id}", json_body=payload)
+        response = requests.put(
+            url,
+            headers=self._get_headers(),
+            json=payload,
+        )
 
-    # --------- CAMADA PREMIUM MULTICANAL ---------
+        if response.status_code not in (200, 201):
+            raise Exception(response.text)
 
-    def buscar_anuncios_por_produto(self, produto_id: int) -> dict[str, Any]:
-        # endpoint provável conforme a documentação pública listar "Anúncios".
-        # caso o seu tenant tenha outra forma de filtrar, ajuste apenas este método.
-        return self._request("GET", "/anuncios", params={"idProduto": produto_id})
-
-    def atualizar_anuncio_simples(self, anuncio_id: int | str, preco: float, preco_promocional: float | None = None) -> dict[str, Any]:
-        payload: dict[str, Any] = {"preco": round(float(preco), 2)}
-        if preco_promocional is not None:
-            payload["precoPromocional"] = round(float(preco_promocional), 2)
-        return self._request("PUT", f"/anuncios/{anuncio_id}", json_body=payload)
-
-    def atualizar_anuncio_ml_modalidades(
-        self,
-        anuncio_id: int | str,
-        preco_classico: float,
-        preco_premium: float,
-    ) -> dict[str, Any]:
-        payload = {
-            "modalidades": [
-                {"tipo": "classico", "preco": round(float(preco_classico), 2)},
-                {"tipo": "premium", "preco": round(float(preco_premium), 2)},
-            ]
-        }
-        return self._request("PUT", f"/anuncios/{anuncio_id}", json_body=payload)
+        return response.json()
