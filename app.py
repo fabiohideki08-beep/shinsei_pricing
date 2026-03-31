@@ -9,7 +9,7 @@ from typing import Any, Callable, Optional
 import openpyxl
 from fastapi import Body, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from pydantic import BaseModel
 
 
@@ -251,6 +251,60 @@ def _normalizar_marketplaces(itens: list[dict]) -> dict[str, dict]:
     return marketplaces
 
 
+def _extrair_identificador_webhook(payload: dict) -> Optional[dict]:
+    """
+    Prioridade:
+    sku -> id -> nome -> ean
+    """
+    candidatos = []
+
+    def add(criterio: str, valor: Any):
+        if valor is None:
+            return
+        txt = str(valor).strip()
+        if txt:
+            candidatos.append({"criterio": criterio, "valor": txt})
+
+    add("sku", payload.get("codigo"))
+    add("sku", payload.get("sku"))
+    add("id", payload.get("id"))
+    add("nome", payload.get("nome"))
+    add("ean", payload.get("gtin"))
+    add("ean", payload.get("ean"))
+    add("ean", payload.get("codigoBarras"))
+    add("ean", payload.get("codigo_barras"))
+
+    for key in ["data", "produto", "item", "entity", "resource"]:
+        bloco = payload.get(key)
+        if isinstance(bloco, dict):
+            add("sku", bloco.get("codigo"))
+            add("sku", bloco.get("sku"))
+            add("id", bloco.get("id"))
+            add("nome", bloco.get("nome"))
+            add("ean", bloco.get("gtin"))
+            add("ean", bloco.get("ean"))
+            add("ean", bloco.get("codigoBarras"))
+            add("ean", bloco.get("codigo_barras"))
+
+    for key in ["produtos", "itens", "items", "data"]:
+        bloco = payload.get(key)
+        if isinstance(bloco, list) and bloco:
+            for item in bloco:
+                if not isinstance(item, dict):
+                    continue
+                add("sku", item.get("codigo"))
+                add("sku", item.get("sku"))
+                add("id", item.get("id"))
+                add("nome", item.get("nome"))
+                add("ean", item.get("gtin"))
+                add("ean", item.get("ean"))
+                add("ean", item.get("codigoBarras"))
+                add("ean", item.get("codigo_barras"))
+                break
+
+    return candidatos[0] if candidatos else None
+
+
 # ============================================================
 # Schemas
 # ============================================================
@@ -441,6 +495,14 @@ def health() -> dict:
         "bling_client": bool(BlingClient),
         "bling_update_engine": bool(aplicar_precos_multicanal),
     }
+
+
+@app.get("/fila")
+def pagina_fila():
+    fila_html = PAGES_DIR / "fila.html"
+    if not fila_html.exists():
+        raise HTTPException(status_code=404, detail="pages/fila.html não encontrado.")
+    return FileResponse(str(fila_html))
 
 
 # ============================================================
@@ -656,11 +718,6 @@ def _buscar_produto_bling_local(client: Any, criterio: str, valor: str) -> dict:
     if not valor:
         raise ValueError("Informe um valor para busca no Bling.")
 
-    # prioridade de uso:
-    # 1) id
-    # 2) sku
-    # 3) ean
-    # 4) nome
     if criterio == "id" and hasattr(client, "get_product"):
         produto = client.get_product(int(valor))
         return {"encontrado": True, "produto": produto, "quantidade": 1, "criterio": criterio, "valor": valor}
@@ -754,7 +811,7 @@ def integracao_preview(payload: IntegracaoPayload) -> dict:
         "forcas_canais": cfg.get("forcas_canais", {}),
     }
 
-    if montar_precificacao_bling and payload.criterio in {"ean", "sku", "id"}:
+    if montar_precificacao_bling and payload.criterio in {"ean", "sku", "id", "nome"}:
         try:
             resultado = montar_precificacao_bling(
                 regras=regras,
@@ -920,7 +977,7 @@ def integracao_preview(payload: IntegracaoPayload) -> dict:
     return preview
 
 
-@app.get("/fila")
+@app.get("/fila/lista")
 def fila_listar() -> list[dict]:
     return carregar_fila()
 
@@ -928,10 +985,7 @@ def fila_listar() -> list[dict]:
 @app.post("/fila/adicionar")
 def fila_adicionar(payload: dict = Body(...)) -> dict:
     itens = carregar_fila()
-    item = {
-        "id": str(uuid.uuid4()),
-        **payload,
-    }
+    item = {"id": str(uuid.uuid4()), **payload}
     itens.insert(0, item)
     salvar_fila(itens)
     return {"ok": True, "item": item, "total": len(itens)}
@@ -964,8 +1018,9 @@ def fila_aprovar(item_id: str) -> dict:
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Falha ao aplicar preços no Bling: {exc}")
 
-    novo = [i for i in itens if i.get("id") != item_id]
-    salvar_fila(novo)
+    item["status"] = "aprovado"
+    item["resultado_aplicacao"] = resultado
+    salvar_fila(itens)
     _append_jsonl(LOG_PATH, {"evento": "aplicacao_bling", "item_id": item_id, "resultado": resultado})
     return {"ok": True, "message": "Preços aplicados no Bling.", "resultado": resultado}
 
@@ -987,6 +1042,127 @@ def integracao_aplicar(payload: dict = Body(...)) -> dict:
 
 
 # ============================================================
+# Webhook inteligente
+# ============================================================
+@app.post("/webhooks/bling")
+@app.post("/webhook/bling")
+async def webhook_bling(payload: dict = Body(...)):
+    try:
+        _append_jsonl(LOG_PATH, {"evento": "webhook_bling_recebido", "payload": payload})
+
+        regras = carregar_regras(apenas_ativas=True)
+        if not regras:
+            raise HTTPException(status_code=400, detail="Nenhuma regra ativa cadastrada.")
+
+        identificador = _extrair_identificador_webhook(payload)
+        if not identificador:
+            fila = carregar_fila()
+            item = {
+                "id": str(uuid.uuid4()),
+                "origem": "webhook_bling",
+                "status": "pendente",
+                "tipo": "payload_bruto",
+                "payload": payload,
+                "motivo": "Webhook recebido sem identificador suficiente para precificação automática.",
+            }
+            fila.insert(0, item)
+            salvar_fila(fila)
+            return {
+                "ok": True,
+                "message": "Webhook recebido. Item enviado para fila sem precificação automática.",
+                "item_id": item["id"],
+            }
+
+        criterio = identificador["criterio"]
+        valor_busca = identificador["valor"]
+        cfg = carregar_cfg()
+
+        if not montar_precificacao_bling:
+            raise HTTPException(status_code=500, detail="pricing_engine.py sem montar_precificacao_bling.")
+
+        resultado = montar_precificacao_bling(
+            regras=regras,
+            criterio=criterio,
+            valor_busca=valor_busca,
+            embalagem=1.0,
+            imposto=4.0,
+            quantidade=1,
+            objetivo="lucro_liquido",
+            tipo_alvo="percentual",
+            valor_alvo=30.0,
+            peso_override=0.0,
+            score_config={
+                "peso_forca": cfg.get("peso_forca", 0.40),
+                "peso_equilibrio": cfg.get("peso_equilibrio", 0.40),
+                "peso_lucro": cfg.get("peso_lucro", 0.20),
+                "forcas_canais": cfg.get("forcas_canais", {}),
+            },
+            modo_aprovacao="manual",
+            preco_compra_anterior_bling=0.0,
+            modo_preco_virtual="percentual_acima",
+            acrescimo_percentual=20.0,
+            acrescimo_nominal=0.0,
+            preco_manual=0.0,
+            arredondamento="90",
+        )
+
+        integracao = resultado.get("integracao", {}) or {}
+        itens_integracao = integracao.get("itens", []) or resultado.get("canais", []) or []
+
+        fila = carregar_fila()
+        item = {
+            "id": str(uuid.uuid4()),
+            "origem": "webhook_bling",
+            "status": "pendente",
+            "tipo": "precificacao_automatica",
+            "criterio": criterio,
+            "valor_busca": valor_busca,
+            "produto": resultado.get("produto_bling", {}),
+            "produto_bling": resultado.get("produto_bling", {}),
+            "melhor_canal": resultado.get("melhor_canal"),
+            "melhor_resultado": resultado.get("melhor_resultado"),
+            "marketplaces": _normalizar_marketplaces(itens_integracao),
+            "raw": resultado,
+            "payload": payload,
+        }
+        fila.insert(0, item)
+        salvar_fila(fila)
+
+        _append_jsonl(
+            LOG_PATH,
+            {
+                "evento": "webhook_bling_fila_criada",
+                "item_id": item["id"],
+                "criterio": criterio,
+                "valor_busca": valor_busca,
+                "produto_id": (resultado.get("produto_bling") or {}).get("id"),
+            },
+        )
+
+        return {
+            "ok": True,
+            "message": "Webhook processado e item criado na fila.",
+            "item_id": item["id"],
+            "criterio": criterio,
+            "valor_busca": valor_busca,
+            "produto_id": (resultado.get("produto_bling") or {}).get("id"),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        _append_jsonl(
+            LOG_PATH,
+            {
+                "evento": "webhook_bling_erro",
+                "erro": str(exc),
+                "payload": payload,
+            },
+        )
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+# ============================================================
 # Startup defaults
 # ============================================================
 if not REGRAS_PATH.exists():
@@ -995,67 +1171,3 @@ if not FILA_PATH.exists():
     _save_json(FILA_PATH, [])
 if not CFG_PATH.exists():
     _save_json(CFG_PATH, DEFAULT_CFG)
-
-from fastapi import Body
-
-@app.post("/bling/aplicar-preco")
-def aplicar_preco(payload: dict = Body(...)):
-    try:
-        from pricing_engine import montar_precificacao_bling
-        from bling_client import BlingClient
-
-        client = BlingClient()
-
-        resultado = montar_precificacao_bling(
-            regras=payload.get("regras"),
-            criterio=payload.get("criterio"),
-            valor_busca=payload.get("valor"),
-            embalagem=payload.get("embalagem"),
-            imposto=payload.get("imposto"),
-            quantidade=payload.get("quantidade"),
-            objetivo=payload.get("objetivo"),
-            tipo_alvo=payload.get("tipo_alvo"),
-            valor_alvo=payload.get("valor_alvo"),
-        )
-
-        produto = resultado["produto"]
-        melhor = resultado["melhor"]
-
-        novo_preco = melhor["preco_final"]
-
-        response = client.update_product(
-            produto["id"],
-            {
-                "preco": novo_preco
-            }
-        )
-
-        return {
-            "ok": True,
-            "produto": produto["nome"],
-            "preco_aplicado": novo_preco,
-            "canal": melhor["canal"],
-            "resposta_bling": response
-        }
-
-    except Exception as e:
-        return {"ok": False, "erro": str(e)}
-
-@app.post("/webhooks/bling")
-async def webhook_bling(payload: dict = Body(...)):
-    try:
-        _append_jsonl(LOG_PATH, {"evento": "webhook_bling_recebido", "payload": payload})
-
-        fila = carregar_fila()
-        item = {
-            "id": str(uuid.uuid4()),
-            "origem": "webhook_bling",
-            "status": "pendente",
-            "payload": payload,
-        }
-        fila.insert(0, item)
-        salvar_fila(fila)
-
-        return {"ok": True, "message": "Webhook recebido com sucesso."}
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
