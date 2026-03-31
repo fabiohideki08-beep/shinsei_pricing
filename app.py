@@ -2,16 +2,15 @@ from __future__ import annotations
 
 import importlib
 import json
-import os
 import uuid
 from pathlib import Path
 from typing import Any, Callable, Optional
 
 import openpyxl
-from fastapi import Body, FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import Body, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from pydantic import BaseModel, Field
+from fastapi.responses import HTMLResponse, RedirectResponse
+from pydantic import BaseModel
 
 
 # ============================================================
@@ -67,7 +66,7 @@ aplicar_precos_multicanal = getattr(bling_update_module, "aplicar_precos_multica
 
 
 # ============================================================
-# Optional routers without derrubar o sistema
+# Optional routers
 # ============================================================
 def include_optional_router(module_name: str) -> bool:
     try:
@@ -86,7 +85,7 @@ def include_optional_router(module_name: str) -> bool:
 
 ROUTERS_STATUS = {
     "mercado_livre": include_optional_router("mercado_livre"),
-    "bling": include_optional_router("bling"),
+    "bling": False,
 }
 
 
@@ -231,7 +230,12 @@ def _normalizar_marketplaces(itens: list[dict]) -> dict[str, dict]:
         key = CANAL_ALIAS.get(canal, canal.lower().replace(" ", "_"))
         marketplaces[key] = {
             "label": canal,
-            "preco": item.get("preco_virtual") or item.get("preco_cheio") or item.get("preco_sugerido") or item.get("preco_promocional") or item.get("preco_final") or 0,
+            "preco": item.get("preco_virtual")
+            or item.get("preco_cheio")
+            or item.get("preco_sugerido")
+            or item.get("preco_promocional")
+            or item.get("preco_final")
+            or 0,
             "preco_promocional": item.get("preco_promocional") or item.get("preco_final") or 0,
             "lucro": item.get("lucro_liquido") or item.get("lucro") or 0,
             "margem": item.get("margem") or 0,
@@ -362,7 +366,7 @@ FALLBACK_HTML = """<!DOCTYPE html>
 <script>
 function num(v){if(v===null||v===undefined)return 0; return Number(String(v).replace(/\\./g,'').replace(',','.'))||0;}
 function money(v){return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));}
-async function statusBling(){const r=await fetch('/bling/status'); const j=await r.json(); document.getElementById('msg').innerText=JSON.stringify(j);} 
+async function statusBling(){const r=await fetch('/bling/status'); const j=await r.json(); document.getElementById('msg').innerText=JSON.stringify(j);}
 async function previewIntegracao(){
   const payload={
     criterio: document.getElementById('criterio').value,
@@ -557,7 +561,6 @@ def simular(payload: SimulacaoPayload) -> dict:
             score_config=score_config,
         )
     except TypeError:
-        # fallback para engines antigas
         modo = payload.objetivo if payload.objetivo in {"markup", "margem"} else "markup"
         resultado = calcular_canais(
             regras,
@@ -593,7 +596,11 @@ def bling_status() -> dict:
         client = BlingClient()
         return {
             "ok": True,
-            "configurado": bool(getattr(client, "client_id", "") and getattr(client, "client_secret", "") and getattr(client, "redirect_uri", "")),
+            "configurado": bool(
+                getattr(client, "client_id", "")
+                and getattr(client, "client_secret", "")
+                and getattr(client, "redirect_uri", "")
+            ),
             "token_local": bool(client.has_local_tokens()),
         }
     except Exception as exc:
@@ -612,14 +619,32 @@ def bling_auth():
 
 
 @app.get("/bling/callback")
-def bling_callback(code: str = Query(...), state: str | None = None):
-    del state
+def bling_callback(
+    code: str | None = Query(None),
+    state: str | None = Query(None),
+    error: str | None = Query(None),
+    error_description: str | None = Query(None),
+):
     if not BlingClient:
         raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
+
+    if error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Bling OAuth retornou erro: {error}. {error_description or ''}".strip(),
+        )
+
+    if not code:
+        raise HTTPException(status_code=400, detail="Callback do Bling sem code de autorização.")
+
     try:
         client = BlingClient()
-        token = client.exchange_code_for_token(code)
-        return {"ok": True, "message": "Conexão com Bling realizada.", "expires_in": token.get("expires_in")}
+        token = client.exchange_code_for_token(code, state=state)
+        return {
+            "ok": True,
+            "message": "Conexão com Bling realizada.",
+            "expires_in": token.get("expires_in"),
+        }
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -630,7 +655,6 @@ def _buscar_produto_bling_local(client: Any, criterio: str, valor: str) -> dict:
     if not valor:
         raise ValueError("Informe um valor para busca no Bling.")
 
-    # Métodos preferenciais
     if criterio == "id" and hasattr(client, "get_product"):
         produto = client.get_product(int(valor))
         return {"encontrado": True, "produto": produto, "quantidade": 1, "criterio": criterio, "valor": valor}
@@ -642,7 +666,6 @@ def _buscar_produto_bling_local(client: Any, criterio: str, valor: str) -> dict:
     if criterio == "sku" and hasattr(client, "get_product_by_sku"):
         return client.get_product_by_sku(valor)
 
-    # Fallback universal via list_products
     if not hasattr(client, "list_products"):
         raise RuntimeError("O cliente do Bling não possui métodos de busca compatíveis.")
 
@@ -674,7 +697,14 @@ def _buscar_produto_bling_local(client: Any, criterio: str, valor: str) -> dict:
     if not encontrados:
         return {"encontrado": False, "criterio": criterio, "valor": valor, "quantidade": 0}
 
-    return {"encontrado": True, "criterio": criterio, "valor": valor, "quantidade": len(encontrados), "produto": encontrados[0], "produtos": encontrados[:10]}
+    return {
+        "encontrado": True,
+        "criterio": criterio,
+        "valor": valor,
+        "quantidade": len(encontrados),
+        "produto": encontrados[0],
+        "produtos": encontrados[:10],
+    }
 
 
 @app.get("/bling/produto/{valor}")
@@ -716,7 +746,6 @@ def integracao_preview(payload: IntegracaoPayload) -> dict:
         "forcas_canais": cfg.get("forcas_canais", {}),
     }
 
-    # Preferência: engine que já monta tudo a partir do Bling
     if montar_precificacao_bling and payload.criterio in {"ean", "sku", "id"}:
         try:
             resultado = montar_precificacao_bling(
@@ -754,7 +783,6 @@ def integracao_preview(payload: IntegracaoPayload) -> dict:
         except Exception:
             pass
 
-    # Fallback: busca manual + calcular + gerar integração
     produto = None
     preco_compra = 0.0
     peso = float(payload.peso_override or 0)
@@ -770,7 +798,9 @@ def integracao_preview(payload: IntegracaoPayload) -> dict:
                 raise HTTPException(status_code=404, detail="Produto não encontrado no Bling.")
             produto = busca.get("produto") or {}
             preco_compra = _safe_float(produto.get("precoCusto") or produto.get("preco_custo") or produto.get("custo") or 0)
-            estoque = _safe_int(((produto.get("estoque") or {}).get("saldoVirtualTotal") if isinstance(produto.get("estoque"), dict) else produto.get("saldoVirtualTotal")) or 0)
+            estoque = _safe_int(
+                ((produto.get("estoque") or {}).get("saldoVirtualTotal") if isinstance(produto.get("estoque"), dict) else produto.get("saldoVirtualTotal")) or 0
+            )
             if peso <= 0:
                 peso = _safe_float(produto.get("pesoLiquido") or produto.get("pesoBruto") or produto.get("peso") or 0)
         except HTTPException:
