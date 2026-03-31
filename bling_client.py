@@ -5,8 +5,14 @@ import time
 import json
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
+# ============================================================
+# Load ENV
+# ============================================================
 BASE_DIR = Path(__file__).parent
+load_dotenv(BASE_DIR / ".env")
+
 DATA_DIR = BASE_DIR / "data"
 TOKEN_PATH = DATA_DIR / "bling_tokens.json"
 
@@ -30,7 +36,7 @@ class BlingClient:
         if TOKEN_PATH.exists():
             try:
                 return json.loads(TOKEN_PATH.read_text(encoding="utf-8"))
-            except:
+            except Exception:
                 return {}
         return {}
 
@@ -63,7 +69,6 @@ class BlingClient:
             raise Exception(f"Erro ao renovar token: {response.text}")
 
         data = response.json()
-
         data["expires_at"] = time.time() + data["expires_in"]
 
         self._save_tokens(data)
@@ -153,7 +158,7 @@ class BlingClient:
         return {"encontrado": False}
 
     # ============================================================
-    # Update produto (base)
+    # Update Produto (fallback genérico)
     # ============================================================
     def update_product(self, product_id: int, payload: dict):
         url = f"{self.base_url}/produtos/{product_id}"
