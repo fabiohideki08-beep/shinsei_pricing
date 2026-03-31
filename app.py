@@ -267,12 +267,12 @@ class SimulacaoPayload(BaseModel):
 
 
 class BuscaProdutoPayload(BaseModel):
-    criterio: str = "nome"
+    criterio: str = "sku"
     valor: str
 
 
 class IntegracaoPayload(BaseModel):
-    criterio: str = "nome"
+    criterio: str = "sku"
     valor_busca: str = ""
     embalagem: float = 0
     imposto: float = 4
@@ -319,7 +319,7 @@ FALLBACK_HTML = """<!DOCTYPE html>
   <div class="grid">
     <div class="card">
       <h2>Simulador</h2>
-      <div class="field"><label>Busca automática no Bling</label><select id="criterio"><option value="nome">Nome</option><option value="sku">SKU</option><option value="ean">EAN</option><option value="id">ID</option></select></div>
+      <div class="field"><label>Busca automática no Bling</label><select id="criterio"><option value="sku">SKU</option><option value="nome">Nome</option><option value="ean">EAN</option><option value="id">ID</option></select></div>
       <div class="field"><label>Nome / SKU / EAN / ID</label><input id="valor_busca" placeholder="Digite nome, sku, ean ou id"></div>
       <div class="row">
         <div class="field"><label>Embalagem</label><input id="embalagem" value="1,00"></div>
@@ -652,44 +652,52 @@ def bling_callback(
 def _buscar_produto_bling_local(client: Any, criterio: str, valor: str) -> dict:
     criterio = (criterio or "").strip().lower()
     valor = (valor or "").strip()
+
     if not valor:
         raise ValueError("Informe um valor para busca no Bling.")
 
+    # prioridade de uso:
+    # 1) id
+    # 2) sku
+    # 3) ean
+    # 4) nome
     if criterio == "id" and hasattr(client, "get_product"):
         produto = client.get_product(int(valor))
         return {"encontrado": True, "produto": produto, "quantidade": 1, "criterio": criterio, "valor": valor}
-    if criterio == "id" and hasattr(client, "get_product_by_id"):
-        produto = client.get_product_by_id(valor)
-        return {"encontrado": True, "produto": produto, "quantidade": 1, "criterio": criterio, "valor": valor}
-    if criterio == "ean" and hasattr(client, "get_product_by_ean"):
-        return client.get_product_by_ean(valor)
+
     if criterio == "sku" and hasattr(client, "get_product_by_sku"):
         return client.get_product_by_sku(valor)
+
+    if criterio == "ean" and hasattr(client, "get_product_by_ean"):
+        return client.get_product_by_ean(valor)
+
+    if criterio == "nome" and hasattr(client, "get_product_by_name"):
+        return client.get_product_by_name(valor)
 
     if not hasattr(client, "list_products"):
         raise RuntimeError("O cliente do Bling não possui métodos de busca compatíveis.")
 
-    payload = client.list_products()
-    data = payload.get("data", payload if isinstance(payload, list) else [])
+    payload = client.list_products(page=1, limit=100)
+    data = payload.get("data", [])
     encontrados = []
     termo = valor.lower()
 
     for item in data:
         prod = item.get("produto", item) if isinstance(item, dict) else {}
-        nome = str(prod.get("nome") or "")
-        codigo = str(prod.get("codigo") or "")
-        gtin = str(prod.get("gtin") or prod.get("gtins") or "")
-        pid = str(prod.get("id") or "")
+        nome = str(prod.get("nome") or "").lower()
+        codigo = str(prod.get("codigo") or "").lower()
+        gtin = str(prod.get("gtin") or prod.get("ean") or "").lower()
+        pid = str(prod.get("id") or "").lower()
 
         ok = False
         if criterio == "nome":
-            ok = termo in nome.lower()
+            ok = termo in nome
         elif criterio == "sku":
-            ok = termo == codigo.lower()
+            ok = termo == codigo
         elif criterio == "ean":
-            ok = termo == gtin.lower()
+            ok = termo == gtin
         elif criterio == "id":
-            ok = termo == pid.lower()
+            ok = termo == pid
 
         if ok:
             encontrados.append(prod)
@@ -708,7 +716,7 @@ def _buscar_produto_bling_local(client: Any, criterio: str, valor: str) -> dict:
 
 
 @app.get("/bling/produto/{valor}")
-def bling_produto_direto(valor: str, criterio: str = Query("ean")) -> dict:
+def bling_produto_direto(valor: str, criterio: str = Query("sku")) -> dict:
     if not BlingClient:
         raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
     try:
