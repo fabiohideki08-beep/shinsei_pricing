@@ -1,217 +1,436 @@
-
 from __future__ import annotations
 
-import base64
-import json
-import os
-import secrets
-import time
-import urllib.parse
-from pathlib import Path
-from typing import Any
-
-import requests
-from dotenv import load_dotenv
-
-load_dotenv()
+from typing import Any, Optional
 
 
-class BlingConfigError(RuntimeError):
-    pass
+# ============================================================
+# Helpers
+# ============================================================
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    if value is None or value == "":
+        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    txt = str(value).strip()
+    txt = txt.replace("R$", "").replace("%", "").replace(" ", "")
+
+    if "," in txt and "." in txt:
+        txt = txt.replace(".", "").replace(",", ".")
+    else:
+        txt = txt.replace(",", ".")
+
+    try:
+        return float(txt)
+    except Exception:
+        return default
 
 
-class BlingAuthError(RuntimeError):
-    pass
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(float(value))
+    except Exception:
+        return default
 
 
-class BlingAPIError(RuntimeError):
-    pass
+def _normalize_channel_key(canal: str) -> str:
+    txt = str(canal or "").strip().lower()
+    txt = txt.replace("á", "a").replace("ã", "a").replace("â", "a")
+    txt = txt.replace("é", "e").replace("ê", "e")
+    txt = txt.replace("í", "i")
+    txt = txt.replace("ó", "o").replace("õ", "o").replace("ô", "o")
+    txt = txt.replace("ú", "u")
+    txt = txt.replace("ç", "c")
+    txt = txt.replace("-", " ")
+    txt = "_".join(txt.split())
+
+    aliases = {
+        "mercado_livre_classico": "mercado_livre_classico",
+        "mercado_livre_clasico": "mercado_livre_classico",
+        "mercado_livre_premium": "mercado_livre_premium",
+        "shopee": "shopee",
+        "amazon": "amazon",
+        "shein": "shein",
+        "shopify": "shopify",
+        "shopfy": "shopify",
+    }
+    return aliases.get(txt, txt)
 
 
-class BlingClient:
-    AUTH_BASE = "https://www.bling.com.br/Api/v3/oauth"
-    API_BASE = "https://api.bling.com.br/Api/v3"
-    TOKEN_FILE = Path("bling_token.json")
+def _extract_product_id(payload: dict) -> Optional[int]:
+    candidates = [
+        payload.get("produto_id"),
+        payload.get("id_produto"),
+        payload.get("bling_id"),
+        (payload.get("produto") or {}).get("id") if isinstance(payload.get("produto"), dict) else None,
+        (payload.get("produto_bling") or {}).get("id") if isinstance(payload.get("produto_bling"), dict) else None,
+        (payload.get("raw") or {}).get("produto_bling", {}).get("id") if isinstance(payload.get("raw"), dict) else None,
+    ]
+    for c in candidates:
+        if c is None or c == "":
+            continue
+        try:
+            return int(c)
+        except Exception:
+            continue
+    return None
 
-    def __init__(self) -> None:
-        self.client_id = os.getenv("BLING_CLIENT_ID", "").strip()
-        self.client_secret = os.getenv("BLING_CLIENT_SECRET", "").strip()
-        self.redirect_uri = os.getenv("BLING_REDIRECT_URI", "").strip()
 
-    def _require_config(self) -> None:
-        if not self.client_id or not self.client_secret or not self.redirect_uri:
-            raise BlingConfigError(
-                "Configure BLING_CLIENT_ID, BLING_CLIENT_SECRET e BLING_REDIRECT_URI no .env."
+def _extract_product_meta(payload: dict) -> dict:
+    produto = payload.get("produto") if isinstance(payload.get("produto"), dict) else {}
+    produto_bling = payload.get("produto_bling") if isinstance(payload.get("produto_bling"), dict) else {}
+    raw_produto = {}
+    if isinstance(payload.get("raw"), dict):
+        raw_produto = payload["raw"].get("produto_bling") or {}
+
+    base = {}
+    for src in [raw_produto, produto_bling, produto]:
+        if isinstance(src, dict):
+            base.update({k: v for k, v in src.items() if v not in (None, "")})
+
+    return {
+        "id": base.get("id"),
+        "nome": base.get("nome"),
+        "codigo": base.get("codigo") or base.get("sku"),
+        "ean": base.get("ean") or base.get("gtin"),
+        "preco": _safe_float(base.get("preco"), 0),
+        "preco_custo": _safe_float(
+            base.get("precoCusto") or base.get("preco_custo") or base.get("custo"), 0
+        ),
+    }
+
+
+def _extract_marketplaces(payload: dict) -> dict[str, dict]:
+    marketplaces = payload.get("marketplaces")
+    if isinstance(marketplaces, dict) and marketplaces:
+        return marketplaces
+
+    itens = payload.get("itens")
+    if not itens and isinstance(payload.get("raw"), dict):
+        raw = payload["raw"]
+        if isinstance(raw.get("integracao"), dict):
+            itens = raw["integracao"].get("itens")
+        if not itens:
+            itens = raw.get("itens")
+
+    if not itens:
+        itens = payload.get("canais")
+
+    resultado: dict[str, dict] = {}
+    if isinstance(itens, list):
+        for item in itens:
+            if not isinstance(item, dict):
+                continue
+            canal = item.get("canal") or item.get("label") or ""
+            if not canal:
+                continue
+            key = _normalize_channel_key(canal)
+            resultado[key] = {
+                "label": canal,
+                "preco": _safe_float(
+                    item.get("preco_virtual")
+                    or item.get("preco_cheio")
+                    or item.get("preco_sugerido")
+                    or item.get("preco")
+                    or item.get("preco_final"),
+                    0,
+                ),
+                "preco_promocional": _safe_float(
+                    item.get("preco_promocional")
+                    or item.get("promocional")
+                    or item.get("preco_final"),
+                    0,
+                ),
+                "raw": item,
+            }
+    return resultado
+
+
+def _has_method(obj: Any, name: str) -> bool:
+    return hasattr(obj, name) and callable(getattr(obj, name))
+
+
+# ============================================================
+# Mapeamento de preços por canal
+# ============================================================
+def _build_price_targets(payload: dict) -> dict:
+    marketplaces = _extract_marketplaces(payload)
+    produto = _extract_product_meta(payload)
+
+    canais = []
+    for canal_key, item in marketplaces.items():
+        preco = _safe_float(item.get("preco"), 0)
+        promo = _safe_float(item.get("preco_promocional"), 0)
+
+        if preco <= 0 and promo > 0:
+            preco = promo
+        if promo <= 0 and preco > 0:
+            promo = preco
+
+        canais.append(
+            {
+                "canal": canal_key,
+                "label": item.get("label") or canal_key,
+                "preco": round(preco, 2),
+                "preco_promocional": round(promo, 2),
+                "raw": item.get("raw", {}),
+            }
+        )
+
+    return {
+        "produto": produto,
+        "produto_id": _extract_product_id(payload),
+        "canais": canais,
+        "payload_original": payload,
+    }
+
+
+# ============================================================
+# Estratégias de update
+# ============================================================
+def _try_update_direct_methods(client: Any, produto_id: int, canais: list[dict]) -> list[dict]:
+    """
+    Tenta métodos específicos do cliente, se existirem.
+    """
+    resultados = []
+
+    for canal in canais:
+        canal_key = canal["canal"]
+        preco = canal["preco"]
+        promo = canal["preco_promocional"]
+
+        sucesso = False
+        detalhe = None
+
+        attempts = [
+            ("update_product_price_marketplace", {"product_id": produto_id, "marketplace": canal_key, "price": preco, "promotional_price": promo}),
+            ("update_marketplace_price", {"product_id": produto_id, "marketplace": canal_key, "price": preco, "promotional_price": promo}),
+            ("set_marketplace_price", {"product_id": produto_id, "marketplace": canal_key, "price": preco, "promotional_price": promo}),
+            ("update_channel_price", {"product_id": produto_id, "channel": canal_key, "price": preco, "promotional_price": promo}),
+        ]
+
+        for method_name, kwargs in attempts:
+            if not _has_method(client, method_name):
+                continue
+            try:
+                response = getattr(client, method_name)(**kwargs)
+                resultados.append(
+                    {
+                        "canal": canal_key,
+                        "preco": preco,
+                        "preco_promocional": promo,
+                        "metodo": method_name,
+                        "ok": True,
+                        "response": response,
+                    }
+                )
+                sucesso = True
+                break
+            except TypeError:
+                try:
+                    response = getattr(client, method_name)(produto_id, canal_key, preco, promo)
+                    resultados.append(
+                        {
+                            "canal": canal_key,
+                            "preco": preco,
+                            "preco_promocional": promo,
+                            "metodo": method_name,
+                            "ok": True,
+                            "response": response,
+                        }
+                    )
+                    sucesso = True
+                    break
+                except Exception as exc:
+                    detalhe = str(exc)
+            except Exception as exc:
+                detalhe = str(exc)
+
+        if not sucesso:
+            resultados.append(
+                {
+                    "canal": canal_key,
+                    "preco": preco,
+                    "preco_promocional": promo,
+                    "ok": False,
+                    "erro": detalhe or "Nenhum método direto compatível encontrado.",
+                }
             )
 
-    def has_local_tokens(self) -> bool:
-        return self.TOKEN_FILE.exists()
+    return resultados
 
-    def build_authorize_url(self) -> str:
-        self._require_config()
-        params = {
-            "response_type": "code",
-            "client_id": self.client_id,
-            "redirect_uri": self.redirect_uri,
-            "state": secrets.token_urlsafe(16),
-        }
-        return f"{self.AUTH_BASE}/authorize?{urllib.parse.urlencode(params)}"
 
-    def _basic_auth_header(self) -> str:
-        self._require_config()
-        raw = f"{self.client_id}:{self.client_secret}".encode("utf-8")
-        return "Basic " + base64.b64encode(raw).decode("utf-8")
+def _build_patch_payload_existing_product(existing: dict, canais: list[dict]) -> dict:
+    """
+    Monta um payload amplo e defensivo para update completo do produto.
+    """
+    marketplaces = []
+    for canal in canais:
+        marketplaces.append(
+            {
+                "canal": canal["canal"],
+                "preco": canal["preco"],
+                "precoPromocional": canal["preco_promocional"],
+                "preco_promocional": canal["preco_promocional"],
+            }
+        )
 
-    def _token_headers(self) -> dict[str, str]:
+    patch = {
+        "id": existing.get("id"),
+        "nome": existing.get("nome"),
+        "codigo": existing.get("codigo"),
+        "preco": existing.get("preco"),
+        "precoCusto": existing.get("precoCusto") or existing.get("preco_custo") or existing.get("custo"),
+        "marketplaces": marketplaces,
+        "precosMarketplaces": marketplaces,
+        "precos_marketplaces": marketplaces,
+    }
+
+    # preserva campos úteis se existirem
+    preserve_fields = [
+        "tipo",
+        "situacao",
+        "formato",
+        "descricaoCurta",
+        "descricaoComplementar",
+        "unidade",
+        "pesoLiquido",
+        "pesoBruto",
+        "gtin",
+        "gtinEmbalagem",
+        "estoque",
+        "fornecedor",
+        "categoria",
+        "marca",
+        "dimensoes",
+    ]
+    for field in preserve_fields:
+        if field in existing:
+            patch[field] = existing[field]
+
+    return patch
+
+
+def _try_update_full_product(client: Any, produto_id: int, canais: list[dict]) -> dict:
+    """
+    Busca o produto e tenta enviar um update completo preservando os dados.
+    """
+    existing = None
+    get_attempts = [
+        ("get_product", {"product_id": produto_id}),
+        ("get_product_by_id", {"product_id": produto_id}),
+    ]
+
+    for method_name, kwargs in get_attempts:
+        if not _has_method(client, method_name):
+            continue
+        try:
+            try:
+                existing = getattr(client, method_name)(**kwargs)
+            except TypeError:
+                existing = getattr(client, method_name)(produto_id)
+            break
+        except Exception:
+            continue
+
+    if existing is None:
+        raise RuntimeError("Não foi possível carregar o produto atual no Bling para update completo.")
+
+    if isinstance(existing, dict) and "data" in existing and isinstance(existing["data"], dict):
+        existing = existing["data"]
+
+    patch = _build_patch_payload_existing_product(existing if isinstance(existing, dict) else {}, canais)
+
+    update_attempts = [
+        ("update_product", {"product_id": produto_id, "payload": patch}),
+        ("update_product_by_id", {"product_id": produto_id, "payload": patch}),
+        ("save_product", {"product_id": produto_id, "payload": patch}),
+    ]
+
+    ultimo_erro = None
+    for method_name, kwargs in update_attempts:
+        if not _has_method(client, method_name):
+            continue
+        try:
+            try:
+                response = getattr(client, method_name)(**kwargs)
+            except TypeError:
+                response = getattr(client, method_name)(produto_id, patch)
+            return {
+                "ok": True,
+                "metodo": method_name,
+                "response": response,
+                "payload_enviado": patch,
+            }
+        except Exception as exc:
+            ultimo_erro = str(exc)
+
+    raise RuntimeError(ultimo_erro or "Nenhum método de update completo compatível encontrado.")
+
+
+# ============================================================
+# API principal
+# ============================================================
+def aplicar_precos_multicanal(client: Any, payload: dict) -> dict:
+    """
+    Aplica preços no Bling a partir de um payload vindo da fila ou do preview.
+
+    Estruturas aceitas:
+    - payload["produto"]["id"] + payload["marketplaces"]
+    - payload["produto_bling"]["id"] + payload["itens"]
+    - payload["raw"]["integracao"]["itens"]
+    """
+    if not isinstance(payload, dict):
+        raise ValueError("Payload inválido para aplicação de preços.")
+
+    targets = _build_price_targets(payload)
+    produto_id = targets["produto_id"]
+    canais = targets["canais"]
+    produto = targets["produto"]
+
+    if not produto_id:
+        raise ValueError("Não foi possível identificar o ID do produto no Bling.")
+    if not canais:
+        raise ValueError("Nenhum preço de canal encontrado para aplicar.")
+
+    # 1) tenta métodos diretos por canal
+    resultados_diretos = _try_update_direct_methods(client, produto_id, canais)
+    diretos_ok = [r for r in resultados_diretos if r.get("ok")]
+
+    if diretos_ok and len(diretos_ok) == len(canais):
         return {
-            "Authorization": self._basic_auth_header(),
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Accept": "application/json",
-            "enable-jwt": "1",
+            "ok": True,
+            "estrategia": "metodos_diretos_por_canal",
+            "produto_id": produto_id,
+            "produto": produto,
+            "resultados": resultados_diretos,
+            "canais_aplicados": len(diretos_ok),
+            "canais_totais": len(canais),
         }
 
-    def _api_headers(self, access_token: str) -> dict[str, str]:
+    # 2) fallback: update completo do produto com marketplaces
+    try:
+        resultado_full = _try_update_full_product(client, produto_id, canais)
         return {
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "enable-jwt": "1",
+            "ok": True,
+            "estrategia": "update_completo_produto",
+            "produto_id": produto_id,
+            "produto": produto,
+            "resultados_diretos": resultados_diretos,
+            "resultado_full": resultado_full,
+            "canais_aplicados": len(canais),
+            "canais_totais": len(canais),
         }
-
-    def _save_token(self, data: dict[str, Any]) -> dict[str, Any]:
-        expires_in = int(data.get("expires_in") or 0)
-        data["expires_at"] = int(time.time()) + max(expires_in - 60, 0)
-        self.TOKEN_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        return data
-
-    def _load_token(self) -> dict[str, Any]:
-        if not self.TOKEN_FILE.exists():
-            raise BlingAuthError("Token do Bling não encontrado. Acesse /bling/auth primeiro.")
-        return json.loads(self.TOKEN_FILE.read_text(encoding="utf-8"))
-
-    def exchange_code_for_token(self, code: str) -> dict[str, Any]:
-        self._require_config()
-        body = {"grant_type": "authorization_code", "code": code, "redirect_uri": self.redirect_uri}
-        resp = requests.post(f"{self.AUTH_BASE}/token", data=body, headers=self._token_headers(), timeout=30)
-        try:
-            data = resp.json()
-        except Exception:
-            raise BlingAuthError(f"Falha ao obter token do Bling: HTTP {resp.status_code} {resp.text}")
-
-        if resp.status_code >= 400 or "error" in data:
-            if data.get("error") == "invalid_grant" and self.TOKEN_FILE.exists():
-                token = self._load_token()
-                if token.get("access_token"):
-                    return token
-            raise BlingAuthError(f"Falha ao obter token do Bling: {data}")
-        return self._save_token(data)
-
-    def refresh_access_token(self) -> dict[str, Any]:
-        token = self._load_token()
-        refresh_token = token.get("refresh_token")
-        if not refresh_token:
-            raise BlingAuthError("Refresh token não encontrado. Refaça a autenticação em /bling/auth.")
-        body = {"grant_type": "refresh_token", "refresh_token": refresh_token}
-        resp = requests.post(f"{self.AUTH_BASE}/token", data=body, headers=self._token_headers(), timeout=30)
-        try:
-            data = resp.json()
-        except Exception:
-            raise BlingAuthError(f"Falha ao renovar token do Bling: HTTP {resp.status_code} {resp.text}")
-        if resp.status_code >= 400 or "error" in data:
-            raise BlingAuthError(f"Falha ao renovar token do Bling: {data}")
-        return self._save_token(data)
-
-    def get_valid_access_token(self) -> str:
-        token = self._load_token()
-        if int(token.get("expires_at") or 0) <= int(time.time()):
-            token = self.refresh_access_token()
-        access_token = token.get("access_token")
-        if not access_token:
-            raise BlingAuthError("Access token inválido. Refaça a autenticação em /bling/auth.")
-        return access_token
-
-    def _request(self, method: str, path: str, *, params: dict[str, Any] | None = None, json_body: dict[str, Any] | None = None) -> dict[str, Any]:
-        access_token = self.get_valid_access_token()
-        url = f"{self.API_BASE}{path}"
-        resp = requests.request(method, url, params=params, json=json_body, headers=self._api_headers(access_token), timeout=30)
-        if resp.status_code == 401:
-            access_token = self.refresh_access_token()["access_token"]
-            resp = requests.request(method, url, params=params, json=json_body, headers=self._api_headers(access_token), timeout=30)
-        try:
-            data = resp.json()
-        except Exception:
-            raise BlingAPIError(f"Resposta inválida do Bling: HTTP {resp.status_code} {resp.text}")
-        if resp.status_code >= 400:
-            raise BlingAPIError(f"Erro na API do Bling: {data}")
-        return data
-
-    def search_product(self, criterio: str, valor: str) -> dict[str, Any]:
-        valor = (valor or "").strip()
-        if not valor:
-            raise BlingAPIError("Valor de busca vazio.")
-
-        criterio = (criterio or "").strip().lower()
-
-        if criterio == "id":
-            return self.obter_produto_completo(valor)
-
-        params = {"codigo": valor}
-        if criterio == "ean":
-            params = {"gtin": valor}
-
-        data = self._request("GET", "/produtos", params=params)
-        items = data.get("data", [])
-        if items:
-            item = items[0]
-            prod_id = item.get("id")
-            if prod_id:
-                try:
-                    return self.obter_produto_completo(prod_id)
-                except Exception:
-                    return item
-            return item
-        raise BlingAPIError("Produto não encontrado")
-
-
-    def obter_produto_completo(self, produto_id: int | str) -> dict[str, Any]:
-        data = self._request("GET", f"/produtos/{produto_id}")
-        return data.get("data", data)
-
-    def atualizar_preco(self, produto_id: int, novo_preco: float) -> dict[str, Any]:
-        produto = self._request("GET", f"/produtos/{produto_id}")
-        data = produto.get("data", produto)
-        payload = {
-            "nome": data.get("nome") or "",
-            "tipo": data.get("tipo") or "P",
-            "situacao": data.get("situacao") or "A",
-            "formato": data.get("formato") or "S",
-            "preco": round(float(novo_preco), 2),
+    except Exception as exc:
+        return {
+            "ok": False,
+            "produto_id": produto_id,
+            "produto": produto,
+            "erro": str(exc),
+            "resultados_diretos": resultados_diretos,
+            "canais_totais": len(canais),
+            "payload_processado": {
+                "produto_id": produto_id,
+                "canais": canais,
+            },
         }
-        return self._request("PUT", f"/produtos/{produto_id}", json_body=payload)
-
-    # --------- CAMADA PREMIUM MULTICANAL ---------
-
-    def buscar_anuncios_por_produto(self, produto_id: int) -> dict[str, Any]:
-        # endpoint provável conforme a documentação pública listar "Anúncios".
-        # caso o seu tenant tenha outra forma de filtrar, ajuste apenas este método.
-        return self._request("GET", "/anuncios", params={"idProduto": produto_id})
-
-    def atualizar_anuncio_simples(self, anuncio_id: int | str, preco: float, preco_promocional: float | None = None) -> dict[str, Any]:
-        payload: dict[str, Any] = {"preco": round(float(preco), 2)}
-        if preco_promocional is not None:
-            payload["precoPromocional"] = round(float(preco_promocional), 2)
-        return self._request("PUT", f"/anuncios/{anuncio_id}", json_body=payload)
-
-    def atualizar_anuncio_ml_modalidades(
-        self,
-        anuncio_id: int | str,
-        preco_classico: float,
-        preco_premium: float,
-    ) -> dict[str, Any]:
-        payload = {
-            "modalidades": [
-                {"tipo": "classico", "preco": round(float(preco_classico), 2)},
-                {"tipo": "premium", "preco": round(float(preco_premium), 2)},
-            ]
-        }
-        return self._request("PUT", f"/anuncios/{anuncio_id}", json_body=payload)
