@@ -995,3 +995,67 @@ if not FILA_PATH.exists():
     _save_json(FILA_PATH, [])
 if not CFG_PATH.exists():
     _save_json(CFG_PATH, DEFAULT_CFG)
+
+from fastapi import Body
+
+@app.post("/bling/aplicar-preco")
+def aplicar_preco(payload: dict = Body(...)):
+    try:
+        from pricing_engine import montar_precificacao_bling
+        from bling_client import BlingClient
+
+        client = BlingClient()
+
+        resultado = montar_precificacao_bling(
+            regras=payload.get("regras"),
+            criterio=payload.get("criterio"),
+            valor_busca=payload.get("valor"),
+            embalagem=payload.get("embalagem"),
+            imposto=payload.get("imposto"),
+            quantidade=payload.get("quantidade"),
+            objetivo=payload.get("objetivo"),
+            tipo_alvo=payload.get("tipo_alvo"),
+            valor_alvo=payload.get("valor_alvo"),
+        )
+
+        produto = resultado["produto"]
+        melhor = resultado["melhor"]
+
+        novo_preco = melhor["preco_final"]
+
+        response = client.update_product(
+            produto["id"],
+            {
+                "preco": novo_preco
+            }
+        )
+
+        return {
+            "ok": True,
+            "produto": produto["nome"],
+            "preco_aplicado": novo_preco,
+            "canal": melhor["canal"],
+            "resposta_bling": response
+        }
+
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+@app.post("/webhooks/bling")
+async def webhook_bling(payload: dict = Body(...)):
+    try:
+        _append_jsonl(LOG_PATH, {"evento": "webhook_bling_recebido", "payload": payload})
+
+        fila = carregar_fila()
+        item = {
+            "id": str(uuid.uuid4()),
+            "origem": "webhook_bling",
+            "status": "pendente",
+            "payload": payload,
+        }
+        fila.insert(0, item)
+        salvar_fila(fila)
+
+        return {"ok": True, "message": "Webhook recebido com sucesso."}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
