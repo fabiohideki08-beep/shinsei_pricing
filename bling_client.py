@@ -40,6 +40,9 @@ class BlingClient:
         self.base_url = "https://api.bling.com.br/Api/v3"
         self.tokens = self._load_tokens()
 
+    # ============================================================
+    # JSON local
+    # ============================================================
     def _load_json(self, path: Path, default: dict | None = None) -> dict:
         default = default or {}
         if not path.exists():
@@ -52,6 +55,9 @@ class BlingClient:
     def _save_json(self, path: Path, data: dict) -> None:
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    # ============================================================
+    # Tokens
+    # ============================================================
     def _load_tokens(self) -> dict:
         return self._load_json(TOKEN_PATH, {})
 
@@ -66,6 +72,9 @@ class BlingClient:
         expires_at = self.tokens.get("expires_at", 0)
         return time.time() >= float(expires_at or 0)
 
+    # ============================================================
+    # Config
+    # ============================================================
     def _ensure_config(self) -> None:
         missing = []
         if not self.client_id:
@@ -77,6 +86,9 @@ class BlingClient:
         if missing:
             raise BlingConfigError(f"Variáveis ausentes no .env: {', '.join(missing)}")
 
+    # ============================================================
+    # OAuth
+    # ============================================================
     def build_authorize_url(self) -> str:
         self._ensure_config()
 
@@ -166,44 +178,107 @@ class BlingClient:
             "Content-Type": "application/json",
         }
 
-    def list_products(self) -> dict:
-        url = f"{self.base_url}/produtos"
-        response = requests.get(url, headers=self._get_headers(), timeout=30)
+    # ============================================================
+    # Request helper
+    # ============================================================
+    def _get(self, path: str, params: dict | None = None) -> dict:
+        url = f"{self.base_url}{path}"
+        response = requests.get(url, headers=self._get_headers(), params=params or {}, timeout=30)
 
         if response.status_code != 200:
             raise BlingAPIError(response.text)
 
         return response.json()
+
+    # ============================================================
+    # Produtos
+    # ============================================================
+    def list_products(self, page: int = 1, limit: int = 100) -> dict:
+        return self._get(
+            "/produtos",
+            params={
+                "pagina": page,
+                "limite": limit,
+            },
+        )
+
+    def list_all_products(self, limit: int = 100, max_pages: int = 50) -> dict:
+        todos: list[dict] = []
+        pagina = 1
+
+        while pagina <= max_pages:
+            payload = self.list_products(page=pagina, limit=limit)
+            data = payload.get("data", [])
+
+            if not data:
+                break
+
+            todos.extend(data)
+
+            # se voltou menos que o limite, acabou
+            if len(data) < limit:
+                break
+
+            pagina += 1
+
+        return {"data": todos}
 
     def get_product(self, product_id: int) -> dict:
-        url = f"{self.base_url}/produtos/{product_id}"
-        response = requests.get(url, headers=self._get_headers(), timeout=30)
+        return self._get(f"/produtos/{product_id}")
 
-        if response.status_code != 200:
-            raise BlingAPIError(response.text)
-
-        return response.json()
+    def _normalize_product(self, item: dict) -> dict:
+        if not isinstance(item, dict):
+            return {}
+        return item.get("produto", item)
 
     def get_product_by_sku(self, sku: str) -> dict:
-        produtos = self.list_products().get("data", [])
+        sku = str(sku).strip().lower()
+        produtos = self.list_all_products().get("data", [])
 
         for item in produtos:
-            prod = item.get("produto", item)
-            if str(prod.get("codigo")) == str(sku):
-                return {"produto": prod}
+            prod = self._normalize_product(item)
+            codigo = str(prod.get("codigo") or "").strip().lower()
+            if codigo == sku:
+                return {"encontrado": True, "produto": prod}
 
         return {"encontrado": False}
 
     def get_product_by_ean(self, ean: str) -> dict:
-        produtos = self.list_products().get("data", [])
+        ean = str(ean).strip()
+        produtos = self.list_all_products().get("data", [])
 
         for item in produtos:
-            prod = item.get("produto", item)
-            if str(prod.get("gtin")) == str(ean):
-                return {"produto": prod}
+            prod = self._normalize_product(item)
+            gtin = str(prod.get("gtin") or prod.get("ean") or "").strip()
+            if gtin == ean:
+                return {"encontrado": True, "produto": prod}
 
         return {"encontrado": False}
 
+    def get_product_by_name(self, nome: str) -> dict:
+        nome = str(nome).strip().lower()
+        produtos = self.list_all_products().get("data", [])
+
+        encontrados = []
+        for item in produtos:
+            prod = self._normalize_product(item)
+            nome_prod = str(prod.get("nome") or prod.get("descricao") or "").strip().lower()
+            if nome and nome in nome_prod:
+                encontrados.append(prod)
+
+        if not encontrados:
+            return {"encontrado": False, "quantidade": 0}
+
+        return {
+            "encontrado": True,
+            "quantidade": len(encontrados),
+            "produto": encontrados[0],
+            "produtos": encontrados[:10],
+        }
+
+    # ============================================================
+    # Update fallback
+    # ============================================================
     def update_product(self, product_id: int, payload: dict) -> dict:
         url = f"{self.base_url}/produtos/{product_id}"
 
