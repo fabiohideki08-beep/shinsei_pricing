@@ -1,17 +1,36 @@
-ARQUIVOS INCLUÍDOS
-- app_atualizado.py
-- services/mercado_livre.py
-- routes/mercado_livre.py
-- pages/mercado_livre.html
-- data/automacao.json
-- data/ml_config.json
-- data/ml_tokens.json
-- data/ml_oauth_state.json
+SHINSEI PRICING — PACOTE COMPLETO DE SOBREPOSIÇÃO
 
-COMO USAR
-1. Copie os arquivos para dentro do projeto.
-2. Renomeie app_atualizado.py para app.py.
-3. Abra /mercado-livre no navegador.
-4. Preencha Client ID, Client Secret e Callback.
-5. Salve e clique em Conectar Mercado Livre.
-6. O modo permanece MANUAL. O ML só será aplicado ao aprovar a fila.
+Arquivos incluídos:
+- app.py
+- bling_client.py
+- requirements.txt
+- pages/simulador.html
+- pages/fila.html
+- data/config.json
+- data/fila_aprovacao.json
+- data/regras.json
+
+O que este pacote já entrega:
+- rota /simulador
+- rota /fila
+- rota /integracao/preview
+- rota /bling/debug/sku
+- rota /bling/produto/buscar
+- rota /fila/limpar-invalidos
+- rota /fila/reset-total
+- diagnóstico inteligente
+- fila automática
+- proteção contra duplicados pendentes
+- debug do campo Código (SKU) no Bling
+
+Dependências externas que DEVEM continuar no seu projeto:
+- pricing_engine_real.py ou pricing_engine.py com a função montar_precificacao_bling()
+- bling_update_engine.py com a função aplicar_precos_multicanal()
+
+Aplicação:
+1. Faça backup do projeto atual.
+2. Substitua os arquivos do pacote nas mesmas pastas.
+3. Instale dependências:
+   pip install -r requirements.txt
+4. Rode:
+   python -m uvicorn app:app --reload
