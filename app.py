@@ -782,7 +782,7 @@ def integracao_aplicar(payload: dict = Body(...)) -> dict:
 
 
 # ============================================================
-# Webhook inteligente
+# Webhook inteligente protegido
 # ============================================================
 @app.post("/webhooks/bling")
 @app.post("/webhook/bling")
@@ -821,31 +821,63 @@ async def webhook_bling(payload: dict = Body(...)):
         if not montar_precificacao_bling:
             raise HTTPException(status_code=500, detail="pricing_engine.py sem montar_precificacao_bling.")
 
-        resultado = montar_precificacao_bling(
-            regras=regras,
-            criterio=criterio,
-            valor_busca=valor_busca,
-            embalagem=1.0,
-            imposto=4.0,
-            quantidade=1,
-            objetivo="lucro_liquido",
-            tipo_alvo="percentual",
-            valor_alvo=30.0,
-            peso_override=0.0,
-            score_config={
-                "peso_forca": cfg.get("peso_forca", 0.40),
-                "peso_equilibrio": cfg.get("peso_equilibrio", 0.40),
-                "peso_lucro": cfg.get("peso_lucro", 0.20),
-                "forcas_canais": cfg.get("forcas_canais", {}),
-            },
-            modo_aprovacao="manual",
-            preco_compra_anterior_bling=0.0,
-            modo_preco_virtual="percentual_acima",
-            acrescimo_percentual=20.0,
-            acrescimo_nominal=0.0,
-            preco_manual=0.0,
-            arredondamento="90",
-        )
+        try:
+            resultado = montar_precificacao_bling(
+                regras=regras,
+                criterio=criterio,
+                valor_busca=valor_busca,
+                embalagem=1.0,
+                imposto=4.0,
+                quantidade=1,
+                objetivo="lucro_liquido",
+                tipo_alvo="percentual",
+                valor_alvo=30.0,
+                peso_override=0.0,
+                score_config={
+                    "peso_forca": cfg.get("peso_forca", 0.40),
+                    "peso_equilibrio": cfg.get("peso_equilibrio", 0.40),
+                    "peso_lucro": cfg.get("peso_lucro", 0.20),
+                    "forcas_canais": cfg.get("forcas_canais", {}),
+                },
+                modo_aprovacao="manual",
+                preco_compra_anterior_bling=0.0,
+                modo_preco_virtual="percentual_acima",
+                acrescimo_percentual=20.0,
+                acrescimo_nominal=0.0,
+                preco_manual=0.0,
+                arredondamento="90",
+            )
+        except Exception as e:
+            fila = carregar_fila()
+            item = {
+                "id": str(uuid.uuid4()),
+                "origem": "webhook_bling",
+                "status": "pendente",
+                "tipo": "erro_precificacao",
+                "criterio": criterio,
+                "valor_busca": valor_busca,
+                "erro": str(e),
+                "payload": payload,
+            }
+            fila.insert(0, item)
+            salvar_fila(fila)
+
+            _append_jsonl(
+                LOG_PATH,
+                {
+                    "evento": "webhook_bling_erro_precificacao",
+                    "criterio": criterio,
+                    "valor_busca": valor_busca,
+                    "erro": str(e),
+                    "payload": payload,
+                },
+            )
+
+            return {
+                "ok": False,
+                "erro": str(e),
+                "message": "Erro no motor de precificação, salvo na fila.",
+            }
 
         integracao = resultado.get("integracao", {}) or {}
         itens_integracao = integracao.get("itens", []) or resultado.get("canais", []) or []
