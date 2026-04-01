@@ -40,7 +40,6 @@ class BlingClient:
         self.base_url = "https://api.bling.com.br/Api/v3"
         self.tokens = self._load_tokens()
 
-        # proteção simples contra burst
         self._last_request_ts = 0.0
         self._min_interval = 0.40
 
@@ -216,10 +215,49 @@ class BlingClient:
 
         raise BlingAPIError("Falha inesperada na requisição GET.")
 
+    def _put(self, path: str, payload: dict, retries: int = 2) -> dict:
+        url = f"{self.base_url}{path}"
+
+        for attempt in range(retries + 1):
+            self._respect_rate_limit()
+
+            response = requests.put(
+                url,
+                headers=self._get_headers(),
+                json=payload,
+                timeout=30,
+            )
+
+            if response.status_code in (200, 201):
+                return response.json()
+
+            if response.status_code == 429 and attempt < retries:
+                time.sleep(1.2 + attempt * 0.8)
+                continue
+
+            raise BlingAPIError(response.text)
+
+        raise BlingAPIError("Falha inesperada na requisição PUT.")
+
     def _normalize_product(self, item: dict) -> dict:
         if not isinstance(item, dict):
             return {}
         return item.get("produto", item)
+
+    def _extract_product_data(self, payload: dict) -> dict:
+        """
+        Normaliza respostas do Bling para um dicionário de produto simples.
+        """
+        if not isinstance(payload, dict):
+            return {}
+
+        if isinstance(payload.get("data"), dict):
+            return self._normalize_product(payload["data"])
+
+        if isinstance(payload.get("data"), list) and payload["data"]:
+            return self._normalize_product(payload["data"][0])
+
+        return self._normalize_product(payload)
 
     # ============================================================
     # Produtos
@@ -234,7 +272,8 @@ class BlingClient:
         )
 
     def get_product(self, product_id: int) -> dict:
-        return self._get(f"/produtos/{product_id}")
+        payload = self._get(f"/produtos/{int(product_id)}")
+        return self._extract_product_data(payload)
 
     def _search_products_light(
         self,
@@ -268,7 +307,7 @@ class BlingClient:
         sku = str(sku).strip().lower()
 
         encontrados = self._search_products_light(
-            lambda prod: str(prod.get("codigo") or "").strip().lower() == sku,
+            lambda prod: str(prod.get("codigo") or prod.get("sku") or "").strip().lower() == sku,
             max_pages=3,
         )
 
@@ -286,7 +325,14 @@ class BlingClient:
         ean = str(ean).strip()
 
         encontrados = self._search_products_light(
-            lambda prod: str(prod.get("gtin") or prod.get("ean") or "").strip() == ean,
+            lambda prod: str(
+                prod.get("gtin")
+                or prod.get("gtinEan")
+                or prod.get("codigoBarras")
+                or prod.get("codigo_barras")
+                or prod.get("ean")
+                or ""
+            ).strip() == ean,
             max_pages=3,
         )
 
@@ -319,28 +365,7 @@ class BlingClient:
         }
 
     # ============================================================
-    # Update fallback
+    # Atualização
     # ============================================================
     def update_product(self, product_id: int, payload: dict) -> dict:
-        url = f"{self.base_url}/produtos/{product_id}"
-
-        for attempt in range(3):
-            self._respect_rate_limit()
-
-            response = requests.put(
-                url,
-                headers=self._get_headers(),
-                json=payload,
-                timeout=30,
-            )
-
-            if response.status_code in (200, 201):
-                return response.json()
-
-            if response.status_code == 429 and attempt < 2:
-                time.sleep(1.2 + attempt * 0.8)
-                continue
-
-            raise BlingAPIError(response.text)
-
-        raise BlingAPIError("Falha inesperada na atualização do produto.")
+        return self._put(f"/produtos/{int(product_id)}", payload)
