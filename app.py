@@ -467,6 +467,188 @@ def fila_rejeitar(item_id: str, payload: dict = Body(default={})):
     logger.info("Item rejeitado: id=%s sku=%s motivo=%s", item_id, item.get("sku"), motivo)
     return {"ok":True,"message":"Item marcado como rejeitado.","stats":stats_fila()}
 
+# ─────────────────────────────────────────────
+# FASE 5 — Integração Comercial
+# Cole este bloco no app.py logo antes de:
+#   if not FILA_PATH.exists(): ...
+# ─────────────────────────────────────────────
+
+INTEGRACAO_CFG_PATH = DATA_DIR / "integracao_comercial.json"
+
+DEFAULT_INTEGRACAO_CFG = {
+    "objetivo": "lucro_liquido",
+    "tipo_alvo": "percentual",
+    "valor_alvo": 30.0,
+    "arredondamento": "90",
+    "modo_aprovacao": "manual",
+    "fila_auto_ao_calcular": True,
+    "gordura_por_canal": {
+        "Mercado Livre Classico": {"tipo": "percentual", "valor": 20.0},
+        "Mercado Livre Premium": {"tipo": "percentual", "valor": 20.0},
+        "Shopee": {"tipo": "percentual", "valor": 20.0},
+        "Amazon": {"tipo": "percentual", "valor": 20.0},
+        "Shein": {"tipo": "percentual", "valor": 20.0},
+        "Shopify": {"tipo": "percentual", "valor": 20.0},
+    },
+    "forcas_canais": {
+        "Mercado Livre Classico": 0.8,
+        "Mercado Livre Premium": 0.75,
+        "Shopee": 0.6,
+        "Amazon": 0.7,
+        "Shein": 0.55,
+        "Shopify": 0.65,
+    },
+    "peso_forca": 0.4,
+    "peso_equilibrio": 0.4,
+    "peso_lucro": 0.2,
+    "regra_estoque": {"ativo": False, "limite": 2, "tipo": "percentual", "valor": 0},
+    "modo_auto": False,
+    "auto_margem_ok": 25.0,
+    "auto_margem_fila": 15.0,
+}
+
+
+def carregar_integracao_cfg() -> dict:
+    data = _load_json(INTEGRACAO_CFG_PATH, {})
+    cfg = json.loads(json.dumps(DEFAULT_INTEGRACAO_CFG))
+    if isinstance(data, dict):
+        cfg.update(data)
+        # merge profundo para sub-dicts
+        if "gordura_por_canal" in data:
+            cfg["gordura_por_canal"] = {
+                **DEFAULT_INTEGRACAO_CFG["gordura_por_canal"],
+                **data["gordura_por_canal"],
+            }
+        if "forcas_canais" in data:
+            cfg["forcas_canais"] = {
+                **DEFAULT_INTEGRACAO_CFG["forcas_canais"],
+                **data["forcas_canais"],
+            }
+        if "regra_estoque" in data:
+            cfg["regra_estoque"] = {
+                **DEFAULT_INTEGRACAO_CFG["regra_estoque"],
+                **data["regra_estoque"],
+            }
+    return cfg
+
+
+def calcular_preco_virtual(preco_calculado: float, gordura: dict, arredondamento: str = "90") -> float:
+    """Aplica a gordura sobre o preço calculado e arredonda."""
+    tipo = gordura.get("tipo", "percentual")
+    valor = float(gordura.get("valor", 20))
+
+    if tipo == "percentual":
+        virtual = preco_calculado * (1 + valor / 100)
+    else:
+        virtual = preco_calculado + valor
+
+    return _arredondar_preco(virtual, arredondamento)
+
+
+def _arredondar_preco(v: float, modo: str) -> float:
+    if modo == "sem":
+        return round(v, 2)
+    sufixo = int(modo) / 100  # "90" → 0.90
+    base = int(v)
+    proposto = base + sufixo
+    if proposto >= v:
+        return round(proposto, 2)
+    return round(base + 1 + sufixo, 2)
+
+
+# ─── ROTA: página de integração comercial ───
+@app.get("/integracao-comercial", response_class=HTMLResponse)
+def integracao_comercial_page():
+    html_file = PAGES_DIR / "integracao_comercial.html"
+    if html_file.exists():
+        return HTMLResponse(html_file.read_text(encoding="utf-8"))
+    raise HTTPException(status_code=404, detail="integracao_comercial.html não encontrado.")
+
+
+# ─── ROTA: GET config ───
+@app.get("/config/integracao-comercial")
+def get_integracao_config():
+    return carregar_integracao_cfg()
+
+
+# ─── ROTA: POST config ───
+@app.post("/config/integracao-comercial")
+async def set_integracao_config(request: Request):
+    data = await request.json()
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Payload inválido.")
+
+    cfg_atual = carregar_integracao_cfg()
+
+    # Campos simples
+    for campo in ["objetivo", "tipo_alvo", "arredondamento", "modo_aprovacao"]:
+        if campo in data:
+            cfg_atual[campo] = str(data[campo])
+
+    for campo in ["valor_alvo", "peso_forca", "peso_equilibrio", "peso_lucro", "auto_margem_ok", "auto_margem_fila"]:
+        if campo in data:
+            try:
+                cfg_atual[campo] = float(data[campo])
+            except (TypeError, ValueError):
+                pass
+
+    for campo in ["fila_auto_ao_calcular", "modo_auto"]:
+        if campo in data:
+            cfg_atual[campo] = bool(data[campo])
+
+    # Sub-dicts
+    if "gordura_por_canal" in data and isinstance(data["gordura_por_canal"], dict):
+        cfg_atual["gordura_por_canal"] = {
+            **cfg_atual.get("gordura_por_canal", {}),
+            **data["gordura_por_canal"],
+        }
+
+    if "forcas_canais" in data and isinstance(data["forcas_canais"], dict):
+        cfg_atual["forcas_canais"] = {
+            **cfg_atual.get("forcas_canais", {}),
+            **data["forcas_canais"],
+        }
+
+    if "regra_estoque" in data and isinstance(data["regra_estoque"], dict):
+        cfg_atual["regra_estoque"] = {
+            **cfg_atual.get("regra_estoque", {}),
+            **data["regra_estoque"],
+        }
+
+    _save_json(INTEGRACAO_CFG_PATH, cfg_atual)
+    logger.info("Configuração de integração comercial atualizada: objetivo=%s", cfg_atual.get("objetivo"))
+
+    return {"ok": True, "config": cfg_atual}
+
+
+# ─── ROTA: calcular preço virtual para um canal ───
+@app.post("/config/calcular-preco-virtual")
+async def calcular_preco_virtual_endpoint(request: Request):
+    """Dado um preço calculado, retorna o preço virtual por canal com a gordura configurada."""
+    data = await request.json()
+    preco = float(data.get("preco", 0))
+    if preco <= 0:
+        raise HTTPException(status_code=400, detail="Preço inválido.")
+
+    cfg = carregar_integracao_cfg()
+    gordura_por_canal = cfg.get("gordura_por_canal", {})
+    arredondamento = str(data.get("arredondamento") or cfg.get("arredondamento", "90"))
+
+    resultado = {}
+    for canal, gordura in gordura_por_canal.items():
+        virtual = calcular_preco_virtual(preco, gordura, arredondamento)
+        dif_nominal = round(virtual - preco, 2)
+        dif_pct = round((dif_nominal / preco) * 100, 2) if preco > 0 else 0
+        resultado[canal] = {
+            "preco_calculado": round(preco, 2),
+            "preco_virtual": virtual,
+            "diferenca_nominal": dif_nominal,
+            "diferenca_percentual": dif_pct,
+            "gordura": gordura,
+        }
+
+    return {"ok": True, "canais": resultado}
+
 if not FILA_PATH.exists(): _save_json(FILA_PATH, [])
 if not CFG_PATH.exists(): _save_json(CFG_PATH, DEFAULT_CFG)
 

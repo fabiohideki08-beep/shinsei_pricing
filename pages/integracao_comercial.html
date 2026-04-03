@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Integração Comercial — Shinsei Pricing</title>
+  <style>
+    :root {
+      --bg:#0b1020; --card:#121a31; --card2:#17213d; --text:#eef2ff;
+      --muted:#9fb0d9; --line:#263458; --accent:#4f8cff; --danger:#ef4444;
+      --ok:#16a34a; --warn:#f5b301; --warnbg:#1a1500;
+      --gold:#f5b301; --green:#22c55e; --purple:#a78bfa;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text)}
+    .wrap{max-width:1400px;margin:0 auto;padding:22px}
+
+    /* TOPBAR */
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 18px;position:sticky;top:16px;z-index:10}
+    .brand h1{margin:0;font-size:22px}.brand p{margin:4px 0 0;color:var(--muted);font-size:13px}
+    .top-actions{display:flex;gap:10px;align-items:center}
+    .btn{border:none;background:var(--accent);color:#fff;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-size:13px}
+    .btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+    .btn.success{background:var(--ok)} .btn.danger{background:var(--danger)}
+    .btn.gold{background:var(--gold);color:#000}
+    .btn:disabled{opacity:.4;cursor:not-allowed}
+
+    /* LAYOUT */
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+    .card{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:20px;padding:18px;margin-bottom:16px}
+    .card h2{margin:0 0 16px;font-size:18px;display:flex;align-items:center;gap:10px}
+    .card h3{margin:0 0 12px;font-size:15px;color:#dbe4ff}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+    input,select{width:100%;padding:11px 13px;border-radius:12px;border:1px solid var(--line);background:#0d1630;color:#fff;outline:none;font-size:14px}
+    input:focus,select:focus{border-color:var(--accent)}
+    .field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+
+    /* TABS */
+    .tabs{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap}
+    .tab{padding:9px 16px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-size:13px;font-weight:600;transition:all .2s}
+    .tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+    /* CANAL CARDS */
+    .canais-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+    .canal-card{background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:16px;transition:border-color .2s}
+    .canal-card:hover{border-color:var(--accent)}
+    .canal-header{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+    .canal-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;flex-shrink:0}
+    .canal-name{font-weight:700;font-size:14px}
+    .canal-tag{font-size:11px;color:var(--muted)}
+    .tipo-btn-group{display:flex;gap:6px;margin-bottom:10px}
+    .tipo-btn{flex:1;padding:7px;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-size:12px;font-weight:600;transition:all .15s}
+    .tipo-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .preview-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--line);margin-top:10px;font-size:12px}
+    .preview-label{color:var(--muted)}
+    .preview-val{font-weight:700}
+    .preview-val.green{color:var(--green)}
+    .preview-val.gold{color:var(--gold)}
+
+    /* OBJETIVO GLOBAL */
+    .obj-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+    .obj-opt{padding:12px;border-radius:14px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;text-align:center;transition:all .2s}
+    .obj-opt.active{border-color:var(--accent);background:rgba(79,140,255,.12);color:var(--text)}
+    .obj-opt .ico{font-size:22px;display:block;margin-bottom:6px}
+    .obj-opt .nome{font-size:13px;font-weight:700}
+    .obj-opt .desc{font-size:11px;color:var(--muted);margin-top:2px}
+
+    /* PREVIEW TABELA */
+    .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:16px}
+    table{width:100%;border-collapse:collapse;min-width:800px}
+    th,td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;text-align:left}
+    th{background:#10182f;color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.04em}
+    tr:last-child td{border-bottom:none}
+    tr:hover td{background:rgba(79,140,255,.04)}
+    .tag{display:inline-block;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700}
+    .tag.green{background:rgba(34,197,94,.15);color:#22c55e}
+    .tag.gold{background:rgba(245,179,1,.15);color:#f5b301}
+    .tag.blue{background:rgba(79,140,255,.15);color:#4f8cff}
+
+    /* MODO */
+    .modo-toggle{display:flex;gap:8px;margin-bottom:16px}
+    .modo-btn{flex:1;padding:12px;border-radius:14px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-size:13px;font-weight:700;transition:all .2s;text-align:center}
+    .modo-btn.active{border-color:var(--green);background:rgba(22,197,94,.1);color:var(--green)}
+
+    /* NOTICE */
+    .notice{padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:#0d1630;color:#cbd5ff;font-size:13px;margin-top:12px}
+    .notice.ok{border-color:#166534;background:rgba(22,163,74,.1);color:#bbf7d0}
+    .notice.warn{border-color:#92400e;background:rgba(245,158,11,.1);color:#fde68a}
+    .notice.err{border-color:#991b1b;background:rgba(239,68,68,.1);color:#fca5a5}
+
+    /* ESTOQUE REGRA */
+    .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}
+    .toggle-row:last-child{border-bottom:none}
+    .toggle-info .nome{font-size:14px;font-weight:600}
+    .toggle-info .desc{font-size:12px;color:var(--muted);margin-top:2px}
+    .switch{position:relative;display:inline-block;width:44px;height:24px}
+    .switch input{display:none}
+    .slider{position:absolute;cursor:pointer;inset:0;background:#263458;border-radius:24px;transition:.3s}
+    .slider:before{position:absolute;content:"";width:18px;height:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s}
+    input:checked+.slider{background:var(--accent)}
+    input:checked+.slider:before{transform:translateX(20px)}
+
+    .separator{border:none;border-top:1px solid var(--line);margin:18px 0}
+
+    @media(max-width:1100px){.canais-grid,.grid-2,.grid-3{grid-template-columns:1fr 1fr}}
+    @media(max-width:720px){.canais-grid,.grid-2,.grid-3,.obj-grid,.row,.row-3{grid-template-columns:1fr}.topbar{flex-direction:column;align-items:flex-start}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="brand">
+      <h1>⚙️ Integração Comercial</h1>
+      <p>Configure objetivo, gordura por canal e regras de automação</p>
+    </div>
+    <div class="top-actions">
+      <a class="btn secondary" href="/">Início</a>
+      <a class="btn secondary" href="/simulador">Simulador</a>
+      <a class="btn secondary" href="/fila">🔔 Fila</a>
+      <button class="btn success" onclick="salvarTudo()">💾 Salvar tudo</button>
+    </div>
+  </div>
+
+  <div id="notice-global" class="notice" style="display:none;margin-bottom:16px"></div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="mudarTab('objetivo', this)">🎯 Objetivo global</button>
+    <button class="tab" onclick="mudarTab('gordura', this)">💰 Gordura por canal</button>
+    <button class="tab" onclick="mudarTab('automacao', this)">🤖 Automação</button>
+    <button class="tab" onclick="mudarTab('estoque', this)">📦 Regra de estoque</button>
+    <button class="tab" onclick="mudarTab('preview', this)">👁 Preview geral</button>
+  </div>
+
+  <!-- TAB: OBJETIVO GLOBAL -->
+  <div id="tab-objetivo" class="tab-content">
+    <div class="card">
+      <h2>🎯 Objetivo de precificação padrão</h2>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 16px">Define o critério principal que o motor usa para calcular o preço ideal. Pode ser sobrescrito no simulador para casos específicos.</p>
+
+      <div class="obj-grid">
+        <div class="obj-opt active" onclick="selecionarObjetivo('lucro_liquido', this)">
+          <span class="ico">💵</span>
+          <div class="nome">Lucro líquido</div>
+          <div class="desc">Garante R$ X ou X% de lucro após todos os custos</div>
+        </div>
+        <div class="obj-opt" onclick="selecionarObjetivo('margem', this)">
+          <span class="ico">📊</span>
+          <div class="nome">Margem</div>
+          <div class="desc">% do preço de venda que sobra como lucro</div>
+        </div>
+        <div class="obj-opt" onclick="selecionarObjetivo('markup', this)">
+          <span class="ico">✖️</span>
+          <div class="nome">Markup</div>
+          <div class="desc">Multiplica o custo por um fator (ex: 2x = 100%)</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Tipo do alvo</label>
+          <select id="cfg_tipo_alvo">
+            <option value="percentual">Percentual (%)</option>
+            <option value="nominal">Valor nominal (R$)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Valor alvo padrão</label>
+          <input id="cfg_valor_alvo" type="number" step="0.01" value="30" placeholder="Ex: 30 para 30%"/>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Arredondamento padrão</label>
+          <select id="cfg_arredondamento">
+            <option value="90">.90 (ex: R$29,90)</option>
+            <option value="99">.99 (ex: R$29,99)</option>
+            <option value="97">.97 (ex: R$29,97)</option>
+            <option value="sem">Sem arredondamento</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Modo de aprovação padrão</label>
+          <select id="cfg_modo_aprovacao">
+            <option value="manual">Manual (vai para fila)</option>
+            <option value="automatico">Automático (aplica direto)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="toggle-row" style="border-top:1px solid var(--line);margin-top:4px;padding-top:14px">
+        <div class="toggle-info">
+          <div class="nome">Adicionar à fila automaticamente ao calcular</div>
+          <div class="desc">Sempre que o simulador calcular um preview válido, envia automaticamente para a fila</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="cfg_fila_auto" checked><span class="slider"></span></label>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: GORDURA POR CANAL -->
+  <div id="tab-gordura" class="tab-content" style="display:none">
+    <div class="card">
+      <h2>💰 Gordura promocional por canal</h2>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 18px">
+        Define o acréscimo aplicado sobre o preço calculado para criar o <strong style="color:var(--gold)">Preço Virtual</strong> (preço âncora).<br>
+        O preço calculado vira o <strong style="color:var(--green)">Preço Promocional</strong> no marketplace — criando a percepção de desconto.
+      </p>
+
+      <div class="canais-grid" id="canaisGrid">
+        <!-- Gerado via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: AUTOMAÇÃO -->
+  <div id="tab-automacao" class="tab-content" style="display:none">
+    <div class="card">
+      <h2>🤖 Regras de automação por margem</h2>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 16px">Quando o sistema roda o scheduler, define o que fazer com base na margem calculada.</p>
+
+      <div class="modo-toggle">
+        <button class="modo-btn active" id="modoManualBtn" onclick="setModoAuto(false)">✋ Manual — tudo vai para fila</button>
+        <button class="modo-btn" id="modoAutoBtn" onclick="setModoAuto(true)">⚡ Automático — decide por margem</button>
+      </div>
+
+      <div id="autoConfig" style="display:none">
+        <div class="row-3">
+          <div class="field">
+            <label>Margem mínima para aplicar direto (%)</label>
+            <input id="auto_margem_ok" type="number" step="0.1" value="25" placeholder="Ex: 25"/>
+            <span style="font-size:11px;color:var(--green);margin-top:4px">✅ Acima disso → aplica direto</span>
+          </div>
+          <div class="field">
+            <label>Margem para enviar à fila (%)</label>
+            <input id="auto_margem_fila" type="number" step="0.1" value="15" placeholder="Ex: 15"/>
+            <span style="font-size:11px;color:var(--gold);margin-top:4px">⏳ Entre os dois → vai para fila</span>
+          </div>
+          <div class="field">
+            <label>Abaixo disso → bloqueia</label>
+            <input id="auto_margem_block" type="number" step="0.1" value="15" placeholder="Ex: 15" disabled style="opacity:.5"/>
+            <span style="font-size:11px;color:var(--danger);margin-top:4px">🚫 Abaixo da fila → bloqueia</span>
+          </div>
+        </div>
+      </div>
+
+      <hr class="separator">
+      <h3>Forças dos canais (peso no cálculo de score)</h3>
+      <p style="color:var(--muted);font-size:12px;margin:0 0 14px">Influencia qual canal o sistema prioriza. Valores entre 0 e 1.</p>
+      <div class="grid-2" id="forcasCanaisGrid">
+        <!-- Gerado via JS -->
+      </div>
+
+      <hr class="separator">
+      <div class="row-3">
+        <div class="field">
+          <label>Peso: força dos canais</label>
+          <input id="peso_forca" type="number" step="0.01" min="0" max="1" value="0.4"/>
+        </div>
+        <div class="field">
+          <label>Peso: equilíbrio</label>
+          <input id="peso_equilibrio" type="number" step="0.01" min="0" max="1" value="0.4"/>
+        </div>
+        <div class="field">
+          <label>Peso: lucro</label>
+          <input id="peso_lucro" type="number" step="0.01" min="0" max="1" value="0.2"/>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: ESTOQUE -->
+  <div id="tab-estoque" class="tab-content" style="display:none">
+    <div class="card">
+      <h2>📦 Regra de estoque baixo</h2>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 16px">Quando o estoque de um produto estiver abaixo do limite, o sistema pode aumentar o preço automaticamente para proteger a margem.</p>
+
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="nome">Ativar regra de estoque</div>
+          <div class="desc">Quando ativo, produtos com estoque baixo terão preço ajustado</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="estoque_ativo" onchange="toggleEstoqueConfig()"><span class="slider"></span></label>
+      </div>
+
+      <div id="estoqueConfig" style="display:none;margin-top:16px">
+        <div class="row-3">
+          <div class="field">
+            <label>Limite de estoque (unidades)</label>
+            <input id="estoque_limite" type="number" step="1" value="2" min="0"/>
+          </div>
+          <div class="field">
+            <label>Tipo de ajuste</label>
+            <select id="estoque_tipo">
+              <option value="percentual">Percentual (%)</option>
+              <option value="nominal">Nominal (R$)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Valor do ajuste</label>
+            <input id="estoque_valor" type="number" step="0.01" value="0" min="0"/>
+          </div>
+        </div>
+        <div class="notice warn">
+          ⚠️ Com estoque ≤ <span id="previewLimite">2</span> unidades, o preço será aumentado em <span id="previewValor">0</span> para proteger o estoque restante.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: PREVIEW -->
+  <div id="tab-preview" class="tab-content" style="display:none">
+    <div class="card">
+      <h2>👁 Preview da configuração atual</h2>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 16px">Simule como a gordura será aplicada sobre um preço calculado de exemplo.</p>
+
+      <div class="row" style="margin-bottom:16px">
+        <div class="field">
+          <label>Preço calculado de exemplo (R$)</label>
+          <input id="preview_preco" type="number" step="0.01" value="35.90" oninput="atualizarPreview()"/>
+        </div>
+        <div class="field" style="align-self:flex-end">
+          <button class="btn gold" onclick="atualizarPreview()">🔄 Atualizar preview</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Canal</th>
+              <th>Preço calculado</th>
+              <th>Gordura</th>
+              <th>Preço virtual (âncora)</th>
+              <th>Diferença R$</th>
+              <th>Diferença %</th>
+              <th>Arredondamento</th>
+            </tr>
+          </thead>
+          <tbody id="previewTabela">
+            <tr><td colspan="7" style="color:var(--muted);text-align:center;padding:20px">Clique em "Atualizar preview"</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API = '';
+const CANAIS = [
+  {key:'Mercado Livre Classico', label:'ML Clássico', icon:'🛒', color:'#f5b301'},
+  {key:'Mercado Livre Premium', label:'ML Premium', icon:'⭐', color:'#4f8cff'},
+  {key:'Shopee', label:'Shopee', icon:'🧡', color:'#ee4d2d'},
+  {key:'Amazon', label:'Amazon', icon:'📦', color:'#ff9900'},
+  {key:'Shein', label:'Shein', icon:'👗', color:'#a78bfa'},
+  {key:'Shopify', label:'Shopify', icon:'🏪', color:'#22c55e'},
+];
+
+let cfg = {
+  objetivo: 'lucro_liquido',
+  tipo_alvo: 'percentual',
+  valor_alvo: 30,
+  arredondamento: '90',
+  modo_aprovacao: 'manual',
+  fila_auto_ao_calcular: true,
+  gordura_por_canal: {},
+  forcas_canais: {
+    'Mercado Livre Classico': 0.8,
+    'Mercado Livre Premium': 0.75,
+    'Shopee': 0.6,
+    'Amazon': 0.7,
+    'Shein': 0.55,
+    'Shopify': 0.65,
+  },
+  peso_forca: 0.4,
+  peso_equilibrio: 0.4,
+  peso_lucro: 0.2,
+  regra_estoque: {ativo: false, limite: 2, tipo: 'percentual', valor: 0},
+  modo_auto: false,
+  auto_margem_ok: 25,
+  auto_margem_fila: 15,
+};
+
+// ─── TABS ───────────────────────────────────────────────
+function mudarTab(nome, btn) {
+  document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + nome).style.display = 'block';
+  btn.classList.add('active');
+  if (nome === 'preview') atualizarPreview();
+}
+
+// ─── OBJETIVO ───────────────────────────────────────────
+function selecionarObjetivo(obj, el) {
+  document.querySelectorAll('.obj-opt').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  cfg.objetivo = obj;
+}
+
+// ─── CANAIS GORDURA ─────────────────────────────────────
+function buildCanaisGrid() {
+  const grid = document.getElementById('canaisGrid');
+  grid.innerHTML = CANAIS.map(canal => {
+    const g = cfg.gordura_por_canal[canal.key] || {tipo: 'percentual', valor: 20};
+    return `
+      <div class="canal-card" id="card-${canal.key.replace(/ /g,'_')}">
+        <div class="canal-header">
+          <div class="canal-icon" style="background:${canal.color}22;color:${canal.color}">${canal.icon}</div>
+          <div>
+            <div class="canal-name">${canal.label}</div>
+            <div class="canal-tag">Gordura promocional</div>
+          </div>
+        </div>
+        <div class="tipo-btn-group">
+          <button class="tipo-btn ${g.tipo==='percentual'?'active':''}"
+            onclick="setTipo('${canal.key}','percentual',this)">% Percentual</button>
+          <button class="tipo-btn ${g.tipo==='nominal'?'active':''}"
+            onclick="setTipo('${canal.key}','nominal',this)">R$ Nominal</button>
+        </div>
+        <div class="field">
+          <label id="lbl-${canal.key.replace(/ /g,'_')}">${g.tipo==='percentual'?'Acréscimo (%)':'Acréscimo (R$)'}</label>
+          <input type="number" step="${g.tipo==='percentual'?'0.1':'0.01'}" value="${g.valor}"
+            id="val-${canal.key.replace(/ /g,'_')}"
+            oninput="setValor('${canal.key}', this.value)"
+            placeholder="${g.tipo==='percentual'?'Ex: 20':'Ex: 8.00'}"/>
+        </div>
+        <div class="preview-row">
+          <span class="preview-label">Exemplo (preço R$35,90)</span>
+          <span class="preview-val gold" id="prev-${canal.key.replace(/ /g,'_')}">—</span>
+        </div>
+      </div>`;
+  }).join('');
+  CANAIS.forEach(c => calcPreviewCanal(c.key));
+}
+
+function setTipo(canal, tipo, btn) {
+  const key = canal.replace(/ /g,'_');
+  btn.closest('.tipo-btn-group').querySelectorAll('.tipo-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (!cfg.gordura_por_canal[canal]) cfg.gordura_por_canal[canal] = {tipo, valor: tipo==='percentual'?20:8};
+  cfg.gordura_por_canal[canal].tipo = tipo;
+  document.getElementById('lbl-'+key).textContent = tipo==='percentual'?'Acréscimo (%)':'Acréscimo (R$)';
+  document.getElementById('val-'+key).step = tipo==='percentual'?'0.1':'0.01';
+  document.getElementById('val-'+key).placeholder = tipo==='percentual'?'Ex: 20':'Ex: 8.00';
+  calcPreviewCanal(canal);
+}
+
+function setValor(canal, v) {
+  if (!cfg.gordura_por_canal[canal]) cfg.gordura_por_canal[canal] = {tipo:'percentual', valor:20};
+  cfg.gordura_por_canal[canal].valor = parseFloat(v)||0;
+  calcPreviewCanal(canal);
+}
+
+function calcPreviewCanal(canal, precoBase=35.90) {
+  const key = canal.replace(/ /g,'_');
+  const g = cfg.gordura_por_canal[canal] || {tipo:'percentual', valor:20};
+  let virtual;
+  if (g.tipo === 'percentual') {
+    virtual = precoBase * (1 + (g.valor||0)/100);
+  } else {
+    virtual = precoBase + (g.valor||0);
+  }
+  virtual = arredondar(virtual, cfg.arredondamento);
+  const el = document.getElementById('prev-'+key);
+  if (el) el.textContent = 'R$' + virtual.toFixed(2).replace('.', ',');
+}
+
+// ─── FORCAS CANAIS ───────────────────────────────────────
+function buildForcasGrid() {
+  const grid = document.getElementById('forcasCanaisGrid');
+  grid.innerHTML = CANAIS.map(c => `
+    <div class="field">
+      <label>${c.icon} ${c.label}</label>
+      <input type="number" step="0.01" min="0" max="1" value="${cfg.forcas_canais[c.key]||0.5}"
+        id="forca-${c.key.replace(/ /g,'_')}"
+        oninput="cfg.forcas_canais['${c.key}']=parseFloat(this.value)||0"/>
+    </div>`).join('');
+}
+
+// ─── AUTOMAÇÃO ───────────────────────────────────────────
+function setModoAuto(ativo) {
+  cfg.modo_auto = ativo;
+  document.getElementById('modoManualBtn').classList.toggle('active', !ativo);
+  document.getElementById('modoAutoBtn').classList.toggle('active', ativo);
+  document.getElementById('autoConfig').style.display = ativo ? 'block' : 'none';
+}
+
+// ─── ESTOQUE ─────────────────────────────────────────────
+function toggleEstoqueConfig() {
+  const ativo = document.getElementById('estoque_ativo').checked;
+  document.getElementById('estoqueConfig').style.display = ativo ? 'block' : 'none';
+}
+
+function atualizarPreviewEstoque() {
+  const lim = document.getElementById('estoque_limite');
+  const val = document.getElementById('estoque_valor');
+  const tipo = document.getElementById('estoque_tipo');
+  if (!lim || !val || !tipo) return;
+  document.getElementById('previewLimite').textContent = lim.value;
+  const t = tipo.value === 'percentual' ? lim.value + '% acima' : 'R$' + parseFloat(val.value||0).toFixed(2);
+  document.getElementById('previewValor').textContent = t;
+}
+
+// ─── PREVIEW GERAL ───────────────────────────────────────
+function arredondar(v, modo) {
+  const intParte = Math.ceil(v);
+  if (modo === 'sem') return Math.round(v * 100)/100;
+  const sufixo = parseInt(modo) / 100;
+  const base = Math.floor(v);
+  const proposto = base + sufixo;
+  return proposto >= v ? proposto : base + 1 + sufixo;
+}
+
+function atualizarPreview() {
+  const precoBase = parseFloat(document.getElementById('preview_preco').value) || 35.90;
+  const arred = document.getElementById('cfg_arredondamento')?.value || cfg.arredondamento;
+  const tbody = document.getElementById('previewTabela');
+  tbody.innerHTML = CANAIS.map(canal => {
+    const g = cfg.gordura_por_canal[canal.key] || {tipo:'percentual', valor:20};
+    let virtual;
+    if (g.tipo === 'percentual') {
+      virtual = precoBase * (1 + (g.valor||0)/100);
+    } else {
+      virtual = precoBase + (g.valor||0);
+    }
+    const virtualArred = arredondar(virtual, arred);
+    const difR = (virtualArred - precoBase).toFixed(2);
+    const difPct = (((virtualArred - precoBase)/precoBase)*100).toFixed(1);
+    const gorduraLabel = g.tipo==='percentual' ? `+${g.valor}%` : `+R$${(g.valor||0).toFixed(2)}`;
+    return `<tr>
+      <td><strong>${canal.icon} ${canal.label}</strong></td>
+      <td style="color:var(--green)">R$ ${precoBase.toFixed(2).replace('.',',')}</td>
+      <td><span class="tag gold">${gorduraLabel}</span></td>
+      <td style="color:var(--gold);font-weight:700">R$ ${virtualArred.toFixed(2).replace('.',',')}</td>
+      <td>R$ ${difR.replace('.',',')}</td>
+      <td>${difPct}%</td>
+      <td><span class="tag blue">.${arred==='sem'?'--':arred}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── CARREGAR / SALVAR ───────────────────────────────────
+async function carregarConfig() {
+  try {
+    const res = await fetch('/config/integracao-comercial');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.objetivo) {
+      cfg.objetivo = data.objetivo;
+      document.querySelectorAll('.obj-opt').forEach(el => el.classList.remove('active'));
+      const idx = ['lucro_liquido','margem','markup'].indexOf(data.objetivo);
+      if (idx>=0) document.querySelectorAll('.obj-opt')[idx]?.classList.add('active');
+    }
+    if (data.tipo_alvo) document.getElementById('cfg_tipo_alvo').value = data.tipo_alvo;
+    if (data.valor_alvo !== undefined) document.getElementById('cfg_valor_alvo').value = data.valor_alvo;
+    if (data.arredondamento) document.getElementById('cfg_arredondamento').value = data.arredondamento;
+    if (data.modo_aprovacao) document.getElementById('cfg_modo_aprovacao').value = data.modo_aprovacao;
+    if (data.fila_auto_ao_calcular !== undefined) document.getElementById('cfg_fila_auto').checked = data.fila_auto_ao_calcular;
+    if (data.gordura_por_canal) cfg.gordura_por_canal = data.gordura_por_canal;
+    if (data.forcas_canais) cfg.forcas_canais = {...cfg.forcas_canais, ...data.forcas_canais};
+    if (data.peso_forca !== undefined) { document.getElementById('peso_forca').value = data.peso_forca; cfg.peso_forca = data.peso_forca; }
+    if (data.peso_equilibrio !== undefined) { document.getElementById('peso_equilibrio').value = data.peso_equilibrio; }
+    if (data.peso_lucro !== undefined) { document.getElementById('peso_lucro').value = data.peso_lucro; }
+    if (data.regra_estoque) {
+      document.getElementById('estoque_ativo').checked = data.regra_estoque.ativo;
+      document.getElementById('estoque_limite').value = data.regra_estoque.limite || 2;
+      document.getElementById('estoque_tipo').value = data.regra_estoque.tipo || 'percentual';
+      document.getElementById('estoque_valor').value = data.regra_estoque.valor || 0;
+      toggleEstoqueConfig();
+    }
+    if (data.modo_auto !== undefined) setModoAuto(data.modo_auto);
+    if (data.auto_margem_ok !== undefined) document.getElementById('auto_margem_ok').value = data.auto_margem_ok;
+    if (data.auto_margem_fila !== undefined) document.getElementById('auto_margem_fila').value = data.auto_margem_fila;
+    buildCanaisGrid();
+    buildForcasGrid();
+  } catch(e) {
+    // Sem config salva ainda, usa defaults
+    buildCanaisGrid();
+    buildForcasGrid();
+  }
+}
+
+function coletarConfig() {
+  // Inicializa gordura padrão para canais sem config
+  CANAIS.forEach(c => {
+    if (!cfg.gordura_por_canal[c.key]) {
+      cfg.gordura_por_canal[c.key] = {tipo:'percentual', valor:20};
+    }
+    const key = c.key.replace(/ /g,'_');
+    const el = document.getElementById('val-'+key);
+    if (el) cfg.gordura_por_canal[c.key].valor = parseFloat(el.value)||0;
+    const forca = document.getElementById('forca-'+key);
+    if (forca) cfg.forcas_canais[c.key] = parseFloat(forca.value)||0;
+  });
+
+  return {
+    objetivo: cfg.objetivo,
+    tipo_alvo: document.getElementById('cfg_tipo_alvo').value,
+    valor_alvo: parseFloat(document.getElementById('cfg_valor_alvo').value)||30,
+    arredondamento: document.getElementById('cfg_arredondamento').value,
+    modo_aprovacao: document.getElementById('cfg_modo_aprovacao').value,
+    fila_auto_ao_calcular: document.getElementById('cfg_fila_auto').checked,
+    gordura_por_canal: cfg.gordura_por_canal,
+    forcas_canais: cfg.forcas_canais,
+    peso_forca: parseFloat(document.getElementById('peso_forca').value)||0.4,
+    peso_equilibrio: parseFloat(document.getElementById('peso_equilibrio').value)||0.4,
+    peso_lucro: parseFloat(document.getElementById('peso_lucro').value)||0.2,
+    regra_estoque: {
+      ativo: document.getElementById('estoque_ativo').checked,
+      limite: parseInt(document.getElementById('estoque_limite').value)||2,
+      tipo: document.getElementById('estoque_tipo').value,
+      valor: parseFloat(document.getElementById('estoque_valor').value)||0,
+    },
+    modo_auto: cfg.modo_auto,
+    auto_margem_ok: parseFloat(document.getElementById('auto_margem_ok').value)||25,
+    auto_margem_fila: parseFloat(document.getElementById('auto_margem_fila').value)||15,
+  };
+}
+
+async function salvarTudo() {
+  const payload = coletarConfig();
+  try {
+    const res = await fetch('/config/integracao-comercial', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-API-Key': window._apiKey||''},
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    mostrarNotice(data.ok ? 'Configurações salvas com sucesso!' : ('Erro: ' + (data.detail||'falha')), data.ok ? 'ok' : 'err');
+  } catch(e) {
+    mostrarNotice('Erro de conexão ao salvar.', 'err');
+  }
+}
+
+function mostrarNotice(msg, tipo='ok') {
+  const el = document.getElementById('notice-global');
+  el.className = 'notice ' + tipo;
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(()=>{ el.style.display='none'; }, 4000);
+}
+
+// Listeners para preview em tempo real
+document.addEventListener('change', () => {
+  CANAIS.forEach(c => calcPreviewCanal(c.key, parseFloat(document.getElementById('preview_preco')?.value)||35.90));
+  atualizarPreviewEstoque();
+});
+
+document.addEventListener('DOMContentLoaded', carregarConfig);
+</script>
+</body>
+</html>

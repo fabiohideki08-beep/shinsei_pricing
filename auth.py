@@ -1,18 +1,18 @@
-"""
-auth.py — Shinsei Pricing
-Autenticação por API key via header X-API-Key.
+﻿"""
+auth.py â€” Shinsei Pricing
+AutenticaÃ§Ã£o por API key via header X-API-Key.
 
 Uso no app.py:
     from auth import verificar_api_key, PUBLIC_PATHS
 
-    # Adicionar logo após app.add_middleware(CORSMiddleware, ...)
+    # Adicionar logo apÃ³s app.add_middleware(CORSMiddleware, ...)
     @app.middleware("http")
     async def auth_middleware(request: Request, call_next):
         return await verificar_api_key(request, call_next)
 
-Configuração:
+ConfiguraÃ§Ã£o:
     API_KEY=sua_chave_no_.env
-    API_KEY_HABILITADO=true   # "false" para desativar sem remover o código
+    API_KEY_HABILITADO=true   # "false" para desativar sem remover o cÃ³digo
 
 Gerar uma chave segura:
     python -c "import secrets; print(secrets.token_urlsafe(32))"
@@ -31,9 +31,9 @@ from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
-# ─────────────────────────────────────────────
-# Configuração
-# ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ConfiguraÃ§Ã£o
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _api_key() -> str | None:
     return os.getenv("API_KEY", "").strip() or None
@@ -43,7 +43,7 @@ def _auth_habilitado() -> bool:
     return os.getenv("API_KEY_HABILITADO", "true").strip().lower() != "false"
 
 
-# Rotas que não exigem autenticação (callbacks OAuth, health check, frontend)
+# Rotas que nÃ£o exigem autenticaÃ§Ã£o (callbacks OAuth, health check, frontend)
 PUBLIC_PATHS = {
     "/",
     "/health",
@@ -60,27 +60,29 @@ PUBLIC_PATHS = {
     "/docs",
     "/openapi.json",
     "/redoc",
+    "/integracao-comercial",
+    "/config/integracao-comercial",
 }
 
-# Prefixos públicos (qualquer rota que comece com esses valores)
+# Prefixos pÃºblicos (qualquer rota que comece com esses valores)
 PUBLIC_PREFIXES = (
     "/static/",
     "/pages/",
 )
 
 
-# ─────────────────────────────────────────────
-# Rate limiting simples (em memória)
-# Protege contra força bruta na API key
-# ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Rate limiting simples (em memÃ³ria)
+# Protege contra forÃ§a bruta na API key
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 _rate_limit_store: dict[str, list[float]] = defaultdict(list)
-_RATE_LIMIT_MAX = 60        # máximo de requisições
+_RATE_LIMIT_MAX = 60        # mÃ¡ximo de requisiÃ§Ãµes
 _RATE_LIMIT_WINDOW = 60.0   # janela em segundos
 
 
 def _check_rate_limit(client_ip: str) -> bool:
-    """Retorna True se o IP está dentro do limite. False se excedeu."""
+    """Retorna True se o IP estÃ¡ dentro do limite. False se excedeu."""
     agora = time.time()
     janela = _rate_limit_store[client_ip]
     # Remove timestamps fora da janela
@@ -91,9 +93,9 @@ def _check_rate_limit(client_ip: str) -> bool:
     return True
 
 
-# ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Middleware principal
-# ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async def verificar_api_key(
     request: Request,
@@ -104,7 +106,7 @@ async def verificar_api_key(
 
     A chave pode ser enviada de duas formas:
       - Header:      X-API-Key: <chave>
-      - Query param: ?api_key=<chave>  (útil para testes rápidos)
+      - Query param: ?api_key=<chave>  (Ãºtil para testes rÃ¡pidos)
     """
     # Auth desativada via env
     if not _auth_habilitado():
@@ -112,18 +114,18 @@ async def verificar_api_key(
 
     path = request.url.path
 
-    # Rotas públicas — passa direto
+    # Rotas pÃºblicas â€” passa direto
     if path in PUBLIC_PATHS:
         return await call_next(request)
 
     if any(path.startswith(prefix) for prefix in PUBLIC_PREFIXES):
         return await call_next(request)
 
-    # Sem API key configurada — loga aviso e passa (evita lockout acidental)
+    # Sem API key configurada â€” loga aviso e passa (evita lockout acidental)
     chave_configurada = _api_key()
     if not chave_configurada:
         logger.warning(
-            "API_KEY não configurada no .env — autenticação desativada. "
+            "API_KEY nÃ£o configurada no .env â€” autenticaÃ§Ã£o desativada. "
             "Defina API_KEY para proteger os endpoints."
         )
         return await call_next(request)
@@ -134,7 +136,7 @@ async def verificar_api_key(
         logger.warning("Rate limit excedido para IP %s em %s", client_ip, path)
         return JSONResponse(
             status_code=429,
-            content={"detail": "Muitas requisições. Aguarde um momento."},
+            content={"detail": "Muitas requisiÃ§Ãµes. Aguarde um momento."},
         )
 
     # Extrai a chave enviada pelo cliente
@@ -148,25 +150,25 @@ async def verificar_api_key(
         return JSONResponse(
             status_code=401,
             content={
-                "detail": "Autenticação obrigatória. Envie o header X-API-Key.",
+                "detail": "AutenticaÃ§Ã£o obrigatÃ³ria. Envie o header X-API-Key.",
                 "docs": "/docs",
             },
         )
 
-    # Comparação em tempo constante (evita timing attacks)
+    # ComparaÃ§Ã£o em tempo constante (evita timing attacks)
     import hmac
     if not hmac.compare_digest(chave_enviada, chave_configurada):
-        logger.warning("API key inválida de IP %s para %s", client_ip, path)
+        logger.warning("API key invÃ¡lida de IP %s para %s", client_ip, path)
         return JSONResponse(
             status_code=403,
-            content={"detail": "API key inválida."},
+            content={"detail": "API key invÃ¡lida."},
         )
 
     return await call_next(request)
 
 
-# ─────────────────────────────────────────────
-# Dependência FastAPI (alternativa ao middleware)
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# DependÃªncia FastAPI (alternativa ao middleware)
 # Use em endpoints individuais se preferir granularidade:
 #
 #   from fastapi import Depends
@@ -174,7 +176,7 @@ async def verificar_api_key(
 #
 #   @app.post("/meu-endpoint", dependencies=[Depends(api_key_dep)])
 #   def meu_endpoint(): ...
-# ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 from fastapi import Header, HTTPException, Security
 from fastapi.security import APIKeyHeader
@@ -183,7 +185,7 @@ _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 async def api_key_dep(x_api_key: str | None = Security(_api_key_header)) -> str:
-    """Dependência FastAPI para proteger endpoints individuais."""
+    """DependÃªncia FastAPI para proteger endpoints individuais."""
     if not _auth_habilitado():
         return "auth-desativada"
     chave = _api_key()
@@ -191,5 +193,6 @@ async def api_key_dep(x_api_key: str | None = Security(_api_key_header)) -> str:
         return "sem-chave-configurada"
     import hmac
     if not x_api_key or not hmac.compare_digest(x_api_key, chave):
-        raise HTTPException(status_code=403, detail="API key inválida.")
+        raise HTTPException(status_code=403, detail="API key invÃ¡lida.")
     return x_api_key
+
