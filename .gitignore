@@ -1,0 +1,84 @@
+# ─── Python ───────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ─── Ambiente virtual ─────────────────────────────────────────
+venv/
+env/
+.venv/
+
+# ─── Variáveis de ambiente (NUNCA versionar com valores reais) ─
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+# Mantenha apenas o .env.example versionado
+
+# ─── Tokens OAuth e dados sensíveis (CRÍTICO) ─────────────────
+data/bling_tokens.json
+data/bling_oauth_state.json
+data/ml_tokens.json
+data/ml_oauth_state.json
+bling_token.json
+$env
+- Copia.env
+
+# ─── Banco de dados local ─────────────────────────────────────
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# ─── Logs e histórico (gerados em runtime) ────────────────────
+data/historico_precificacao.jsonl
+data/pricing_logs.jsonl
+data/webhook_logs.jsonl
+logs/
+*.log
+*.jsonl
+
+# ─── Arquivos temporários e backups ───────────────────────────
+*_backup.*
+*_old.*
+*- Copia*
+~$*
+*.tmp
+app_old.py
+app_mock_backup.py
+app_v4_backup.py
+index_backup.html
+index_final_backup.html
+index_v3.html
+index_v4.html
+index_v5.html.html
+pages/fila\ -\ Copia.html
+pages/regras_backup.html
+pages/simulador_backup.html
+modulo_regras_precificacao.py.py
+
+# ─── IDEs ─────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ─── OS ───────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Excel temporário ─────────────────────────────────────────
+~$*.xlsx
+*.xlsb
+data/temp.xlsx
+
+# ─── Cache Python compilado ───────────────────────────────────
+__pycache__.zip
