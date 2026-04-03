@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 from dotenv import load_dotenv
 load_dotenv()
 import importlib, json, uuid
@@ -67,10 +67,10 @@ def _optional_import(module_name: str):
 
 pricing_module = _optional_import("pricing_engine_real") or _optional_import("pricing_engine")
 if pricing_module is None:
-    raise RuntimeError("pricing_engine_real.py ou pricing_engine.py não encontrado.")
+    raise RuntimeError("pricing_engine_real.py ou pricing_engine.py nÃ£o encontrado.")
 montar_precificacao_bling: Optional[Callable[..., dict]] = getattr(pricing_module, "montar_precificacao_bling", None)
 if montar_precificacao_bling is None:
-    raise RuntimeError("Seu motor atual não expõe montar_precificacao_bling().")
+    raise RuntimeError("Seu motor atual nÃ£o expÃµe montar_precificacao_bling().")
 
 bling_mod = _optional_import("bling_client")
 BlingClient = getattr(bling_mod, "BlingClient", None) if bling_mod else None
@@ -176,7 +176,7 @@ def _diagnostico_preview(preview: dict) -> dict:
             erro_txt = str(aud.get("erro") or "").lower()
             if "sem peso" in erro_txt:
                 codigo = "peso_ausente"
-            elif "composição" in erro_txt or "composicao" in erro_txt:
+            elif "composiÃ§Ã£o" in erro_txt or "composicao" in erro_txt:
                 codigo = "composicao_sem_custo"
             elif "sem custo" in erro_txt:
                 codigo = "custo_ausente"
@@ -184,7 +184,7 @@ def _diagnostico_preview(preview: dict) -> dict:
                 codigo = "erro_motor"
         return {"ok":False,"codigo":codigo,"mensagem":str(aud.get("erro")),"detalhe":aud.get("acao") or ""}
     if not (produto.get("codigo") or aud.get("sku")):
-        return {"ok":False,"codigo":"sku_ausente","mensagem":"SKU ausente no retorno do Bling.","detalhe":"Verifique se o produto encontrado possui Código (SKU) cadastrado."}
+        return {"ok":False,"codigo":"sku_ausente","mensagem":"SKU ausente no retorno do Bling.","detalhe":"Verifique se o produto encontrado possui CÃ³digo (SKU) cadastrado."}
     custo = float(aud.get("custo_usado") or 0)
     peso = float(aud.get("peso_usado") or 0)
     tipo_custo = str(aud.get("tipo_custo") or "").lower()
@@ -193,16 +193,16 @@ def _diagnostico_preview(preview: dict) -> dict:
         return {"ok":False,"codigo":"peso_ausente","mensagem":"Produto sem peso no Bling.","detalhe":"Preencha o peso no produto ou use peso override no simulador."}
     if custo <= 0 and tipo_custo == "composicao":
         faltando = [c.get("sku") or str(c.get("id") or "-") for c in componentes if float(c.get("custo_unitario") or 0) <= 0]
-        return {"ok":False,"codigo":"composicao_sem_custo","mensagem":"Composição sem custo válido nos componentes.","detalhe":("Componentes sem custo: " + ", ".join(faltando)) if faltando else "Nenhum componente retornou custo válido."}
+        return {"ok":False,"codigo":"composicao_sem_custo","mensagem":"ComposiÃ§Ã£o sem custo vÃ¡lido nos componentes.","detalhe":("Componentes sem custo: " + ", ".join(faltando)) if faltando else "Nenhum componente retornou custo vÃ¡lido."}
     if custo <= 0:
-        return {"ok":False,"codigo":"custo_ausente","mensagem":"Produto sem custo no estoque do Bling.","detalhe":"Preencha o preço de compra/custo do produto no estoque."}
+        return {"ok":False,"codigo":"custo_ausente","mensagem":"Produto sem custo no estoque do Bling.","detalhe":"Preencha o preÃ§o de compra/custo do produto no estoque."}
     if not _marketplaces_validos(marketplaces):
-        return {"ok":False,"codigo":"sem_canais","mensagem":"Nenhum canal válido foi calculado.","detalhe":"Verifique peso, custo e faixas da Aba2 para este produto."}
-    return {"ok":True,"codigo":"preview_valido","mensagem":"Preview válido.","detalhe":""}
+        return {"ok":False,"codigo":"sem_canais","mensagem":"Nenhum canal vÃ¡lido foi calculado.","detalhe":"Verifique peso, custo e faixas da Aba2 para este produto."}
+    return {"ok":True,"codigo":"preview_valido","mensagem":"Preview vÃ¡lido.","detalhe":""}
 
 def _preview_valido(preview: dict):
     diag = _diagnostico_preview(preview)
-    return bool(diag.get("ok")), str(diag.get("mensagem") or "Preview inválido.")
+    return bool(diag.get("ok")), str(diag.get("mensagem") or "Preview invÃ¡lido.")
 
 def _montar_item_fila(preview: dict, payload_original: dict | None = None) -> dict:
     aud = preview.get("auditoria") or {}
@@ -271,7 +271,7 @@ def fila_page():
     html_file = PAGES_DIR / "fila.html"
     if html_file.exists():
         return HTMLResponse(html_file.read_text(encoding="utf-8"))
-    raise HTTPException(status_code=404, detail="pages/fila.html não encontrado.")
+    raise HTTPException(status_code=404, detail="pages/fila.html nÃ£o encontrado.")
 
 @app.get("/health")
 def health():
@@ -280,7 +280,7 @@ def health():
 
 @app.get("/bling/status")
 def bling_status():
-    if not BlingClient: return {"ok":False,"erro":"bling_client.py não encontrado."}
+    if not BlingClient: return {"ok":False,"erro":"bling_client.py nÃ£o encontrado."}
     try:
         client = BlingClient()
         return {"ok":True,"configurado":bool(getattr(client,"client_id","") and getattr(client,"client_secret","") and getattr(client,"redirect_uri","")),"token_local":bool(client.has_local_tokens())}
@@ -289,7 +289,7 @@ def bling_status():
 
 @app.get("/bling/auth")
 def bling_auth():
-    if not BlingClient: raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
+    if not BlingClient: raise HTTPException(status_code=500, detail="bling_client.py nÃ£o encontrado.")
     try:
         client = BlingClient()
         return RedirectResponse(client.build_authorize_url())
@@ -298,19 +298,19 @@ def bling_auth():
 
 @app.get("/bling/callback")
 def bling_callback(code: str | None = Query(None), state: str | None = Query(None), error: str | None = Query(None), error_description: str | None = Query(None)):
-    if not BlingClient: raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
+    if not BlingClient: raise HTTPException(status_code=500, detail="bling_client.py nÃ£o encontrado.")
     if error: raise HTTPException(status_code=400, detail=f"Bling OAuth retornou erro: {error}. {error_description or ''}".strip())
-    if not code: raise HTTPException(status_code=400, detail="Callback do Bling sem code de autorização.")
+    if not code: raise HTTPException(status_code=400, detail="Callback do Bling sem code de autorizaÃ§Ã£o.")
     try:
         client = BlingClient()
         token = client.exchange_code_for_token(code, state=state)
-        return {"ok":True,"message":"Conexão com Bling realizada.","expires_in":token.get("expires_in")}
+        return {"ok":True,"message":"ConexÃ£o com Bling realizada.","expires_in":token.get("expires_in")}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
 @app.post("/bling/debug/sku")
 def bling_debug_sku(payload: DebugSkuPayload):
-    if not BlingClient: raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
+    if not BlingClient: raise HTTPException(status_code=500, detail="bling_client.py nÃ£o encontrado.")
     try:
         client = BlingClient()
         return client.debug_product_by_sku(payload.sku)
@@ -319,7 +319,7 @@ def bling_debug_sku(payload: DebugSkuPayload):
 
 @app.post("/bling/produto/buscar")
 def bling_produto_buscar(payload: DebugSkuPayload):
-    if not BlingClient: raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
+    if not BlingClient: raise HTTPException(status_code=500, detail="bling_client.py nÃ£o encontrado.")
     try:
         client = BlingClient()
         return client.get_product_by_sku(payload.sku)
@@ -329,9 +329,9 @@ def bling_produto_buscar(payload: DebugSkuPayload):
 @app.post("/bling/produto/atualizar-peso")
 def bling_produto_atualizar_peso(payload: AtualizacaoCampoBlingPayload):
     if not BlingClient:
-        raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
+        raise HTTPException(status_code=500, detail="bling_client.py nÃ£o encontrado.")
     if float(payload.valor or 0) <= 0:
-        raise HTTPException(status_code=400, detail="Informe um peso válido.")
+        raise HTTPException(status_code=400, detail="Informe um peso vÃ¡lido.")
     try:
         client = BlingClient()
         existing = client.get_product(int(payload.produto_id))
@@ -350,9 +350,9 @@ def bling_produto_atualizar_peso(payload: AtualizacaoCampoBlingPayload):
 @app.post("/bling/produto/atualizar-preco")
 def bling_produto_atualizar_preco(payload: AtualizacaoCampoBlingPayload):
     if not BlingClient:
-        raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
+        raise HTTPException(status_code=500, detail="bling_client.py nÃ£o encontrado.")
     if float(payload.valor or 0) <= 0:
-        raise HTTPException(status_code=400, detail="Informe um preço válido.")
+        raise HTTPException(status_code=400, detail="Informe um preÃ§o vÃ¡lido.")
     try:
         client = BlingClient()
         existing = client.get_product(int(payload.produto_id))
@@ -361,9 +361,9 @@ def bling_produto_atualizar_preco(payload: AtualizacaoCampoBlingPayload):
         patch["preco"] = round(float(payload.valor), 2)
         result = client.update_product(int(payload.produto_id), patch)
         atualizado = client.get_product(int(payload.produto_id))
-        return {"ok": True, "message": "Preço atualizado no Bling.", "produto": atualizado, "raw": result}
+        return {"ok": True, "message": "PreÃ§o atualizado no Bling.", "produto": atualizado, "raw": result}
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Falha ao atualizar preço no Bling: {exc}")
+        raise HTTPException(status_code=400, detail=f"Falha ao atualizar preÃ§o no Bling: {exc}")
 
 @app.post("/integracao/preview")
 def integracao_preview(payload: IntegracaoPayload):
@@ -371,7 +371,7 @@ def integracao_preview(payload: IntegracaoPayload):
     if not regras:
         raise HTTPException(status_code=400, detail="Nenhuma regra cadastrada. Importe a Aba2 primeiro.")
     if (payload.criterio or "sku").strip().lower() != "sku":
-        raise HTTPException(status_code=400, detail="A precificação integrada aceita apenas busca por SKU. Use criterio='sku'.")
+        raise HTTPException(status_code=400, detail="A precificaÃ§Ã£o integrada aceita apenas busca por SKU. Use criterio='sku'.")
     try:
         resultado = montar_precificacao_bling(
             regras=regras, criterio="sku", valor_busca=payload.valor_busca, embalagem=payload.embalagem, imposto=payload.imposto,
@@ -395,16 +395,16 @@ def integracao_preview(payload: IntegracaoPayload):
         if carregar_cfg().get("fila_auto_ao_calcular", True) and valido:
             sku = preview["auditoria"].get("sku") or preview["produto"].get("codigo") or ""
             if ja_existe_pendente(sku):
-                fila_auto = {"adicionado":False,"motivo":"Já existe item pendente equivalente na fila."}
+                fila_auto = {"adicionado":False,"motivo":"JÃ¡ existe item pendente equivalente na fila."}
             else:
                 item = _montar_item_fila(preview, payload.dict())
                 inserir_item_fila(item)
                 _append_jsonl(LOG_PATH, {"evento":"fila_auto_preview","item_id":item["id"],"sku":item["sku"],"quando":item["criado_em"]})
                 fila_auto = {"adicionado":True,"item_id":item["id"]}
         else:
-            fila_auto = {"adicionado":False,"motivo":motivo or diagnostico.get("mensagem") or "Fila automática desativada."}
+            fila_auto = {"adicionado":False,"motivo":motivo or diagnostico.get("mensagem") or "Fila automÃ¡tica desativada."}
         preview["fila_auto"] = fila_auto
-        logger.info("Precificação: SKU=%s melhor_canal=%s fila=%s", payload.valor_busca, preview.get("melhor_canal"), fila_auto.get("adicionado"))
+        logger.info("PrecificaÃ§Ã£o: SKU=%s melhor_canal=%s fila=%s", payload.valor_busca, preview.get("melhor_canal"), fila_auto.get("adicionado"))
         return preview
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Falha no preview: {exc}")
@@ -418,10 +418,10 @@ def fila_lista():
 def fila_adicionar(payload: dict = Body(...)):
     preview = {"ok":payload.get("ok", True),"produto":payload.get("produto_bling") or payload.get("produto") or {},"marketplaces":payload.get("marketplaces") or {},"auditoria":payload.get("auditoria") or {},"raw":payload.get("raw") or {}}
     diag = _diagnostico_preview(preview)
-    if not diag.get("ok"): raise HTTPException(status_code=400, detail=f"Preview inválido para fila: {diag.get('mensagem')}")
+    if not diag.get("ok"): raise HTTPException(status_code=400, detail=f"Preview invÃ¡lido para fila: {diag.get('mensagem')}")
     sku = (preview.get("auditoria") or {}).get("sku") or (preview.get("produto") or {}).get("codigo") or ""
     if ja_existe_pendente(sku):
-        return {"ok":True,"duplicado":True,"message":"Já existe item pendente equivalente na fila.","stats":stats_fila()}
+        return {"ok":True,"duplicado":True,"message":"JÃ¡ existe item pendente equivalente na fila.","stats":stats_fila()}
     item = _montar_item_fila(preview, payload.get("payload_original") or payload.get("raw") or {})
     inserir_item_fila(item)
     _append_jsonl(LOG_PATH, {"evento":"fila_adicionar_manual","item_id":item["id"],"sku":item["sku"],"quando":item["criado_em"]})
@@ -440,26 +440,29 @@ def fila_reset_total():
 @app.post("/fila/aprovar/{item_id}")
 def fila_aprovar(item_id: str):
     item = buscar_item_fila(item_id)
-    if not item: raise HTTPException(status_code=404, detail="Item não encontrado na fila.")
+    if not item:
+        raise HTTPException(status_code=404, detail="Item nÃ£o encontrado na fila.")
     if item.get("status") != "pendente":
-        raise HTTPException(status_code=400, detail=f"Item já com status '{item['status']}'.")
+        raise HTTPException(status_code=400, detail=f"Item jÃ¡ com status '{item.get("status")}'.")
     if not BlingClient or not aplicar_precos_multicanal:
-        raise HTTPException(status_code=500, detail="Integração de aplicação no Bling indisponível.")
+        raise HTTPException(status_code=500, detail="IntegraÃ§Ã£o de aplicaÃ§Ã£o no Bling indisponÃ­vel.")
+    item_com_gordura = _aplicar_gordura_no_item(item)
     try:
         client = BlingClient()
-        resultado = aplicar_precos_multicanal(client, item)
+        resultado = aplicar_precos_multicanal(client, item_com_gordura)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Falha ao aplicar preços no Bling: {exc}")
+        raise HTTPException(status_code=400, detail=f"Falha ao aplicar preÃ§os no Bling: {exc}")
     agora = datetime.utcnow().isoformat()
     atualizar_status_fila(item_id, "aprovado", resultado=resultado)
-    _append_jsonl(LOG_PATH, {"evento":"fila_aprovado","item_id":item_id,"quando":agora})
-    logger.info("Item aprovado: id=%s sku=%s", item_id, item.get("sku"))
-    return {"ok":True,"message":"Preços aplicados no Bling.","stats":stats_fila()}
+    _append_jsonl(LOG_PATH, {"evento": "fila_aprovado", "item_id": item_id, "quando": agora})
+    logger.info("Item aprovado: id=%s sku=%s estrategia=%s", item_id, item.get("sku"), resultado.get("estrategia"))
+    return {"ok": True, "message": "PreÃ§os aplicados no Bling.", "resultado": resultado, "stats": stats_fila()}
+
 
 @app.post("/fila/rejeitar/{item_id}")
 def fila_rejeitar(item_id: str, payload: dict = Body(default={})):
     item = buscar_item_fila(item_id)
-    if not item: raise HTTPException(status_code=404, detail="Item não encontrado na fila.")
+    if not item: raise HTTPException(status_code=404, detail="Item nÃ£o encontrado na fila.")
     agora = datetime.utcnow().isoformat()
     motivo = payload.get("motivo") or "Rejeitado manualmente."
     atualizar_status_fila(item_id, "rejeitado", resultado={"motivo": motivo})
@@ -467,11 +470,72 @@ def fila_rejeitar(item_id: str, payload: dict = Body(default={})):
     logger.info("Item rejeitado: id=%s sku=%s motivo=%s", item_id, item.get("sku"), motivo)
     return {"ok":True,"message":"Item marcado como rejeitado.","stats":stats_fila()}
 
-# ─────────────────────────────────────────────
-# FASE 5 — Integração Comercial
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# FASE 5 â€” IntegraÃ§Ã£o Comercial
 # Cole este bloco no app.py logo antes de:
-#   if not FILA_PATH.exists(): ...
-# ─────────────────────────────────────────────
+#   
+def _aplicar_gordura_no_item(item: dict) -> dict:
+    import copy
+    item_mod = copy.deepcopy(item)
+    cfg = carregar_integracao_cfg()
+    gordura_por_canal = cfg.get("gordura_por_canal", {})
+    arredondamento = str(cfg.get("arredondamento", "90"))
+    marketplaces = item_mod.get("marketplaces", {})
+    if isinstance(marketplaces, dict):
+        for canal_key, dados in marketplaces.items():
+            if not isinstance(dados, dict): continue
+            preco_calculado = float(dados.get("preco_promocional") or dados.get("preco_final") or dados.get("preco") or 0)
+            if preco_calculado <= 0: continue
+            gordura = _buscar_gordura_canal(canal_key, gordura_por_canal)
+            preco_virtual = calcular_preco_virtual(preco_calculado, gordura, arredondamento)
+            dados["preco_promocional"] = round(preco_calculado, 2)
+            dados["preco"] = preco_virtual
+            dados["preco_virtual"] = preco_virtual
+            dados["gordura_aplicada"] = gordura
+    itens_lista = item_mod.get("itens", [])
+    if isinstance(itens_lista, list):
+        for it in itens_lista:
+            if not isinstance(it, dict): continue
+            canal_key = it.get("canal", "")
+            preco_calculado = float(it.get("preco_promocional") or it.get("preco_final") or it.get("preco") or 0)
+            if preco_calculado <= 0: continue
+            gordura = _buscar_gordura_canal(canal_key, gordura_por_canal)
+            preco_virtual = calcular_preco_virtual(preco_calculado, gordura, arredondamento)
+            it["preco_promocional"] = round(preco_calculado, 2)
+            it["preco"] = preco_virtual
+            it["preco_virtual"] = preco_virtual
+    return item_mod
+
+
+def _buscar_gordura_canal(canal_key: str, gordura_por_canal: dict) -> dict:
+    padrao = {"tipo": "percentual", "valor": 20.0}
+    if canal_key in gordura_por_canal: return gordura_por_canal[canal_key]
+    def _norm(s): return s.lower().replace(" ", "_").replace("-", "_")
+    canal_norm = _norm(canal_key)
+    for nome, gordura in gordura_por_canal.items():
+        if _norm(nome) == canal_norm: return gordura
+    aliases = {
+        "mercado_livre_classico": ["ml_classico","mercadolivre_classico","mercado livre classico"],
+        "mercado_livre_premium": ["ml_premium","mercadolivre_premium","mercado livre premium"],
+        "shopee": ["shopee"], "amazon": ["amazon"], "shein": ["shein"], "shopify": ["shopify","shopfy"],
+    }
+    for chave_cfg, alias_list in aliases.items():
+        if canal_norm in [_norm(a) for a in alias_list]:
+            if chave_cfg in gordura_por_canal: return gordura_por_canal[chave_cfg]
+    return padrao
+
+
+@app.post("/webhooks/bling")
+async def webhook_bling(request: Request):
+    try: body = await request.json()
+    except Exception: body = {}
+    evento = body.get("evento") or body.get("event") or "desconhecido"
+    logger.info("Webhook Bling recebido: evento=%s", evento)
+    _append_jsonl(LOG_PATH, {"evento":"webhook_bling","tipo":evento,"quando":datetime.utcnow().isoformat(),"payload":body})
+    return {"ok": True, "recebido": True}
+
+if not FILA_PATH.exists(): ...
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INTEGRACAO_CFG_PATH = DATA_DIR / "integracao_comercial.json"
 
@@ -533,7 +597,7 @@ def carregar_integracao_cfg() -> dict:
 
 
 def calcular_preco_virtual(preco_calculado: float, gordura: dict, arredondamento: str = "90") -> float:
-    """Aplica a gordura sobre o preço calculado e arredonda."""
+    """Aplica a gordura sobre o preÃ§o calculado e arredonda."""
     tipo = gordura.get("tipo", "percentual")
     valor = float(gordura.get("valor", 20))
 
@@ -548,7 +612,7 @@ def calcular_preco_virtual(preco_calculado: float, gordura: dict, arredondamento
 def _arredondar_preco(v: float, modo: str) -> float:
     if modo == "sem":
         return round(v, 2)
-    sufixo = int(modo) / 100  # "90" → 0.90
+    sufixo = int(modo) / 100  # "90" â†’ 0.90
     base = int(v)
     proposto = base + sufixo
     if proposto >= v:
@@ -556,27 +620,27 @@ def _arredondar_preco(v: float, modo: str) -> float:
     return round(base + 1 + sufixo, 2)
 
 
-# ─── ROTA: página de integração comercial ───
+# â”€â”€â”€ ROTA: pÃ¡gina de integraÃ§Ã£o comercial â”€â”€â”€
 @app.get("/integracao-comercial", response_class=HTMLResponse)
 def integracao_comercial_page():
     html_file = PAGES_DIR / "integracao_comercial.html"
     if html_file.exists():
         return HTMLResponse(html_file.read_text(encoding="utf-8"))
-    raise HTTPException(status_code=404, detail="integracao_comercial.html não encontrado.")
+    raise HTTPException(status_code=404, detail="integracao_comercial.html nÃ£o encontrado.")
 
 
-# ─── ROTA: GET config ───
+# â”€â”€â”€ ROTA: GET config â”€â”€â”€
 @app.get("/config/integracao-comercial")
 def get_integracao_config():
     return carregar_integracao_cfg()
 
 
-# ─── ROTA: POST config ───
+# â”€â”€â”€ ROTA: POST config â”€â”€â”€
 @app.post("/config/integracao-comercial")
 async def set_integracao_config(request: Request):
     data = await request.json()
     if not isinstance(data, dict):
-        raise HTTPException(status_code=400, detail="Payload inválido.")
+        raise HTTPException(status_code=400, detail="Payload invÃ¡lido.")
 
     cfg_atual = carregar_integracao_cfg()
 
@@ -616,19 +680,19 @@ async def set_integracao_config(request: Request):
         }
 
     _save_json(INTEGRACAO_CFG_PATH, cfg_atual)
-    logger.info("Configuração de integração comercial atualizada: objetivo=%s", cfg_atual.get("objetivo"))
+    logger.info("ConfiguraÃ§Ã£o de integraÃ§Ã£o comercial atualizada: objetivo=%s", cfg_atual.get("objetivo"))
 
     return {"ok": True, "config": cfg_atual}
 
 
-# ─── ROTA: calcular preço virtual para um canal ───
+# â”€â”€â”€ ROTA: calcular preÃ§o virtual para um canal â”€â”€â”€
 @app.post("/config/calcular-preco-virtual")
 async def calcular_preco_virtual_endpoint(request: Request):
-    """Dado um preço calculado, retorna o preço virtual por canal com a gordura configurada."""
+    """Dado um preÃ§o calculado, retorna o preÃ§o virtual por canal com a gordura configurada."""
     data = await request.json()
     preco = float(data.get("preco", 0))
     if preco <= 0:
-        raise HTTPException(status_code=400, detail="Preço inválido.")
+        raise HTTPException(status_code=400, detail="PreÃ§o invÃ¡lido.")
 
     cfg = carregar_integracao_cfg()
     gordura_por_canal = cfg.get("gordura_por_canal", {})
@@ -649,12 +713,73 @@ async def calcular_preco_virtual_endpoint(request: Request):
 
     return {"ok": True, "canais": resultado}
 
+
+def _aplicar_gordura_no_item(item: dict) -> dict:
+    import copy
+    item_mod = copy.deepcopy(item)
+    cfg = carregar_integracao_cfg()
+    gordura_por_canal = cfg.get("gordura_por_canal", {})
+    arredondamento = str(cfg.get("arredondamento", "90"))
+    marketplaces = item_mod.get("marketplaces", {})
+    if isinstance(marketplaces, dict):
+        for canal_key, dados in marketplaces.items():
+            if not isinstance(dados, dict): continue
+            preco_calculado = float(dados.get("preco_promocional") or dados.get("preco_final") or dados.get("preco") or 0)
+            if preco_calculado <= 0: continue
+            gordura = _buscar_gordura_canal(canal_key, gordura_por_canal)
+            preco_virtual = calcular_preco_virtual(preco_calculado, gordura, arredondamento)
+            dados["preco_promocional"] = round(preco_calculado, 2)
+            dados["preco"] = preco_virtual
+            dados["preco_virtual"] = preco_virtual
+            dados["gordura_aplicada"] = gordura
+    itens_lista = item_mod.get("itens", [])
+    if isinstance(itens_lista, list):
+        for it in itens_lista:
+            if not isinstance(it, dict): continue
+            canal_key = it.get("canal", "")
+            preco_calculado = float(it.get("preco_promocional") or it.get("preco_final") or it.get("preco") or 0)
+            if preco_calculado <= 0: continue
+            gordura = _buscar_gordura_canal(canal_key, gordura_por_canal)
+            preco_virtual = calcular_preco_virtual(preco_calculado, gordura, arredondamento)
+            it["preco_promocional"] = round(preco_calculado, 2)
+            it["preco"] = preco_virtual
+            it["preco_virtual"] = preco_virtual
+    return item_mod
+
+
+def _buscar_gordura_canal(canal_key: str, gordura_por_canal: dict) -> dict:
+    padrao = {"tipo": "percentual", "valor": 20.0}
+    if canal_key in gordura_por_canal: return gordura_por_canal[canal_key]
+    def _norm(s): return s.lower().replace(" ", "_").replace("-", "_")
+    canal_norm = _norm(canal_key)
+    for nome, gordura in gordura_por_canal.items():
+        if _norm(nome) == canal_norm: return gordura
+    aliases = {
+        "mercado_livre_classico": ["ml_classico","mercadolivre_classico","mercado livre classico"],
+        "mercado_livre_premium": ["ml_premium","mercadolivre_premium","mercado livre premium"],
+        "shopee": ["shopee"], "amazon": ["amazon"], "shein": ["shein"], "shopify": ["shopify","shopfy"],
+    }
+    for chave_cfg, alias_list in aliases.items():
+        if canal_norm in [_norm(a) for a in alias_list]:
+            if chave_cfg in gordura_por_canal: return gordura_por_canal[chave_cfg]
+    return padrao
+
+
+@app.post("/webhooks/bling")
+async def webhook_bling(request: Request):
+    try: body = await request.json()
+    except Exception: body = {}
+    evento = body.get("evento") or body.get("event") or "desconhecido"
+    logger.info("Webhook Bling recebido: evento=%s", evento)
+    _append_jsonl(LOG_PATH, {"evento":"webhook_bling","tipo":evento,"quando":datetime.utcnow().isoformat(),"payload":body})
+    return {"ok": True, "recebido": True}
+
 if not FILA_PATH.exists(): _save_json(FILA_PATH, [])
 if not CFG_PATH.exists(): _save_json(CFG_PATH, DEFAULT_CFG)
 
-# ─────────────────────────────────────────────
-# MÓDULO REGRAS
-# ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# MÃ“DULO REGRAS
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 MAPA_CANAIS_EXCEL = {
     "Classico": "Mercado Livre Classico",
@@ -679,7 +804,7 @@ def regras_page():
     html_file = PAGES_DIR / "regras.html"
     if html_file.exists():
         return HTMLResponse(html_file.read_text(encoding="utf-8"))
-    raise HTTPException(status_code=404, detail="pages/regras.html não encontrado.")
+    raise HTTPException(status_code=404, detail="pages/regras.html nÃ£o encontrado.")
 
 @app.get("/regras/listar")
 def regras_listar():
@@ -702,7 +827,7 @@ def regras_adicionar(payload: dict = Body(...)):
         "ativo": bool(payload.get("ativo", True)),
     }
     if not nova["canal"]:
-        raise HTTPException(status_code=400, detail="Canal obrigatório.")
+        raise HTTPException(status_code=400, detail="Canal obrigatÃ³rio.")
     novo_id = inserir_regra(nova)
     return {"ok": True, "id": novo_id, "total": len(carregar_regras())}
 
@@ -721,20 +846,20 @@ def regras_editar(idx: int, payload: dict = Body(...)):
     }
     ok = atualizar_regra(idx, nova)
     if not ok:
-        raise HTTPException(status_code=404, detail="Regra não encontrada.")
+        raise HTTPException(status_code=404, detail="Regra nÃ£o encontrada.")
     return {"ok": True, "total": len(carregar_regras())}
 
 @app.delete("/regras/excluir/{idx}")
 def regras_excluir(idx: int):
     ok = excluir_regra(idx)
     if not ok:
-        raise HTTPException(status_code=404, detail="Regra não encontrada.")
+        raise HTTPException(status_code=404, detail="Regra nÃ£o encontrada.")
     return {"ok": True, "total": len(carregar_regras())}
 
 @app.post("/regras/importar-excel")
 async def regras_importar_excel(file: UploadFile = File(...)):
     if not file.filename.endswith(".xlsx"):
-        raise HTTPException(status_code=400, detail="Apenas arquivos .xlsx são aceitos.")
+        raise HTTPException(status_code=400, detail="Apenas arquivos .xlsx sÃ£o aceitos.")
     try:
         import io
         import openpyxl
@@ -770,7 +895,7 @@ async def regras_importar_excel(file: UploadFile = File(...)):
 def regras_modelo_download():
     modelo = BASE_DIR / "Simulador_modelo.xlsx"
     if not modelo.exists():
-        raise HTTPException(status_code=404, detail="Arquivo modelo não encontrado.")
+        raise HTTPException(status_code=404, detail="Arquivo modelo nÃ£o encontrado.")
     return FileResponse(
         path=str(modelo),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

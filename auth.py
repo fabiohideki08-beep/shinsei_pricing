@@ -60,6 +60,7 @@ PUBLIC_PATHS = {
     "/docs",
     "/openapi.json",
     "/redoc",
+    "/webhooks/bling",
     "/integracao-comercial",
     "/config/integracao-comercial",
 }
