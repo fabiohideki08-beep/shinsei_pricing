@@ -1,10 +1,12 @@
-
 from __future__ import annotations
+from dotenv import load_dotenv
+load_dotenv()
 import importlib, json, uuid
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
-from fastapi import Body, FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import Body, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel
@@ -19,6 +21,12 @@ from database import (
     migrar_json_legado,
 )
 from scheduler import iniciar_scheduler_background, parar_scheduler
+from logging_config import configurar_logging
+from auth import verificar_api_key
+
+configurar_logging()
+logger = logging.getLogger(__name__)
+
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 PAGES_DIR = BASE_DIR / "pages"
@@ -31,11 +39,17 @@ PAGES_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(title="Shinsei Pricing")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    return await verificar_api_key(request, call_next)
+
 @app.on_event("startup")
 def startup():
     init_db()
     migrar_json_legado()
     iniciar_scheduler_background()
+    logger.info("Shinsei Pricing iniciado")
 
 @app.on_event("shutdown")
 def shutdown():
@@ -99,11 +113,19 @@ def carregar_cfg() -> dict:
     return cfg
 
 def carregar_fila() -> list[dict]:
-    itens = _load_json(FILA_PATH, [])
-    return itens if isinstance(itens, list) else []
+    try:
+        return db_listar_fila()
+    except Exception:
+        itens = _load_json(FILA_PATH, [])
+        return itens if isinstance(itens, list) else []
 
 def salvar_fila(itens: list[dict]) -> None:
-    _save_json(FILA_PATH, itens)
+    try:
+        reset_fila()
+        for item in itens:
+            inserir_item_fila(item)
+    except Exception:
+        _save_json(FILA_PATH, itens)
 
 def _fila_stats(itens: list[dict]) -> dict:
     stats = {"pendente":0,"aprovado":0,"rejeitado":0}
@@ -215,7 +237,6 @@ class IntegracaoPayload(BaseModel):
 class DebugSkuPayload(BaseModel):
     sku: str
 
-
 class AtualizacaoCampoBlingPayload(BaseModel):
     produto_id: int
     valor: float
@@ -299,7 +320,6 @@ def bling_produto_buscar(payload: DebugSkuPayload):
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-
 @app.post("/bling/produto/atualizar-peso")
 def bling_produto_atualizar_peso(payload: AtualizacaoCampoBlingPayload):
     if not BlingClient:
@@ -367,18 +387,18 @@ def integracao_preview(payload: IntegracaoPayload):
         valido, motivo = _preview_valido(preview)
         fila_auto = {"adicionado":False,"motivo":""}
         if carregar_cfg().get("fila_auto_ao_calcular", True) and valido:
-            itens_fila = carregar_fila()
             sku = preview["auditoria"].get("sku") or preview["produto"].get("codigo") or ""
-            if _ja_existe_pendente_semelhante(itens_fila, sku, preview["auditoria"]):
+            if ja_existe_pendente(sku):
                 fila_auto = {"adicionado":False,"motivo":"Já existe item pendente equivalente na fila."}
             else:
                 item = _montar_item_fila(preview, payload.dict())
-                itens_fila.insert(0, item); salvar_fila(itens_fila)
+                inserir_item_fila(item)
                 _append_jsonl(LOG_PATH, {"evento":"fila_auto_preview","item_id":item["id"],"sku":item["sku"],"quando":item["criado_em"]})
                 fila_auto = {"adicionado":True,"item_id":item["id"]}
         else:
             fila_auto = {"adicionado":False,"motivo":motivo or diagnostico.get("mensagem") or "Fila automática desativada."}
         preview["fila_auto"] = fila_auto
+        logger.info("Precificação: SKU=%s melhor_canal=%s fila=%s", payload.valor_busca, preview.get("melhor_canal"), fila_auto.get("adicionado"))
         return preview
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Falha no preview: {exc}")
@@ -386,66 +406,60 @@ def integracao_preview(payload: IntegracaoPayload):
 @app.get("/fila/lista")
 def fila_lista():
     itens = carregar_fila()
-    return {"itens":itens,"stats":_fila_stats(itens)}
+    return {"itens":itens,"stats":stats_fila()}
 
 @app.post("/fila/adicionar")
 def fila_adicionar(payload: dict = Body(...)):
     preview = {"ok":payload.get("ok", True),"produto":payload.get("produto_bling") or payload.get("produto") or {},"marketplaces":payload.get("marketplaces") or {},"auditoria":payload.get("auditoria") or {},"raw":payload.get("raw") or {}}
     diag = _diagnostico_preview(preview)
     if not diag.get("ok"): raise HTTPException(status_code=400, detail=f"Preview inválido para fila: {diag.get('mensagem')}")
-    itens = carregar_fila()
     sku = (preview.get("auditoria") or {}).get("sku") or (preview.get("produto") or {}).get("codigo") or ""
-    if _ja_existe_pendente_semelhante(itens, sku, preview.get("auditoria") or {}):
-        return {"ok":True,"duplicado":True,"message":"Já existe item pendente equivalente na fila.","stats":_fila_stats(itens)}
+    if ja_existe_pendente(sku):
+        return {"ok":True,"duplicado":True,"message":"Já existe item pendente equivalente na fila.","stats":stats_fila()}
     item = _montar_item_fila(preview, payload.get("payload_original") or payload.get("raw") or {})
-    itens.insert(0, item); salvar_fila(itens)
+    inserir_item_fila(item)
     _append_jsonl(LOG_PATH, {"evento":"fila_adicionar_manual","item_id":item["id"],"sku":item["sku"],"quando":item["criado_em"]})
-    return {"ok":True,"item":item,"stats":_fila_stats(itens)}
+    return {"ok":True,"item":item,"stats":stats_fila()}
 
 @app.post("/fila/limpar-invalidos")
 def fila_limpar_invalidos():
-    itens = carregar_fila()
-    validos, removidos = [], []
-    for item in itens:
-        preview_like = {"ok":True,"produto":item.get("produto_bling") or {},"marketplaces":item.get("marketplaces") or {},"auditoria":item.get("auditoria") or {}}
-        diag = _diagnostico_preview(preview_like)
-        if diag.get("ok") or item.get("status") in {"aprovado","rejeitado"}: validos.append(item)
-        else: removidos.append({"id":item.get("id"),"sku":item.get("sku"),"motivo":diag.get("mensagem")})
-    salvar_fila(validos)
-    return {"ok":True,"removidos":removidos,"stats":_fila_stats(validos)}
+    removidos_n = limpar_invalidos_fila()
+    return {"ok":True,"removidos":removidos_n,"stats":stats_fila()}
 
 @app.post("/fila/reset-total")
 def fila_reset_total():
-    salvar_fila([])
-    return {"ok":True,"message":"Fila completamente limpa","stats":_fila_stats([])}
+    reset_fila()
+    return {"ok":True,"message":"Fila completamente limpa","stats":stats_fila()}
 
 @app.post("/fila/aprovar/{item_id}")
 def fila_aprovar(item_id: str):
-    itens = carregar_fila()
-    item = next((i for i in itens if i.get("id") == item_id), None)
+    item = buscar_item_fila(item_id)
     if not item: raise HTTPException(status_code=404, detail="Item não encontrado na fila.")
+    if item.get("status") != "pendente":
+        raise HTTPException(status_code=400, detail=f"Item já com status '{item['status']}'.")
     if not BlingClient or not aplicar_precos_multicanal:
         raise HTTPException(status_code=500, detail="Integração de aplicação no Bling indisponível.")
     try:
-        client = BlingClient(); resultado = aplicar_precos_multicanal(client, item)
+        client = BlingClient()
+        resultado = aplicar_precos_multicanal(client, item)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Falha ao aplicar preços no Bling: {exc}")
     agora = datetime.utcnow().isoformat()
-    item["status"] = "aprovado"; item["atualizado_em"] = agora; item["resultado_aplicacao"] = resultado
-    item.setdefault("historico_decisao", []).append({"acao":"aprovado","quando":agora,"resultado_resumido":{"ok":True,"estrategia":resultado.get("estrategia")}})
-    salvar_fila(itens); _append_jsonl(LOG_PATH, {"evento":"fila_aprovado","item_id":item_id,"quando":agora})
-    return {"ok":True,"message":"Preços aplicados no Bling.","stats":_fila_stats(itens)}
+    atualizar_status_fila(item_id, "aprovado", resultado=resultado)
+    _append_jsonl(LOG_PATH, {"evento":"fila_aprovado","item_id":item_id,"quando":agora})
+    logger.info("Item aprovado: id=%s sku=%s", item_id, item.get("sku"))
+    return {"ok":True,"message":"Preços aplicados no Bling.","stats":stats_fila()}
 
 @app.post("/fila/rejeitar/{item_id}")
 def fila_rejeitar(item_id: str, payload: dict = Body(default={})):
-    itens = carregar_fila()
-    item = next((i for i in itens if i.get("id") == item_id), None)
+    item = buscar_item_fila(item_id)
     if not item: raise HTTPException(status_code=404, detail="Item não encontrado na fila.")
-    agora = datetime.utcnow().isoformat(); motivo = payload.get("motivo") or "Rejeitado manualmente."
-    item["status"] = "rejeitado"; item["atualizado_em"] = agora
-    item.setdefault("historico_decisao", []).append({"acao":"rejeitado","quando":agora,"motivo":motivo})
-    salvar_fila(itens); _append_jsonl(LOG_PATH, {"evento":"fila_rejeitado","item_id":item_id,"quando":agora,"motivo":motivo})
-    return {"ok":True,"message":"Item marcado como rejeitado.","stats":_fila_stats(itens)}
+    agora = datetime.utcnow().isoformat()
+    motivo = payload.get("motivo") or "Rejeitado manualmente."
+    atualizar_status_fila(item_id, "rejeitado", resultado={"motivo": motivo})
+    _append_jsonl(LOG_PATH, {"evento":"fila_rejeitado","item_id":item_id,"quando":agora,"motivo":motivo})
+    logger.info("Item rejeitado: id=%s sku=%s motivo=%s", item_id, item.get("sku"), motivo)
+    return {"ok":True,"message":"Item marcado como rejeitado.","stats":stats_fila()}
 
 if not FILA_PATH.exists(): _save_json(FILA_PATH, [])
 if not CFG_PATH.exists(): _save_json(CFG_PATH, DEFAULT_CFG)
@@ -481,16 +495,13 @@ def regras_page():
 
 @app.get("/regras/listar")
 def regras_listar():
-    regras = _load_json(REGRAS_PATH, [])
-    if not isinstance(regras, list): regras = []
+    regras = carregar_regras()
     for i, r in enumerate(regras):
         if isinstance(r, dict): r["_idx"] = i
     return {"regras": regras, "total": len(regras)}
 
 @app.post("/regras/adicionar")
 def regras_adicionar(payload: dict = Body(...)):
-    regras = _load_json(REGRAS_PATH, [])
-    if not isinstance(regras, list): regras = []
     nova = {
         "canal": str(payload.get("canal", "")).strip(),
         "peso_min": _para_float(payload.get("peso_min"), 0),
@@ -504,16 +515,12 @@ def regras_adicionar(payload: dict = Body(...)):
     }
     if not nova["canal"]:
         raise HTTPException(status_code=400, detail="Canal obrigatório.")
-    regras.append(nova)
-    _save_json(REGRAS_PATH, regras)
-    return {"ok": True, "total": len(regras)}
+    novo_id = inserir_regra(nova)
+    return {"ok": True, "id": novo_id, "total": len(carregar_regras())}
 
 @app.post("/regras/editar/{idx}")
 def regras_editar(idx: int, payload: dict = Body(...)):
-    regras = _load_json(REGRAS_PATH, [])
-    if not isinstance(regras, list) or idx >= len(regras):
-        raise HTTPException(status_code=404, detail="Regra não encontrada.")
-    regras[idx] = {
+    nova = {
         "canal": str(payload.get("canal", "")).strip(),
         "peso_min": _para_float(payload.get("peso_min"), 0),
         "peso_max": _para_float(payload.get("peso_max"), 999999),
@@ -524,17 +531,17 @@ def regras_editar(idx: int, payload: dict = Body(...)):
         "comissao": _para_float(payload.get("comissao"), 0),
         "ativo": bool(payload.get("ativo", True)),
     }
-    _save_json(REGRAS_PATH, regras)
-    return {"ok": True, "total": len(regras)}
+    ok = atualizar_regra(idx, nova)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Regra não encontrada.")
+    return {"ok": True, "total": len(carregar_regras())}
 
 @app.delete("/regras/excluir/{idx}")
 def regras_excluir(idx: int):
-    regras = _load_json(REGRAS_PATH, [])
-    if not isinstance(regras, list) or idx >= len(regras):
+    ok = excluir_regra(idx)
+    if not ok:
         raise HTTPException(status_code=404, detail="Regra não encontrada.")
-    regras.pop(idx)
-    _save_json(REGRAS_PATH, regras)
-    return {"ok": True, "total": len(regras)}
+    return {"ok": True, "total": len(carregar_regras())}
 
 @app.post("/regras/importar-excel")
 async def regras_importar_excel(file: UploadFile = File(...)):
@@ -545,7 +552,6 @@ async def regras_importar_excel(file: UploadFile = File(...)):
         import openpyxl
         contents = await file.read()
         wb = openpyxl.load_workbook(io.BytesIO(contents), data_only=True)
-        # Aceita aba "Regras", "Aba2" ou a primeira aba
         nome_aba = next((n for n in wb.sheetnames if n.lower() in ("regras", "aba2")), wb.sheetnames[0])
         ws = wb[nome_aba]
         regras = []
@@ -566,7 +572,7 @@ async def regras_importar_excel(file: UploadFile = File(...)):
             })
         if not regras:
             raise HTTPException(status_code=400, detail="Nenhuma regra encontrada na planilha. Verifique se a aba se chama 'Regras' ou 'Aba2'.")
-        _save_json(REGRAS_PATH, regras)
+        substituir_todas_regras(regras)
         return {"ok": True, "total": len(regras), "aba": nome_aba}
     except HTTPException: raise
     except Exception as e:
