@@ -1,4 +1,6 @@
 fastapi
-uvicorn
-python-dotenv
+uvicorn[standard]
 requests
+python-dotenv
+pydantic
+openpyxl
