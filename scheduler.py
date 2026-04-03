@@ -137,7 +137,7 @@ def _ciclo_atualizacao() -> dict:
 
     # Busca produtos com estoque
     try:
-        produtos_response = client.list_products(com_estoque=True, pagina=1, limite=100)
+        produtos_response = client.list_products(page=1, limit=100)
         produtos = produtos_response.get("data", []) if isinstance(produtos_response, dict) else produtos_response
         resumo["produtos_buscados"] = len(produtos)
         logger.info("Scheduler: %d produtos buscados do Bling", len(produtos))
@@ -147,12 +147,13 @@ def _ciclo_atualizacao() -> dict:
 
     for item in produtos:
         produto = item if isinstance(item, dict) else {}
-        sku = produto.get("codigo") or produto.get("sku") or str(produto.get("id", ""))
-
+        sku = produto.get("codigo") or produto.get("sku") or ""
         if not sku:
+            logger.debug("Produto id=%s ignorado: sem codigo/SKU", produto.get("id"))
             resumo["ignorados"] += 1
             continue
 
+      
         custo = float(produto.get("precoCusto") or produto.get("preco_custo") or 0)
         if custo <= 0:
             logger.debug("SKU %s ignorado: sem custo no Bling", sku)
