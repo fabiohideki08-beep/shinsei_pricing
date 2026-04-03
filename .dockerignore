@@ -1,0 +1,51 @@
+# Credenciais e dados sensíveis
+.env
+.env.*
+data/bling_tokens.json
+data/bling_oauth_state.json
+data/ml_tokens.json
+data/ml_oauth_state.json
+data/shopee_tokens.json
+data/amazon_tokens.json
+bling_token.json
+
+# Dados de runtime (montados como volume)
+data/fila_aprovacao.json
+data/regras.json
+data/historico_precificacao.jsonl
+data/pricing_logs.jsonl
+data/webhook_logs.jsonl
+data/*.db
+data/*.db-shm
+data/*.db-wal
+logs/
+
+# Git
+.git/
+.gitignore
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+__pycache__.zip
+
+# Backups e versões antigas
+app_old.py
+app_mock_backup.py
+app_v4_backup.py
+index_backup.html
+index_v3.html
+index_v4.html
+Deploy/
+
+# Temporários
+~$*
+*.tmp
+data/temp.xlsx
+
+# IDEs e OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

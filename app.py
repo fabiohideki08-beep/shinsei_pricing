@@ -38,12 +38,13 @@ DATA_DIR.mkdir(exist_ok=True)
 PAGES_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(title="Shinsei Pricing")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 from routes.batch import router as batch_router
 from routes.ml_unificado import router as ml_router
-
+from monitoring import router as monitoring_router
 app.include_router(batch_router)
 app.include_router(ml_router)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.include_router(monitoring_router)
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
