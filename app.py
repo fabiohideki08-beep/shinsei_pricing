@@ -595,6 +595,124 @@ def estoque_limpar_resolvidos():
     salvar_fila_estoque(itens)
     return {"ok": True, "stats": stats_fila_estoque()}
 
+
+@app.post("/shopify-flow/pricing-suggestion")
+async def shopify_flow_pricing(request: Request):
+    """
+    Endpoint para Shopify Flow.
+    Recebe payload com SKU do produto, busca no Bling,
+    calcula preços pelo motor e retorna sugestão por canal.
+    Não aplica preços automaticamente.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    # Extrai SKU do payload Shopify (vários formatos possíveis)
+    sku = (
+        body.get("sku")
+        or body.get("variant_sku")
+        or body.get("product", {}).get("variants", [{}])[0].get("sku", "") if isinstance(body.get("product"), dict) else ""
+        or body.get("codigo")
+        or ""
+    )
+    sku = str(sku).strip()
+
+    if not sku:
+        return {
+            "ok": False,
+            "erro": "SKU não encontrado no payload.",
+            "payload_recebido": body,
+        }
+
+    if not BlingClient or not montar_precificacao_bling:
+        return {"ok": False, "erro": "Motor de precificação indisponível."}
+
+    # Carrega configuração comercial
+    cfg = carregar_integracao_cfg()
+    objetivo = cfg.get("objetivo", "lucro_liquido")
+    tipo_alvo = cfg.get("tipo_alvo", "percentual")
+    valor_alvo = float(cfg.get("valor_alvo", 30))
+    arredondamento = str(cfg.get("arredondamento", "90"))
+
+    try:
+        client = BlingClient()
+        regras = carregar_regras(apenas_ativas=True)
+
+        resultado = montar_precificacao_bling(
+            client=client,
+            criterio="sku",
+            valor_busca=sku,
+            regras=regras,
+            embalagem=float(body.get("embalagem", 1)),
+            imposto=float(body.get("imposto", 4)),
+            quantidade=int(body.get("quantidade", 1)),
+            objetivo=objetivo,
+            tipo_alvo=tipo_alvo,
+            valor_alvo=valor_alvo,
+            peso_override=float(body.get("peso_override", 0)),
+            arredondamento=arredondamento,
+            regra_estoque=cfg.get("regra_estoque"),
+        )
+    except Exception as exc:
+        logger.warning("Shopify Flow: erro no motor para SKU=%s: %s", sku, exc)
+        return {"ok": False, "sku": sku, "erro": str(exc)}
+
+    if resultado.get("erro"):
+        return {"ok": False, "sku": sku, "erro": resultado["erro"]}
+
+    # Monta sugestão por canal com gordura
+    gordura_por_canal = cfg.get("gordura_por_canal", {})
+    itens = (resultado.get("integracao") or {}).get("itens") or resultado.get("itens") or []
+    sugestoes = []
+
+    for item in itens:
+        if not isinstance(item, dict):
+            continue
+        canal = item.get("canal", "")
+        preco_calculado = float(
+            item.get("preco_promocional") or item.get("preco_final") or item.get("preco") or 0
+        )
+        if preco_calculado <= 0:
+            continue
+
+        gordura = gordura_por_canal.get(canal, {"tipo": "percentual", "valor": 20})
+        preco_virtual = calcular_preco_virtual(preco_calculado, gordura, arredondamento)
+
+        sugestoes.append({
+            "canal": canal,
+            "preco_calculado": round(preco_calculado, 2),
+            "preco_virtual": preco_virtual,
+            "lucro_liquido": float(item.get("lucro_liquido") or item.get("lucro") or 0),
+            "margem": float(item.get("margem") or item.get("margem_liquida_percentual") or 0),
+        })
+
+    # Sugestão do canal Shopify especificamente
+    shopify_sugestao = next((s for s in sugestoes if "shopify" in s["canal"].lower()), None)
+
+    produto = resultado.get("produto_bling") or {}
+    logger.info("Shopify Flow: SKU=%s canais=%d", sku, len(sugestoes))
+    _append_jsonl(LOG_PATH, {
+        "evento": "shopify_flow_suggestion",
+        "sku": sku,
+        "quando": datetime.utcnow().isoformat(),
+        "canais": len(sugestoes),
+    })
+
+    return {
+        "ok": True,
+        "sku": sku,
+        "produto": {
+            "nome": produto.get("nome") or produto.get("descricao") or "",
+            "codigo": produto.get("codigo") or sku,
+        },
+        "sugestao_shopify": shopify_sugestao,
+        "todos_canais": sugestoes,
+        "objetivo_usado": objetivo,
+        "valor_alvo_usado": valor_alvo,
+    }
+
 if not FILA_PATH.exists(): ...
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -895,6 +1013,124 @@ def estoque_limpar_resolvidos():
     itens = [i for i in itens if i.get("status") == "pendente"]
     salvar_fila_estoque(itens)
     return {"ok": True, "stats": stats_fila_estoque()}
+
+
+@app.post("/shopify-flow/pricing-suggestion")
+async def shopify_flow_pricing(request: Request):
+    """
+    Endpoint para Shopify Flow.
+    Recebe payload com SKU do produto, busca no Bling,
+    calcula preços pelo motor e retorna sugestão por canal.
+    Não aplica preços automaticamente.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    # Extrai SKU do payload Shopify (vários formatos possíveis)
+    sku = (
+        body.get("sku")
+        or body.get("variant_sku")
+        or body.get("product", {}).get("variants", [{}])[0].get("sku", "") if isinstance(body.get("product"), dict) else ""
+        or body.get("codigo")
+        or ""
+    )
+    sku = str(sku).strip()
+
+    if not sku:
+        return {
+            "ok": False,
+            "erro": "SKU não encontrado no payload.",
+            "payload_recebido": body,
+        }
+
+    if not BlingClient or not montar_precificacao_bling:
+        return {"ok": False, "erro": "Motor de precificação indisponível."}
+
+    # Carrega configuração comercial
+    cfg = carregar_integracao_cfg()
+    objetivo = cfg.get("objetivo", "lucro_liquido")
+    tipo_alvo = cfg.get("tipo_alvo", "percentual")
+    valor_alvo = float(cfg.get("valor_alvo", 30))
+    arredondamento = str(cfg.get("arredondamento", "90"))
+
+    try:
+        client = BlingClient()
+        regras = carregar_regras(apenas_ativas=True)
+
+        resultado = montar_precificacao_bling(
+            client=client,
+            criterio="sku",
+            valor_busca=sku,
+            regras=regras,
+            embalagem=float(body.get("embalagem", 1)),
+            imposto=float(body.get("imposto", 4)),
+            quantidade=int(body.get("quantidade", 1)),
+            objetivo=objetivo,
+            tipo_alvo=tipo_alvo,
+            valor_alvo=valor_alvo,
+            peso_override=float(body.get("peso_override", 0)),
+            arredondamento=arredondamento,
+            regra_estoque=cfg.get("regra_estoque"),
+        )
+    except Exception as exc:
+        logger.warning("Shopify Flow: erro no motor para SKU=%s: %s", sku, exc)
+        return {"ok": False, "sku": sku, "erro": str(exc)}
+
+    if resultado.get("erro"):
+        return {"ok": False, "sku": sku, "erro": resultado["erro"]}
+
+    # Monta sugestão por canal com gordura
+    gordura_por_canal = cfg.get("gordura_por_canal", {})
+    itens = (resultado.get("integracao") or {}).get("itens") or resultado.get("itens") or []
+    sugestoes = []
+
+    for item in itens:
+        if not isinstance(item, dict):
+            continue
+        canal = item.get("canal", "")
+        preco_calculado = float(
+            item.get("preco_promocional") or item.get("preco_final") or item.get("preco") or 0
+        )
+        if preco_calculado <= 0:
+            continue
+
+        gordura = gordura_por_canal.get(canal, {"tipo": "percentual", "valor": 20})
+        preco_virtual = calcular_preco_virtual(preco_calculado, gordura, arredondamento)
+
+        sugestoes.append({
+            "canal": canal,
+            "preco_calculado": round(preco_calculado, 2),
+            "preco_virtual": preco_virtual,
+            "lucro_liquido": float(item.get("lucro_liquido") or item.get("lucro") or 0),
+            "margem": float(item.get("margem") or item.get("margem_liquida_percentual") or 0),
+        })
+
+    # Sugestão do canal Shopify especificamente
+    shopify_sugestao = next((s for s in sugestoes if "shopify" in s["canal"].lower()), None)
+
+    produto = resultado.get("produto_bling") or {}
+    logger.info("Shopify Flow: SKU=%s canais=%d", sku, len(sugestoes))
+    _append_jsonl(LOG_PATH, {
+        "evento": "shopify_flow_suggestion",
+        "sku": sku,
+        "quando": datetime.utcnow().isoformat(),
+        "canais": len(sugestoes),
+    })
+
+    return {
+        "ok": True,
+        "sku": sku,
+        "produto": {
+            "nome": produto.get("nome") or produto.get("descricao") or "",
+            "codigo": produto.get("codigo") or sku,
+        },
+        "sugestao_shopify": shopify_sugestao,
+        "todos_canais": sugestoes,
+        "objetivo_usado": objetivo,
+        "valor_alvo_usado": valor_alvo,
+    }
 
 if not FILA_PATH.exists(): _save_json(FILA_PATH, [])
 if not CFG_PATH.exists(): _save_json(CFG_PATH, DEFAULT_CFG)

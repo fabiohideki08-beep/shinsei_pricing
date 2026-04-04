@@ -61,6 +61,7 @@ PUBLIC_PATHS = {
     "/openapi.json",
     "/redoc",
     "/webhooks/bling",
+    "/shopify-flow/pricing-suggestion",
     "/estoque/fila",
     "/conferencia-estoque",
     "/integracao-comercial",
