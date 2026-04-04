@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Conferência de Estoque — Shinsei Pricing</title>
+  <style>
+    :root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--danger:#ef4444;--ok:#16a34a;--warn:#f5b301}
+    *{box-sizing:border-box} body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text)}
+    .wrap{max-width:1320px;margin:0 auto;padding:22px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 18px;position:sticky;top:16px;z-index:10}
+    .brand h1{margin:0;font-size:22px}.brand p{margin:4px 0 0;color:var(--muted);font-size:13px}.top-actions{display:flex;gap:10px;align-items:center}
+    .btn{border:none;background:var(--accent);color:#fff;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-size:13px}
+    .btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+    .btn.success{background:var(--ok)} .btn.danger{background:var(--danger)} .btn.warn{background:var(--warn);color:#000}
+    .btn.sm{padding:7px 10px;font-size:12px;border-radius:9px}
+    .btn:disabled{opacity:.4;cursor:not-allowed}
+    .card{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:20px;padding:18px;margin-bottom:16px}
+    .card h2{margin:0 0 14px;font-size:18px}
+    .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+    .stat{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:14px}
+    .stat .label{color:var(--muted);font-size:12px}.stat .value{font-size:26px;font-weight:700;margin-top:6px}
+    .stat .value.warn{color:var(--warn)}.stat .value.ok{color:#22c55e}.stat .value.danger{color:var(--danger)}
+    .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+    .filter-btn{padding:7px 14px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-size:13px;font-weight:600}
+    .filter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:16px}
+    table{width:100%;border-collapse:collapse;min-width:800px}
+    th,td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;text-align:left}
+    th{background:#10182f;color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.04em}
+    tr:last-child td{border-bottom:none}
+    tr:hover td{background:rgba(79,140,255,.04)}
+    .tag{display:inline-block;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700}
+    .tag.pendente{background:rgba(245,179,1,.15);color:#f5b301}
+    .tag.corrigido{background:rgba(34,197,94,.15);color:#22c55e}
+    .tag.ignorado{background:rgba(150,150,150,.15);color:#9fb0d9}
+    .dif-pos{color:#ef4444;font-weight:700}
+    .dif-neg{color:#f5b301;font-weight:700}
+    .actions-row{display:flex;gap:6px}
+    .notice{padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:#0d1630;color:#cbd5ff;font-size:13px;margin-bottom:14px}
+    .notice.ok{border-color:#166534;background:rgba(22,163,74,.1);color:#bbf7d0}
+    .notice.warn{border-color:#92400e;background:rgba(245,158,11,.1);color:#fde68a}
+    .notice.err{border-color:#991b1b;background:rgba(239,68,68,.1);color:#fca5a5}
+    .hero-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:180px;border:1px dashed var(--line);border-radius:16px;color:var(--muted);gap:10px}
+    .hero-empty .ico{font-size:40px}
+    .spin{animation:spin 1s linear infinite;display:inline-block}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @media(max-width:900px){.stats-grid{grid-template-columns:1fr 1fr}.topbar{flex-direction:column;align-items:flex-start}}
+    @media(max-width:600px){.stats-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1>📦 Conferência de Estoque</h1>
+      <p>Compara estoque do Bling vs marketplaces e corrige divergências</p>
+    </div>
+    <div class="top-actions">
+      <a class="btn secondary" href="/">Início</a>
+      <a class="btn secondary" href="/simulador">Simulador</a>
+      <a class="btn secondary" href="/fila">Fila preços</a>
+      <button class="btn warn" id="btnConferir" onclick="rodarConferencia()">🔍 Conferir agora</button>
+      <button class="btn secondary" onclick="limparResolvidos()">🧹 Limpar resolvidos</button>
+    </div>
+  </div>
+
+  <div id="notice" style="display:none" class="notice"></div>
+
+  <!-- STATS -->
+  <div class="stats-grid">
+    <div class="stat"><div class="label">Pendentes</div><div class="value warn" id="statPendente">—</div></div>
+    <div class="stat"><div class="label">Corrigidos</div><div class="value ok" id="statCorrigido">—</div></div>
+    <div class="stat"><div class="label">Ignorados</div><div class="value" id="statIgnorado">—</div></div>
+    <div class="stat"><div class="label">Total</div><div class="value" id="statTotal">—</div></div>
+  </div>
+
+  <!-- FILA -->
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h2 style="margin:0">Divergências de estoque</h2>
+      <div class="filters">
+        <button class="filter-btn active" onclick="filtrar('', this)">Todos</button>
+        <button class="filter-btn" onclick="filtrar('pendente', this)">Pendentes</button>
+        <button class="filter-btn" onclick="filtrar('corrigido', this)">Corrigidos</button>
+        <button class="filter-btn" onclick="filtrar('ignorado', this)">Ignorados</button>
+      </div>
+    </div>
+    <div id="tabelaWrap">
+      <div class="hero-empty"><div class="ico">📦</div><div>Nenhuma divergência encontrada.</div><div style="font-size:12px">Clique em "Conferir agora" para rodar a comparação.</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let filtroAtivo = '';
+let dadosAtuais = [];
+
+function mostrarNotice(msg, tipo=''){
+  const el=document.getElementById('notice');
+  el.className='notice '+(tipo||'');
+  el.textContent=msg;
+  el.style.display='block';
+  if(tipo==='ok')setTimeout(()=>el.style.display='none',4000);
+}
+
+function atualizarStats(stats){
+  document.getElementById('statPendente').textContent = stats.pendente ?? '—';
+  document.getElementById('statCorrigido').textContent = stats.corrigido ?? '—';
+  document.getElementById('statIgnorado').textContent = stats.ignorado ?? '—';
+  document.getElementById('statTotal').textContent = stats.total ?? '—';
+}
+
+function renderTabela(itens){
+  if(!itens.length){
+    document.getElementById('tabelaWrap').innerHTML=`
+      <div class="hero-empty">
+        <div class="ico">✅</div>
+        <div>Nenhuma divergência${filtroAtivo?' com status "'+filtroAtivo+'"':''}.</div>
+      </div>`;
+    return;
+  }
+  const rows=itens.map(item=>{
+    const dif=item.diferenca||0;
+    const difClass=dif>0?'dif-pos':'dif-neg';
+    const difStr=dif>0?'+'+dif:dif;
+    const acoes = item.status==='pendente' ? `
+      <div class="actions-row">
+        <button class="btn success sm" onclick="corrigir('${item.id}')">✅ Corrigir</button>
+        <button class="btn secondary sm" onclick="ignorar('${item.id}')">🚫 Ignorar</button>
+      </div>` : '—';
+    return `<tr>
+      <td><strong>${item.sku||'—'}</strong></td>
+      <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.nome||'—'}</td>
+      <td>${item.canal||'—'}</td>
+      <td style="font-weight:700;color:#22c55e">${item.estoque_bling??'—'}</td>
+      <td style="font-weight:700;color:#4f8cff">${item.estoque_marketplace??'—'}</td>
+      <td class="${difClass}">${difStr}</td>
+      <td><span class="tag ${item.status||'pendente'}">${item.status||'pendente'}</span></td>
+      <td style="font-size:11px;color:var(--muted)">${item.criado_em?new Date(item.criado_em).toLocaleString('pt-BR'):''}</td>
+      <td>${acoes}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('tabelaWrap').innerHTML=`
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>SKU</th><th>Produto</th><th>Canal</th>
+          <th>Estoque Bling</th><th>Estoque Marketplace</th><th>Diferença</th>
+          <th>Status</th><th>Detectado em</th><th>Ação</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+async function carregarFila(){
+  try{
+    const url = '/estoque/fila' + (filtroAtivo ? '?status='+filtroAtivo : '');
+    const res = await fetch(url);
+    const data = await res.json();
+    dadosAtuais = data.itens || [];
+    atualizarStats(data.stats || {});
+    renderTabela(dadosAtuais);
+  }catch(e){
+    mostrarNotice('Erro ao carregar fila de estoque.','err');
+  }
+}
+
+function filtrar(status, btn){
+  filtroAtivo = status;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  carregarFila();
+}
+
+async function rodarConferencia(){
+  const btn=document.getElementById('btnConferir');
+  btn.disabled=true;
+  btn.innerHTML='<span class="spin">⏳</span> Conferindo...';
+  try{
+    const res=await fetch('/estoque/conferir',{method:'POST'});
+    const data=await res.json();
+    if(data.ok){
+      mostrarNotice(`Conferência concluída: ${data.verificados} produtos verificados, ${data.novas_divergencias} divergências novas encontradas.`,data.novas_divergencias>0?'warn':'ok');
+    }else{
+      mostrarNotice('Erro na conferência: '+(data.erro||data.detail||'falha'),'err');
+    }
+    carregarFila();
+  }catch(e){
+    mostrarNotice('Erro de conexão ao conferir.','err');
+  }finally{
+    btn.disabled=false;
+    btn.innerHTML='🔍 Conferir agora';
+  }
+}
+
+async function corrigir(id){
+  if(!confirm('Confirma a correção? O estoque no marketplace será atualizado com o valor do Bling.'))return;
+  try{
+    const res=await fetch('/estoque/corrigir/'+id,{method:'POST'});
+    const data=await res.json();
+    if(data.ok){mostrarNotice('Estoque corrigido no marketplace com sucesso!','ok')}
+    else{mostrarNotice('Erro ao corrigir: '+(data.detail||'falha'),'err')}
+    carregarFila();
+  }catch(e){mostrarNotice('Erro de conexão.','err')}
+}
+
+async function ignorar(id){
+  try{
+    await fetch('/estoque/ignorar/'+id,{method:'POST'});
+    carregarFila();
+  }catch(e){mostrarNotice('Erro ao ignorar.','err')}
+}
+
+async function limparResolvidos(){
+  if(!confirm('Remover todos os itens corrigidos e ignorados da fila?'))return;
+  try{
+    await fetch('/estoque/limpar-resolvidos',{method:'POST'});
+    mostrarNotice('Itens resolvidos removidos.','ok');
+    carregarFila();
+  }catch(e){mostrarNotice('Erro ao limpar.','err')}
+}
+
+document.addEventListener('DOMContentLoaded', carregarFila);
+</script>
+</body>
+</html>

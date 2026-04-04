@@ -534,6 +534,67 @@ async def webhook_bling(request: Request):
     _append_jsonl(LOG_PATH, {"evento":"webhook_bling","tipo":evento,"quando":datetime.utcnow().isoformat(),"payload":body})
     return {"ok": True, "recebido": True}
 
+
+@app.get("/conferencia-estoque", response_class=HTMLResponse)
+def conferencia_estoque_page():
+    html_file = PAGES_DIR / "conferencia_estoque.html"
+    if html_file.exists():
+        return HTMLResponse(html_file.read_text(encoding="utf-8"))
+    raise HTTPException(status_code=404, detail="conferencia_estoque.html não encontrado.")
+
+@app.get("/estoque/fila")
+def estoque_fila_lista(status: str = ""):
+    from estoque_conferencia import carregar_fila_estoque, stats_fila_estoque
+    itens = carregar_fila_estoque()
+    if status:
+        itens = [i for i in itens if i.get("status") == status]
+    return {"itens": itens, "stats": stats_fila_estoque()}
+
+@app.post("/estoque/conferir")
+def estoque_conferir():
+    from estoque_conferencia import conferir_estoques
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="Bling não disponível.")
+    try:
+        client = BlingClient()
+        ml_svc = None
+        try:
+            from services.mercado_livre import MercadoLivreService
+            ml_svc = MercadoLivreService(BASE_DIR)
+        except Exception:
+            pass
+        return conferir_estoques(client, ml_svc)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/estoque/corrigir/{item_id}")
+def estoque_corrigir(item_id: str):
+    from estoque_conferencia import corrigir_item_estoque, stats_fila_estoque
+    ml_svc = None
+    try:
+        from services.mercado_livre import MercadoLivreService
+        ml_svc = MercadoLivreService(BASE_DIR)
+    except Exception:
+        pass
+    resultado = corrigir_item_estoque(item_id, ml_svc)
+    if not resultado.get("ok"):
+        raise HTTPException(status_code=400, detail=resultado.get("erro","Falha ao corrigir."))
+    return {"ok": True, "resultado": resultado, "stats": stats_fila_estoque()}
+
+@app.post("/estoque/ignorar/{item_id}")
+def estoque_ignorar(item_id: str):
+    from estoque_conferencia import ignorar_item_estoque, stats_fila_estoque
+    resultado = ignorar_item_estoque(item_id)
+    return {"ok": resultado.get("ok"), "stats": stats_fila_estoque()}
+
+@app.post("/estoque/limpar-resolvidos")
+def estoque_limpar_resolvidos():
+    from estoque_conferencia import carregar_fila_estoque, salvar_fila_estoque, stats_fila_estoque
+    itens = carregar_fila_estoque()
+    itens = [i for i in itens if i.get("status") == "pendente"]
+    salvar_fila_estoque(itens)
+    return {"ok": True, "stats": stats_fila_estoque()}
+
 if not FILA_PATH.exists(): ...
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -773,6 +834,67 @@ async def webhook_bling(request: Request):
     logger.info("Webhook Bling recebido: evento=%s", evento)
     _append_jsonl(LOG_PATH, {"evento":"webhook_bling","tipo":evento,"quando":datetime.utcnow().isoformat(),"payload":body})
     return {"ok": True, "recebido": True}
+
+
+@app.get("/conferencia-estoque", response_class=HTMLResponse)
+def conferencia_estoque_page():
+    html_file = PAGES_DIR / "conferencia_estoque.html"
+    if html_file.exists():
+        return HTMLResponse(html_file.read_text(encoding="utf-8"))
+    raise HTTPException(status_code=404, detail="conferencia_estoque.html não encontrado.")
+
+@app.get("/estoque/fila")
+def estoque_fila_lista(status: str = ""):
+    from estoque_conferencia import carregar_fila_estoque, stats_fila_estoque
+    itens = carregar_fila_estoque()
+    if status:
+        itens = [i for i in itens if i.get("status") == status]
+    return {"itens": itens, "stats": stats_fila_estoque()}
+
+@app.post("/estoque/conferir")
+def estoque_conferir():
+    from estoque_conferencia import conferir_estoques
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="Bling não disponível.")
+    try:
+        client = BlingClient()
+        ml_svc = None
+        try:
+            from services.mercado_livre import MercadoLivreService
+            ml_svc = MercadoLivreService(BASE_DIR)
+        except Exception:
+            pass
+        return conferir_estoques(client, ml_svc)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/estoque/corrigir/{item_id}")
+def estoque_corrigir(item_id: str):
+    from estoque_conferencia import corrigir_item_estoque, stats_fila_estoque
+    ml_svc = None
+    try:
+        from services.mercado_livre import MercadoLivreService
+        ml_svc = MercadoLivreService(BASE_DIR)
+    except Exception:
+        pass
+    resultado = corrigir_item_estoque(item_id, ml_svc)
+    if not resultado.get("ok"):
+        raise HTTPException(status_code=400, detail=resultado.get("erro","Falha ao corrigir."))
+    return {"ok": True, "resultado": resultado, "stats": stats_fila_estoque()}
+
+@app.post("/estoque/ignorar/{item_id}")
+def estoque_ignorar(item_id: str):
+    from estoque_conferencia import ignorar_item_estoque, stats_fila_estoque
+    resultado = ignorar_item_estoque(item_id)
+    return {"ok": resultado.get("ok"), "stats": stats_fila_estoque()}
+
+@app.post("/estoque/limpar-resolvidos")
+def estoque_limpar_resolvidos():
+    from estoque_conferencia import carregar_fila_estoque, salvar_fila_estoque, stats_fila_estoque
+    itens = carregar_fila_estoque()
+    itens = [i for i in itens if i.get("status") == "pendente"]
+    salvar_fila_estoque(itens)
+    return {"ok": True, "stats": stats_fila_estoque()}
 
 if not FILA_PATH.exists(): _save_json(FILA_PATH, [])
 if not CFG_PATH.exists(): _save_json(CFG_PATH, DEFAULT_CFG)
