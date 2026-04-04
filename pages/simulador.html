@@ -1,57 +1,493 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<title>Simulador</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shinsei Pricing - Simulador</title>
+  <style>
+    :root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--danger:#ef4444;--ok:#16a34a;--warn:#f5b301;--warnbg:#fff1a8}
+    *{box-sizing:border-box} body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text)}
+    .wrap{max-width:1320px;margin:0 auto;padding:22px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:18px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 18px;position:sticky;top:16px;z-index:10}
+    .brand h1{margin:0;font-size:24px}.brand p{margin:4px 0 0;color:var(--muted);font-size:14px}.top-actions{display:flex;gap:12px;align-items:center}
+    .btn{border:none;background:var(--accent);color:#fff;padding:11px 14px;border-radius:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:13px}
+    .btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)} .btn.success{background:var(--ok)} .btn.warn{background:var(--warn);color:#000}
+    .btn.sm{padding:7px 11px;font-size:12px;border-radius:9px}
+    .bell{position:relative;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:12px;background:var(--card2);border:1px solid var(--line);font-size:18px;text-decoration:none;color:#fff}
+    .badge{position:absolute;top:-6px;right:-6px;background:var(--danger);color:#fff;border-radius:999px;min-width:22px;height:22px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 6px}
+    .layout{display:grid;grid-template-columns:1fr;gap:18px}
+    .card{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:20px;padding:18px}
+    .card h2{margin:0 0 14px;font-size:20px}.card h3{margin:0 0 12px;font-size:16px;color:#dbe4ff}
+    .inputs-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+    .field{display:flex;flex-direction:column;gap:6px}
+    label{display:block;font-size:13px;color:var(--muted)} input,select{width:100%;padding:12px 13px;border-radius:12px;border:1px solid var(--line);background:#0d1630;color:#fff;outline:none}
+    .field-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.field-actions input{flex:1}
+    .warning-input{background:var(--warnbg)!important;border-color:var(--warn)!important;color:#000!important}
+    .warning-text{font-size:12px;color:#ffdf7a;margin-top:2px}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+    .notice{margin-top:14px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:#0d1630;color:#cbd5ff}.notice.ok{border-color:#166534;background:rgba(22,163,74,.12);color:#bbf7d0}.notice.warn{border-color:#92400e;background:rgba(245,158,11,.12);color:#fde68a}
+    .block-grid{display:grid;grid-template-columns:1fr;gap:18px}
+    .summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+    .metric{background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:14px}.metric .label{color:var(--muted);font-size:12px}.metric .value{font-size:22px;font-weight:700;margin-top:8px}.metric .sub{margin-top:4px;font-size:12px;color:#c9d3f8}
+    .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:16px}.table-wrap table{width:100%;border-collapse:collapse;min-width:960px} th,td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;text-align:left} th{background:#10182f}
+    .price-edit{width:110px;padding:8px 10px;border-radius:10px}
+    .hero-empty{display:flex;align-items:center;justify-content:center;min-height:120px;border:1px dashed var(--line);border-radius:16px;color:var(--muted)}
+
+    /* Canal cards expandíveis */
+    .canal-row{cursor:pointer;transition:background .15s}
+    .canal-row:hover td{background:rgba(79,140,255,.06)}
+    .canal-row.melhor td:first-child{border-left:3px solid var(--ok)}
+    .canal-row.prejuizo td{color:var(--danger)}
+    .canal-detail{display:none;background:rgba(10,16,40,.7)}
+    .canal-detail.open{display:table-row-group}
+    .canal-detail td{padding:10px 16px 14px;font-size:12px}
+    .detail-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:6px}
+    .detail-item .di-label{color:var(--muted);font-size:11px}
+    .detail-item .di-val{font-size:13px;font-weight:600;margin-top:2px}
+    .tag-melhor{display:inline-block;background:rgba(22,163,74,.2);color:#22c55e;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;margin-left:6px}
+    .tag-prejuizo{display:inline-block;background:rgba(239,68,68,.2);color:#ef4444;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;margin-left:6px}
+
+    /* Export dropdown */
+    .export-wrap{position:relative;display:inline-block}
+    .export-menu{display:none;position:absolute;top:calc(100% + 6px);right:0;background:var(--card2);border:1px solid var(--line);border-radius:12px;min-width:160px;z-index:20;padding:6px}
+    .export-menu.open{display:block}
+    .export-item{display:block;padding:9px 12px;border-radius:8px;color:var(--text);cursor:pointer;font-size:13px;text-decoration:none;white-space:nowrap}
+    .export-item:hover{background:rgba(79,140,255,.1)}
+
+    /* Salvar simulação banner */
+    .saved-banner{padding:10px 14px;background:rgba(245,179,1,.08);border:1px solid rgba(245,179,1,.3);border-radius:12px;font-size:13px;color:var(--warn);display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+
+    @media (max-width:1100px){.inputs-grid,.summary-grid{grid-template-columns:1fr 1fr}.detail-grid{grid-template-columns:1fr 1fr}}
+    @media (max-width:720px){.inputs-grid,.summary-grid,.detail-grid{grid-template-columns:1fr}.topbar{flex-direction:column;align-items:flex-start}}
+  </style>
 </head>
-<body style="background:#0b132b;color:white;font-family:Arial;padding:30px">
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand"><h1>🧮 Simulador multicanal</h1><p>Calcule preços por canal com objetivo, gordura e arredondamento configuráveis.</p></div>
+    <div class="top-actions">
+      <a class="btn secondary" href="/">Início</a>
+      <a class="btn secondary" href="/integracao-comercial">⚙️ Config</a>
+      <div class="export-wrap">
+        <button class="btn secondary" onclick="toggleExportMenu()" id="btnExport" disabled>📤 Exportar ▾</button>
+        <div class="export-menu" id="exportMenu">
+          <span class="export-item" onclick="exportarCSV()">📄 CSV</span>
+          <span class="export-item" onclick="exportarJSON()">🗂 JSON</span>
+          <span class="export-item" onclick="exportarPDF()">🖨 Imprimir / PDF</span>
+        </div>
+      </div>
+      <a class="bell" href="/fila">🔔<span class="badge" id="filaCount">0</span></a>
+    </div>
+  </div>
 
-<h1>Simulador</h1>
+  <!-- Banner simulação salva -->
+  <div id="savedBanner" class="saved-banner" style="display:none">
+    <span>⚡ Simulação anterior carregada automaticamente.</span>
+    <button class="btn sm secondary" onclick="limparSimulacaoSalva()">Limpar</button>
+  </div>
 
-<label>Nome</label>
-<input id="nome" style="width:100%;padding:10px"><br><br>
+  <div class="layout">
+    <!-- BLOCO 1: INPUTS -->
+    <section class="card">
+      <h2>1. Inputs do simulador</h2>
+      <div class="inputs-grid">
+        <div class="field"><label for="valor_busca">SKU do produto</label><input id="valor_busca" placeholder="Digite o SKU" /></div>
+        <div class="field"><label for="objetivo">Objetivo</label><select id="objetivo"><option value="lucro_liquido" selected>Lucro líquido</option><option value="margem">Margem</option><option value="markup">Markup</option></select></div>
+        <div class="field"><label for="tipo_alvo">Tipo alvo</label><select id="tipo_alvo"><option value="percentual" selected>Percentual</option><option value="nominal">Nominal</option></select></div>
 
-<label>Margem (%)</label>
-<input id="margem" type="number" value="20" style="width:100%;padding:10px"><br><br>
+        <div class="field"><label for="embalagem">Embalagem (R$)</label><input id="embalagem" type="number" step="0.01" value="1" /></div>
+        <div class="field"><label for="imposto">Imposto (%)</label><input id="imposto" type="number" step="0.01" value="4" /></div>
+        <div class="field"><label for="quantidade">Quantidade</label><input id="quantidade" type="number" step="1" value="1" /></div>
 
-<label>Custo</label>
-<input id="custo" type="number" value="50" style="width:100%;padding:10px"><br><br>
+        <div class="field"><label for="valor_alvo">Valor alvo</label><input id="valor_alvo" type="number" step="0.01" value="30" /></div>
+        <div class="field"><label for="arredondamento">Arredondamento</label><select id="arredondamento"><option value="90" selected>.90</option><option value="99">.99</option><option value="97">.97</option><option value="sem">Sem</option></select></div>
+        <div class="field"><label for="modo_preco_virtual">Modo preço virtual</label><select id="modo_preco_virtual"><option value="percentual_acima" selected>Percentual acima</option><option value="valor_acima">Valor acima</option><option value="manual">Manual</option></select></div>
 
-<button onclick="calcular()" style="padding:15px;background:#3b82f6;color:white;border:none">
-Calcular
-</button>
+        <div class="field" id="pesoField"><label for="peso_override">Peso manual / override</label><div class="field-actions"><input id="peso_override" type="number" step="0.001" value="0" /><button class="btn secondary sm" type="button" id="btnAtualizarPeso" style="display:none" onclick="atualizarPesoNoBling()">Atualizar no Bling</button></div><div class="warning-text" id="pesoWarning" style="display:none"></div></div>
+        <div class="field"><label for="preco_compra_manual">Custo manual / override</label><input id="preco_compra_manual" type="number" step="0.01" value="0" /></div>
+        <div class="field"><label for="preco_manual">Preço manual</label><div class="field-actions"><input id="preco_manual" type="number" step="0.01" value="0" /><button class="btn secondary sm" type="button" id="btnAtualizarPreco" style="display:none" onclick="atualizarPrecoNoBling()">Atualizar no Bling</button></div><div class="warning-text" id="precoWarning" style="display:none"></div></div>
 
-<div id="resultado" style="margin-top:30px"></div>
+        <div class="field"><label for="acrescimo_percentual">Acréscimo percentual (%)</label><input id="acrescimo_percentual" type="number" step="0.01" value="20" /></div>
+        <div class="field"><label for="acrescimo_nominal">Acréscimo nominal (R$)</label><input id="acrescimo_nominal" type="number" step="0.01" value="0" /></div>
+      </div>
+      <div class="actions">
+        <button class="btn" onclick="executarPreview()">🔍 Calcular e visualizar</button>
+        <button class="btn secondary" onclick="adicionarNaFila()">📋 Adicionar à fila</button>
+        <button class="btn secondary" onclick="salvarPrecosEditadosNaFila()">💾 Salvar preços editados</button>
+        <button class="btn secondary sm" onclick="carregarConfigPadrao()" title="Carrega objetivo/arredondamento da Integração Comercial">⚙️ Usar config padrão</button>
+      </div>
+      <div id="notice" class="notice">Ao calcular, o sistema envia automaticamente para a fila se o preview estiver válido.</div>
+    </section>
+
+    <!-- BLOCO 2: DETALHES DO PRODUTO -->
+    <section class="card">
+      <h2>2. Detalhes do produto</h2>
+      <div id="productDetails" class="hero-empty">Nenhum produto carregado.</div>
+    </section>
+
+    <!-- BLOCO 3: RESULTADO POR CANAL -->
+    <section class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <h2 style="margin:0">3. Resultado por canal</h2>
+        <span style="font-size:12px;color:var(--muted)">Clique em um canal para ver os detalhes</span>
+      </div>
+      <div id="checkoutChannels" class="hero-empty">Nenhum canal calculado.</div>
+    </section>
+
+    <!-- BLOCO 4: QUADRO TÉCNICO -->
+    <section class="card">
+      <h2>4. Quadro técnico</h2>
+      <div id="techPanel" class="hero-empty">Nenhuma auditoria disponível.</div>
+    </section>
+  </div>
+</div>
 
 <script>
-async function calcular(){
+const STORAGE_KEY = 'shinsei_ultima_simulacao';
+let ultimoPreview = null;
+let melhorCanal = null;
 
-  const payload = {
-    nome: document.getElementById("nome").value,
-    margem: document.getElementById("margem").value,
-    custo: document.getElementById("custo").value
-  };
+function moeda(v){return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
+function n(v,d=2){return Number(v||0).toFixed(d)}
+function setNotice(text,kind=''){const el=document.getElementById('notice');el.className=`notice ${kind}`.trim();el.textContent=text}
 
-  const res = await fetch("/simular", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify(payload)
+async function atualizarContadorFila(){
+  try{const res=await fetch('/fila/lista');const data=await res.json();document.getElementById('filaCount').textContent=((data.stats||{}).pendente||0)}
+  catch(e){document.getElementById('filaCount').textContent='0'}
+}
+
+function obterPayload(){
+  return {
+    criterio:'sku',
+    valor_busca:document.getElementById('valor_busca').value.trim(),
+    embalagem:Number(document.getElementById('embalagem').value||0),
+    imposto:Number(document.getElementById('imposto').value||0),
+    quantidade:Number(document.getElementById('quantidade').value||1),
+    objetivo:document.getElementById('objetivo').value,
+    tipo_alvo:document.getElementById('tipo_alvo').value,
+    valor_alvo:Number(document.getElementById('valor_alvo').value||0),
+    peso_override:Number(document.getElementById('peso_override').value||0),
+    modo_aprovacao:'manual',
+    modo_preco_virtual:document.getElementById('modo_preco_virtual').value,
+    acrescimo_percentual:Number(document.getElementById('acrescimo_percentual').value||0),
+    acrescimo_nominal:Number(document.getElementById('acrescimo_nominal').value||0),
+    preco_manual:Number(document.getElementById('preco_manual').value||0),
+    arredondamento:document.getElementById('arredondamento').value,
+    preco_compra_anterior_bling:Number(document.getElementById('preco_compra_manual').value||0),
+    score_config:{}
+  }
+}
+
+function toggleWarning(inputId,msgElId,btnId,message,show){
+  const input=document.getElementById(inputId);
+  const msg=document.getElementById(msgElId);
+  const btn=document.getElementById(btnId);
+  if(show){input.classList.add('warning-input');msg.textContent=message;msg.style.display='block';if(btn&&btn!='none')btn.style.display='inline-flex';}
+  else{input.classList.remove('warning-input');msg.textContent='';msg.style.display='none';if(btn&&btn!='none')btn.style.display='none';}
+}
+
+function productId(){return ((ultimoPreview||{}).produto||{}).id||((ultimoPreview||{}).auditoria||{}).produto_id||null}
+
+async function atualizarPesoNoBling(){
+  const id=productId();const valor=Number(document.getElementById('peso_override').value||0);
+  if(!id){alert('Produto sem ID para atualizar no Bling.');return}
+  const res=await fetch('/bling/produto/atualizar-peso',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({produto_id:id,valor})});
+  const data=await res.json();
+  if(!res.ok){alert(data.detail||'Falha ao atualizar peso no Bling.');return}
+  setNotice(data.message||'Peso atualizado no Bling.','ok')
+}
+
+async function atualizarPrecoNoBling(){
+  const id=productId();const valor=Number(document.getElementById('preco_manual').value||0);
+  if(!id){alert('Produto sem ID para atualizar no Bling.');return}
+  const res=await fetch('/bling/produto/atualizar-preco',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({produto_id:id,valor})});
+  const data=await res.json();
+  if(!res.ok){alert(data.detail||'Falha ao atualizar preço no Bling.');return}
+  setNotice(data.message||'Preço atualizado no Bling.','ok')
+}
+
+// ─── RENDER PRODUTO ──────────────────────────────────────
+function renderProductDetails(data){
+  const produto=data.produto||{};const aud=data.auditoria||{};
+  document.getElementById('productDetails').innerHTML=`
+    <div class="summary-grid">
+      <div class="metric"><div class="label">Produto</div><div class="value" style="font-size:18px">${produto.nome||'[SEM PRODUTO VÁLIDO]'}</div><div class="sub">SKU ${produto.codigo||aud.sku||'-'}</div></div>
+      <div class="metric"><div class="label">Tipo de custo</div><div class="value" style="font-size:18px">${aud.tipo_custo||'-'}</div><div class="sub">Origem ${aud.origem_custo||'-'}</div></div>
+      <div class="metric"><div class="label">Custo usado</div><div class="value">${moeda(aud.custo_usado||0)}</div><div class="sub">${aud.warning_custo||''}</div></div>
+      <div class="metric"><div class="label">Diagnóstico</div><div class="value" style="font-size:18px">${(data.diagnostico||{}).codigo||'-'}</div><div class="sub">${(data.diagnostico||{}).mensagem||''}</div></div>
+    </div>`
+}
+
+// ─── RENDER CANAIS COM EXPANSÃO ──────────────────────────
+function renderCheckout(data){
+  const items=Object.entries(data.marketplaces||{});
+  if(!items.length){document.getElementById('checkoutChannels').innerHTML='<div class="hero-empty">Nenhum canal calculado.</div>';return}
+
+  // Ordena por lucro líquido decrescente
+  items.sort(([,a],[,b])=>{
+    const la=Number((a.raw||a).lucro_liquido||(a.raw||a).lucro||a.lucro||0);
+    const lb=Number((b.raw||b).lucro_liquido||(b.raw||b).lucro||b.lucro||0);
+    return lb-la;
   });
 
-  const data = await res.json();
+  melhorCanal=items[0]?.[0]||null;
 
-  if(!data.success){
-    alert("Erro");
-    return;
-  }
+  const rows=items.map(([key,item],idx)=>{
+    const raw=item.raw||{};
+    const promo=Number(item.preco_promocional||raw.preco_promocional||raw.preco_final||0);
+    const virt=Number(item.preco||raw.preco_virtual||item.preco_virtual||0);
+    const lucro=Number(item.lucro||raw.lucro_liquido||raw.lucro||0);
+    const margem=Number(item.margem||raw.margem_liquida_percentual||raw.margem||0);
+    const frete=Number(item.frete||raw.frete||0);
+    const comissao=Number(item.comissao||raw.comissao||0);
+    const taxa_fixa=Number(item.taxa_fixa||raw.taxa_fixa||0);
+    const imposto=Number(item.imposto||raw.imposto||0);
+    const custo=Number(item.custo_total||raw.custo_total||raw.custo_produto||0);
+    const markup=Number(raw.markup_percentual||raw.markup||0);
+    const faixa=item.faixa_aplicada||raw.faixa_aplicada||'-';
+    const isMelhor=idx===0&&lucro>0;
+    const isPrejuizo=lucro<0;
+    const ajuste=virt-promo;
+    const detailId=`det-${key}`;
 
-  document.getElementById("resultado").innerHTML = `
-    <h2>${data.produto}</h2>
-    <p>Preço: R$ ${data.preco_base}</p>
-    <p>Lucro: R$ ${data.marketplaces.mercado_livre_classico.lucro}</p>
-  `;
+    return `
+      <tr class="canal-row${isMelhor?' melhor':''}${isPrejuizo?' prejuizo':''}" onclick="toggleDetalhe('${detailId}')">
+        <td><strong>${item.label||key}</strong>${isMelhor?'<span class="tag-melhor">✅ Melhor</span>':''}${isPrejuizo?'<span class="tag-prejuizo">🔴 Prejuízo</span>':''}</td>
+        <td>${moeda(promo)}</td>
+        <td><input class="price-edit" data-canal="${key}" type="number" step="0.01" value="${promo.toFixed(2)}" onclick="event.stopPropagation()"></td>
+        <td style="color:#f5b301">${moeda(virt)}</td>
+        <td style="color:#9fb0d9">${moeda(ajuste)}</td>
+        <td style="color:${lucro>=0?'#22c55e':'#ef4444'};font-weight:700">${moeda(lucro)}</td>
+        <td>${n(margem)}%</td>
+        <td>${moeda(frete)}</td>
+        <td style="font-size:11px;color:var(--muted)">▼</td>
+      </tr>
+      <tbody class="canal-detail" id="${detailId}">
+        <tr>
+          <td colspan="9">
+            <div style="color:var(--muted);font-size:11px;margin-bottom:6px;font-weight:600;letter-spacing:.04em">DETALHES DO CANAL — ${item.label||key}</div>
+            <div class="detail-grid">
+              <div class="detail-item"><div class="di-label">Receita líquida</div><div class="di-val">${moeda(raw.receita_liquida||0)}</div></div>
+              <div class="detail-item"><div class="di-label">Custo base</div><div class="di-val">${moeda(custo)}</div></div>
+              <div class="detail-item"><div class="di-label">Custo operacional</div><div class="di-val">${moeda(raw.custo_operacional||0)}</div></div>
+              <div class="detail-item"><div class="di-label">Lucro bruto</div><div class="di-val">${moeda(raw.lucro_bruto||0)}</div></div>
+              <div class="detail-item"><div class="di-label">Comissão</div><div class="di-val">${moeda(comissao)}</div></div>
+              <div class="detail-item"><div class="di-label">Taxa fixa</div><div class="di-val">${moeda(taxa_fixa)}</div></div>
+              <div class="detail-item"><div class="di-label">Frete</div><div class="di-val">${moeda(frete)}</div></div>
+              <div class="detail-item"><div class="di-label">Imposto</div><div class="di-val">${moeda(imposto)}</div></div>
+              <div class="detail-item"><div class="di-label">Markup</div><div class="di-val">${n(markup)}%</div></div>
+              <div class="detail-item"><div class="di-label">Margem</div><div class="di-val">${n(margem)}%</div></div>
+              <div class="detail-item"><div class="di-label">Faixa aplicada</div><div class="di-val" style="font-size:11px">${faixa}</div></div>
+              <div class="detail-item"><div class="di-label">Preço virtual (âncora)</div><div class="di-val" style="color:#f5b301">${moeda(virt)}</div></div>
+            </div>
+          </td>
+        </tr>
+      </tbody>`
+  }).join('');
+
+  document.getElementById('checkoutChannels').innerHTML=`
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Canal</th><th>Preço calculado</th><th>Editar preço</th><th>Preço virtual</th><th>Ajuste</th><th>Lucro líquido</th><th>Margem</th><th>Frete</th><th></th></tr></thead>
+        ${rows}
+      </table>
+    </div>`
 }
-</script>
 
+function toggleDetalhe(id){
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.classList.toggle('open');
+  // Atualiza seta
+  const row=el.previousElementSibling;
+  if(row){const arr=row.querySelector('td:last-child');if(arr)arr.textContent=el.classList.contains('open')?'▲':'▼'}
+}
+
+// ─── RENDER TÉCNICO ──────────────────────────────────────
+function renderTech(data){
+  const aud=data.auditoria||{};
+  document.getElementById('techPanel').innerHTML=`
+    <div class="table-wrap"><table><tbody>
+      <tr><th>Fórmula</th><td>${aud.formula_version||'-'}</td><th>SKU</th><td>${aud.sku||((data.produto||{}).codigo)||'-'}</td></tr>
+      <tr><th>Tipo de peso</th><td>${aud.tipo_peso||aud.origem_peso||'-'}</td><th>Peso usado</th><td>${n(aud.peso_usado||0,3)} kg</td></tr>
+      <tr><th>Origem do peso</th><td>${aud.origem_peso||'-'}</td><th>Tipo de custo</th><td>${aud.tipo_custo||'-'}</td></tr>
+      <tr><th>Origem do custo</th><td>${aud.origem_custo||'-'}</td><th>Diagnóstico</th><td>${(data.diagnostico||{}).mensagem||'-'}</td></tr>
+    </tbody></table></div>`
+}
+
+function aplicarAlertas(data){
+  const diag=data.diagnostico||{};
+  toggleWarning('peso_override','pesoWarning','btnAtualizarPeso','Peso ausente no Bling. Preencha manualmente ou atualize no Bling.',diag.codigo==='peso_ausente');
+  toggleWarning('preco_compra_manual','precoWarning','none','',false);
+  document.getElementById('btnAtualizarPreco').style.display=productId()?'inline-flex':'none';
+}
+
+function renderPreview(data){
+  renderProductDetails(data);
+  renderCheckout(data);
+  renderTech(data);
+  aplicarAlertas(data);
+  document.getElementById('btnExport').disabled=false;
+}
+
+// ─── CALCULAR ────────────────────────────────────────────
+async function executarPreview(){
+  const payload=obterPayload();
+  if(!payload.valor_busca){alert('Informe o SKU.');return}
+  setNotice('Calculando...','');
+  try{
+    const res=await fetch('/integracao/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await res.json();
+    ultimoPreview=data;
+    renderPreview(data);
+    salvarSimulacao(payload,data);
+    const diag=data.diagnostico||{};
+    if(!diag.ok){setNotice(`${diag.mensagem}${diag.detalhe?' '+diag.detalhe:''}`,'warn');return}
+    if(data.fila_auto&&data.fila_auto.adicionado){setNotice('Preview válido e enviado automaticamente para a fila.','ok')}
+    else{setNotice('Preview válido.','ok')}
+    atualizarContadorFila();
+  }catch(e){setNotice('Erro de conexão ao calcular.','warn')}
+}
+
+// ─── FILA ────────────────────────────────────────────────
+async function adicionarNaFila(){
+  if(!ultimoPreview||!(ultimoPreview.diagnostico||{}).ok){alert(((ultimoPreview||{}).diagnostico||{}).mensagem||'Preview inválido.');return}
+  const payload={ok:true,produto_bling:ultimoPreview.produto||{},marketplaces:ultimoPreview.marketplaces||{},auditoria:ultimoPreview.auditoria||{},raw:ultimoPreview.raw||{},payload_original:obterPayload()};
+  const res=await fetch('/fila/adicionar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const data=await res.json();
+  if(data.ok){setNotice(data.duplicado?'Já existia item pendente equivalente na fila.':'Item adicionado à fila.',data.duplicado?'warn':'ok');atualizarContadorFila()}
+  else{alert(data.detail||'Não foi possível adicionar à fila.')}
+}
+
+async function salvarPrecosEditadosNaFila(){
+  if(!ultimoPreview){alert('Nenhum preview calculado.');return}
+  // Coleta preços editados da tabela
+  const inputs=document.querySelectorAll('.price-edit');
+  inputs.forEach(inp=>{
+    const canal=inp.dataset.canal;
+    if(ultimoPreview.marketplaces&&ultimoPreview.marketplaces[canal]){
+      ultimoPreview.marketplaces[canal].preco_promocional=Number(inp.value);
+    }
+  });
+  setNotice('Preços editados salvos no preview. Clique em "Adicionar à fila" para enviar.','ok');
+}
+
+// ─── SALVAR/RESTAURAR SIMULAÇÃO ──────────────────────────
+function salvarSimulacao(payload,data){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({payload, data, quando:new Date().toISOString()}));
+  }catch(e){}
+}
+
+function restaurarSimulacao(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw)return;
+    const saved=JSON.parse(raw);
+    if(!saved||!saved.payload)return;
+    const p=saved.payload;
+    // Preenche campos
+    if(p.valor_busca)document.getElementById('valor_busca').value=p.valor_busca;
+    if(p.embalagem)document.getElementById('embalagem').value=p.embalagem;
+    if(p.imposto)document.getElementById('imposto').value=p.imposto;
+    if(p.quantidade)document.getElementById('quantidade').value=p.quantidade;
+    if(p.objetivo)document.getElementById('objetivo').value=p.objetivo;
+    if(p.tipo_alvo)document.getElementById('tipo_alvo').value=p.tipo_alvo;
+    if(p.valor_alvo)document.getElementById('valor_alvo').value=p.valor_alvo;
+    if(p.arredondamento)document.getElementById('arredondamento').value=p.arredondamento;
+    if(p.modo_preco_virtual)document.getElementById('modo_preco_virtual').value=p.modo_preco_virtual;
+    if(p.acrescimo_percentual)document.getElementById('acrescimo_percentual').value=p.acrescimo_percentual;
+    if(p.acrescimo_nominal)document.getElementById('acrescimo_nominal').value=p.acrescimo_nominal;
+    if(p.preco_compra_anterior_bling)document.getElementById('preco_compra_manual').value=p.preco_compra_anterior_bling;
+    // Restaura resultado
+    if(saved.data){
+      ultimoPreview=saved.data;
+      renderPreview(saved.data);
+      document.getElementById('btnExport').disabled=false;
+      document.getElementById('savedBanner').style.display='flex';
+      const quando=new Date(saved.quando).toLocaleString('pt-BR');
+      document.querySelector('#savedBanner span').textContent=`⚡ Simulação de ${quando} carregada automaticamente.`;
+    }
+  }catch(e){}
+}
+
+function limparSimulacaoSalva(){
+  localStorage.removeItem(STORAGE_KEY);
+  document.getElementById('savedBanner').style.display='none';
+  setNotice('Simulação salva removida.','');
+}
+
+// ─── CONFIG PADRÃO ───────────────────────────────────────
+async function carregarConfigPadrao(){
+  try{
+    const res=await fetch('/config/integracao-comercial');
+    if(!res.ok)return;
+    const cfg=await res.json();
+    if(cfg.objetivo)document.getElementById('objetivo').value=cfg.objetivo;
+    if(cfg.tipo_alvo)document.getElementById('tipo_alvo').value=cfg.tipo_alvo;
+    if(cfg.valor_alvo)document.getElementById('valor_alvo').value=cfg.valor_alvo;
+    if(cfg.arredondamento)document.getElementById('arredondamento').value=cfg.arredondamento;
+    setNotice('Configuração padrão carregada da Integração Comercial.','ok');
+  }catch(e){setNotice('Não foi possível carregar a config padrão.','warn')}
+}
+
+// ─── EXPORT ──────────────────────────────────────────────
+function toggleExportMenu(){
+  document.getElementById('exportMenu').classList.toggle('open');
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.export-wrap'))document.getElementById('exportMenu').classList.remove('open');
+});
+
+function exportarCSV(){
+  if(!ultimoPreview)return;
+  const items=Object.entries(ultimoPreview.marketplaces||{});
+  const produto=ultimoPreview.produto||{};
+  const aud=ultimoPreview.auditoria||{};
+  let csv='SKU,Produto,Canal,Preço calculado,Preço virtual,Lucro líquido,Margem %,Markup %,Frete,Comissão,Taxa fixa,Imposto,Faixa aplicada\n';
+  items.forEach(([key,item])=>{
+    const raw=item.raw||{};
+    const promo=Number(item.preco_promocional||raw.preco_promocional||raw.preco_final||0);
+    const virt=Number(item.preco||raw.preco_virtual||0);
+    const lucro=Number(item.lucro||raw.lucro_liquido||raw.lucro||0);
+    const margem=Number(item.margem||raw.margem_liquida_percentual||raw.margem||0);
+    const markup=Number(raw.markup_percentual||raw.markup||0);
+    const frete=Number(item.frete||raw.frete||0);
+    const comissao=Number(item.comissao||raw.comissao||0);
+    const taxa=Number(item.taxa_fixa||raw.taxa_fixa||0);
+    const imposto=Number(item.imposto||raw.imposto||0);
+    const faixa=item.faixa_aplicada||raw.faixa_aplicada||'-';
+    csv+=`"${produto.codigo||aud.sku||''}","${produto.nome||''}","${item.label||key}",${promo.toFixed(2)},${virt.toFixed(2)},${lucro.toFixed(2)},${margem.toFixed(2)},${markup.toFixed(2)},${frete.toFixed(2)},${comissao.toFixed(2)},${taxa.toFixed(2)},${imposto.toFixed(2)},"${faixa}"\n`;
+  });
+  downloadArquivo(csv,'text/csv',`shinsei_simulacao_${produto.codigo||'export'}.csv`);
+  document.getElementById('exportMenu').classList.remove('open');
+}
+
+function exportarJSON(){
+  if(!ultimoPreview)return;
+  const produto=ultimoPreview.produto||{};
+  downloadArquivo(JSON.stringify(ultimoPreview,null,2),'application/json',`shinsei_simulacao_${produto.codigo||'export'}.json`);
+  document.getElementById('exportMenu').classList.remove('open');
+}
+
+function exportarPDF(){
+  document.getElementById('exportMenu').classList.remove('open');
+  window.print();
+}
+
+function downloadArquivo(conteudo,tipo,nome){
+  const blob=new Blob([conteudo],{type:tipo});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=nome;a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── INIT ────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded',()=>{
+  atualizarContadorFila();
+  restaurarSimulacao();
+});
+</script>
 </body>
 </html>
