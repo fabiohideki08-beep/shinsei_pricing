@@ -350,20 +350,41 @@ def bling_produto_atualizar_peso(payload: AtualizacaoCampoBlingPayload):
 @app.post("/bling/produto/atualizar-preco")
 def bling_produto_atualizar_preco(payload: AtualizacaoCampoBlingPayload):
     if not BlingClient:
-        raise HTTPException(status_code=500, detail="bling_client.py nÃ£o encontrado.")
+        raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
     if float(payload.valor or 0) <= 0:
-        raise HTTPException(status_code=400, detail="Informe um preÃ§o vÃ¡lido.")
+        raise HTTPException(status_code=400, detail="Informe um preço válido.")
     try:
         client = BlingClient()
         existing = client.get_product(int(payload.produto_id))
-        patch = _prepare_product_patch(existing)
-        patch["id"] = int(payload.produto_id)
-        patch["preco"] = round(float(payload.valor), 2)
-        result = client.update_product(int(payload.produto_id), patch)
-        atualizado = client.get_product(int(payload.produto_id))
-        return {"ok": True, "message": "PreÃ§o atualizado no Bling.", "produto": atualizado, "raw": result}
+        valor = round(float(payload.valor), 2)
+
+        # Tenta via fornecedor primeiro
+        fornecedor = existing.get("fornecedor") if isinstance(existing, dict) else None
+        if isinstance(fornecedor, dict) and fornecedor.get("id"):
+            patch = _prepare_product_patch(existing) if "_prepare_product_patch" in dir() else dict(existing)
+            patch["id"] = int(payload.produto_id)
+            fornecedor_patch = dict(fornecedor)
+            fornecedor_patch["precoCusto"] = valor
+            fornecedor_patch["precoCompra"] = valor
+            patch["fornecedor"] = fornecedor_patch
+            client.update_product(int(payload.produto_id), patch)
+            logger.info("Custo atualizado via fornecedor: produto_id=%s valor=%s", payload.produto_id, valor)
+            return {"ok": True, "message": f"Custo R${valor:.2f} atualizado no Bling."}
+        else:
+            # Fallback: salva custo localmente como override
+            custo_override_path = DATA_DIR / "custo_override.json"
+            overrides = _load_json(custo_override_path, {})
+            sku = existing.get("codigo") or str(payload.produto_id) if isinstance(existing, dict) else str(payload.produto_id)
+            prod_id_str = str(payload.produto_id)
+            entry = {"custo": valor, "produto_id": payload.produto_id, "atualizado_em": datetime.utcnow().isoformat()}
+            overrides[sku] = entry
+            overrides[prod_id_str] = entry
+            _save_json(custo_override_path, overrides)
+            logger.info("Custo salvo localmente (sem fornecedor): sku=%s valor=%s", sku, valor)
+            return {"ok": True, "message": f"Custo R${valor:.2f} salvo localmente. Recalcule para ver o resultado.", "local_only": True}
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Falha ao atualizar preÃ§o no Bling: {exc}")
+        raise HTTPException(status_code=400, detail=f"Falha ao atualizar custo: {exc}")
+
 
 @app.post("/integracao/preview")
 def integracao_preview(payload: IntegracaoPayload):

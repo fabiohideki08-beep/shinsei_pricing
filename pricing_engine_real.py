@@ -309,6 +309,20 @@ def extrair_custo_do_estoque_bling(produto: dict) -> dict:
         if not origem.startswith("produto.estoque"):
             return {"custo": round(float(valor), 4), "origem": origem, "warning": "Fallback por varredura no produto."}
 
+    # Override local de custo (salvo pelo simulador para produtos sem fornecedor)
+    try:
+        from pathlib import Path as _Path
+        import json as _json
+        _override_path = _Path(__file__).parent / "data" / "custo_override.json"
+        if _override_path.exists():
+            _overrides = _json.loads(_override_path.read_text(encoding="utf-8"))
+            _sku = produto.get("codigo") or ""
+            _pid = str(produto.get("id") or "")
+            _override = _overrides.get(_sku) or _overrides.get(_pid)
+            if _override and float(_override.get("custo", 0)) > 0:
+                return {"custo": round(float(_override["custo"]), 4), "origem": "override_local", "warning": "Custo salvo localmente pelo simulador."}
+    except Exception:
+        pass
     return {"custo": 0.0, "origem": None, "warning": "Preço de compra não encontrado no estoque nem no produto."}
 
 def _buscar_componentes_em_objeto(obj: Any, prefixo: str = "") -> list[dict]:
@@ -440,6 +454,7 @@ def resolver_custo_produto_ou_composicao(client, produto: dict) -> dict:
         detalhes.append({
             "sku": (produto_comp.get("codigo") or comp.get("sku")),
             "id": produto_comp.get("id") or comp.get("id"),
+            "nome": produto_comp.get("nome") or produto_comp.get("descricao") or "",
             "quantidade": _safe_float(comp.get("quantidade"), 1),
             "custo_unitario": _round2(custo_unit),
             "subtotal": _round2(subtotal),
@@ -487,6 +502,8 @@ def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto,
     produto = busca.get("produto", {})
     custo_resolvido = resolver_custo_produto_ou_composicao(client, produto)
     preco_custo = float(custo_resolvido["custo_total"] or 0)
+
+
     estoque = int(((produto.get("estoque") or {}).get("saldoVirtualTotal") or 0))
     peso_extraido = extrair_peso_do_produto_bling(produto)
     peso_usado = float(peso_override or 0) if float(peso_override or 0) > 0 else float(peso_extraido["peso"] or 0)

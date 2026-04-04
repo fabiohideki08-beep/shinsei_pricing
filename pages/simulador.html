@@ -399,9 +399,13 @@ async function fixAtualizarPeso(){
 function recalcularAposFixar(){ executarPreview(); }
 
 function _renderComponentesSemCusto(data){
-  const custo_extraido = (data.auditoria || {}).custo_extraido || 
-                         (data.raw || {}).custo_extraido || 
-                         (data.raw || {}).custo_resolvido || {};
+  // Busca custo_extraido em todos os lugares possíveis do response
+  const custo_extraido = (data.auditoria || {}).custo_extraido ||
+                         (data.raw || {}).custo_extraido ||
+                         (data.raw || {}).custo_resolvido ||
+                         data.custo_extraido ||
+                         (((data.raw || {}).auditoria) || {}).custo_extraido ||
+                         {};
   const componentes = custo_extraido.componentes || [];
   const semCusto = componentes.filter(c => !c.custo_unitario || c.custo_unitario <= 0 || c.warning);
   
@@ -417,8 +421,8 @@ function _renderComponentesSemCusto(data){
   lista.innerHTML = semCusto.map((comp,idx) => `
     <div style="display:grid;grid-template-columns:1fr auto 120px;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:rgba(0,0,0,.2);border-radius:10px">
       <div>
-        <div style="font-size:13px;font-weight:600">${comp.sku||'-'}</div>
-        <div style="font-size:11px;color:var(--muted)">ID Bling: ${comp.id||'-'} · Qtd: ${comp.quantidade||1}</div>
+        <div style="font-size:13px;font-weight:600">${comp.nome||comp.sku||'-'}</div>
+        <div style="font-size:11px;color:var(--muted)">SKU: ${comp.sku||'-'} · ID: ${comp.id||'-'} · Qtd: ${comp.quantidade||1}</div>
         ${comp.warning?`<div style="font-size:11px;color:var(--warn)">${comp.warning}</div>`:''}
       </div>
       <label style="font-size:12px;color:var(--muted)">Custo (R$)</label>
@@ -472,6 +476,13 @@ async function executarPreview(){
   try{
     const res=await fetch('/integracao/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const data=await res.json();
+    // Normaliza custo_extraido para ficar acessível em qualquer formato
+    if(data.auditoria && !data.auditoria.custo_extraido && data.custo_extraido){
+      data.auditoria.custo_extraido = data.custo_extraido;
+    }
+    if(!data.auditoria && data.custo_extraido){
+      data.auditoria = {custo_extraido: data.custo_extraido};
+    }
     ultimoPreview=data;
     renderPreview(data);
     salvarSimulacao(payload,data);
