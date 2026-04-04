@@ -47,6 +47,13 @@
     .tag-melhor{display:inline-block;background:rgba(22,163,74,.2);color:#22c55e;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;margin-left:6px}
     .tag-prejuizo{display:inline-block;background:rgba(239,68,68,.2);color:#ef4444;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;margin-left:6px}
 
+    /* Painel de dados ausentes */
+    .fix-panel{display:none;margin-top:14px;padding:16px;border-radius:14px;border:1px solid rgba(245,179,1,.4);background:rgba(245,179,1,.07)}
+    .fix-panel.show{display:block}
+    .fix-panel h4{margin:0 0 12px;font-size:14px;color:var(--warn)}
+    .fix-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .fix-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+
     /* Export dropdown */
     .export-wrap{position:relative;display:inline-block}
     .export-menu{display:none;position:absolute;top:calc(100% + 6px);right:0;background:var(--card2);border:1px solid var(--line);border-radius:12px;min-width:160px;z-index:20;padding:6px}
@@ -117,6 +124,29 @@
         <button class="btn secondary sm" onclick="carregarConfigPadrao()" title="Carrega objetivo/arredondamento da Integração Comercial">⚙️ Usar config padrão</button>
       </div>
       <div id="notice" class="notice">Ao calcular, o sistema envia automaticamente para a fila se o preview estiver válido.</div>
+      <!-- Painel de dados ausentes -->
+      <div class="fix-panel" id="fixPanel">
+        <h4>⚠️ Dados ausentes no Bling — preencha e atualize</h4>
+        <div class="fix-grid">
+          <div class="field" id="fixCustoField" style="display:none">
+            <label>Preço de compra / Custo (R$)</label>
+            <div class="field-actions">
+              <input id="fix_custo" type="number" step="0.01" placeholder="Ex: 25.90" />
+              <button class="btn warn sm" onclick="fixAtualizarCusto()">Salvar no Bling</button>
+            </div>
+          </div>
+          <div class="field" id="fixPesoField" style="display:none">
+            <label>Peso do produto (kg)</label>
+            <div class="field-actions">
+              <input id="fix_peso" type="number" step="0.001" placeholder="Ex: 0.350" />
+              <button class="btn warn sm" onclick="fixAtualizarPeso()">Salvar no Bling</button>
+            </div>
+          </div>
+        </div>
+        <div class="fix-actions">
+          <button class="btn sm" onclick="recalcularAposFixar()">🔄 Recalcular após corrigir</button>
+        </div>
+      </div>
     </section>
 
     <!-- BLOCO 2: DETALHES DO PRODUTO -->
@@ -317,10 +347,47 @@ function renderTech(data){
 
 function aplicarAlertas(data){
   const diag=data.diagnostico||{};
-  toggleWarning('peso_override','pesoWarning','btnAtualizarPeso','Peso ausente no Bling. Preencha manualmente ou atualize no Bling.',diag.codigo==='peso_ausente');
+  const codigo=diag.codigo||'';
+  toggleWarning('peso_override','pesoWarning','btnAtualizarPeso','Peso ausente no Bling.',codigo==='peso_ausente');
   toggleWarning('preco_compra_manual','precoWarning','none','',false);
   document.getElementById('btnAtualizarPreco').style.display=productId()?'inline-flex':'none';
+  // Painel de correção
+  const fixPanel=document.getElementById('fixPanel');
+  const fixCusto=document.getElementById('fixCustoField');
+  const fixPeso=document.getElementById('fixPesoField');
+  const mostrarFix=codigo==='custo_ausente'||codigo==='peso_ausente'||codigo==='composicao_sem_custo';
+  fixPanel.classList.toggle('show', mostrarFix);
+  if(fixCusto) fixCusto.style.display=(codigo==='custo_ausente'||codigo==='composicao_sem_custo')?'flex':'none';
+  if(fixPeso) fixPeso.style.display=codigo==='peso_ausente'?'flex':'none';
 }
+
+async function fixAtualizarCusto(){
+  const id=productId();
+  const valor=parseFloat(document.getElementById('fix_custo').value||0);
+  if(!id){setNotice('Produto sem ID. Calcule primeiro.','warn');return}
+  if(!valor||valor<=0){setNotice('Informe um valor de custo válido.','warn');return}
+  try{
+    const res=await fetch('/bling/produto/atualizar-preco',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({produto_id:id,valor})});
+    const data=await res.json();
+    if(res.ok){setNotice('Custo atualizado no Bling! Clique em "Recalcular".','ok')}
+    else{setNotice('Erro: '+(data.detail||'falha'),'warn')}
+  }catch(e){setNotice('Erro de conexão.','warn')}
+}
+
+async function fixAtualizarPeso(){
+  const id=productId();
+  const valor=parseFloat(document.getElementById('fix_peso').value||0);
+  if(!id){setNotice('Produto sem ID. Calcule primeiro.','warn');return}
+  if(!valor||valor<=0){setNotice('Informe um peso válido.','warn');return}
+  try{
+    const res=await fetch('/bling/produto/atualizar-peso',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({produto_id:id,valor})});
+    const data=await res.json();
+    if(res.ok){setNotice('Peso atualizado no Bling! Clique em "Recalcular".','ok')}
+    else{setNotice('Erro: '+(data.detail||'falha'),'warn')}
+  }catch(e){setNotice('Erro de conexão.','warn')}
+}
+
+function recalcularAposFixar(){ executarPreview(); }
 
 function renderPreview(data){
   renderProductDetails(data);
@@ -342,7 +409,7 @@ async function executarPreview(){
     renderPreview(data);
     salvarSimulacao(payload,data);
     const diag=data.diagnostico||{};
-    if(!diag.ok){setNotice(`${diag.mensagem}${diag.detalhe?' '+diag.detalhe:''}`,'warn');return}
+    if(!diag.ok){setNotice((diag.mensagem||'Erro no cálculo.')+(diag.detalhe?' '+diag.detalhe:''),'warn');return}
     if(data.fila_auto&&data.fila_auto.adicionado){setNotice('Preview válido e enviado automaticamente para a fila.','ok')}
     else{setNotice('Preview válido.','ok')}
     atualizarContadorFila();

@@ -61,6 +61,11 @@ PUBLIC_PATHS = {
     "/openapi.json",
     "/redoc",
     "/webhooks/bling",
+    "/integracao/preview",
+    "/fila/lista",
+    "/fila/adicionar",
+    "/bling/produto/atualizar-peso",
+    "/bling/produto/atualizar-preco",
     "/shopify-flow/pricing-suggestion",
     "/estoque/fila",
     "/conferencia-estoque",
@@ -199,4 +204,5 @@ async def api_key_dep(x_api_key: str | None = Security(_api_key_header)) -> str:
     if not x_api_key or not hmac.compare_digest(x_api_key, chave):
         raise HTTPException(status_code=403, detail="API key invÃ¡lida.")
     return x_api_key
+
 
