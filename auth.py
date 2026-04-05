@@ -64,6 +64,8 @@ PUBLIC_PATHS = {
     "/integracao/preview",
     "/fila/lista",
     "/fila/adicionar",
+    "/fila/aprovar",
+    "/fila/rejeitar",
     "/bling/produto/atualizar-peso",
     "/bling/produto/atualizar-preco",
     "/shopify-flow/pricing-suggestion",
@@ -75,7 +77,11 @@ PUBLIC_PATHS = {
 
 # Prefixos pÃºblicos (qualquer rota que comece com esses valores)
 PUBLIC_PREFIXES = (
+    "/fila/aprovar/",
+    "/fila/rejeitar/",
     "/static/",
+    "/fila/aprovar/",
+    "/fila/rejeitar/",
     "/pages/",
 )
 
@@ -204,5 +210,8 @@ async def api_key_dep(x_api_key: str | None = Security(_api_key_header)) -> str:
     if not x_api_key or not hmac.compare_digest(x_api_key, chave):
         raise HTTPException(status_code=403, detail="API key invÃ¡lida.")
     return x_api_key
+
+
+
 
 
