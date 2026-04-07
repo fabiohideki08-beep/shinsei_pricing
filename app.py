@@ -734,6 +734,74 @@ async def shopify_flow_pricing(request: Request):
         "valor_alvo_usado": valor_alvo,
     }
 
+
+@app.get("/auditoria-automatica", response_class=HTMLResponse)
+def auditoria_automatica_page():
+    html_file = PAGES_DIR / "auditoria_automatica.html"
+    if html_file.exists():
+        return HTMLResponse(html_file.read_text(encoding="utf-8"))
+    raise HTTPException(status_code=404, detail="auditoria_automatica.html não encontrado.")
+
+@app.get("/auditoria/fila")
+def auditoria_fila_lista(status: str = "", tipo: str = ""):
+    from auditoria_automatica import carregar_fila_auditoria, stats_fila_auditoria
+    itens = carregar_fila_auditoria()
+    if status:
+        itens = [i for i in itens if i.get("status") == status]
+    if tipo:
+        itens = [i for i in itens if i.get("tipo") == tipo]
+    return {"itens": itens, "stats": stats_fila_auditoria()}
+
+@app.post("/auditoria/rodar")
+def auditoria_rodar():
+    from auditoria_automatica import rodar_auditoria
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="Bling não disponível.")
+    try:
+        client = BlingClient()
+        ml_svc = None
+        try:
+            from services.mercado_livre import MercadoLivreService
+            ml_svc = MercadoLivreService(BASE_DIR)
+        except Exception:
+            pass
+        return rodar_auditoria(client, ml_svc)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/auditoria/corrigir/{item_id}")
+def auditoria_corrigir(item_id: str):
+    from auditoria_automatica import carregar_fila_auditoria, corrigir_estoque, corrigir_preco, stats_fila_auditoria
+    fila = carregar_fila_auditoria()
+    item = next((i for i in fila if i.get("id") == item_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado.")
+    ml_svc = None
+    try:
+        from services.mercado_livre import MercadoLivreService
+        ml_svc = MercadoLivreService(BASE_DIR)
+    except Exception:
+        pass
+    if item.get("tipo") == "estoque":
+        resultado = corrigir_estoque(item_id, ml_svc)
+    else:
+        resultado = corrigir_preco(item_id, ml_svc)
+    if not resultado.get("ok"):
+        raise HTTPException(status_code=400, detail=resultado.get("erro", "Falha ao corrigir."))
+    return {"ok": True, "resultado": resultado, "stats": stats_fila_auditoria()}
+
+@app.post("/auditoria/ignorar/{item_id}")
+def auditoria_ignorar(item_id: str):
+    from auditoria_automatica import ignorar_item, stats_fila_auditoria
+    resultado = ignorar_item(item_id)
+    return {"ok": resultado.get("ok"), "stats": stats_fila_auditoria()}
+
+@app.post("/auditoria/limpar-resolvidos")
+def auditoria_limpar():
+    from auditoria_automatica import limpar_resolvidos, stats_fila_auditoria
+    removidos = limpar_resolvidos()
+    return {"ok": True, "removidos": removidos, "stats": stats_fila_auditoria()}
+
 if not FILA_PATH.exists(): ...
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -1152,6 +1220,74 @@ async def shopify_flow_pricing(request: Request):
         "objetivo_usado": objetivo,
         "valor_alvo_usado": valor_alvo,
     }
+
+
+@app.get("/auditoria-automatica", response_class=HTMLResponse)
+def auditoria_automatica_page():
+    html_file = PAGES_DIR / "auditoria_automatica.html"
+    if html_file.exists():
+        return HTMLResponse(html_file.read_text(encoding="utf-8"))
+    raise HTTPException(status_code=404, detail="auditoria_automatica.html não encontrado.")
+
+@app.get("/auditoria/fila")
+def auditoria_fila_lista(status: str = "", tipo: str = ""):
+    from auditoria_automatica import carregar_fila_auditoria, stats_fila_auditoria
+    itens = carregar_fila_auditoria()
+    if status:
+        itens = [i for i in itens if i.get("status") == status]
+    if tipo:
+        itens = [i for i in itens if i.get("tipo") == tipo]
+    return {"itens": itens, "stats": stats_fila_auditoria()}
+
+@app.post("/auditoria/rodar")
+def auditoria_rodar():
+    from auditoria_automatica import rodar_auditoria
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="Bling não disponível.")
+    try:
+        client = BlingClient()
+        ml_svc = None
+        try:
+            from services.mercado_livre import MercadoLivreService
+            ml_svc = MercadoLivreService(BASE_DIR)
+        except Exception:
+            pass
+        return rodar_auditoria(client, ml_svc)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/auditoria/corrigir/{item_id}")
+def auditoria_corrigir(item_id: str):
+    from auditoria_automatica import carregar_fila_auditoria, corrigir_estoque, corrigir_preco, stats_fila_auditoria
+    fila = carregar_fila_auditoria()
+    item = next((i for i in fila if i.get("id") == item_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado.")
+    ml_svc = None
+    try:
+        from services.mercado_livre import MercadoLivreService
+        ml_svc = MercadoLivreService(BASE_DIR)
+    except Exception:
+        pass
+    if item.get("tipo") == "estoque":
+        resultado = corrigir_estoque(item_id, ml_svc)
+    else:
+        resultado = corrigir_preco(item_id, ml_svc)
+    if not resultado.get("ok"):
+        raise HTTPException(status_code=400, detail=resultado.get("erro", "Falha ao corrigir."))
+    return {"ok": True, "resultado": resultado, "stats": stats_fila_auditoria()}
+
+@app.post("/auditoria/ignorar/{item_id}")
+def auditoria_ignorar(item_id: str):
+    from auditoria_automatica import ignorar_item, stats_fila_auditoria
+    resultado = ignorar_item(item_id)
+    return {"ok": resultado.get("ok"), "stats": stats_fila_auditoria()}
+
+@app.post("/auditoria/limpar-resolvidos")
+def auditoria_limpar():
+    from auditoria_automatica import limpar_resolvidos, stats_fila_auditoria
+    removidos = limpar_resolvidos()
+    return {"ok": True, "removidos": removidos, "stats": stats_fila_auditoria()}
 
 if not FILA_PATH.exists(): _save_json(FILA_PATH, [])
 if not CFG_PATH.exists(): _save_json(CFG_PATH, DEFAULT_CFG)

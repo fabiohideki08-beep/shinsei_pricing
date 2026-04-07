@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auditoria Automática — Shinsei Pricing</title>
+  <style>
+    :root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--danger:#ef4444;--ok:#16a34a;--warn:#f5b301}
+    *{box-sizing:border-box} body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text)}
+    .wrap{max-width:1400px;margin:0 auto;padding:22px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 18px;position:sticky;top:16px;z-index:10}
+    .brand h1{margin:0;font-size:22px}.brand p{margin:4px 0 0;color:var(--muted);font-size:13px}.top-actions{display:flex;gap:10px;align-items:center}
+    .btn{border:none;background:var(--accent);color:#fff;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-size:13px}
+    .btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+    .btn.success{background:var(--ok)} .btn.danger{background:var(--danger)} .btn.warn{background:var(--warn);color:#000}
+    .btn.sm{padding:7px 10px;font-size:12px;border-radius:9px}
+    .btn:disabled{opacity:.4;cursor:not-allowed}
+
+    /* STATS GLOBAIS */
+    .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+    .stat{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;transition:border-color .2s}
+    .stat:hover{border-color:var(--accent)}
+    .stat.active{border-color:var(--accent);background:rgba(79,140,255,.08)}
+    .stat .label{color:var(--muted);font-size:12px;display:flex;align-items:center;gap:6px}
+    .stat .value{font-size:28px;font-weight:700;margin-top:6px}
+    .stat .value.warn{color:var(--warn)}.stat .value.ok{color:#22c55e}.stat .value.danger{color:var(--danger)}
+    .stat .sub{font-size:11px;color:var(--muted);margin-top:4px}
+
+    /* SEÇÕES */
+    .secao{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:20px;padding:18px;margin-bottom:16px}
+    .secao-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px}
+    .secao-titulo{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:700}
+    .secao-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .badge-count{background:var(--warn);color:#000;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700}
+    .badge-count.zero{background:rgba(34,197,94,.2);color:#22c55e}
+
+    /* TABELA */
+    .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:14px}
+    table{width:100%;border-collapse:collapse;min-width:750px}
+    th,td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;text-align:left}
+    th{background:#10182f;color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.04em}
+    tr:last-child td{border-bottom:none}
+    tr:hover td{background:rgba(79,140,255,.04)}
+    .tag{display:inline-block;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700}
+    .tag.pendente{background:rgba(245,179,1,.15);color:#f5b301}
+    .tag.corrigido{background:rgba(34,197,94,.15);color:#22c55e}
+    .tag.ignorado{background:rgba(150,150,150,.15);color:#9fb0d9}
+    .tag.alerta{background:rgba(239,68,68,.15);color:#ef4444}
+    .dif-pos{color:#ef4444;font-weight:700}
+    .dif-neg{color:#22c55e;font-weight:700}
+    .actions-row{display:flex;gap:6px}
+
+    /* NOTICE */
+    .notice{padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:#0d1630;color:#cbd5ff;font-size:13px;margin-bottom:14px;display:none}
+    .notice.ok{border-color:#166534;background:rgba(22,163,74,.1);color:#bbf7d0;display:block}
+    .notice.warn{border-color:#92400e;background:rgba(245,158,11,.1);color:#fde68a;display:block}
+    .notice.err{border-color:#991b1b;background:rgba(239,68,68,.1);color:#fca5a5;display:block}
+
+    /* EMPTY */
+    .hero-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:120px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);gap:8px}
+    .hero-empty .ico{font-size:32px}
+
+    /* COMING SOON */
+    .coming-soon{padding:20px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:14px}
+    .coming-soon .ico{font-size:36px;display:block;margin-bottom:8px}
+
+    .spin{animation:spin 1s linear infinite;display:inline-block}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* FILTROS */
+    .filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+    .filtro-btn{padding:6px 12px;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-size:12px;font-weight:600}
+    .filtro-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+    @media(max-width:900px){.stats-grid{grid-template-columns:1fr 1fr}.topbar{flex-direction:column;align-items:flex-start}}
+    @media(max-width:600px){.stats-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1>🔍 Auditoria Automática</h1>
+      <p>Conferência de estoque, preços, comissões e fretes em todos os canais</p>
+    </div>
+    <div class="top-actions">
+      <a class="btn secondary" href="/">Início</a>
+      <a class="btn secondary" href="/simulador">Simulador</a>
+      <a class="btn secondary" href="/fila">Fila preços</a>
+      <button class="btn warn" id="btnConferirTudo" onclick="conferirTudo()">🔍 Conferir tudo agora</button>
+      <button class="btn secondary" onclick="limparResolvidos()">🧹 Limpar resolvidos</button>
+    </div>
+  </div>
+
+  <div id="notice-global" class="notice"></div>
+
+  <!-- STATS GLOBAIS -->
+  <div class="stats-grid">
+    <div class="stat active" onclick="mostrarSecao('estoque', this)">
+      <div class="label">📦 Estoque</div>
+      <div class="value warn" id="statEstoque">—</div>
+      <div class="sub">divergências pendentes</div>
+    </div>
+    <div class="stat" onclick="mostrarSecao('preco', this)">
+      <div class="label">💰 Preço</div>
+      <div class="value warn" id="statPreco">—</div>
+      <div class="sub">divergências pendentes</div>
+    </div>
+    <div class="stat" onclick="mostrarSecao('comissao', this)">
+      <div class="label">📊 Comissão</div>
+      <div class="value" id="statComissao">—</div>
+      <div class="sub">alertas pendentes</div>
+    </div>
+    <div class="stat" onclick="mostrarSecao('frete', this)">
+      <div class="label">🚚 Frete</div>
+      <div class="value" id="statFrete">—</div>
+      <div class="sub">alertas pendentes</div>
+    </div>
+  </div>
+
+  <!-- SEÇÃO: ESTOQUE -->
+  <div class="secao" id="secao-estoque">
+    <div class="secao-header">
+      <div class="secao-titulo">
+        📦 Conferência de Estoque
+        <span class="badge-count zero" id="badgeEstoque">0</span>
+      </div>
+      <div class="secao-actions">
+        <div class="filtros">
+          <button class="filtro-btn active" onclick="filtrarEstoque('', this)">Todos</button>
+          <button class="filtro-btn" onclick="filtrarEstoque('pendente', this)">Pendentes</button>
+          <button class="filtro-btn" onclick="filtrarEstoque('corrigido', this)">Corrigidos</button>
+          <button class="filtro-btn" onclick="filtrarEstoque('ignorado', this)">Ignorados</button>
+        </div>
+        <button class="btn sm warn" onclick="conferirEstoque()">🔄 Conferir estoque</button>
+      </div>
+    </div>
+    <div id="tabelaEstoque">
+      <div class="hero-empty"><div class="ico">📦</div><div>Nenhuma divergência de estoque.</div></div>
+    </div>
+  </div>
+
+  <!-- SEÇÃO: PREÇO -->
+  <div class="secao" id="secao-preco" style="display:none">
+    <div class="secao-header">
+      <div class="secao-titulo">
+        💰 Conferência de Preço
+        <span class="badge-count zero" id="badgePreco">0</span>
+      </div>
+      <div class="secao-actions">
+        <div class="filtros">
+          <button class="filtro-btn active" onclick="filtrarPreco('', this)">Todos</button>
+          <button class="filtro-btn" onclick="filtrarPreco('pendente', this)">Pendentes</button>
+          <button class="filtro-btn" onclick="filtrarPreco('corrigido', this)">Corrigidos</button>
+          <button class="filtro-btn" onclick="filtrarPreco('ignorado', this)">Ignorados</button>
+        </div>
+        <button class="btn sm warn" onclick="conferirPrecos()">🔄 Conferir preços</button>
+      </div>
+    </div>
+    <div id="tabelaPreco">
+      <div class="hero-empty"><div class="ico">💰</div><div>Nenhuma divergência de preço.</div></div>
+    </div>
+  </div>
+
+  <!-- SEÇÃO: COMISSÃO -->
+  <div class="secao" id="secao-comissao" style="display:none">
+    <div class="secao-header">
+      <div class="secao-titulo">📊 Conferência de Comissão</div>
+    </div>
+    <div class="coming-soon">
+      <span class="ico">🔧</span>
+      <strong>Em breve</strong>
+      <p style="margin:8px 0 0;font-size:13px">Aguardando configuração do Access Token do Mercado Pago.<br>Quando configurado, esta seção comparará as comissões reais cobradas vs as usadas no cálculo.</p>
+      <div style="margin-top:12px">
+        <input id="mpAccessToken" type="password" placeholder="Cole o Access Token do Mercado Pago aqui" style="padding:10px;border-radius:10px;border:1px solid var(--line);background:#0d1630;color:#fff;width:400px;max-width:100%"/>
+        <button class="btn sm" style="margin-left:8px" onclick="salvarMPToken()">Salvar token</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEÇÃO: FRETE -->
+  <div class="secao" id="secao-frete" style="display:none">
+    <div class="secao-header">
+      <div class="secao-titulo">🚚 Conferência de Frete</div>
+    </div>
+    <div class="coming-soon">
+      <span class="ico">🔧</span>
+      <strong>Em breve</strong>
+      <p style="margin:8px 0 0;font-size:13px">Aguardando configuração do Access Token do Mercado Pago.<br>Quando configurado, esta seção comparará os fretes reais cobrados vs os usados no cálculo.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─── NAVEGAÇÃO ────────────────────────────────────────────
+const secoes = ['estoque','preco','comissao','frete'];
+let filtroEstoque = '';
+let filtroPreco = '';
+
+function mostrarSecao(nome, statEl) {
+  secoes.forEach(s => {
+    document.getElementById('secao-' + s).style.display = s === nome ? 'block' : 'none';
+  });
+  document.querySelectorAll('.stat').forEach(el => el.classList.remove('active'));
+  if(statEl) statEl.classList.add('active');
+}
+
+// ─── NOTICE ──────────────────────────────────────────────
+function mostrarNotice(msg, tipo='ok'){
+  const el = document.getElementById('notice-global');
+  el.className = 'notice ' + tipo;
+  el.textContent = msg;
+  if(tipo === 'ok') setTimeout(() => el.className = 'notice', 4000);
+}
+
+// ─── ESTOQUE ─────────────────────────────────────────────
+async function carregarEstoque(){
+  try{
+    const url = '/estoque/fila' + (filtroEstoque ? '?status=' + filtroEstoque : '');
+    const res = await fetch(url);
+    const data = await res.json();
+    const itens = data.itens || [];
+    const stats = data.stats || {};
+    const pendentes = stats.pendente || 0;
+    document.getElementById('statEstoque').textContent = pendentes;
+    document.getElementById('statEstoque').className = 'value ' + (pendentes > 0 ? 'warn' : 'ok');
+    document.getElementById('badgeEstoque').textContent = pendentes;
+    document.getElementById('badgeEstoque').className = 'badge-count ' + (pendentes > 0 ? '' : 'zero');
+    renderTabelaEstoque(itens);
+  }catch(e){ console.error(e); }
+}
+
+function renderTabelaEstoque(itens){
+  const wrap = document.getElementById('tabelaEstoque');
+  if(!itens.length){
+    wrap.innerHTML = '<div class="hero-empty"><div class="ico">✅</div><div>Nenhuma divergência de estoque.</div></div>';
+    return;
+  }
+  const rows = itens.map(item => {
+    const dif = item.diferenca || 0;
+    const difClass = dif > 0 ? 'dif-pos' : 'dif-neg';
+    const acoes = item.status === 'pendente' ? `
+      <div class="actions-row">
+        <button class="btn success sm" onclick="corrigirEstoque('${item.id}')">✅ Corrigir</button>
+        <button class="btn secondary sm" onclick="ignorarEstoque('${item.id}')">🚫 Ignorar</button>
+      </div>` : '—';
+    return `<tr>
+      <td><strong>${item.sku||'—'}</strong></td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.nome||'—'}</td>
+      <td>${item.canal||'—'}</td>
+      <td style="color:#22c55e;font-weight:700">${item.estoque_bling??'—'}</td>
+      <td style="color:#4f8cff;font-weight:700">${item.estoque_marketplace??'—'}</td>
+      <td class="${difClass}">${dif > 0 ? '+' + dif : dif}</td>
+      <td><span class="tag ${item.status||'pendente'}">${item.status||'pendente'}</span></td>
+      <td style="font-size:11px;color:var(--muted)">${item.criado_em ? new Date(item.criado_em).toLocaleString('pt-BR') : ''}</td>
+      <td>${acoes}</td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>SKU</th><th>Produto</th><th>Canal</th><th>Bling</th><th>Marketplace</th><th>Diferença</th><th>Status</th><th>Detectado</th><th>Ação</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function filtrarEstoque(status, btn){
+  filtroEstoque = status;
+  document.querySelectorAll('#secao-estoque .filtro-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  carregarEstoque();
+}
+
+async function conferirEstoque(){
+  const btn = document.getElementById('btnConferirTudo');
+  try{
+    const res = await fetch('/estoque/conferir', {method:'POST'});
+    const data = await res.json();
+    if(data.ok) mostrarNotice(`Estoque: ${data.verificados} verificados, ${data.novas_divergencias} novas divergências.`, data.novas_divergencias > 0 ? 'warn' : 'ok');
+    carregarEstoque();
+  }catch(e){ mostrarNotice('Erro ao conferir estoque.', 'err'); }
+}
+
+async function corrigirEstoque(id){
+  if(!confirm('Corrigir estoque no marketplace com o valor do Bling?')) return;
+  try{
+    const res = await fetch('/estoque/corrigir/' + id, {method:'POST'});
+    const data = await res.json();
+    mostrarNotice(data.ok ? 'Estoque corrigido!' : 'Erro: ' + (data.detail||'falha'), data.ok ? 'ok' : 'err');
+    carregarEstoque();
+  }catch(e){ mostrarNotice('Erro de conexão.','err'); }
+}
+
+async function ignorarEstoque(id){
+  try{
+    await fetch('/estoque/ignorar/' + id, {method:'POST'});
+    carregarEstoque();
+  }catch(e){}
+}
+
+// ─── PREÇO ───────────────────────────────────────────────
+async function carregarPrecos(){
+  try{
+    const url = '/auditoria/precos' + (filtroPreco ? '?status=' + filtroPreco : '');
+    const res = await fetch(url);
+    if(!res.ok){ renderTabelaPreco([]); return; }
+    const data = await res.json();
+    const itens = data.itens || [];
+    const pendentes = itens.filter(i => i.status === 'pendente').length;
+    document.getElementById('statPreco').textContent = pendentes;
+    document.getElementById('statPreco').className = 'value ' + (pendentes > 0 ? 'warn' : 'ok');
+    document.getElementById('badgePreco').textContent = pendentes;
+    document.getElementById('badgePreco').className = 'badge-count ' + (pendentes > 0 ? '' : 'zero');
+    renderTabelaPreco(itens);
+  }catch(e){ renderTabelaPreco([]); }
+}
+
+function renderTabelaPreco(itens){
+  const wrap = document.getElementById('tabelaPreco');
+  if(!itens.length){
+    wrap.innerHTML = '<div class="hero-empty"><div class="ico">✅</div><div>Nenhuma divergência de preço.</div></div>';
+    return;
+  }
+  const rows = itens.map(item => {
+    const difPromo = (item.preco_shinsei - item.preco_marketplace_promocional).toFixed(2);
+    const difVirt = (item.preco_virtual_shinsei - item.preco_marketplace).toFixed(2);
+    const acoes = item.status === 'pendente' ? `
+      <div class="actions-row">
+        <button class="btn success sm" onclick="corrigirPreco('${item.id}')">✅ Corrigir</button>
+        <button class="btn secondary sm" onclick="ignorarPreco('${item.id}')">🚫 Ignorar</button>
+      </div>` : '—';
+    return `<tr>
+      <td><strong>${item.sku||'—'}</strong></td>
+      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.nome||'—'}</td>
+      <td>${item.canal||'—'}</td>
+      <td style="color:#22c55e">R$ ${(item.preco_shinsei||0).toFixed(2).replace('.',',')}</td>
+      <td style="color:#4f8cff">R$ ${(item.preco_marketplace_promocional||0).toFixed(2).replace('.',',')}</td>
+      <td class="${parseFloat(difPromo) > 0 ? 'dif-pos' : 'dif-neg'}">R$ ${difPromo.replace('.',',')}</td>
+      <td style="color:#f5b301">R$ ${(item.preco_virtual_shinsei||0).toFixed(2).replace('.',',')}</td>
+      <td style="color:#9fb0d9">R$ ${(item.preco_marketplace||0).toFixed(2).replace('.',',')}</td>
+      <td><span class="tag ${item.status||'pendente'}">${item.status||'pendente'}</span></td>
+      <td>${acoes}</td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr>
+      <th>SKU</th><th>Produto</th><th>Canal</th>
+      <th>Preço Shinsei</th><th>Preço Marketplace</th><th>Dif. Promo</th>
+      <th>Virtual Shinsei</th><th>Preço Marketplace</th>
+      <th>Status</th><th>Ação</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function filtrarPreco(status, btn){
+  filtroPreco = status;
+  document.querySelectorAll('#secao-preco .filtro-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  carregarPrecos();
+}
+
+async function conferirPrecos(){
+  try{
+    const res = await fetch('/auditoria/conferir-precos', {method:'POST'});
+    const data = await res.json();
+    if(data.ok) mostrarNotice(`Preços: ${data.verificados} verificados, ${data.novas_divergencias} novas divergências.`, data.novas_divergencias > 0 ? 'warn' : 'ok');
+    carregarPrecos();
+  }catch(e){ mostrarNotice('Endpoint de conferência de preços não disponível ainda.', 'warn'); }
+}
+
+async function corrigirPreco(id){
+  if(!confirm('Corrigir preço no marketplace com os valores do Shinsei?')) return;
+  try{
+    const res = await fetch('/auditoria/corrigir-preco/' + id, {method:'POST'});
+    const data = await res.json();
+    mostrarNotice(data.ok ? 'Preço corrigido!' : 'Erro: ' + (data.detail||'falha'), data.ok ? 'ok' : 'err');
+    carregarPrecos();
+  }catch(e){ mostrarNotice('Erro de conexão.','err'); }
+}
+
+async function ignorarPreco(id){
+  try{
+    await fetch('/auditoria/ignorar-preco/' + id, {method:'POST'});
+    carregarPrecos();
+  }catch(e){}
+}
+
+// ─── CONFERIR TUDO ───────────────────────────────────────
+async function conferirTudo(){
+  const btn = document.getElementById('btnConferirTudo');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin">⏳</span> Conferindo...';
+  await conferirEstoque();
+  await conferirPrecos();
+  btn.disabled = false;
+  btn.innerHTML = '🔍 Conferir tudo agora';
+}
+
+// ─── LIMPAR ──────────────────────────────────────────────
+async function limparResolvidos(){
+  if(!confirm('Remover todos os itens corrigidos e ignorados das filas?')) return;
+  try{
+    await fetch('/estoque/limpar-resolvidos', {method:'POST'});
+    await fetch('/auditoria/limpar-resolvidos', {method:'POST'}).catch(()=>{});
+    mostrarNotice('Itens resolvidos removidos.','ok');
+    carregarEstoque();
+    carregarPrecos();
+  }catch(e){}
+}
+
+// ─── MERCADO PAGO TOKEN ──────────────────────────────────
+async function salvarMPToken(){
+  const token = document.getElementById('mpAccessToken').value.trim();
+  if(!token){ alert('Cole o Access Token do Mercado Pago.'); return; }
+  try{
+    const res = await fetch('/auditoria/mp-token', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({access_token: token})
+    });
+    const data = await res.json();
+    mostrarNotice(data.ok ? 'Token do Mercado Pago salvo!' : 'Erro ao salvar token.', data.ok ? 'ok' : 'err');
+  }catch(e){ mostrarNotice('Erro de conexão.','err'); }
+}
+
+// ─── INIT ────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  carregarEstoque();
+  carregarPrecos();
+});
+</script>
+</body>
+</html>

@@ -61,6 +61,8 @@ PUBLIC_PATHS = {
     "/openapi.json",
     "/redoc",
     "/webhooks/bling",
+    "/auditoria/fila",
+    "/auditoria-automatica",
     "/integracao/preview",
     "/fila/lista",
     "/fila/adicionar",
