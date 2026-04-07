@@ -106,6 +106,11 @@
       <div class="value warn" id="statPreco">—</div>
       <div class="sub">divergências pendentes</div>
     </div>
+    <div class="stat" onclick="mostrarSecao('estoque-ml', this)">
+      <div class="label">🛒 Estoque ML</div>
+      <div class="value warn" id="statEstoqueML">—</div>
+      <div class="sub">pendentes (sem SKU + divergências)</div>
+    </div>
     <div class="stat" onclick="mostrarSecao('comissao', this)">
       <div class="label">📊 Comissão</div>
       <div class="value" id="statComissao">—</div>
@@ -137,6 +142,29 @@
     </div>
     <div id="tabelaEstoque">
       <div class="hero-empty"><div class="ico">📦</div><div>Nenhuma divergência de estoque.</div></div>
+    </div>
+  </div>
+
+  <!-- SEÇÃO: ESTOQUE ML -->
+  <div class="secao" id="secao-estoque-ml" style="display:none">
+    <div class="secao-header">
+      <div class="secao-titulo">
+        🛒 Conferência de Estoque ML
+        <span class="badge-count zero" id="badgeEstoqueML">0</span>
+      </div>
+      <div class="secao-actions">
+        <div class="filtros">
+          <button class="filtro-btn active" onclick="filtrarML('', '', this)">Todos</button>
+          <button class="filtro-btn" onclick="filtrarML('pendente', '', this)">Pendentes</button>
+          <button class="filtro-btn" onclick="filtrarML('', 'sem_sku', this)">Sem SKU</button>
+          <button class="filtro-btn" onclick="filtrarML('', 'divergencia', this)">Divergências</button>
+          <button class="filtro-btn" onclick="filtrarML('corrigido', '', this)">Corrigidos</button>
+        </div>
+        <button class="btn sm warn" onclick="conferirEstoqueML()">🔄 Conferir ML</button>
+      </div>
+    </div>
+    <div id="tabelaEstoqueML">
+      <div class="hero-empty"><div class="ico">🛒</div><div>Clique em "Conferir ML" para iniciar.</div></div>
     </div>
   </div>
 
@@ -194,7 +222,7 @@
 
 <script>
 // ─── NAVEGAÇÃO ────────────────────────────────────────────
-const secoes = ['estoque','preco','comissao','frete'];
+const secoes = ['estoque','estoque-ml','preco','comissao','frete'];
 let filtroEstoque = '';
 let filtroPreco = '';
 
@@ -423,9 +451,146 @@ async function salvarMPToken(){
   }catch(e){ mostrarNotice('Erro de conexão.','err'); }
 }
 
+// ─── ESTOQUE ML ──────────────────────────────────────────
+let filtroMLStatus = '';
+let filtroMLTipo = '';
+
+async function carregarEstoqueML(){
+  try{
+    let url = '/auditoria/ml-estoque';
+    const params = [];
+    if(filtroMLStatus) params.push('status='+filtroMLStatus);
+    if(filtroMLTipo) params.push('tipo='+filtroMLTipo);
+    if(params.length) url += '?' + params.join('&');
+    const res = await fetch(url);
+    if(!res.ok){ return; }
+    const data = await res.json();
+    const itens = data.itens || [];
+    const stats = data.stats || {};
+    const pendentes = (stats.pendente||0);
+    const semSku = (stats.sem_sku||0);
+    document.getElementById('statEstoqueML').textContent = pendentes;
+    document.getElementById('statEstoqueML').className = 'value ' + (pendentes > 0 ? 'warn' : 'ok');
+    document.getElementById('badgeEstoqueML').textContent = pendentes;
+    document.getElementById('badgeEstoqueML').className = 'badge-count ' + (pendentes > 0 ? '' : 'zero');
+    renderTabelaEstoqueML(itens);
+  }catch(e){ console.error(e); }
+}
+
+function renderTabelaEstoqueML(itens){
+  const wrap = document.getElementById('tabelaEstoqueML');
+  if(!itens.length){
+    wrap.innerHTML = '<div class="hero-empty"><div class="ico">✅</div><div>Nenhuma divergência de estoque ML.</div></div>';
+    return;
+  }
+  const rows = itens.map(item => {
+    const isSemSku = item.tipo === 'sem_sku';
+    const permalink = item.permalink ? `<a href="${item.permalink}" target="_blank" style="color:var(--accent);font-size:11px">Ver anúncio</a>` : '';
+
+    let acoes = '—';
+    if(item.status === 'pendente'){
+      if(isSemSku){
+        acoes = `<div class="actions-row">
+          <input type="text" placeholder="SKU Bling" id="sku_input_${item.id}" style="padding:6px;border-radius:8px;border:1px solid var(--warn);background:#0d1630;color:#fff;width:120px;font-size:12px"/>
+          <button class="btn success sm" onclick="cadastrarSKU('${item.id}')">💾 Salvar SKU</button>
+          <button class="btn secondary sm" onclick="ignorarML('${item.id}')">🚫</button>
+        </div>`;
+      } else {
+        acoes = `<div class="actions-row">
+          <button class="btn success sm" onclick="corrigirML('${item.id}')">✅ Corrigir</button>
+          <button class="btn secondary sm" onclick="ignorarML('${item.id}')">🚫 Ignorar</button>
+        </div>`;
+      }
+    }
+
+    const estoqueBlinkCell = isSemSku ? '<td style="color:var(--muted)">—</td>' : `<td style="color:#22c55e;font-weight:700">${item.estoque_bling??'—'}</td>`;
+    const difCell = isSemSku ? '<td><span class="tag alerta">Sem SKU</span></td>' : `<td class="${(item.diferenca||0) > 0 ? 'dif-pos' : 'dif-neg'}">${(item.diferenca||0) > 0 ? '+' : ''}${item.diferenca??'—'}</td>`;
+
+    return `<tr>
+      <td><strong>${item.item_id_ml||'—'}</strong><br/>${permalink}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${item.titulo||''}">${item.titulo||'—'}</td>
+      <td>${item.sku||'<span style="color:var(--warn)">AUSENTE</span>'}</td>
+      ${estoqueBlinkCell}
+      <td style="color:#4f8cff;font-weight:700">${item.estoque_ml??'—'}</td>
+      ${difCell}
+      <td><span class="tag ${item.status||'pendente'}">${item.status||'pendente'}</span></td>
+      <td style="font-size:11px;color:var(--muted)">${item.criado_em ? new Date(item.criado_em).toLocaleString('pt-BR') : ''}</td>
+      <td>${acoes}</td>
+    </tr>`;
+  }).join('');
+
+  wrap.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>Item ML</th><th>Título</th><th>SKU</th><th>Bling</th><th>ML</th><th>Diferença</th><th>Status</th><th>Detectado</th><th>Ação</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function filtrarML(status, tipo, btn){
+  filtroMLStatus = status;
+  filtroMLTipo = tipo;
+  document.querySelectorAll('#secao-estoque-ml .filtro-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  carregarEstoqueML();
+}
+
+async function conferirEstoqueML(){
+  const btn = document.getElementById('btnConferirTudo');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin">⏳</span> Conferindo ML...';
+  try{
+    const res = await fetch('/auditoria/ml-estoque/conferir', {method:'POST'});
+    const data = await res.json();
+    if(data.ok){
+      mostrarNotice(
+        `ML: ${data.verificados} anúncios verificados — ${data.sem_sku} sem SKU, ${data.novas_divergencias} divergências de estoque.`,
+        (data.sem_sku + data.novas_divergencias) > 0 ? 'warn' : 'ok'
+      );
+    }
+    carregarEstoqueML();
+  }catch(e){ mostrarNotice('Erro ao conferir estoque ML.','err'); }
+  finally{
+    btn.disabled = false;
+    btn.innerHTML = '🔍 Conferir tudo agora';
+  }
+}
+
+async function corrigirML(id){
+  if(!confirm('Corrigir estoque no ML com o valor do Bling?')) return;
+  try{
+    const res = await fetch('/auditoria/ml-estoque/corrigir/' + id, {method:'POST'});
+    const data = await res.json();
+    mostrarNotice(data.ok ? 'Estoque corrigido no ML!' : 'Erro: '+(data.detail||'falha'), data.ok?'ok':'err');
+    carregarEstoqueML();
+  }catch(e){ mostrarNotice('Erro de conexão.','err'); }
+}
+
+async function cadastrarSKU(id){
+  const input = document.getElementById('sku_input_' + id);
+  const sku = input ? input.value.trim() : '';
+  if(!sku){ alert('Digite o SKU do Bling.'); return; }
+  try{
+    const res = await fetch('/auditoria/ml-estoque/cadastrar-sku/' + id, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({sku})
+    });
+    const data = await res.json();
+    mostrarNotice(data.ok ? `SKU ${sku} cadastrado no ML!` : 'Erro: '+(data.detail||'falha'), data.ok?'ok':'err');
+    carregarEstoqueML();
+  }catch(e){ mostrarNotice('Erro de conexão.','err'); }
+}
+
+async function ignorarML(id){
+  try{
+    await fetch('/auditoria/ml-estoque/ignorar/' + id, {method:'POST'});
+    carregarEstoqueML();
+  }catch(e){}
+}
+
 // ─── INIT ────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   carregarEstoque();
+  carregarEstoqueML();
   carregarPrecos();
 });
 </script>

@@ -61,6 +61,7 @@ PUBLIC_PATHS = {
     "/openapi.json",
     "/redoc",
     "/webhooks/bling",
+    "/auditoria/ml-estoque",
     "/auditoria/fila",
     "/auditoria-automatica",
     "/integracao/preview",
@@ -81,9 +82,11 @@ PUBLIC_PATHS = {
 PUBLIC_PREFIXES = (
     "/fila/aprovar/",
     "/fila/rejeitar/",
+    "/auditoria/ml-estoque/",
     "/static/",
     "/fila/aprovar/",
     "/fila/rejeitar/",
+    "/auditoria/ml-estoque/",
     "/pages/",
 )
 

@@ -43,6 +43,8 @@ from routes.batch import router as batch_router
 from routes.ml_unificado import router as ml_router
 from monitoring import router as monitoring_router
 app.include_router(batch_router)
+from routes.mercado_livre import router as ml_page_router
+app.include_router(ml_page_router)
 app.include_router(ml_router)
 app.include_router(monitoring_router)
 
@@ -802,6 +804,62 @@ def auditoria_limpar():
     removidos = limpar_resolvidos()
     return {"ok": True, "removidos": removidos, "stats": stats_fila_auditoria()}
 
+
+@app.get("/auditoria/ml-estoque")
+def auditoria_ml_estoque_lista(status: str = "", tipo: str = ""):
+    from ml_estoque_conferencia import carregar_fila_estoque_ml, stats_fila_estoque_ml
+    itens = carregar_fila_estoque_ml()
+    if status:
+        itens = [i for i in itens if i.get("status") == status]
+    if tipo:
+        itens = [i for i in itens if i.get("tipo") == tipo]
+    return {"itens": itens, "stats": stats_fila_estoque_ml()}
+
+@app.post("/auditoria/ml-estoque/conferir")
+def auditoria_ml_estoque_conferir():
+    from ml_estoque_conferencia import conferir_estoques_ml
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="Bling não disponível.")
+    try:
+        client = BlingClient()
+        return conferir_estoques_ml(client, max_paginas=10)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/auditoria/ml-estoque/corrigir/{item_id}")
+def auditoria_ml_estoque_corrigir(item_id: str):
+    from ml_estoque_conferencia import corrigir_estoque_ml
+    resultado = corrigir_estoque_ml(item_id)
+    if not resultado.get("ok"):
+        raise HTTPException(status_code=400, detail=resultado.get("erro", "Falha."))
+    return {"ok": True}
+
+@app.post("/auditoria/ml-estoque/cadastrar-sku/{item_id}")
+async def auditoria_ml_cadastrar_sku(item_id: str, request: Request):
+    from ml_estoque_conferencia import cadastrar_sku_ml
+    data = await request.json()
+    sku = data.get("sku", "").strip()
+    if not sku:
+        raise HTTPException(status_code=400, detail="SKU obrigatório.")
+    client = BlingClient() if BlingClient else None
+    resultado = cadastrar_sku_ml(item_id, sku, client)
+    if not resultado.get("ok"):
+        raise HTTPException(status_code=400, detail=resultado.get("erro", "Falha."))
+    return resultado
+
+@app.post("/auditoria/ml-estoque/ignorar/{item_id}")
+def auditoria_ml_estoque_ignorar(item_id: str):
+    from ml_estoque_conferencia import ignorar_item_ml
+    return ignorar_item_ml(item_id)
+
+@app.post("/auditoria/ml-estoque/limpar-resolvidos")
+def auditoria_ml_limpar_resolvidos():
+    from ml_estoque_conferencia import carregar_fila_estoque_ml, salvar_fila_estoque_ml, stats_fila_estoque_ml
+    itens = carregar_fila_estoque_ml()
+    itens = [i for i in itens if i.get("status") == "pendente"]
+    salvar_fila_estoque_ml(itens)
+    return {"ok": True, "stats": stats_fila_estoque_ml()}
+
 if not FILA_PATH.exists(): ...
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -1289,6 +1347,62 @@ def auditoria_limpar():
     removidos = limpar_resolvidos()
     return {"ok": True, "removidos": removidos, "stats": stats_fila_auditoria()}
 
+
+@app.get("/auditoria/ml-estoque")
+def auditoria_ml_estoque_lista(status: str = "", tipo: str = ""):
+    from ml_estoque_conferencia import carregar_fila_estoque_ml, stats_fila_estoque_ml
+    itens = carregar_fila_estoque_ml()
+    if status:
+        itens = [i for i in itens if i.get("status") == status]
+    if tipo:
+        itens = [i for i in itens if i.get("tipo") == tipo]
+    return {"itens": itens, "stats": stats_fila_estoque_ml()}
+
+@app.post("/auditoria/ml-estoque/conferir")
+def auditoria_ml_estoque_conferir():
+    from ml_estoque_conferencia import conferir_estoques_ml
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="Bling não disponível.")
+    try:
+        client = BlingClient()
+        return conferir_estoques_ml(client, max_paginas=10)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/auditoria/ml-estoque/corrigir/{item_id}")
+def auditoria_ml_estoque_corrigir(item_id: str):
+    from ml_estoque_conferencia import corrigir_estoque_ml
+    resultado = corrigir_estoque_ml(item_id)
+    if not resultado.get("ok"):
+        raise HTTPException(status_code=400, detail=resultado.get("erro", "Falha."))
+    return {"ok": True}
+
+@app.post("/auditoria/ml-estoque/cadastrar-sku/{item_id}")
+async def auditoria_ml_cadastrar_sku(item_id: str, request: Request):
+    from ml_estoque_conferencia import cadastrar_sku_ml
+    data = await request.json()
+    sku = data.get("sku", "").strip()
+    if not sku:
+        raise HTTPException(status_code=400, detail="SKU obrigatório.")
+    client = BlingClient() if BlingClient else None
+    resultado = cadastrar_sku_ml(item_id, sku, client)
+    if not resultado.get("ok"):
+        raise HTTPException(status_code=400, detail=resultado.get("erro", "Falha."))
+    return resultado
+
+@app.post("/auditoria/ml-estoque/ignorar/{item_id}")
+def auditoria_ml_estoque_ignorar(item_id: str):
+    from ml_estoque_conferencia import ignorar_item_ml
+    return ignorar_item_ml(item_id)
+
+@app.post("/auditoria/ml-estoque/limpar-resolvidos")
+def auditoria_ml_limpar_resolvidos():
+    from ml_estoque_conferencia import carregar_fila_estoque_ml, salvar_fila_estoque_ml, stats_fila_estoque_ml
+    itens = carregar_fila_estoque_ml()
+    itens = [i for i in itens if i.get("status") == "pendente"]
+    salvar_fila_estoque_ml(itens)
+    return {"ok": True, "stats": stats_fila_estoque_ml()}
+
 if not FILA_PATH.exists(): _save_json(FILA_PATH, [])
 if not CFG_PATH.exists(): _save_json(CFG_PATH, DEFAULT_CFG)
 
@@ -1416,3 +1530,4 @@ def regras_modelo_download():
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename="Shinsei_Regras_Modelo.xlsx",
     )
+
