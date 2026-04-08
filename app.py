@@ -876,14 +876,7 @@ def integracoes_page():
         return HTMLResponse(html_file.read_text(encoding="utf-8"))
     raise HTTPException(status_code=404)
 
-@app.get("/auditoria/mp-status")
-def auditoria_mp_status():
-    from preco_conferencia import carregar_mp_token
-    import json
-    from pathlib import Path as _P
-    mp = _P("data/mp_token.json")
-    data = json.loads(mp.read_text(encoding="utf-8")) if mp.exists() else {}
-    return {"configurado": bool(carregar_mp_token()), "salvo_em": data.get("salvo_em")}
+
 
 @app.get("/ml/status")
 def ml_status_endpoint():
@@ -1455,12 +1448,12 @@ def integracoes_page():
 
 @app.get("/auditoria/mp-status")
 def auditoria_mp_status():
-    from preco_conferencia import carregar_mp_token
-    import json
+    import json as _json
     from pathlib import Path as _P
     mp = _P("data/mp_token.json")
-    data = json.loads(mp.read_text(encoding="utf-8")) if mp.exists() else {}
-    return {"configurado": bool(carregar_mp_token()), "salvo_em": data.get("salvo_em")}
+    data = _json.loads(mp.read_text(encoding="utf-8")) if mp.exists() else {}
+    token = data.get("access_token", "")
+    return {"configurado": bool(token) and token != ".", "salvo_em": data.get("salvo_em")}
 
 @app.get("/ml/status")
 def ml_status_endpoint():
@@ -1598,4 +1591,6 @@ def regras_modelo_download():
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename="Shinsei_Regras_Modelo.xlsx",
     )
+
+
 
