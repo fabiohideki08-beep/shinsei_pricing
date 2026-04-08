@@ -111,6 +111,11 @@
       <div class="value warn" id="statEstoqueML">—</div>
       <div class="sub">pendentes (sem SKU + divergências)</div>
     </div>
+    <div class="stat" onclick="mostrarSecao('shopify', this)">
+      <div class="label">🛍️ Shopify</div>
+      <div class="value warn" id="statShopify">—</div>
+      <div class="sub">divergências pendentes</div>
+    </div>
     <div class="stat" onclick="mostrarSecao('comissao', this)">
       <div class="label">📊 Comissão</div>
       <div class="value" id="statComissao">—</div>
@@ -175,6 +180,36 @@
     </div>
   </div>
 
+  <!-- SEÇÃO: SHOPIFY -->
+  <div class="secao" id="secao-shopify" style="display:none">
+    <div class="secao-header">
+      <div class="secao-titulo">
+        🛍️ Conferência Shopify
+        <span class="badge-count zero" id="badgeShopify">0</span>
+      </div>
+      <div class="secao-actions">
+        <div class="filtros">
+          <button class="filtro-btn active" onclick="filtrarShopify('', '', this)">Todos</button>
+          <button class="filtro-btn" onclick="filtrarShopify('pendente', '', this)">Pendentes</button>
+          <button class="filtro-btn" onclick="filtrarShopify('', 'estoque', this)">Estoque</button>
+          <button class="filtro-btn" onclick="filtrarShopify('', 'preco', this)">Preço</button>
+          <button class="filtro-btn" onclick="filtrarShopify('corrigido', '', this)">Corrigidos</button>
+        </div>
+        <button class="btn sm warn" id="btnConferirShopify" onclick="conferirShopify()">🔄 Conferir Shopify</button>
+        <button class="btn sm success" onclick="corrigirTodosShopify()">✅ Corrigir todos</button>
+      </div>
+    </div>
+    <div id="progressoShopify" style="display:none;padding:10px;background:rgba(79,140,255,.08);border-radius:12px;margin-bottom:12px;font-size:13px;color:var(--muted)">
+      <div id="progressoShopifyTexto">Aguardando...</div>
+      <div style="height:6px;background:var(--line);border-radius:4px;margin-top:8px">
+        <div id="progressoShopifyBar" style="height:6px;background:var(--accent);border-radius:4px;width:0%;transition:width .3s"></div>
+      </div>
+    </div>
+    <div id="tabelaShopify">
+      <div class="hero-empty"><div class="ico">🛍️</div><div>Clique em "Conferir Shopify" para iniciar.</div></div>
+    </div>
+  </div>
+
   <!-- SEÇÃO: PREÇO -->
   <div class="secao" id="secao-preco" style="display:none">
     <div class="secao-header">
@@ -229,7 +264,7 @@
 
 <script>
 // ─── NAVEGAÇÃO ────────────────────────────────────────────
-const secoes = ['estoque','estoque-ml','preco','comissao','frete'];
+const secoes = ['estoque','estoque-ml','shopify','preco','comissao','frete'];
 let filtroEstoque = '';
 let filtroPreco = '';
 
@@ -436,9 +471,13 @@ async function limparResolvidos(){
   if(!confirm('Remover todos os itens corrigidos e ignorados das filas?')) return;
   try{
     await fetch('/estoque/limpar-resolvidos', {method:'POST'});
+    await fetch('/auditoria/ml-estoque/limpar-resolvidos', {method:'POST'}).catch(()=>{});
+    await fetch('/auditoria/shopify/limpar-resolvidos', {method:'POST'}).catch(()=>{});
     await fetch('/auditoria/limpar-resolvidos', {method:'POST'}).catch(()=>{});
     mostrarNotice('Itens resolvidos removidos.','ok');
     carregarEstoque();
+    carregarEstoqueML();
+    carregarShopify();
     carregarPrecos();
   }catch(e){}
 }
@@ -677,10 +716,157 @@ async function ignorarML(id){
   }catch(e){}
 }
 
+// ─── SHOPIFY ─────────────────────────────────────────────
+let filtroShopifyStatus = '';
+let filtroShopifyTipo = '';
+
+async function carregarShopify(){
+  try{
+    let url = '/auditoria/shopify';
+    const params = [];
+    if(filtroShopifyStatus) params.push('status='+filtroShopifyStatus);
+    if(filtroShopifyTipo) params.push('tipo='+filtroShopifyTipo);
+    if(params.length) url += '?' + params.join('&');
+    const res = await fetch(url);
+    if(!res.ok) return;
+    const data = await res.json();
+    const itens = data.itens || [];
+    const stats = data.stats || {};
+    const pendentes = stats.pendente || 0;
+    document.getElementById('statShopify').textContent = pendentes;
+    document.getElementById('statShopify').className = 'value ' + (pendentes > 0 ? 'warn' : 'ok');
+    document.getElementById('badgeShopify').textContent = pendentes;
+    document.getElementById('badgeShopify').className = 'badge-count ' + (pendentes > 0 ? '' : 'zero');
+    renderTabelaShopify(itens);
+  }catch(e){}
+}
+
+function renderTabelaShopify(itens){
+  const wrap = document.getElementById('tabelaShopify');
+  if(!itens.length){
+    wrap.innerHTML = '<div class="hero-empty"><div class="ico">✅</div><div>Nenhuma divergência Shopify.</div></div>';
+    return;
+  }
+  const rows = itens.map(item => {
+    const isEstoque = item.tipo === 'estoque';
+    const acoes = item.status === 'pendente' ? `
+      <div class="actions-row">
+        <button class="btn success sm" onclick="corrigirShopify('${item.id}')">✅ Corrigir</button>
+        <button class="btn secondary sm" onclick="ignorarShopify('${item.id}')">🚫 Ignorar</button>
+      </div>` : '—';
+
+    const detalhe = isEstoque
+      ? `<td style="color:#22c55e;font-weight:700">${item.estoque_bling??'—'}</td>
+         <td style="color:#4f8cff;font-weight:700">${item.estoque_shopify??'—'}</td>`
+      : `<td style="color:#22c55e;font-weight:700">R$ ${(item.preco_bling||0).toFixed(2).replace('.',',')}</td>
+         <td style="color:#4f8cff;font-weight:700">R$ ${(item.preco_shopify||0).toFixed(2).replace('.',',')}</td>`;
+
+    const dif = item.diferenca || 0;
+    return `<tr>
+      <td><strong>${item.sku||'—'}</strong></td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.titulo||'—'}</td>
+      <td><span class="tag ${item.tipo==='estoque'?'pendente':'corrigido'}">${item.tipo||'—'}</span></td>
+      ${detalhe}
+      <td class="${dif > 0 ? 'dif-pos' : 'dif-neg'}">${dif > 0 ? '+' : ''}${dif}</td>
+      <td><span class="tag ${item.status||'pendente'}">${item.status||'pendente'}</span></td>
+      <td style="font-size:11px;color:var(--muted)">${item.criado_em ? new Date(item.criado_em).toLocaleString('pt-BR') : ''}</td>
+      <td>${acoes}</td>
+    </tr>`;
+  }).join('');
+
+  wrap.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>SKU</th><th>Produto</th><th>Tipo</th><th>Bling</th><th>Shopify</th><th>Diferença</th><th>Status</th><th>Detectado</th><th>Ação</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function filtrarShopify(status, tipo, btn){
+  filtroShopifyStatus = status;
+  filtroShopifyTipo = tipo;
+  document.querySelectorAll('#secao-shopify .filtro-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  carregarShopify();
+}
+
+async function conferirShopify(){
+  const btn = document.getElementById('btnConferirShopify');
+  const btnTudo = document.getElementById('btnConferirTudo');
+  const prog = document.getElementById('progressoShopify');
+  const progTexto = document.getElementById('progressoShopifyTexto');
+  const progBar = document.getElementById('progressoShopifyBar');
+
+  if(btn) btn.disabled = true;
+  if(btnTudo){ btnTudo.disabled = true; btnTudo.innerHTML = '<span class="spin">⏳</span> Conferindo...'; }
+  prog.style.display = 'block';
+  progBar.style.width = '0%';
+  progTexto.textContent = 'Iniciando conferência Shopify...';
+
+  let progSim = 0;
+  const iv = setInterval(() => {
+    if(progSim < 85){ progSim += 2; progBar.style.width = progSim + '%'; }
+    progTexto.textContent = `Varrendo produtos Shopify... (${Math.floor(progSim*5)} aprox.)`;
+  }, 1000);
+
+  try{
+    const res = await fetch('/auditoria/shopify/conferir', {method:'POST'});
+    const data = await res.json();
+    clearInterval(iv);
+    progBar.style.width = '100%';
+    if(data.ok){
+      const tem = (data.divergencias_estoque + data.divergencias_preco) > 0;
+      progBar.style.background = tem ? 'var(--warn)' : 'var(--ok)';
+      progTexto.textContent = `Concluído! ${data.verificados} verificados — ${data.divergencias_estoque} div. estoque, ${data.divergencias_preco} div. preço.`;
+      mostrarNotice(`Shopify: ${data.verificados} verificados — ${data.divergencias_estoque} divergências de estoque, ${data.divergencias_preco} de preço.`, tem ? 'warn' : 'ok');
+    }
+    carregarShopify();
+  }catch(e){
+    clearInterval(iv);
+    mostrarNotice('Erro ao conferir Shopify.','err');
+  }finally{
+    if(btn) btn.disabled = false;
+    if(btnTudo){ btnTudo.disabled = false; btnTudo.innerHTML = '🔍 Conferir tudo agora'; }
+    setTimeout(() => { prog.style.display = 'none'; progBar.style.background = 'var(--accent)'; }, 6000);
+  }
+}
+
+async function corrigirShopify(id){
+  try{
+    const res = await fetch('/auditoria/shopify/corrigir/' + id, {method:'POST'});
+    const data = await res.json();
+    mostrarNotice(data.ok ? 'Corrigido na Shopify!' : 'Erro: '+(data.detail||'falha'), data.ok?'ok':'err');
+    carregarShopify();
+  }catch(e){ mostrarNotice('Erro.','err'); }
+}
+
+async function corrigirTodosShopify(){
+  if(!confirm('Corrigir TODAS as divergências pendentes na Shopify?')) return;
+  const res = await fetch('/auditoria/shopify?status=pendente');
+  const data = await res.json();
+  const itens = data.itens || [];
+  if(!itens.length){ mostrarNotice('Nenhuma divergência pendente.','ok'); return; }
+
+  let ok = 0, err = 0;
+  for(const item of itens){
+    try{
+      const r = await fetch('/auditoria/shopify/corrigir/' + item.id, {method:'POST'});
+      const d = await r.json();
+      if(d.ok) ok++; else err++;
+    }catch(e){ err++; }
+    await new Promise(r => setTimeout(r, 500));
+  }
+  mostrarNotice(`Shopify: ${ok} corrigidos, ${err} erros.`, err > 0 ? 'warn' : 'ok');
+  carregarShopify();
+}
+
+async function ignorarShopify(id){
+  try{ await fetch('/auditoria/shopify/ignorar/' + id, {method:'POST'}); carregarShopify(); }catch(e){}
+}
+
 // ─── INIT ────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   carregarEstoque();
   carregarEstoqueML();
+  carregarShopify();
   carregarPrecos();
 });
 </script>

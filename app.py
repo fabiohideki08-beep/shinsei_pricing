@@ -887,6 +887,64 @@ def ml_status_endpoint():
     tokens = json.loads(tp.read_text(encoding="utf-8"))
     at = tokens.get("access_token", "")
     return {"connected": bool(at) and at != ".", "seller_id": tokens.get("user_id"), "expires_at": tokens.get("expires_at")}
+
+@app.get("/auditoria/shopify")
+def auditoria_shopify_lista(status: str = "", tipo: str = ""):
+    from shopify_conferencia import carregar_fila_shopify, stats_fila_shopify
+    itens = carregar_fila_shopify()
+    if status:
+        itens = [i for i in itens if i.get("status") == status]
+    if tipo:
+        itens = [i for i in itens if i.get("tipo") == tipo]
+    return {"itens": itens, "stats": stats_fila_shopify()}
+
+@app.post("/auditoria/shopify/conferir")
+def auditoria_shopify_conferir():
+    from shopify_conferencia import conferir_shopify
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="Bling nao disponivel.")
+    global _scheduler_pausado
+    _scheduler_pausado = True
+    try:
+        client = BlingClient()
+        resultado = conferir_shopify(client)
+        return resultado
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        _scheduler_pausado = False
+
+@app.post("/auditoria/shopify/corrigir/{item_id}")
+def auditoria_shopify_corrigir(item_id: str):
+    from shopify_conferencia import corrigir_shopify
+    resultado = corrigir_shopify(item_id)
+    if not resultado.get("ok"):
+        raise HTTPException(status_code=400, detail=resultado.get("erro", "Falha."))
+    return {"ok": True}
+
+@app.post("/auditoria/shopify/ignorar/{item_id}")
+def auditoria_shopify_ignorar(item_id: str):
+    from shopify_conferencia import ignorar_shopify
+    return ignorar_shopify(item_id)
+
+@app.post("/auditoria/shopify/limpar-resolvidos")
+def auditoria_shopify_limpar():
+    from shopify_conferencia import carregar_fila_shopify, salvar_fila_shopify, stats_fila_shopify
+    itens = carregar_fila_shopify()
+    itens = [i for i in itens if i.get("status") == "pendente"]
+    salvar_fila_shopify(itens)
+    return {"ok": True, "stats": stats_fila_shopify()}
+
+@app.post("/auditoria/shopify/token")
+async def auditoria_shopify_token(request: Request):
+    from shopify_conferencia import salvar_shopify_token
+    data = await request.json()
+    token = data.get("access_token", "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Token invalido.")
+    salvar_shopify_token(token)
+    return {"ok": True}
+
 if not FILA_PATH.exists(): ...
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -1464,6 +1522,64 @@ def ml_status_endpoint():
     tokens = json.loads(tp.read_text(encoding="utf-8"))
     at = tokens.get("access_token", "")
     return {"connected": bool(at) and at != ".", "seller_id": tokens.get("user_id"), "expires_at": tokens.get("expires_at")}
+
+@app.get("/auditoria/shopify")
+def auditoria_shopify_lista(status: str = "", tipo: str = ""):
+    from shopify_conferencia import carregar_fila_shopify, stats_fila_shopify
+    itens = carregar_fila_shopify()
+    if status:
+        itens = [i for i in itens if i.get("status") == status]
+    if tipo:
+        itens = [i for i in itens if i.get("tipo") == tipo]
+    return {"itens": itens, "stats": stats_fila_shopify()}
+
+@app.post("/auditoria/shopify/conferir")
+def auditoria_shopify_conferir():
+    from shopify_conferencia import conferir_shopify
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="Bling nao disponivel.")
+    global _scheduler_pausado
+    _scheduler_pausado = True
+    try:
+        client = BlingClient()
+        resultado = conferir_shopify(client)
+        return resultado
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        _scheduler_pausado = False
+
+@app.post("/auditoria/shopify/corrigir/{item_id}")
+def auditoria_shopify_corrigir(item_id: str):
+    from shopify_conferencia import corrigir_shopify
+    resultado = corrigir_shopify(item_id)
+    if not resultado.get("ok"):
+        raise HTTPException(status_code=400, detail=resultado.get("erro", "Falha."))
+    return {"ok": True}
+
+@app.post("/auditoria/shopify/ignorar/{item_id}")
+def auditoria_shopify_ignorar(item_id: str):
+    from shopify_conferencia import ignorar_shopify
+    return ignorar_shopify(item_id)
+
+@app.post("/auditoria/shopify/limpar-resolvidos")
+def auditoria_shopify_limpar():
+    from shopify_conferencia import carregar_fila_shopify, salvar_fila_shopify, stats_fila_shopify
+    itens = carregar_fila_shopify()
+    itens = [i for i in itens if i.get("status") == "pendente"]
+    salvar_fila_shopify(itens)
+    return {"ok": True, "stats": stats_fila_shopify()}
+
+@app.post("/auditoria/shopify/token")
+async def auditoria_shopify_token(request: Request):
+    from shopify_conferencia import salvar_shopify_token
+    data = await request.json()
+    token = data.get("access_token", "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Token invalido.")
+    salvar_shopify_token(token)
+    return {"ok": True}
+
 if not FILA_PATH.exists(): _save_json(FILA_PATH, [])
 if not CFG_PATH.exists(): _save_json(CFG_PATH, DEFAULT_CFG)
 
