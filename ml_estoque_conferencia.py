@@ -1,12 +1,12 @@
-﻿"""
-ml_estoque_conferencia.py â€” Shinsei Pricing
-MÃ³dulo de conferÃªncia de estoque entre Bling e Mercado Livre.
+"""
+ml_estoque_conferencia.py — Shinsei Pricing
+Módulo de conferência de estoque entre Bling e Mercado Livre.
 
-EstratÃ©gia:
-- Varre todos os anÃºncios ativos do ML via API
+Estratégia:
+- Varre todos os anúncios ativos do ML via API
 - Cruza pelo campo seller_custom_field (SKU do seller) com o Bling
-- AnÃºncios sem SKU â†’ alerta para cadastrar
-- DivergÃªncia de estoque â†’ alerta na fila de auditoria
+- Anúncios sem SKU → alerta para cadastrar
+- Divergência de estoque → alerta na fila de auditoria
 """
 from __future__ import annotations
 import json
@@ -63,7 +63,7 @@ def _ml_get_seller_id() -> Optional[int]:
     return None
 
 def _ml_get_item_sku(item: dict) -> Optional[str]:
-    """Extrai SKU do anÃºncio â€” tenta seller_custom_field e attributes SELLER_SKU."""
+    """Extrai SKU do anúncio — tenta seller_custom_field e attributes SELLER_SKU."""
     sku = item.get("seller_custom_field")
     if sku: return str(sku).strip()
     for attr in item.get("attributes", []):
@@ -73,7 +73,7 @@ def _ml_get_item_sku(item: dict) -> Optional[str]:
     return None
 
 def _ml_listar_anuncios(seller_id: int, limit: int = 50, offset: int = 0) -> list[str]:
-    """Busca IDs de anÃºncios ativos do seller."""
+    """Busca IDs de anúncios ativos do seller."""
     try:
         res = requests.get(
             f"https://api.mercadolibre.com/users/{seller_id}/items/search",
@@ -85,11 +85,11 @@ def _ml_listar_anuncios(seller_id: int, limit: int = 50, offset: int = 0) -> lis
             data = res.json()
             return data.get("results", []), data.get("paging", {}).get("total", 0)
     except Exception as e:
-        logger.warning("Erro ao listar anÃºncios ML: %s", e)
+        logger.warning("Erro ao listar anúncios ML: %s", e)
     return [], 0
 
 def _ml_get_item(item_id: str) -> Optional[dict]:
-    """Busca detalhes de um anÃºncio."""
+    """Busca detalhes de um anúncio."""
     try:
         res = requests.get(
             f"https://api.mercadolibre.com/items/{item_id}",
@@ -103,7 +103,7 @@ def _ml_get_item(item_id: str) -> Optional[dict]:
     return None
 
 def _ml_atualizar_sku(item_id: str, sku: str) -> dict:
-    """Atualiza o SKU de um anÃºncio no ML via atributo SELLER_SKU."""
+    """Atualiza o SKU de um anúncio no ML via atributo SELLER_SKU."""
     try:
         res = requests.put(
             f"https://api.mercadolibre.com/items/{item_id}",
@@ -118,7 +118,7 @@ def _ml_atualizar_sku(item_id: str, sku: str) -> dict:
         return {"ok": False, "erro": str(e)}
 
 def _ml_atualizar_estoque(item_id: str, quantidade: int) -> dict:
-    """Atualiza estoque de um anÃºncio no ML."""
+    """Atualiza estoque de um anúncio no ML."""
     try:
         res = requests.put(
             f"https://api.mercadolibre.com/items/{item_id}",
@@ -134,11 +134,11 @@ def _ml_atualizar_estoque(item_id: str, quantidade: int) -> dict:
 
 def conferir_estoques_ml(bling_client, max_paginas: int = 5) -> dict:
     """
-    Varre anÃºncios ativos do ML e confere estoque vs Bling.
+    Varre anúncios ativos do ML e confere estoque vs Bling.
     """
     seller_id = _ml_get_seller_id()
     if not seller_id:
-        return {"ok": False, "erro": "NÃ£o foi possÃ­vel obter seller_id do ML. Reconecte o ML."}
+        return {"ok": False, "erro": "Não foi possível obter seller_id do ML. Reconecte o ML."}
 
     fila = carregar_fila_estoque_ml()
     chaves_pendentes = {
@@ -161,16 +161,14 @@ def conferir_estoques_ml(bling_client, max_paginas: int = 5) -> dict:
             try:
                 item = _ml_get_item(item_id)
                 if not item: continue
-                time.sleep(0.2)  # Rate limit: 0.2s entre requisiÃ§Ãµes ao ML
+                time.sleep(0.2)  # rate limit ML
                 verificados += 1
 
                 sku = _ml_get_item_sku(item)
                 qty_ml = int(item.get("available_quantity") or 0)
                 titulo = item.get("title", "")[:60]
-                catalog_listing = bool(item.get("catalog_listing"))
 
-                # â”€â”€ Caso 1: sem SKU â€” alerta em TODOS os anÃºncios incluindo catÃ¡logo
-                # (SKU Ã© necessÃ¡rio para o Bling vincular Ã  nota fiscal)
+                # ── Caso 1: sem SKU ──────────────────────────────
                 if not sku:
                     sem_sku += 1
                     chave = (item_id, "sem_sku")
@@ -181,7 +179,6 @@ def conferir_estoques_ml(bling_client, max_paginas: int = 5) -> dict:
                             "titulo": titulo,
                             "sku": None,
                             "tipo": "sem_sku",
-                            "catalog_listing": catalog_listing,
                             "estoque_bling": None,
                             "estoque_ml": qty_ml,
                             "diferenca": None,
@@ -193,9 +190,9 @@ def conferir_estoques_ml(bling_client, max_paginas: int = 5) -> dict:
                         chaves_pendentes.add(chave)
                     continue
 
-                # â”€â”€ Caso 2: tem SKU â†’ confere com Bling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                # ── Caso 2: tem SKU → confere com Bling ──────────
                 try:
-                    time.sleep(0.5)  # rate limit
+                    time.sleep(0.5)  # rate limit Bling
                     busca = bling_client.get_product_by_sku(sku)
                     if not busca.get("encontrado"):
                         continue
@@ -215,7 +212,6 @@ def conferir_estoques_ml(bling_client, max_paginas: int = 5) -> dict:
                                 "sku": sku,
                                 "nome_bling": prod.get("nome", "")[:60],
                                 "tipo": "divergencia",
-                                "catalog_listing": catalog_listing,
                                 "estoque_bling": estoque_bling,
                                 "estoque_ml": qty_ml,
                                 "diferenca": estoque_bling - qty_ml,
@@ -226,7 +222,7 @@ def conferir_estoques_ml(bling_client, max_paginas: int = 5) -> dict:
                             })
                             chaves_pendentes.add(chave)
                             logger.info(
-                                "DivergÃªncia ML: item=%s sku=%s bling=%d ml=%d",
+                                "Divergência ML: item=%s sku=%s bling=%d ml=%d",
                                 item_id, sku, estoque_bling, qty_ml
                             )
                 except Exception as e:
@@ -242,7 +238,7 @@ def conferir_estoques_ml(bling_client, max_paginas: int = 5) -> dict:
 
     salvar_fila_estoque_ml(fila)
     logger.info(
-        "ConferÃªncia ML: %d verificados, %d sem SKU, %d divergÃªncias, %d erros",
+        "Conferência ML: %d verificados, %d sem SKU, %d divergências, %d erros",
         verificados, sem_sku, divergencias, erros
     )
     return {
@@ -255,12 +251,12 @@ def conferir_estoques_ml(bling_client, max_paginas: int = 5) -> dict:
     }
 
 def corrigir_estoque_ml(item_id_fila: str) -> dict:
-    """Corrige estoque do anÃºncio ML com o valor do Bling."""
+    """Corrige estoque do anúncio ML com o valor do Bling."""
     fila = carregar_fila_estoque_ml()
     item = next((i for i in fila if i.get("id") == item_id_fila), None)
-    if not item: return {"ok": False, "erro": "Item nÃ£o encontrado."}
-    if item.get("status") != "pendente": return {"ok": False, "erro": "Item jÃ¡ processado."}
-    if item.get("tipo") != "divergencia": return {"ok": False, "erro": "Item sem divergÃªncia de estoque."}
+    if not item: return {"ok": False, "erro": "Item não encontrado."}
+    if item.get("status") != "pendente": return {"ok": False, "erro": "Item já processado."}
+    if item.get("tipo") != "divergencia": return {"ok": False, "erro": "Item sem divergência de estoque."}
 
     estoque_bling = item.get("estoque_bling", 0)
     item_id_ml = item.get("item_id_ml")
@@ -273,10 +269,10 @@ def corrigir_estoque_ml(item_id_fila: str) -> dict:
     return resultado
 
 def cadastrar_sku_ml(item_id_fila: str, sku: str, bling_client=None) -> dict:
-    """Cadastra SKU em anÃºncio sem SKU e verifica estoque."""
+    """Cadastra SKU em anúncio sem SKU e verifica estoque."""
     fila = carregar_fila_estoque_ml()
     item = next((i for i in fila if i.get("id") == item_id_fila), None)
-    if not item: return {"ok": False, "erro": "Item nÃ£o encontrado."}
+    if not item: return {"ok": False, "erro": "Item não encontrado."}
 
     item_id_ml = item.get("item_id_ml")
     resultado = _ml_atualizar_sku(item_id_ml, sku)
@@ -288,11 +284,10 @@ def cadastrar_sku_ml(item_id_fila: str, sku: str, bling_client=None) -> dict:
     item["atualizado_em"] = datetime.utcnow().isoformat()
     item["resultado"] = resultado
 
-    # Verifica se hÃ¡ divergÃªncia de estoque agora
+    # Verifica se há divergência de estoque agora
     if bling_client:
         try:
-            time.sleep(0.5)  # rate limit
-                    busca = bling_client.get_product_by_sku(sku)
+            busca = bling_client.get_product_by_sku(sku)
             if busca.get("encontrado"):
                 prod = busca.get("produto", {})
                 estoque_bling = int((prod.get("estoque") or {}).get("saldoVirtualTotal") or 0)
@@ -312,4 +307,3 @@ def ignorar_item_ml(item_id_fila: str) -> dict:
     item["atualizado_em"] = datetime.utcnow().isoformat()
     salvar_fila_estoque_ml(fila)
     return {"ok": True}
-
