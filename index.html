@@ -1,11 +1,324 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
-<title>Shinsei Pricing</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shinsei Pricing</title>
+  <style>
+    :root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--danger:#ef4444;--ok:#16a34a;--warn:#f5b301}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#080e1e,#0d1630 60%,#0a1228);color:var(--text);min-height:100vh}
+    a{text-decoration:none;color:inherit}
+
+    /* HEADER */
+    .header{padding:32px 24px 0;max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px}
+    .logo{display:flex;align-items:center;gap:14px}
+    .logo-icon{font-size:36px}
+    .logo h1{font-size:26px;font-weight:800;letter-spacing:-.5px}
+    .logo p{font-size:13px;color:var(--muted);margin-top:2px}
+    .header-right{display:flex;align-items:center;gap:10px}
+    .badge-version{background:rgba(79,140,255,.15);border:1px solid rgba(79,140,255,.3);color:var(--accent);padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700}
+
+    /* STATUS BAR */
+    .statusbar{max-width:1200px;margin:20px auto 0;padding:0 24px}
+    .statusbar-inner{background:rgba(18,26,49,.8);border:1px solid var(--line);border-radius:14px;padding:12px 18px;display:flex;gap:20px;flex-wrap:wrap;align-items:center}
+    .status-item{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    .dot.green{background:#22c55e;box-shadow:0 0 6px #22c55e80}
+    .dot.red{background:#ef4444}
+    .dot.gray{background:#9fb0d9}
+    .dot.pulse{animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+    .status-val{color:var(--text);font-weight:600}
+
+    /* MAIN GRID */
+    .main{max-width:1200px;margin:28px auto;padding:0 24px 40px}
+
+    /* HERO CARDS - módulos principais */
+    .hero-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
+    @media(max-width:900px){.hero-grid{grid-template-columns:1fr 1fr}}
+    @media(max-width:560px){.hero-grid{grid-template-columns:1fr}}
+
+    .module-card{background:rgba(18,26,49,.9);border:1px solid var(--line);border-radius:20px;padding:20px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+    .module-card:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 8px 32px rgba(79,140,255,.15)}
+    .module-card.highlight{border-color:rgba(79,140,255,.4);background:rgba(79,140,255,.06)}
+    .module-card .card-icon{font-size:32px;margin-bottom:12px;display:block}
+    .module-card h3{font-size:16px;font-weight:700;margin-bottom:6px}
+    .module-card p{font-size:12px;color:var(--muted);line-height:1.5}
+    .module-card .card-badge{position:absolute;top:14px;right:14px;background:var(--warn);color:#000;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;display:none}
+    .module-card .card-badge.show{display:block}
+    .module-card .card-arrow{position:absolute;bottom:16px;right:16px;color:var(--accent);font-size:18px;opacity:0;transition:opacity .2s}
+    .module-card:hover .card-arrow{opacity:1}
+    .module-card .card-tag{display:inline-block;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;margin-top:8px}
+    .card-tag.novo{background:rgba(79,140,255,.15);color:var(--accent)}
+    .card-tag.ativo{background:rgba(34,197,94,.15);color:#22c55e}
+    .card-tag.beta{background:rgba(245,179,1,.15);color:var(--warn)}
+
+    /* SECONDARY GRID */
+    .secondary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px}
+    @media(max-width:900px){.secondary-grid{grid-template-columns:1fr 1fr}}
+    @media(max-width:560px){.secondary-grid{grid-template-columns:1fr}}
+
+    .mini-card{background:rgba(18,26,49,.9);border:1px solid var(--line);border-radius:16px;padding:16px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:12px}
+    .mini-card:hover{border-color:var(--accent);background:rgba(79,140,255,.06)}
+    .mini-card .mini-icon{font-size:22px;flex-shrink:0}
+    .mini-card .mini-text h4{font-size:13px;font-weight:700;margin-bottom:2px}
+    .mini-card .mini-text p{font-size:11px;color:var(--muted)}
+
+    /* STATS ROW */
+    .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
+    @media(max-width:900px){.stats-row{grid-template-columns:1fr 1fr}}
+
+    .stat-card{background:rgba(18,26,49,.9);border:1px solid var(--line);border-radius:16px;padding:16px}
+    .stat-card .stat-label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+    .stat-card .stat-value{font-size:28px;font-weight:800}
+    .stat-card .stat-sub{font-size:11px;color:var(--muted);margin-top:4px}
+    .stat-value.green{color:#22c55e}
+    .stat-value.warn{color:var(--warn)}
+    .stat-value.blue{color:var(--accent)}
+
+    /* SECTION TITLE */
+    .section-title{font-size:12px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+    .section-title::after{content:'';flex:1;height:1px;background:var(--line)}
+
+    /* FOOTER */
+    .footer{text-align:center;padding:24px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);max-width:1200px;margin:0 auto}
+  </style>
 </head>
-<body style="background:#0b1020;color:white;font-family:Arial;padding:20px">
-<h1>Shinsei Pricing</h1>
-<a href="/simulador">Simulador</a><br><br>
-<a href="/fila-aprovacao">Fila de aprovação</a>
+<body>
+
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">🧮</div>
+    <div>
+      <h1>Shinsei Pricing</h1>
+      <p>Sistema de precificação multicanal automatizado</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="badge-version">v3.4.0-composicao</span>
+  </div>
+</div>
+
+<!-- STATUS BAR -->
+<div class="statusbar">
+  <div class="statusbar-inner">
+    <div class="status-item">
+      <div class="dot green pulse" id="dot-server"></div>
+      <span>Servidor</span>
+      <span class="status-val">Online</span>
+    </div>
+    <div class="status-item">
+      <div class="dot gray" id="dot-bling"></div>
+      <span>Bling</span>
+      <span class="status-val" id="val-bling">Verificando...</span>
+    </div>
+    <div class="status-item">
+      <div class="dot gray" id="dot-ml"></div>
+      <span>Mercado Livre</span>
+      <span class="status-val" id="val-ml">Verificando...</span>
+    </div>
+    <div class="status-item">
+      <div class="dot gray" id="dot-mp"></div>
+      <span>Mercado Pago</span>
+      <span class="status-val" id="val-mp">Verificando...</span>
+    </div>
+    <div class="status-item" style="margin-left:auto">
+      <div class="dot green" id="dot-scheduler"></div>
+      <span>Scheduler</span>
+      <span class="status-val" id="val-scheduler">300s</span>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- STATS -->
+  <div class="stats-row" style="margin-top:24px">
+    <div class="stat-card">
+      <div class="stat-label">Fila de aprovação</div>
+      <div class="stat-value warn" id="stat-fila">—</div>
+      <div class="stat-sub">itens pendentes</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Estoque ML</div>
+      <div class="stat-value warn" id="stat-ml-estoque">—</div>
+      <div class="stat-sub">divergências pendentes</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Regras ativas</div>
+      <div class="stat-value blue" id="stat-regras">495</div>
+      <div class="stat-sub">faixas de precificação</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Último ciclo</div>
+      <div class="stat-value green" id="stat-ciclo">—</div>
+      <div class="stat-sub">produtos calculados</div>
+    </div>
+  </div>
+
+  <!-- MÓDULOS PRINCIPAIS -->
+  <div class="section-title">Módulos principais</div>
+  <div class="hero-grid">
+
+    <a href="/simulador" class="module-card highlight">
+      <span class="card-icon">🔢</span>
+      <h3>Simulador Multicanal</h3>
+      <p>Calcule preços por canal com objetivo, gordura e arredondamento configuráveis. Suporte a composições.</p>
+      <span class="card-tag ativo">Principal</span>
+      <span class="card-arrow">→</span>
+    </a>
+
+    <a href="/fila" class="module-card">
+      <span class="card-icon">📋</span>
+      <h3>Fila de Aprovação</h3>
+      <p>Revise e aprove preços calculados automaticamente antes de publicar nos marketplaces.</p>
+      <div class="card-badge show" id="badge-fila">—</div>
+      <span class="card-tag ativo">Ativo</span>
+      <span class="card-arrow">→</span>
+    </a>
+
+    <a href="/auditoria-automatica" class="module-card">
+      <span class="card-icon">🔍</span>
+      <h3>Auditoria Automática</h3>
+      <p>Confira divergências de estoque e preço entre Bling e Mercado Livre em tempo real.</p>
+      <div class="card-badge show" id="badge-auditoria">—</div>
+      <span class="card-tag novo">Novo</span>
+      <span class="card-arrow">→</span>
+    </a>
+
+    <a href="/integracao-comercial" class="module-card">
+      <span class="card-icon">⚙️</span>
+      <h3>Integração Comercial</h3>
+      <p>Configure objetivos globais, gordura por canal, automação e regras de estoque.</p>
+      <span class="card-tag ativo">Ativo</span>
+      <span class="card-arrow">→</span>
+    </a>
+
+    <a href="/integracoes" class="module-card">
+      <span class="card-icon">🔌</span>
+      <h3>Integrações</h3>
+      <p>Status e reconexão de Bling, Mercado Livre, Mercado Pago e Shopify.</p>
+      <span class="card-tag ativo">Ativo</span>
+      <span class="card-arrow">→</span>
+    </a>
+
+    <a href="/regras" class="module-card">
+      <span class="card-icon">📊</span>
+      <h3>Regras de Precificação</h3>
+      <p>Visualize e gerencie as 495 faixas de precificação importadas da Aba2.</p>
+      <span class="card-tag ativo">495 regras</span>
+      <span class="card-arrow">→</span>
+    </a>
+
+  </div>
+
+  <!-- MÓDULOS SECUNDÁRIOS -->
+  <div class="section-title">Ferramentas</div>
+  <div class="secondary-grid">
+
+    <a href="/bling/status" class="mini-card">
+      <div class="mini-icon">📦</div>
+      <div class="mini-text">
+        <h4>Status Bling</h4>
+        <p>Token e conexão</p>
+      </div>
+    </a>
+
+    <a href="/ml/login" class="mini-card">
+      <div class="mini-icon">🛒</div>
+      <div class="mini-text">
+        <h4>Reconectar ML</h4>
+        <p>OAuth Mercado Livre</p>
+      </div>
+    </a>
+
+    <a href="/docs" class="mini-card" target="_blank">
+      <div class="mini-icon">📖</div>
+      <div class="mini-text">
+        <h4>API Docs</h4>
+        <p>Swagger UI</p>
+      </div>
+    </a>
+
+    <a href="/health" class="mini-card" target="_blank">
+      <div class="mini-icon">💓</div>
+      <div class="mini-text">
+        <h4>Health Check</h4>
+        <p>Status do servidor</p>
+      </div>
+    </a>
+
+  </div>
+
+</div>
+
+<div class="footer">
+  Shinsei Pricing v3.4.0 — Motor de precificação multicanal para Shinsei Market
+</div>
+
+<script>
+async function carregarStats(){
+  // Fila
+  try{
+    const res = await fetch('/fila/lista');
+    const data = await res.json();
+    const pendentes = (data.itens||[]).filter(i => i.status === 'pendente').length;
+    document.getElementById('stat-fila').textContent = pendentes;
+    document.getElementById('badge-fila').textContent = pendentes;
+    document.getElementById('badge-fila').style.display = pendentes > 0 ? 'block' : 'none';
+  }catch(e){}
+
+  // Estoque ML
+  try{
+    const res = await fetch('/auditoria/ml-estoque');
+    const data = await res.json();
+    const stats = data.stats || {};
+    const pendentes = stats.pendente || 0;
+    document.getElementById('stat-ml-estoque').textContent = pendentes;
+    document.getElementById('badge-auditoria').textContent = pendentes;
+    document.getElementById('badge-auditoria').style.display = pendentes > 0 ? 'block' : 'none';
+  }catch(e){}
+
+  // Status Bling
+  try{
+    const res = await fetch('/bling/status');
+    const data = await res.json();
+    const ok = data.conectado || data.connected || data.ok;
+    document.getElementById('dot-bling').className = 'dot ' + (ok ? 'green' : 'red');
+    document.getElementById('val-bling').textContent = ok ? 'Conectado' : 'Desconectado';
+  }catch(e){
+    document.getElementById('val-bling').textContent = 'Erro';
+  }
+
+  // Status ML
+  try{
+    const res = await fetch('/ml/status');
+    const data = await res.json();
+    const ok = data.connected;
+    document.getElementById('dot-ml').className = 'dot ' + (ok ? 'green' : 'red');
+    document.getElementById('val-ml').textContent = ok ? 'Conectado' : 'Desconectado';
+  }catch(e){}
+
+  // Status MP
+  try{
+    const res = await fetch('/auditoria/mp-status');
+    const data = await res.json();
+    document.getElementById('dot-mp').className = 'dot ' + (data.configurado ? 'green' : 'gray');
+    document.getElementById('val-mp').textContent = data.configurado ? 'Configurado' : 'Não configurado';
+  }catch(e){}
+
+  // Health / ciclo
+  try{
+    const res = await fetch('/health');
+    const data = await res.json();
+    if(data.ultimo_ciclo){
+      document.getElementById('stat-ciclo').textContent = data.ultimo_ciclo.calculados || '—';
+    }
+  }catch(e){}
+}
+
+document.addEventListener('DOMContentLoaded', carregarStats);
+</script>
 </body>
 </html>
