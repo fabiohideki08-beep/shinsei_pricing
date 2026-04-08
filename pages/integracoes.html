@@ -3,71 +3,322 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Integrações</title>
+  <title>Integrações — Shinsei Pricing</title>
   <style>
-    :root {
-      --bg:#0b1020; --panel:#11182d; --line:rgba(255,255,255,.08); --text:#eef2ff; --muted:#aeb8d6; --green:#22c55e; --red:#ef4444; --blue:#60a5fa; --radius:18px;
-    }
-    *{box-sizing:border-box} body{margin:0;font-family:Inter,Arial,sans-serif;background:linear-gradient(180deg,#0b1020 0%,#0f172a 100%);color:var(--text)}
-    .wrap{max-width:1320px;margin:0 auto;padding:24px}
-    .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:24px}
-    .brand{display:flex;align-items:flex-start;gap:18px}
-    .logo{width:72px;height:72px;border-radius:20px;background:rgba(255,255,255,.04);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;letter-spacing:.08em}
-    .title h1{margin:0;font-size:32px} .title p{margin:8px 0 0;color:var(--muted)}
-    .nav{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
-    .btn,button,input,select,textarea{background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--text);border-radius:14px;padding:12px 14px;text-decoration:none;outline:none}
-    textarea{min-height:110px;width:100%} input,select{width:100%}
-    button,.btn{cursor:pointer} .btn{display:inline-block}
-    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:16px}
-    .card{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
-    .meta{color:var(--muted);font-size:13px} .table-wrap{overflow:auto}
-    table{width:100%;border-collapse:collapse} th,td{border-bottom:1px solid var(--line);padding:10px;text-align:left;font-size:14px}
-    .row{display:grid;grid-template-columns:repeat(2,1fr);gap:12px} .actions{display:flex;gap:10px;flex-wrap:wrap}
-    pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.2);padding:12px;border-radius:12px;border:1px solid var(--line)}
-    @media (max-width:1000px){.grid,.row{grid-template-columns:1fr} .topbar{flex-direction:column}}
+    :root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--danger:#ef4444;--ok:#16a34a;--warn:#f5b301}
+    *{box-sizing:border-box} body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text)}
+    .wrap{max-width:1100px;margin:0 auto;padding:22px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 18px}
+    .brand h1{margin:0;font-size:22px}.brand p{margin:4px 0 0;color:var(--muted);font-size:13px}
+    .top-actions{display:flex;gap:10px}
+    .btn{border:none;background:var(--accent);color:#fff;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-size:13px}
+    .btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+    .btn.success{background:#166534} .btn.danger{background:var(--danger)}
+    .btn.sm{padding:7px 10px;font-size:12px;border-radius:9px}
+
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+    @media(max-width:700px){.grid{grid-template-columns:1fr}}
+
+    .card{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:20px;padding:20px}
+    .card-header{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+    .card-icon{font-size:28px}
+    .card-title{font-size:16px;font-weight:700}
+    .card-sub{font-size:12px;color:var(--muted);margin-top:2px}
+
+    .status-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;font-size:12px;font-weight:700}
+    .status-badge.connected{background:rgba(22,163,74,.15);color:#22c55e;border:1px solid rgba(22,163,74,.3)}
+    .status-badge.disconnected{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
+    .status-badge.unknown{background:rgba(150,150,150,.15);color:#9fb0d9;border:1px solid rgba(150,150,150,.3)}
+    .dot{width:8px;height:8px;border-radius:50%}
+    .dot.green{background:#22c55e} .dot.red{background:#ef4444} .dot.gray{background:#9fb0d9}
+
+    .info-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+    .info-row:last-child{border-bottom:none}
+    .info-label{color:var(--muted)}
+    .info-value{font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+    .field{margin-bottom:12px}
+    .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:600}
+    .field input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#0d1630;color:#fff;font-size:13px}
+    .field input:focus{outline:none;border-color:var(--accent)}
+
+    .notice{padding:12px 14px;border-radius:12px;margin-bottom:14px;font-size:13px;display:none}
+    .notice.ok{border:1px solid #166534;background:rgba(22,163,74,.1);color:#bbf7d0;display:block}
+    .notice.err{border:1px solid #991b1b;background:rgba(239,68,68,.1);color:#fca5a5;display:block}
+    .notice.warn{border:1px solid #92400e;background:rgba(245,158,11,.1);color:#fde68a;display:block}
+
+    .divider{border:none;border-top:1px solid var(--line);margin:16px 0}
+    .section-title{font-size:12px;color:var(--muted);font-weight:700;letter-spacing:.06em;margin-bottom:12px;text-transform:uppercase}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="topbar">
-      <div class="brand">
-        <div class="logo">神</div>
-        <div class="title">
-          <h1>Integrações</h1>
-          <p>Módulo do Shinsei Pricing</p>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1>🔌 Integrações</h1>
+      <p>Status e configuração das conexões com sistemas externos</p>
+    </div>
+    <div class="top-actions">
+      <a class="btn secondary" href="/">Início</a>
+      <a class="btn secondary" href="/simulador">Simulador</a>
+      <button class="btn" onclick="verificarTodas()">🔄 Verificar todas</button>
+    </div>
+  </div>
+
+  <div id="notice-global" class="notice"></div>
+
+  <div class="grid">
+
+    <!-- BLING -->
+    <div class="card" id="card-bling">
+      <div class="card-header">
+        <div class="card-icon">📦</div>
+        <div>
+          <div class="card-title">Bling ERP</div>
+          <div class="card-sub">Produtos, estoque e precificação</div>
+        </div>
+        <div style="margin-left:auto" id="status-bling">
+          <span class="status-badge unknown"><span class="dot gray"></span>Verificando...</span>
         </div>
       </div>
-      <div class="nav">
-        <a class="btn" href="/">Dashboard</a>
-        <a class="btn" href="/simulador">Simulador</a>
-        <a class="btn" href="/regras-calculo">Regras</a>
-        <a class="btn" href="/perfis">Perfis</a>
-        <a class="btn" href="/fila-aprovacao">Fila</a>
-        <a class="btn" href="/cost-engine">Cost Engine</a>
-        <a class="btn" href="/cost-allocation">Cost Allocation</a>
-        <a class="btn" href="/sie">SIE</a>
-        <a class="btn" href="/oee">OEE</a>
-        <a class="btn" href="/integracoes">Integrações</a>
+
+      <div id="info-bling">
+        <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="bling-status-text">—</span></div>
+        <div class="info-row"><span class="info-label">Token expira em</span><span class="info-value" id="bling-expires">—</span></div>
+        <div class="info-row"><span class="info-label">Último ciclo</span><span class="info-value" id="bling-last-cycle">—</span></div>
+      </div>
+
+      <hr class="divider"/>
+      <div class="section-title">Reconectar</div>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 12px">Clique abaixo para iniciar o fluxo OAuth do Bling e renovar o token de acesso.</p>
+      <a class="btn success" href="/bling/auth" target="_blank">🔐 Conectar Bling</a>
+    </div>
+
+    <!-- MERCADO LIVRE -->
+    <div class="card" id="card-ml">
+      <div class="card-header">
+        <div class="card-icon">🛒</div>
+        <div>
+          <div class="card-title">Mercado Livre</div>
+          <div class="card-sub">Anúncios, estoque e preços</div>
+        </div>
+        <div style="margin-left:auto" id="status-ml">
+          <span class="status-badge unknown"><span class="dot gray"></span>Verificando...</span>
+        </div>
+      </div>
+
+      <div id="info-ml">
+        <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="ml-status-text">—</span></div>
+        <div class="info-row"><span class="info-label">Seller ID</span><span class="info-value" id="ml-seller-id">—</span></div>
+        <div class="info-row"><span class="info-label">Token expira em</span><span class="info-value" id="ml-expires">—</span></div>
+        <div class="info-row"><span class="info-label">Anúncios ativos</span><span class="info-value" id="ml-anuncios">—</span></div>
+      </div>
+
+      <hr class="divider"/>
+      <div class="section-title">Reconectar</div>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 12px">Clique abaixo para iniciar o fluxo OAuth do Mercado Livre.</p>
+      <a class="btn success" href="/ml/login" target="_blank">🔐 Conectar Mercado Livre</a>
+    </div>
+
+    <!-- MERCADO PAGO -->
+    <div class="card" id="card-mp">
+      <div class="card-header">
+        <div class="card-icon">💳</div>
+        <div>
+          <div class="card-title">Mercado Pago</div>
+          <div class="card-sub">Comissões e fretes reais por transação</div>
+        </div>
+        <div style="margin-left:auto" id="status-mp">
+          <span class="status-badge unknown"><span class="dot gray"></span>Verificando...</span>
+        </div>
+      </div>
+
+      <div id="info-mp">
+        <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="mp-status-text">—</span></div>
+        <div class="info-row"><span class="info-label">Token salvo em</span><span class="info-value" id="mp-saved-at">—</span></div>
+      </div>
+
+      <hr class="divider"/>
+      <div class="section-title">Access Token</div>
+      <div class="field">
+        <label>Cole o Access Token do Mercado Pago</label>
+        <input type="password" id="mp-token-input" placeholder="APP_USR-..." />
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn success sm" onclick="salvarMPToken()">💾 Salvar token</button>
+        <button class="btn secondary sm" onclick="toggleMPToken()">👁 Mostrar</button>
       </div>
     </div>
-    
-<div class="grid">
-  <div class="card"><h3>Status do Bling</h3><pre id="health">Carregando...</pre><div class="actions"><a class="btn" href="/bling/auth">Conectar / Reautenticar Bling</a></div></div>
-  <div class="card"><h3>Canais ativos</h3><div class="row"><div><label><input id="amazon_ativo" type="checkbox"> Amazon</label></div><div><label><input id="mercado_livre_ativo" type="checkbox"> Mercado Livre</label></div><div><label><input id="shopee_ativo" type="checkbox"> Shopee</label></div><div><label><input id="shein_ativo" type="checkbox"> Shein</label></div><div><label><input id="shopify_ativo" type="checkbox"> Shopify</label></div></div><div class="actions" style="margin-top:12px"><button onclick="salvar()">Salvar integrações</button></div></div>
-</div>
+
+    <!-- SHOPIFY -->
+    <div class="card" id="card-shopify">
+      <div class="card-header">
+        <div class="card-icon">🛍️</div>
+        <div>
+          <div class="card-title">Shopify</div>
+          <div class="card-sub">Loja virtual e precificação</div>
+        </div>
+        <div style="margin-left:auto">
+          <span class="status-badge connected"><span class="dot green"></span>Via Webhook</span>
+        </div>
+      </div>
+      <div>
+        <div class="info-row"><span class="info-label">Store ID</span><span class="info-value">pknw4n-eg</span></div>
+        <div class="info-row"><span class="info-label">Endpoint</span><span class="info-value">/shopify-flow/pricing-suggestion</span></div>
+        <div class="info-row"><span class="info-label">Integração</span><span class="info-value">Shopify Flow</span></div>
+      </div>
+      <hr class="divider"/>
+      <div class="section-title">URL do Webhook</div>
+      <div style="background:#0d1630;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:12px;color:var(--muted);word-break:break-all" id="shopify-webhook-url">
+        Carregando...
+      </div>
+      <button class="btn secondary sm" style="margin-top:8px" onclick="copiarWebhook()">📋 Copiar URL</button>
+    </div>
 
   </div>
-  <script>
-async function carregar(){
-  const [hres,ires]=await Promise.all([fetch('/health'),fetch('/modulos/integracoes')]);
-  document.getElementById('health').textContent = JSON.stringify(await hres.json(), null, 2);
-  const i=await ires.json(); Object.keys(i).forEach(k=>{const el=document.getElementById(k); if(el) el.checked=!!i[k];});
+
+  <!-- NGROK / URL PÚBLICA -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon">🌐</div>
+      <div>
+        <div class="card-title">URL Pública (ngrok)</div>
+        <div class="card-sub">Necessária para webhooks e OAuth callbacks</div>
+      </div>
+      <div style="margin-left:auto" id="status-ngrok">
+        <span class="status-badge unknown"><span class="dot gray"></span>Verificando...</span>
+      </div>
+    </div>
+    <div class="info-row"><span class="info-label">URL atual</span><span class="info-value" id="ngrok-url">—</span></div>
+    <div class="info-row"><span class="info-label">API Key</span><span class="info-value" id="api-key-display">—</span></div>
+    <hr class="divider"/>
+    <p style="font-size:12px;color:var(--muted);margin:0">Para usar webhooks e OAuth externos, o ngrok precisa estar rodando. Inicie com <code style="background:#0d1630;padding:2px 6px;border-radius:4px">ngrok http 8000</code> ou use o <code style="background:#0d1630;padding:2px 6px;border-radius:4px">iniciar.bat</code>.</p>
+  </div>
+
+</div>
+
+<script>
+function mostrarNotice(msg, tipo){
+  const el = document.getElementById('notice-global');
+  el.className = 'notice ' + tipo;
+  el.textContent = msg;
+  if(tipo === 'ok') setTimeout(() => el.className = 'notice', 4000);
 }
-async function salvar(){
-  const payload={amazon_ativo:document.getElementById('amazon_ativo').checked,mercado_livre_ativo:document.getElementById('mercado_livre_ativo').checked,shopee_ativo:document.getElementById('shopee_ativo').checked,shein_ativo:document.getElementById('shein_ativo').checked,shopify_ativo:document.getElementById('shopify_ativo').checked};
-  await fetch('/modulos/integracoes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); alert('Integrações salvas');
+
+function setStatus(id, connected, label){
+  const el = document.getElementById(id);
+  if(!el) return;
+  const cls = connected === true ? 'connected' : connected === false ? 'disconnected' : 'unknown';
+  const dot = connected === true ? 'green' : connected === false ? 'red' : 'gray';
+  el.innerHTML = `<span class="status-badge ${cls}"><span class="dot ${dot}"></span>${label}</span>`;
 }
-document.addEventListener('DOMContentLoaded', carregar);
+
+// ── BLING ────────────────────────────────────────────────
+async function verificarBling(){
+  try{
+    const res = await fetch('/bling/status');
+    const data = await res.json();
+    const ok = data.conectado || data.connected || data.ok;
+    setStatus('status-bling', ok, ok ? 'Conectado' : 'Desconectado');
+    document.getElementById('bling-status-text').textContent = ok ? '✅ Ativo' : '❌ Token inválido';
+    if(data.expires_at || data.expira_em){
+      const exp = new Date(data.expires_at || data.expira_em);
+      document.getElementById('bling-expires').textContent = exp.toLocaleString('pt-BR');
+    }
+  }catch(e){
+    setStatus('status-bling', false, 'Erro');
+    document.getElementById('bling-status-text').textContent = 'Erro ao verificar';
+  }
+}
+
+// ── ML ───────────────────────────────────────────────────
+async function verificarML(){
+  try{
+    const res = await fetch('/ml/status');
+    const data = await res.json();
+    const ok = data.connected || data.conectado || (data.access_token && data.access_token !== '.');
+    setStatus('status-ml', ok, ok ? 'Conectado' : 'Desconectado');
+    document.getElementById('ml-status-text').textContent = ok ? '✅ Ativo' : '❌ Token inválido';
+    document.getElementById('ml-seller-id').textContent = data.seller_id || data.user_id || '—';
+    if(data.expires_at){
+      const exp = new Date(data.expires_at);
+      document.getElementById('ml-expires').textContent = exp.toLocaleString('pt-BR');
+    }
+    if(data.total_anuncios !== undefined){
+      document.getElementById('ml-anuncios').textContent = data.total_anuncios.toLocaleString('pt-BR');
+    }
+  }catch(e){
+    setStatus('status-ml', false, 'Erro');
+    document.getElementById('ml-status-text').textContent = 'Erro ao verificar';
+  }
+}
+
+// ── MERCADO PAGO ─────────────────────────────────────────
+async function verificarMP(){
+  try{
+    const res = await fetch('/auditoria/mp-status');
+    const data = await res.json();
+    const ok = data.configurado;
+    setStatus('status-mp', ok, ok ? 'Configurado' : 'Não configurado');
+    document.getElementById('mp-status-text').textContent = ok ? '✅ Token salvo' : '⚠️ Aguardando token';
+    if(data.salvo_em){
+      document.getElementById('mp-saved-at').textContent = new Date(data.salvo_em).toLocaleString('pt-BR');
+    }
+  }catch(e){
+    setStatus('status-mp', null, 'Não configurado');
+    document.getElementById('mp-status-text').textContent = '⚠️ Aguardando token';
+  }
+}
+
+async function salvarMPToken(){
+  const token = document.getElementById('mp-token-input').value.trim();
+  if(!token){ alert('Cole o Access Token do Mercado Pago.'); return; }
+  try{
+    const res = await fetch('/auditoria/mp-token', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({access_token: token})
+    });
+    const data = await res.json();
+    mostrarNotice(data.ok ? 'Token do Mercado Pago salvo com sucesso!' : 'Erro ao salvar token.', data.ok ? 'ok' : 'err');
+    if(data.ok) verificarMP();
+  }catch(e){ mostrarNotice('Erro de conexão.','err'); }
+}
+
+function toggleMPToken(){
+  const input = document.getElementById('mp-token-input');
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+// ── NGROK / URL PÚBLICA ───────────────────────────────────
+async function verificarNgrok(){
+  try{
+    const res = await fetch('/health');
+    const data = await res.json();
+    const url = data.ngrok_url || data.public_url || window.location.origin;
+    document.getElementById('ngrok-url').textContent = url;
+    document.getElementById('shopify-webhook-url').textContent = url + '/shopify-flow/pricing-suggestion';
+    document.getElementById('api-key-display').textContent = data.api_key ? data.api_key.substring(0,8) + '...' : '—';
+    const isNgrok = url.includes('ngrok');
+    setStatus('status-ngrok', isNgrok, isNgrok ? 'Online' : 'Local apenas');
+  }catch(e){
+    setStatus('status-ngrok', false, 'Erro');
+  }
+}
+
+function copiarWebhook(){
+  const url = document.getElementById('shopify-webhook-url').textContent;
+  navigator.clipboard.writeText(url).then(() => mostrarNotice('URL copiada!','ok'));
+}
+
+function verificarTodas(){
+  verificarBling();
+  verificarML();
+  verificarMP();
+  verificarNgrok();
+}
+
+document.addEventListener('DOMContentLoaded', verificarTodas);
 </script>
 </body>
 </html>

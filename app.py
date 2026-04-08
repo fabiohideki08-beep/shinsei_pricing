@@ -868,6 +868,32 @@ def auditoria_ml_limpar_resolvidos():
     salvar_fila_estoque_ml(itens)
     return {"ok": True, "stats": stats_fila_estoque_ml()}
 
+
+@app.get("/integracoes", response_class=HTMLResponse)
+def integracoes_page():
+    html_file = PAGES_DIR / "integracoes.html"
+    if html_file.exists():
+        return HTMLResponse(html_file.read_text(encoding="utf-8"))
+    raise HTTPException(status_code=404)
+
+@app.get("/auditoria/mp-status")
+def auditoria_mp_status():
+    from preco_conferencia import carregar_mp_token
+    import json
+    from pathlib import Path as _P
+    mp = _P("data/mp_token.json")
+    data = json.loads(mp.read_text(encoding="utf-8")) if mp.exists() else {}
+    return {"configurado": bool(carregar_mp_token()), "salvo_em": data.get("salvo_em")}
+
+@app.get("/ml/status")
+def ml_status_endpoint():
+    import json
+    from pathlib import Path as _P
+    tp = _P("data/ml_tokens.json")
+    if not tp.exists(): return {"connected": False}
+    tokens = json.loads(tp.read_text(encoding="utf-8"))
+    at = tokens.get("access_token", "")
+    return {"connected": bool(at) and at != ".", "seller_id": tokens.get("user_id"), "expires_at": tokens.get("expires_at")}
 if not FILA_PATH.exists(): ...
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -1419,6 +1445,32 @@ def auditoria_ml_limpar_resolvidos():
     salvar_fila_estoque_ml(itens)
     return {"ok": True, "stats": stats_fila_estoque_ml()}
 
+
+@app.get("/integracoes", response_class=HTMLResponse)
+def integracoes_page():
+    html_file = PAGES_DIR / "integracoes.html"
+    if html_file.exists():
+        return HTMLResponse(html_file.read_text(encoding="utf-8"))
+    raise HTTPException(status_code=404)
+
+@app.get("/auditoria/mp-status")
+def auditoria_mp_status():
+    from preco_conferencia import carregar_mp_token
+    import json
+    from pathlib import Path as _P
+    mp = _P("data/mp_token.json")
+    data = json.loads(mp.read_text(encoding="utf-8")) if mp.exists() else {}
+    return {"configurado": bool(carregar_mp_token()), "salvo_em": data.get("salvo_em")}
+
+@app.get("/ml/status")
+def ml_status_endpoint():
+    import json
+    from pathlib import Path as _P
+    tp = _P("data/ml_tokens.json")
+    if not tp.exists(): return {"connected": False}
+    tokens = json.loads(tp.read_text(encoding="utf-8"))
+    at = tokens.get("access_token", "")
+    return {"connected": bool(at) and at != ".", "seller_id": tokens.get("user_id"), "expires_at": tokens.get("expires_at")}
 if not FILA_PATH.exists(): _save_json(FILA_PATH, [])
 if not CFG_PATH.exists(): _save_json(CFG_PATH, DEFAULT_CFG)
 
