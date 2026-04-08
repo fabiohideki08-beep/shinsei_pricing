@@ -295,7 +295,7 @@ async function carregarStats(){
   try{
     const res = await fetch('/ml/status');
     const data = await res.json();
-    const ok = data.connected;
+    const ok = data.connected || data.conectado || data.configurado;
     document.getElementById('dot-ml').className = 'dot ' + (ok ? 'green' : 'red');
     document.getElementById('val-ml').textContent = ok ? 'Conectado' : 'Desconectado';
   }catch(e){}
