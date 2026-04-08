@@ -160,7 +160,14 @@
           <button class="filtro-btn" onclick="filtrarML('', 'divergencia', this)">Divergências</button>
           <button class="filtro-btn" onclick="filtrarML('corrigido', '', this)">Corrigidos</button>
         </div>
-        <button class="btn sm warn" onclick="conferirEstoqueML()">🔄 Conferir ML</button>
+        <button class="btn sm warn" id="btnConferirML" onclick="conferirEstoqueML()">🔄 Conferir ML</button>
+        <button class="btn sm success" onclick="corrigirTodosML()" id="btnCorrigirTodosML">✅ Corrigir todos</button>
+      </div>
+    </div>
+    <div id="progressoML" style="display:none;padding:10px;background:rgba(79,140,255,.08);border-radius:12px;margin-bottom:12px;font-size:13px;color:var(--muted)">
+      <div id="progressoMLTexto">Aguardando...</div>
+      <div style="height:6px;background:var(--line);border-radius:4px;margin-top:8px">
+        <div id="progressoMLBar" style="height:6px;background:var(--accent);border-radius:4px;width:0%;transition:width .3s"></div>
       </div>
     </div>
     <div id="tabelaEstoqueML">
@@ -534,24 +541,107 @@ function filtrarML(status, tipo, btn){
 }
 
 async function conferirEstoqueML(){
-  const btn = document.getElementById('btnConferirTudo');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spin">⏳</span> Conferindo ML...';
+  const btnConf = document.getElementById('btnConferirML') || document.querySelector('[onclick="conferirEstoqueML()"]');
+  const btnTudo = document.getElementById('btnConferirTudo');
+  const progWrap = document.getElementById('progressoML');
+  const progTexto = document.getElementById('progressoMLTexto');
+  const progBar = document.getElementById('progressoMLBar');
+
+  if(btnConf) btnConf.disabled = true;
+  if(btnTudo){ btnTudo.disabled = true; btnTudo.innerHTML = '<span class="spin">⏳</span> Conferindo...'; }
+  progWrap.style.display = 'block';
+  progBar.style.width = '0%';
+  progBar.style.background = 'var(--accent)';
+  progTexto.textContent = 'Iniciando conferência de estoque ML...';
+
+  // Simula progresso enquanto aguarda resposta
+  let progSimulado = 0;
+  const intervalo = setInterval(() => {
+    if(progSimulado < 85){
+      progSimulado += Math.random() * 3;
+      progBar.style.width = Math.min(progSimulado, 85) + '%';
+      const pags = Math.floor(progSimulado / 10);
+      progTexto.textContent = `Varrendo anúncios ML... (página ${pags+1}/10 aproximadamente)`;
+    }
+  }, 1500);
+
   try{
     const res = await fetch('/auditoria/ml-estoque/conferir', {method:'POST'});
     const data = await res.json();
+    clearInterval(intervalo);
+    progBar.style.width = '100%';
+
     if(data.ok){
+      const temProblemas = (data.sem_sku + data.novas_divergencias) > 0;
+      progBar.style.background = temProblemas ? 'var(--warn)' : 'var(--ok)';
+      progTexto.textContent = `Concluído! ${data.verificados} verificados — ${data.sem_sku} sem SKU, ${data.novas_divergencias} novas divergências, ${data.erros} erros.`;
       mostrarNotice(
         `ML: ${data.verificados} anúncios verificados — ${data.sem_sku} sem SKU, ${data.novas_divergencias} divergências de estoque.`,
-        (data.sem_sku + data.novas_divergencias) > 0 ? 'warn' : 'ok'
+        temProblemas ? 'warn' : 'ok'
       );
     }
     carregarEstoqueML();
-  }catch(e){ mostrarNotice('Erro ao conferir estoque ML.','err'); }
-  finally{
-    btn.disabled = false;
-    btn.innerHTML = '🔍 Conferir tudo agora';
+  }catch(e){
+    clearInterval(intervalo);
+    progBar.style.background = 'var(--danger)';
+    progTexto.textContent = 'Erro ao conferir estoque ML.';
+    mostrarNotice('Erro ao conferir estoque ML.','err');
+  }finally{
+    if(btnConf) btnConf.disabled = false;
+    if(btnTudo){ btnTudo.disabled = false; btnTudo.innerHTML = '🔍 Conferir tudo agora'; }
+    setTimeout(() => { progWrap.style.display = 'none'; }, 6000);
   }
+}
+
+async function corrigirTodosML(){
+  if(!confirm('Corrigir TODOS os itens com divergência? Isso atualizará o estoque de todos os anúncios no ML com os valores do Bling.')) return;
+
+  const progWrap = document.getElementById('progressoML');
+  const progTexto = document.getElementById('progressoMLTexto');
+  const progBar = document.getElementById('progressoMLBar');
+  const btn = document.getElementById('btnCorrigirTodosML');
+
+  btn.disabled = true;
+  progWrap.style.display = 'block';
+
+  // Busca todos os pendentes com divergência
+  const res = await fetch('/auditoria/ml-estoque?status=pendente&tipo=divergencia');
+  const data = await res.json();
+  const itens = data.itens || [];
+
+  if(!itens.length){
+    mostrarNotice('Nenhuma divergência pendente para corrigir.', 'ok');
+    progWrap.style.display = 'none';
+    btn.disabled = false;
+    return;
+  }
+
+  let corrigidos = 0, erros = 0;
+  const total = itens.length;
+
+  for(let i = 0; i < itens.length; i++){
+    const item = itens[i];
+    progTexto.textContent = `Corrigindo ${i+1}/${total}: ${item.titulo||item.item_id_ml}... (${corrigidos} OK, ${erros} erros)`;
+    progBar.style.width = Math.round(((i+1)/total)*100) + '%';
+
+    try{
+      const r = await fetch('/auditoria/ml-estoque/corrigir/' + item.id, {method:'POST'});
+      const d = await r.json();
+      if(d.ok) corrigidos++;
+      else erros++;
+    }catch(e){ erros++; }
+
+    // Pequena pausa para não sobrecarregar a API
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  progTexto.textContent = `Concluído! ${corrigidos} corrigidos, ${erros} erros.`;
+  progBar.style.width = '100%';
+  progBar.style.background = erros > 0 ? 'var(--warn)' : 'var(--ok)';
+  mostrarNotice(`Correção em massa: ${corrigidos} anúncios corrigidos no ML, ${erros} erros.`, erros > 0 ? 'warn' : 'ok');
+  btn.disabled = false;
+  setTimeout(() => { progWrap.style.display = 'none'; progBar.style.background = 'var(--accent)'; }, 5000);
+  carregarEstoqueML();
 }
 
 async function corrigirML(id){

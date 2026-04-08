@@ -821,9 +821,17 @@ def auditoria_ml_estoque_conferir():
     if not BlingClient:
         raise HTTPException(status_code=500, detail="Bling não disponível.")
     try:
-        client = BlingClient()
-        return conferir_estoques_ml(client, max_paginas=10)
+        # Pausa o scheduler durante a conferência para evitar rate limit
+        global _scheduler_pausado
+        _scheduler_pausado = True
+        try:
+            client = BlingClient()
+            resultado = conferir_estoques_ml(client, max_paginas=10)
+        finally:
+            _scheduler_pausado = False
+        return resultado
     except Exception as e:
+        _scheduler_pausado = False
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/auditoria/ml-estoque/corrigir/{item_id}")
@@ -1364,9 +1372,17 @@ def auditoria_ml_estoque_conferir():
     if not BlingClient:
         raise HTTPException(status_code=500, detail="Bling não disponível.")
     try:
-        client = BlingClient()
-        return conferir_estoques_ml(client, max_paginas=10)
+        # Pausa o scheduler durante a conferência para evitar rate limit
+        global _scheduler_pausado
+        _scheduler_pausado = True
+        try:
+            client = BlingClient()
+            resultado = conferir_estoques_ml(client, max_paginas=10)
+        finally:
+            _scheduler_pausado = False
+        return resultado
     except Exception as e:
+        _scheduler_pausado = False
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/auditoria/ml-estoque/corrigir/{item_id}")
