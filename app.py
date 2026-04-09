@@ -868,6 +868,12 @@ def auditoria_ml_limpar_resolvidos():
     salvar_fila_estoque_ml(itens)
     return {"ok": True, "stats": stats_fila_estoque_ml()}
 
+@app.post("/auditoria/ml-estoque/limpar-tudo")
+def auditoria_ml_limpar_tudo():
+    from ml_estoque_conferencia import salvar_fila_estoque_ml, stats_fila_estoque_ml
+    salvar_fila_estoque_ml([])
+    return {"ok": True, "stats": stats_fila_estoque_ml()}
+
 
 @app.get("/integracoes", response_class=HTMLResponse)
 def integracoes_page():
@@ -1518,13 +1524,7 @@ def auditoria_ml_estoque_ignorar(item_id: str):
     from ml_estoque_conferencia import ignorar_item_ml
     return ignorar_item_ml(item_id)
 
-@app.post("/auditoria/ml-estoque/limpar-resolvidos")
-def auditoria_ml_limpar_resolvidos():
-    from ml_estoque_conferencia import carregar_fila_estoque_ml, salvar_fila_estoque_ml, stats_fila_estoque_ml
-    itens = carregar_fila_estoque_ml()
-    itens = [i for i in itens if i.get("status") == "pendente"]
-    salvar_fila_estoque_ml(itens)
-    return {"ok": True, "stats": stats_fila_estoque_ml()}
+
 
 
 @app.get("/integracoes", response_class=HTMLResponse)
@@ -1768,5 +1768,36 @@ def regras_modelo_download():
         filename="Shinsei_Regras_Modelo.xlsx",
     )
 
+@app.get("/auditoria/estoque-negativo")
+def auditoria_estoque_negativo_lista(status: str = ""):
+    from pathlib import Path as _P
+    import json as _j
+    fila_path = _P("data/fila_estoque_negativo.json")
+    itens = _j.loads(fila_path.read_text(encoding="utf-8")) if fila_path.exists() else []
+    if status:
+        itens = [i for i in itens if i.get("status") == status]
+    total = len(itens)
+    pendentes = sum(1 for i in itens if i.get("status") == "pendente")
+    return {"itens": itens, "stats": {"pendente": pendentes, "total": total}}
 
+@app.post("/auditoria/estoque-negativo/ignorar/{item_id}")
+def auditoria_estoque_negativo_ignorar(item_id: str):
+    from pathlib import Path as _P
+    import json as _j
+    fila_path = _P("data/fila_estoque_negativo.json")
+    itens = _j.loads(fila_path.read_text(encoding="utf-8")) if fila_path.exists() else []
+    for i in itens:
+        if i.get("id") == item_id:
+            i["status"] = "ignorado"
+    fila_path.write_text(_j.dumps(itens, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"ok": True}
 
+@app.post("/auditoria/estoque-negativo/limpar")
+def auditoria_estoque_negativo_limpar():
+    from pathlib import Path as _P
+    import json as _j
+    fila_path = _P("data/fila_estoque_negativo.json")
+    itens = _j.loads(fila_path.read_text(encoding="utf-8")) if fila_path.exists() else []
+    itens = [i for i in itens if i.get("status") == "pendente"]
+    fila_path.write_text(_j.dumps(itens, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"ok": True, "pendentes": len(itens)}

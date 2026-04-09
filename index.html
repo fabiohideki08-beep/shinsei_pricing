@@ -162,6 +162,12 @@
     </div>
   </div>
 
+        <div class="stat-card" onclick="window.location='/auditoria-automatica'" style="cursor:pointer;border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.06)">
+          <div class="stat-label">⚠️ Estoque Negativo</div>
+          <div class="stat-value warn" id="stat-negativo">0</div>
+          <div class="stat-sub" id="stat-negativo-sub">SKUs com saldo negativo no Bling</div>
+        </div>
+
   <!-- MÓDULOS PRINCIPAIS -->
   <div class="section-title">Módulos principais</div>
   <div class="hero-grid">
@@ -333,6 +339,15 @@ async function carregarStats(){
 }
 
 document.addEventListener('DOMContentLoaded', carregarStats);
+
+        fetch('/auditoria/estoque-negativo?status=pendente')
+            .then(r=>r.json()).then(d=>{
+                const n=d.stats?.pendente||0;
+                const el=document.getElementById('stat-negativo');
+                if(el){el.textContent=n;el.className='stat-value '+(n>0?'warn':'green');}
+                const sub=document.getElementById('stat-negativo-sub');
+                if(sub&&n>0)sub.textContent=n+' SKU(s) com saldo negativo — clique para ver';
+            }).catch(()=>{});
 </script>
 </body>
 </html>

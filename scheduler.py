@@ -153,6 +153,29 @@ def _ciclo_atualizacao() -> dict:
             resumo["ignorados"] += 1
             continue
 
+        # Alerta de estoque negativo no Bling
+        estoque_virtual = int((produto.get("estoque") or {}).get("saldoVirtualTotal") or 0)
+        if estoque_virtual < 0:
+            logger.warning("ESTOQUE NEGATIVO: SKU %s estoque=%d", sku, estoque_virtual)
+            try:
+                import json as _json
+                from datetime import datetime as _dt
+                _fila_neg = BASE_DIR / "data" / "fila_estoque_negativo.json"
+                _itens = _json.loads(_fila_neg.read_text(encoding="utf-8")) if _fila_neg.exists() else []
+                _skus_existentes = {i.get("sku") for i in _itens if i.get("status") == "pendente"}
+                if sku not in _skus_existentes:
+                    _itens.append({
+                        "id": f"neg_{sku}_{_dt.now().strftime('%Y%m%d%H%M%S')}",
+                        "sku": sku,
+                        "nome": produto.get("nome", ""),
+                        "estoque": estoque_virtual,
+                        "detectado_em": _dt.now().isoformat(),
+                        "status": "pendente"
+                    })
+                    _fila_neg.write_text(_json.dumps(_itens, ensure_ascii=False, indent=2), encoding="utf-8")
+            except Exception as _e:
+                logger.debug("Erro ao salvar alerta estoque negativo: %s", _e)
+
       
         custo = float(produto.get("precoCusto") or produto.get("preco_custo") or 0)
         if custo <= 0:

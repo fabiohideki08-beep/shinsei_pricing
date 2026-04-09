@@ -71,6 +71,7 @@ PUBLIC_PATHS = {
     "/auditoria/ml-estoque",
     "/auditoria/fila",
     "/auditoria-automatica",
+    "/auditoria/estoque-negativo",
     "/integracao/preview",
     "/fila/lista",
     "/fila/adicionar",
