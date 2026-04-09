@@ -173,6 +173,7 @@
         <button class="btn sm warn" id="btnConferirMLEstoque" onclick="conferirEstoqueML('estoque')">📦 Conferir estoque</button>
         <button class="btn sm warn" id="btnConferirMLPreco" onclick="conferirEstoqueML('preco')" style="background:#7c3aed">💰 Conferir preços</button>
         <button class="btn sm success" onclick="corrigirTodosML('divergencia')" id="btnCorrigirTodosML">📦 Corrigir estoque</button>
+        <button class="btn sm secondary" onclick="limparFilaCompleta('ml')" style="background:#374151">🗑️ Limpar fila</button>
         <button class="btn sm success" onclick="corrigirTodosMLPreco()" id="btnCorrigirTodosMLPreco" style="background:#7c3aed">💰 Corrigir preços</button>
       </div>
     </div>
@@ -205,6 +206,7 @@
         <button class="btn sm warn" id="btnConferirShopifyEstoque" onclick="conferirShopify('estoque')">📦 Conferir estoque</button>
         <button class="btn sm warn" id="btnConferirShopifyPreco" onclick="conferirShopify('preco')" style="background:#7c3aed">💰 Conferir preços</button>
         <button class="btn sm success" onclick="corrigirTodosShopify('estoque')">📦 Corrigir estoque</button>
+        <button class="btn sm secondary" onclick="limparFilaCompleta('shopify')" style="background:#374151">🗑️ Limpar fila</button>
         <button class="btn sm success" onclick="corrigirTodosShopify('preco')" style="background:#7c3aed">💰 Corrigir preços</button>
       </div>
     </div>
@@ -931,6 +933,27 @@ function mostrarSecaoNegativo(){
   const s = document.getElementById('secao-negativo');
   if(s){ s.style.display='block'; carregarNegativo(); }
 }
+
+// ─── LIMPAR FILA COMPLETA ─────────────────────────────────────
+async function limparFilaCompleta(tipo){
+  const nomes = {
+    'ml': 'ML', 'shopify': 'Shopify', 
+    'negativo': 'Estoque Negativo', 'preco': 'Fila de Preços'
+  };
+  if(!confirm('Limpar TODA a fila de ' + (nomes[tipo]||tipo) + '? Esta ação não pode ser desfeita.')) return;
+  const urls = {
+    'ml': '/auditoria/ml-estoque/limpar-tudo',
+    'shopify': '/auditoria/shopify/limpar-tudo',
+    'negativo': '/auditoria/estoque-negativo/limpar-tudo',
+    'preco': '/fila/reset-total'
+  };
+  await fetch(urls[tipo], {method:'POST'});
+  mostrarNotice('Fila de ' + (nomes[tipo]||tipo) + ' limpa!', 'ok');
+  if(tipo==='ml') carregarEstoqueML();
+  else if(tipo==='shopify') carregarShopify();
+  else if(tipo==='negativo') carregarNegativo();
+  else location.reload();
+}
 </script>
 
       <!-- SEÇÃO ESTOQUE NEGATIVO -->
@@ -943,6 +966,7 @@ function mostrarSecaoNegativo(){
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn sm secondary" onclick="ignorarTodosNegativos()">✓ Ignorar todos</button>
             <button class="btn sm secondary" onclick="limparNegativosResolvidos()">🧹 Limpar resolvidos</button>
+            <button class="btn sm secondary" onclick="limparFilaCompleta('negativo')" style="background:#374151">🗑️ Limpar fila</button>
           </div>
         </div>
         <div style="font-size:13px;color:#f87171;margin-bottom:12px">

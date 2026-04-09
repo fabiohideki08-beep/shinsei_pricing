@@ -1787,3 +1787,15 @@ def auditoria_estoque_negativo_limpar():
     fila_path.write_text(_j.dumps(itens, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"ok": True, "pendentes": len(itens)}
 
+@app.post("/auditoria/shopify/limpar-tudo")
+def auditoria_shopify_limpar_tudo():
+    from shopify_conferencia import salvar_fila_shopify
+    salvar_fila_shopify([])
+    return {"ok": True}
+
+@app.post("/auditoria/estoque-negativo/limpar-tudo")
+def auditoria_negativo_limpar_tudo():
+    from pathlib import Path as _P
+    import json as _j
+    _P("data/fila_estoque_negativo.json").write_text("[]", encoding="utf-8")
+    return {"ok": True}
