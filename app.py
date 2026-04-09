@@ -945,6 +945,36 @@ async def auditoria_shopify_token(request: Request):
     salvar_shopify_token(token)
     return {"ok": True}
 
+
+@app.get("/shopify/auth")
+def shopify_auth(request: Request):
+    from shopify_oauth import gerar_url_auth
+    from fastapi.responses import RedirectResponse
+    base_url = str(request.base_url).rstrip("/")
+    redirect_uri = base_url + "/shopify/callback"
+    url = gerar_url_auth(redirect_uri)
+    return RedirectResponse(url)
+
+@app.get("/shopify/callback")
+def shopify_callback(code: str = "", state: str = "", request: Request = None):
+    from shopify_oauth import processar_callback
+    from fastapi.responses import HTMLResponse
+    base_url = str(request.base_url).rstrip("/")
+    redirect_uri = base_url + "/shopify/callback"
+    resultado = processar_callback(code, state, redirect_uri)
+    if resultado.get("ok"):
+        return HTMLResponse("<h2>✅ Shopify conectado! Token salvo com sucesso.</h2><p><a href='/integracoes'>Voltar para Integrações</a></p>")
+    return HTMLResponse(f"<h2>❌ Erro: {resultado.get('erro')}</h2>")
+
+@app.get("/shopify/status")
+def shopify_status():
+    import json
+    from pathlib import Path as _P
+    cfg = _P("data/shopify_config.json")
+    if not cfg.exists(): return {"connected": False}
+    data = json.loads(cfg.read_text(encoding="utf-8"))
+    token = data.get("access_token", "")
+    return {"connected": bool(token) and token != ".", "scope": data.get("scope", ""), "salvo_em": data.get("salvo_em")}
 if not FILA_PATH.exists(): ...
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -1580,6 +1610,36 @@ async def auditoria_shopify_token(request: Request):
     salvar_shopify_token(token)
     return {"ok": True}
 
+
+@app.get("/shopify/auth")
+def shopify_auth(request: Request):
+    from shopify_oauth import gerar_url_auth
+    from fastapi.responses import RedirectResponse
+    base_url = str(request.base_url).rstrip("/")
+    redirect_uri = base_url + "/shopify/callback"
+    url = gerar_url_auth(redirect_uri)
+    return RedirectResponse(url)
+
+@app.get("/shopify/callback")
+def shopify_callback(code: str = "", state: str = "", request: Request = None):
+    from shopify_oauth import processar_callback
+    from fastapi.responses import HTMLResponse
+    base_url = str(request.base_url).rstrip("/")
+    redirect_uri = base_url + "/shopify/callback"
+    resultado = processar_callback(code, state, redirect_uri)
+    if resultado.get("ok"):
+        return HTMLResponse("<h2>✅ Shopify conectado! Token salvo com sucesso.</h2><p><a href='/integracoes'>Voltar para Integrações</a></p>")
+    return HTMLResponse(f"<h2>❌ Erro: {resultado.get('erro')}</h2>")
+
+@app.get("/shopify/status")
+def shopify_status():
+    import json
+    from pathlib import Path as _P
+    cfg = _P("data/shopify_config.json")
+    if not cfg.exists(): return {"connected": False}
+    data = json.loads(cfg.read_text(encoding="utf-8"))
+    token = data.get("access_token", "")
+    return {"connected": bool(token) and token != ".", "scope": data.get("scope", ""), "salvo_em": data.get("salvo_em")}
 if not FILA_PATH.exists(): _save_json(FILA_PATH, [])
 if not CFG_PATH.exists(): _save_json(CFG_PATH, DEFAULT_CFG)
 

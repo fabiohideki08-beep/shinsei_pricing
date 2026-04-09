@@ -123,6 +123,11 @@
       <span>Mercado Pago</span>
       <span class="status-val" id="val-mp">Verificando...</span>
     </div>
+    <div class="status-item">
+      <div class="dot gray" id="dot-shopify"></div>
+      <span>Shopify</span>
+      <span class="status-val" id="val-shopify">Verificando...</span>
+    </div>
     <div class="status-item" style="margin-left:auto">
       <div class="dot green" id="dot-scheduler"></div>
       <span>Scheduler</span>
@@ -306,6 +311,15 @@ async function carregarStats(){
     const data = await res.json();
     document.getElementById('dot-mp').className = 'dot ' + (data.configurado ? 'green' : 'gray');
     document.getElementById('val-mp').textContent = data.configurado ? 'Configurado' : 'Não configurado';
+  }catch(e){}
+
+  // Status Shopify
+  try{
+    const res = await fetch('/shopify/status');
+    const data = await res.json();
+    const ok = data.connected;
+    document.getElementById('dot-shopify').className = 'dot ' + (ok ? 'green' : 'red');
+    document.getElementById('val-shopify').textContent = ok ? 'Conectado' : 'Desconectado';
   }catch(e){}
 
   // Health / ciclo

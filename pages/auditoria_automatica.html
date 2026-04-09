@@ -166,7 +166,7 @@
           <button class="filtro-btn" onclick="filtrarML('corrigido', '', this)">Corrigidos</button>
         </div>
         <button class="btn sm warn" id="btnConferirML" onclick="conferirEstoqueML()">🔄 Conferir ML</button>
-        <button class="btn sm success" onclick="corrigirTodosML()" id="btnCorrigirTodosML">✅ Corrigir todos</button>
+        <button class="btn sm success" onclick="corrigirTodosML('divergencia')" id="btnCorrigirTodosML">📦 Corrigir estoque</button>
       </div>
     </div>
     <div id="progressoML" style="display:none;padding:10px;background:rgba(79,140,255,.08);border-radius:12px;margin-bottom:12px;font-size:13px;color:var(--muted)">
@@ -196,7 +196,8 @@
           <button class="filtro-btn" onclick="filtrarShopify('corrigido', '', this)">Corrigidos</button>
         </div>
         <button class="btn sm warn" id="btnConferirShopify" onclick="conferirShopify()">🔄 Conferir Shopify</button>
-        <button class="btn sm success" onclick="corrigirTodosShopify()">✅ Corrigir todos</button>
+        <button class="btn sm success" onclick="corrigirTodosShopify('estoque')">📦 Corrigir estoque</button>
+        <button class="btn sm success" onclick="corrigirTodosShopify('preco')" style="background:#7c3aed">💰 Corrigir preços</button>
       </div>
     </div>
     <div id="progressoShopify" style="display:none;padding:10px;background:rgba(79,140,255,.08);border-radius:12px;margin-bottom:12px;font-size:13px;color:var(--muted)">
@@ -632,8 +633,8 @@ async function conferirEstoqueML(){
   }
 }
 
-async function corrigirTodosML(){
-  if(!confirm('Corrigir TODOS os itens com divergência? Isso atualizará o estoque de todos os anúncios no ML com os valores do Bling.')) return;
+async function corrigirTodosML(tipo='divergencia'){
+  if(!confirm('Corrigir todos os itens com divergência de estoque no ML?')) return;
 
   const progWrap = document.getElementById('progressoML');
   const progTexto = document.getElementById('progressoMLTexto');
@@ -643,8 +644,7 @@ async function corrigirTodosML(){
   btn.disabled = true;
   progWrap.style.display = 'block';
 
-  // Busca todos os pendentes com divergência
-  const res = await fetch('/auditoria/ml-estoque?status=pendente&tipo=divergencia');
+  const res = await fetch('/auditoria/ml-estoque?status=pendente&tipo=' + tipo);
   const data = await res.json();
   const itens = data.itens || [];
 
@@ -838,9 +838,12 @@ async function corrigirShopify(id){
   }catch(e){ mostrarNotice('Erro.','err'); }
 }
 
-async function corrigirTodosShopify(){
-  if(!confirm('Corrigir TODAS as divergências pendentes na Shopify?')) return;
-  const res = await fetch('/auditoria/shopify?status=pendente');
+async function corrigirTodosShopify(tipo=''){
+  const label = tipo === 'estoque' ? 'estoque' : tipo === 'preco' ? 'preço' : 'todas as divergências';
+  if(!confirm('Corrigir ' + label + ' pendentes na Shopify?')) return;
+  let url = '/auditoria/shopify?status=pendente';
+  if(tipo) url += '&tipo=' + tipo;
+  const res = await fetch(url);
   const data = await res.json();
   const itens = data.itens || [];
   if(!itens.length){ mostrarNotice('Nenhuma divergência pendente.','ok'); return; }
