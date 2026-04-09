@@ -89,8 +89,7 @@
       <a class="btn secondary" href="/fila">Fila preços</a>
       <button class="btn warn" id="btnConferirTudo" onclick="conferirTudo()">🔍 Conferir tudo agora</button>
       <button class="btn secondary" onclick="limparResolvidos()">🧹 Limpar resolvidos</button>
-    </div>
-  </div>
+    </div>  </div>
 
   <div id="notice-global" class="notice"></div>
 
@@ -115,6 +114,12 @@
       <div class="label">🛍️ Shopify</div>
       <div class="value warn" id="statShopify">—</div>
       <div class="sub">divergências pendentes</div>
+    </div>
+
+    <div class="stat" onclick="mostrarSecaoNegativo()" style="cursor:pointer;border:1px solid rgba(239,68,68,.5);background:rgba(239,68,68,.1)">
+      <div class="label">⚠️ Estoque Negativo</div>
+      <div class="value warn" id="stat-negativo-card">0</div>
+      <div class="sub">SKUs com saldo negativo no Bling</div>
     </div>
     <div class="stat" onclick="mostrarSecao('comissao', this)">
       <div class="label">📊 Comissão</div>
