@@ -905,7 +905,7 @@ def auditoria_shopify_lista(status: str = "", tipo: str = ""):
     return {"itens": itens, "stats": stats_fila_shopify()}
 
 @app.post("/auditoria/shopify/conferir")
-def auditoria_shopify_conferir():
+def auditoria_shopify_conferir(tipo: str = ""):
     from shopify_conferencia import conferir_shopify
     if not BlingClient:
         raise HTTPException(status_code=500, detail="Bling nao disponivel.")
@@ -913,7 +913,7 @@ def auditoria_shopify_conferir():
     _scheduler_pausado = True
     try:
         client = BlingClient()
-        resultado = conferir_shopify(client)
+        resultado = conferir_shopify(client, tipo=tipo)
         return resultado
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1563,21 +1563,6 @@ def auditoria_shopify_lista(status: str = "", tipo: str = ""):
         itens = [i for i in itens if i.get("tipo") == tipo]
     return {"itens": itens, "stats": stats_fila_shopify()}
 
-@app.post("/auditoria/shopify/conferir")
-def auditoria_shopify_conferir():
-    from shopify_conferencia import conferir_shopify
-    if not BlingClient:
-        raise HTTPException(status_code=500, detail="Bling nao disponivel.")
-    global _scheduler_pausado
-    _scheduler_pausado = True
-    try:
-        client = BlingClient()
-        resultado = conferir_shopify(client)
-        return resultado
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        _scheduler_pausado = False
 
 @app.post("/auditoria/shopify/corrigir/{item_id}")
 def auditoria_shopify_corrigir(item_id: str):
@@ -1801,3 +1786,4 @@ def auditoria_estoque_negativo_limpar():
     itens = [i for i in itens if i.get("status") == "pendente"]
     fila_path.write_text(_j.dumps(itens, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"ok": True, "pendentes": len(itens)}
+

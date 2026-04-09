@@ -165,7 +165,8 @@
           <button class="filtro-btn" onclick="filtrarML('', 'divergencia', this)">Divergências</button>
           <button class="filtro-btn" onclick="filtrarML('corrigido', '', this)">Corrigidos</button>
         </div>
-        <button class="btn sm warn" id="btnConferirML" onclick="conferirEstoqueML()">🔄 Conferir ML</button>
+        <button class="btn sm warn" id="btnConferirMLEstoque" onclick="conferirEstoqueML('estoque')">📦 Conferir estoque</button>
+        <button class="btn sm warn" id="btnConferirMLPreco" onclick="conferirEstoqueML('preco')" style="background:#7c3aed">💰 Conferir preços</button>
         <button class="btn sm success" onclick="corrigirTodosML('divergencia')" id="btnCorrigirTodosML">📦 Corrigir estoque</button>
       </div>
     </div>
@@ -195,7 +196,8 @@
           <button class="filtro-btn" onclick="filtrarShopify('', 'preco', this)">Preço</button>
           <button class="filtro-btn" onclick="filtrarShopify('corrigido', '', this)">Corrigidos</button>
         </div>
-        <button class="btn sm warn" id="btnConferirShopify" onclick="conferirShopify()">🔄 Conferir Shopify</button>
+        <button class="btn sm warn" id="btnConferirShopifyEstoque" onclick="conferirShopify('estoque')">📦 Conferir estoque</button>
+        <button class="btn sm warn" id="btnConferirShopifyPreco" onclick="conferirShopify('preco')" style="background:#7c3aed">💰 Conferir preços</button>
         <button class="btn sm success" onclick="corrigirTodosShopify('estoque')">📦 Corrigir estoque</button>
         <button class="btn sm success" onclick="corrigirTodosShopify('preco')" style="background:#7c3aed">💰 Corrigir preços</button>
       </div>
@@ -580,8 +582,8 @@ function filtrarML(status, tipo, btn){
   carregarEstoqueML();
 }
 
-async function conferirEstoqueML(){
-  const btnConf = document.getElementById('btnConferirML') || document.querySelector('[onclick="conferirEstoqueML()"]');
+async function conferirEstoqueML(tipo=''){
+  const btnConf = document.getElementById(tipo==='preco' ? 'btnConferirMLPreco' : 'btnConferirMLEstoque');
   const btnTudo = document.getElementById('btnConferirTudo');
   const progWrap = document.getElementById('progressoML');
   const progTexto = document.getElementById('progressoMLTexto');
@@ -606,7 +608,7 @@ async function conferirEstoqueML(){
   }, 1500);
 
   try{
-    const res = await fetch('/auditoria/ml-estoque/conferir', {method:'POST'});
+    const res = await fetch('/auditoria/ml-estoque/conferir' + (tipo ? '?tipo='+tipo : ''), {method:'POST'});
     const data = await res.json();
     clearInterval(intervalo);
     progBar.style.width = '100%';
@@ -788,8 +790,8 @@ function filtrarShopify(status, tipo, btn){
   carregarShopify();
 }
 
-async function conferirShopify(){
-  const btn = document.getElementById('btnConferirShopify');
+async function conferirShopify(tipo=''){
+  const btn = document.getElementById(tipo==='preco' ? 'btnConferirShopifyPreco' : 'btnConferirShopifyEstoque');
   const btnTudo = document.getElementById('btnConferirTudo');
   const prog = document.getElementById('progressoShopify');
   const progTexto = document.getElementById('progressoShopifyTexto');
@@ -808,7 +810,7 @@ async function conferirShopify(){
   }, 1000);
 
   try{
-    const res = await fetch('/auditoria/shopify/conferir', {method:'POST'});
+    const res = await fetch('/auditoria/shopify/conferir' + (tipo ? '?tipo='+tipo : ''), {method:'POST'});
     const data = await res.json();
     clearInterval(iv);
     progBar.style.width = '100%';
@@ -872,6 +874,93 @@ document.addEventListener('DOMContentLoaded', () => {
   carregarShopify();
   carregarPrecos();
 });
+
+// ─── ESTOQUE NEGATIVO ─────────────────────────────────────────
+async function carregarNegativo(){
+  const res = await fetch('/auditoria/estoque-negativo').catch(()=>null);
+  if(!res) return;
+  const data = await res.json();
+  const itens = data.itens || [];
+  const pendentes = itens.filter(i=>i.status==='pendente');
+  document.getElementById('badge-negativo').textContent = pendentes.length;
+  const tbody = document.getElementById('tabela-negativo');
+  const empty = document.getElementById('negativo-empty');
+  if(!tbody) return;
+  if(!itens.length){ tbody.innerHTML=''; if(empty) empty.style.display='block'; return; }
+  if(empty) empty.style.display='none';
+  tbody.innerHTML = itens.map(i=>`
+    <tr style="border-bottom:1px solid #1a2540;${i.status==='pendente'?'background:rgba(239,68,68,0.05)':''}">
+      <td style="padding:8px 12px;font-family:monospace;color:#f87171">${i.sku||'-'}</td>
+      <td style="padding:8px 12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${i.nome||''}">${i.nome||'-'}</td>
+      <td style="padding:8px 12px;text-align:center;font-weight:700;color:#ef4444">${i.estoque}</td>
+      <td style="padding:8px 12px;color:#9fb0d9;font-size:11px">${(i.detectado_em||'').replace('T',' ').substring(0,16)}</td>
+      <td style="padding:8px 12px"><span style="background:${i.status==='pendente'?'#ef4444':'#374151'};color:white;border-radius:999px;padding:2px 8px;font-size:11px">${i.status}</span></td>
+      <td style="padding:8px 12px">
+        ${i.status==='pendente'?`<button class="btn success sm" onclick="ignorarNegativo('${i.id}')">✓ Ignorar</button>`:''}
+      </td>
+    </tr>`).join('');
+}
+
+async function ignorarNegativo(id){
+  await fetch('/auditoria/estoque-negativo/ignorar/'+id, {method:'POST'});
+  carregarNegativo();
+}
+
+async function ignorarTodosNegativos(){
+  if(!confirm('Ignorar todos os alertas de estoque negativo pendentes?')) return;
+  const data = await fetch('/auditoria/estoque-negativo').then(r=>r.json());
+  const pendentes = (data.itens||[]).filter(i=>i.status==='pendente');
+  for(const i of pendentes) await fetch('/auditoria/estoque-negativo/ignorar/'+i.id, {method:'POST'});
+  carregarNegativo();
+}
+
+async function limparNegativosResolvidos(){
+  await fetch('/auditoria/estoque-negativo/limpar', {method:'POST'});
+  carregarNegativo();
+}
+
+// Mostra seção negativo quando clicado no card
+function mostrarSecaoNegativo(){
+  document.querySelectorAll('.secao-auditoria').forEach(s=>s.style.display='none');
+  const s = document.getElementById('secao-negativo');
+  if(s){ s.style.display='block'; carregarNegativo(); }
+}
 </script>
+
+      <!-- SEÇÃO ESTOQUE NEGATIVO -->
+      <div id="secao-negativo" style="display:none;margin-top:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+          <h2 style="font-size:18px;font-weight:700;display:flex;align-items:center;gap:8px">
+            ⚠️ Estoque Negativo Bling
+            <span id="badge-negativo" style="background:#ef4444;color:white;border-radius:999px;padding:2px 10px;font-size:13px">0</span>
+          </h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn sm secondary" onclick="ignorarTodosNegativos()">✓ Ignorar todos</button>
+            <button class="btn sm secondary" onclick="limparNegativosResolvidos()">🧹 Limpar resolvidos</button>
+          </div>
+        </div>
+        <div style="font-size:13px;color:#f87171;margin-bottom:12px">
+          ⚡ Produtos com saldo negativo indicam venda sem estoque. Verifique e corrija no Bling.
+        </div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="border-bottom:1px solid #263458;color:#9fb0d9;text-align:left">
+                <th style="padding:8px 12px">SKU</th>
+                <th style="padding:8px 12px">Produto</th>
+                <th style="padding:8px 12px;text-align:center">Estoque</th>
+                <th style="padding:8px 12px">Detectado em</th>
+                <th style="padding:8px 12px">Status</th>
+                <th style="padding:8px 12px">Ação</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-negativo"></tbody>
+          </table>
+        </div>
+        <div id="negativo-empty" style="display:none;text-align:center;padding:40px;color:#9fb0d9">
+          <div style="font-size:32px;margin-bottom:8px">✅</div>
+          Nenhum estoque negativo detectado.
+        </div>
+      </div>
 </body>
 </html>

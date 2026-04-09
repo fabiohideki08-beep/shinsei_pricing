@@ -1,6 +1,6 @@
-"""
-shopify_conferencia.py — Shinsei Pricing
-Módulo de conferência de estoque e preço entre Bling e Shopify.
+﻿"""
+shopify_conferencia.py â€” Shinsei Pricing
+MÃ³dulo de conferÃªncia de estoque e preÃ§o entre Bling e Shopify.
 """
 from __future__ import annotations
 import json
@@ -56,7 +56,7 @@ def _shopify_get_token() -> Optional[str]:
     return config.get("access_token") or "SHOPIFY_TOKEN_REMOVED"
 
 def _shopify_listar_produtos(token: str, limit: int = 250, page_info: str = None) -> tuple[list, Optional[str]]:
-    """Lista produtos da Shopify com paginação."""
+    """Lista produtos da Shopify com paginaÃ§Ã£o."""
     url = f"https://{SHOPIFY_STORE}.myshopify.com/admin/api/{SHOPIFY_API_VERSION}/products.json"
     params = {"limit": limit, "fields": "id,title,variants,status"}
     if page_info:
@@ -66,7 +66,7 @@ def _shopify_listar_produtos(token: str, limit: int = 250, page_info: str = None
         if res.status_code == 200:
             data = res.json()
             produtos = data.get("products", [])
-            # Paginação via Link header
+            # PaginaÃ§Ã£o via Link header
             next_page = None
             link_header = res.headers.get("Link", "")
             if 'rel="next"' in link_header:
@@ -82,7 +82,7 @@ def _shopify_listar_produtos(token: str, limit: int = 250, page_info: str = None
     return [], None
 
 def _shopify_get_inventory(token: str, inventory_item_id: int, location_id: int) -> int:
-    """Busca estoque de um item em uma localização."""
+    """Busca estoque de um item em uma localizaÃ§Ã£o."""
     url = f"https://{SHOPIFY_STORE}.myshopify.com/admin/api/{SHOPIFY_API_VERSION}/inventory_levels.json"
     params = {"inventory_item_ids": inventory_item_id, "location_ids": location_id}
     try:
@@ -96,18 +96,18 @@ def _shopify_get_inventory(token: str, inventory_item_id: int, location_id: int)
     return 0
 
 def _shopify_get_locations(token: str) -> list[dict]:
-    """Lista localizações ativas da Shopify."""
+    """Lista localizaÃ§Ãµes ativas da Shopify."""
     url = f"https://{SHOPIFY_STORE}.myshopify.com/admin/api/{SHOPIFY_API_VERSION}/locations.json"
     try:
         res = requests.get(url, headers=_shopify_headers(token), timeout=15)
         if res.status_code == 200:
             return res.json().get("locations", [])
     except Exception as e:
-        logger.warning("Erro ao buscar localizações Shopify: %s", e)
+        logger.warning("Erro ao buscar localizaÃ§Ãµes Shopify: %s", e)
     return []
 
 def _shopify_atualizar_estoque(token: str, inventory_item_id: int, location_id: int, quantidade: int) -> dict:
-    """Atualiza estoque de um item em uma localização."""
+    """Atualiza estoque de um item em uma localizaÃ§Ã£o."""
     url = f"https://{SHOPIFY_STORE}.myshopify.com/admin/api/{SHOPIFY_API_VERSION}/inventory_levels/set.json"
     payload = {
         "location_id": location_id,
@@ -123,7 +123,7 @@ def _shopify_atualizar_estoque(token: str, inventory_item_id: int, location_id: 
         return {"ok": False, "erro": str(e)}
 
 def _shopify_atualizar_preco(token: str, variant_id: int, preco: float, preco_comparado: float = None) -> dict:
-    """Atualiza preço de uma variante."""
+    """Atualiza preÃ§o de uma variante."""
     url = f"https://{SHOPIFY_STORE}.myshopify.com/admin/api/{SHOPIFY_API_VERSION}/variants/{variant_id}.json"
     payload = {"variant": {"id": variant_id, "price": str(round(preco, 2))}}
     if preco_comparado:
@@ -136,20 +136,20 @@ def _shopify_atualizar_preco(token: str, variant_id: int, preco: float, preco_co
     except Exception as e:
         return {"ok": False, "erro": str(e)}
 
-def conferir_shopify(bling_client, max_produtos: int = 500) -> dict:
+def conferir_shopify(bling_client, max_produtos: int = 500, tipo: str = "") -> dict:
     """
-    Compara produtos Shopify com Bling — estoque e preço.
+    Compara produtos Shopify com Bling â€” estoque e preÃ§o.
     Usa inventory_quantity direto da variante (sem precisar de read_locations).
     """
     token = _shopify_get_token()
     if not token:
-        return {"ok": False, "erro": "Token da Shopify não configurado."}
+        return {"ok": False, "erro": "Token da Shopify nÃ£o configurado."}
 
-    # Busca location_id do primeiro depósito ativo
+    # Busca location_id do primeiro depÃ³sito ativo
     locations = _shopify_get_locations(token)
     location_id = locations[0]["id"] if locations else None
     if not location_id:
-        logger.warning("Shopify: nenhuma localização encontrada, usando inventory_quantity direto")
+        logger.warning("Shopify: nenhuma localizaÃ§Ã£o encontrada, usando inventory_quantity direto")
 
     fila = carregar_fila_shopify()
     chaves_pendentes = {(i.get("sku"), i.get("tipo")) for i in fila if i.get("status") == "pendente"}
@@ -189,18 +189,19 @@ def conferir_shopify(bling_client, max_produtos: int = 500) -> dict:
                     estoque_bling = int((prod_bling.get("estoque") or {}).get("saldoVirtualTotal") or 0)
                     preco_bling = float(prod_bling.get("preco") or 0)
 
-                    # Estoque Shopify — direto da variante (inventory_quantity)
+                    # Estoque Shopify â€” direto da variante (inventory_quantity)
                     estoque_shopify = int(variant.get("inventory_quantity") or 0)
                     inventory_item_id = variant.get("inventory_item_id")
 
-                    # Preço Shopify
+                    # PreÃ§o Shopify
                     preco_shopify = float(variant.get("price") or 0)
 
                     titulo = produto.get("title", "")[:60]
                     variant_id = variant.get("id")
 
-                    # ── Divergência de estoque ──
-                    if estoque_bling != estoque_shopify:
+                    # â”€â”€ DivergÃªncia de estoque â”€â”€
+                    # ── Filtro por tipo + Divergência de estoque ──
+                    if tipo not in ("preco",) and estoque_bling != estoque_shopify:
                         divergencias_estoque += 1
                         chave = (sku, "estoque")
                         if chave not in chaves_pendentes:
@@ -223,10 +224,10 @@ def conferir_shopify(bling_client, max_produtos: int = 500) -> dict:
                                 "atualizado_em": None,
                             })
                             chaves_pendentes.add(chave)
-                            logger.info("Divergência Shopify estoque: sku=%s bling=%d shopify=%d", sku, estoque_bling, estoque_shopify)
+                            logger.info("DivergÃªncia Shopify estoque: sku=%s bling=%d shopify=%d", sku, estoque_bling, estoque_shopify)
 
-                    # ── Divergência de preço (tolerância R$0,50) ──
-                    if abs(preco_bling - preco_shopify) > 0.50 and preco_bling > 0:
+                    # â”€â”€ DivergÃªncia de preÃ§o (tolerÃ¢ncia R$0,50) â”€â”€
+                    if tipo not in ("estoque",) and abs(preco_bling - preco_shopify) > 0.50 and preco_bling > 0:
                         divergencias_preco += 1
                         chave = (sku, "preco")
                         if chave not in chaves_pendentes:
@@ -245,7 +246,7 @@ def conferir_shopify(bling_client, max_produtos: int = 500) -> dict:
                                 "atualizado_em": None,
                             })
                             chaves_pendentes.add(chave)
-                            logger.info("Divergência Shopify preço: sku=%s bling=%.2f shopify=%.2f", sku, preco_bling, preco_shopify)
+                            logger.info("DivergÃªncia Shopify preÃ§o: sku=%s bling=%.2f shopify=%.2f", sku, preco_bling, preco_shopify)
 
                 except Exception as e:
                     erros += 1
@@ -258,7 +259,7 @@ def conferir_shopify(bling_client, max_produtos: int = 500) -> dict:
         page_info = next_page
 
     salvar_fila_shopify(fila)
-    logger.info("Conferência Shopify: %d verificados, %d div. estoque, %d div. preço, %d erros",
+    logger.info("ConferÃªncia Shopify: %d verificados, %d div. estoque, %d div. preÃ§o, %d erros",
                 verificados, divergencias_estoque, divergencias_preco, erros)
     return {
         "ok": True,
@@ -270,15 +271,15 @@ def conferir_shopify(bling_client, max_produtos: int = 500) -> dict:
     }
 
 def corrigir_shopify(item_id_fila: str) -> dict:
-    """Corrige divergência de estoque ou preço na Shopify."""
+    """Corrige divergÃªncia de estoque ou preÃ§o na Shopify."""
     fila = carregar_fila_shopify()
     item = next((i for i in fila if i.get("id") == item_id_fila), None)
-    if not item: return {"ok": False, "erro": "Item não encontrado."}
-    if item.get("status") != "pendente": return {"ok": False, "erro": "Item já processado."}
+    if not item: return {"ok": False, "erro": "Item nÃ£o encontrado."}
+    if item.get("status") != "pendente": return {"ok": False, "erro": "Item jÃ¡ processado."}
 
     token = _shopify_get_token()
     tipo = item.get("tipo")
-    resultado = {"ok": False, "erro": "Tipo não suportado."}
+    resultado = {"ok": False, "erro": "Tipo nÃ£o suportado."}
 
     if tipo == "estoque":
         resultado = _shopify_atualizar_estoque(
@@ -311,3 +312,4 @@ def ignorar_shopify(item_id_fila: str) -> dict:
 
 def salvar_shopify_token(token: str) -> None:
     _save_json(SHOPIFY_CONFIG_PATH, {"access_token": token, "salvo_em": datetime.utcnow().isoformat()})
+
