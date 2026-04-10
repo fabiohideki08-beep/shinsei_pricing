@@ -280,7 +280,7 @@
 
 <script>
 // ─── NAVEGAÇÃO ────────────────────────────────────────────
-const secoes = ['estoque','estoque-ml','shopify','preco','comissao','frete'];
+const secoes = ['estoque','estoque-ml','shopify','preco','comissao','frete','amazon'];
 let filtroEstoque = '';
 let filtroPreco = '';
 
@@ -959,8 +959,64 @@ async function limparFilaCompleta(tipo){
   else if(tipo==='negativo') carregarNegativo();
   else location.reload();
 }
+
+// AMAZON
+async function carregarAmazon(){
+  const res = await fetch('/auditoria/amazon').catch(()=>null);
+  if(!res) return;
+  const data = await res.json();
+  const n = data.stats?.pendente || 0;
+  const el = document.getElementById('statAmazon');
+  if(el) el.textContent = n || '—';
+  const badge = document.getElementById('badge-amazon');
+  if(badge) badge.textContent = n;
+  const tbody = document.getElementById('tabela-amazon');
+  const empty = document.getElementById('amazon-empty');
+  const itens = data.itens || [];
+  if(!tbody) return;
+  if(!itens.length){ tbody.innerHTML=''; if(empty){empty.style.display='block';} return; }
+  if(empty) empty.style.display='none';
+  tbody.innerHTML = itens.map(i=>`<tr style="border-bottom:1px solid #1a2540"><td style="padding:8px 12px;font-family:monospace">${i.sku||'-'}</td><td style="padding:8px 12px">${i.nome||'-'}</td><td style="padding:8px 12px">${i.tipo||'-'}</td><td style="padding:8px 12px;text-align:center">${i.estoque_bling??i.preco_bling??'-'}</td><td style="padding:8px 12px;text-align:center">${i.estoque_amazon??i.preco_amazon??'-'}</td><td style="padding:8px 12px;text-align:center">${i.diferenca??'-'}</td><td style="padding:8px 12px">${i.status}</td><td style="padding:8px 12px">${i.status==='pendente'?`<button class="btn sm secondary" onclick="ignorarAmazon('${i.id}')">Ignorar</button>`:''}</td></tr>`).join('');
+}
+async function conferirAmazon(tipo){
+  const btn = document.getElementById(tipo==='pedidos'?'btnConferirAmazonPedidos':'btnConferirAmazonEstoque');
+  if(btn){btn.disabled=true;btn.textContent='Conferindo...';}
+  const res = await fetch('/auditoria/amazon/conferir'+(tipo?'?tipo='+tipo:''),{method:'POST'}).catch(()=>null);
+  if(res){const d=await res.json();mostrarNotice(d.ok?'Amazon OK: '+d.verificados+' verificados':'Erro: '+(d.erro||'?'),d.ok?'ok':'err');}
+  carregarAmazon();
+  if(btn){btn.disabled=false;btn.textContent=tipo==='pedidos'?'Conferir pedidos':'Conferir estoque';}
+}
+async function ignorarAmazon(id){
+  await fetch('/auditoria/amazon/ignorar/'+id,{method:'POST'});
+  carregarAmazon();
+}
 </script>
 
+      
+      <!-- SEÇÃO AMAZON -->
+      <div id="secao-amazon" class="secao" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+          <h2 style="font-size:18px;font-weight:700">&#x1F6D2; Conferencia Amazon <span id="badge-amazon" style="background:#f59e0b;color:#000;border-radius:999px;padding:2px 10px;font-size:13px">0</span></h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn sm warn" id="btnConferirAmazonEstoque" onclick="conferirAmazon('estoque')">&#x1F4E6; Conferir estoque</button>
+            <button class="btn sm warn" id="btnConferirAmazonPedidos" onclick="conferirAmazon('pedidos')" style="background:#7c3aed">&#x1F4CB; Conferir pedidos</button>
+            <button class="btn sm secondary" onclick="limparFilaCompleta('amazon')" style="background:#374151">&#x1F5D1;&#xFE0F; Limpar fila</button>
+          </div>
+        </div>
+        <div id="amazon-empty" style="text-align:center;padding:40px;color:#9fb0d9">
+          <div style="font-size:32px;margin-bottom:8px">&#x2705;</div>
+          Clique em Conferir para iniciar.
+        </div>
+        <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="border-bottom:1px solid #263458;color:#9fb0d9;text-align:left">
+            <th style="padding:8px 12px">SKU</th><th style="padding:8px 12px">Produto</th>
+            <th style="padding:8px 12px">Tipo</th><th style="padding:8px 12px;text-align:center">Bling</th>
+            <th style="padding:8px 12px;text-align:center">Amazon</th><th style="padding:8px 12px;text-align:center">Dif</th>
+            <th style="padding:8px 12px">Status</th><th style="padding:8px 12px">Acao</th>
+          </tr></thead>
+          <tbody id="tabela-amazon"></tbody>
+        </table></div>
+      </div>
       <!-- SEÇÃO ESTOQUE NEGATIVO -->
       <div id="secao-negativo" style="display:none;margin-top:24px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
