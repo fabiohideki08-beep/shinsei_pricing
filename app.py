@@ -1799,3 +1799,60 @@ def auditoria_negativo_limpar_tudo():
     import json as _j
     _P("data/fila_estoque_negativo.json").write_text("[]", encoding="utf-8")
     return {"ok": True}
+
+@app.get("/auditoria/amazon")
+def auditoria_amazon_lista(status: str = "", tipo: str = ""):
+    from amazon_conferencia import carregar_fila, stats_fila
+    itens = carregar_fila()
+    if status:
+        itens = [i for i in itens if i.get("status") == status]
+    if tipo:
+        itens = [i for i in itens if i.get("tipo") == tipo]
+    return {"itens": itens, "stats": stats_fila()}
+
+@app.post("/auditoria/amazon/conferir")
+def auditoria_amazon_conferir(tipo: str = ""):
+    from amazon_conferencia import conferir_amazon
+    from amazon_client import AmazonClient
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="Bling não disponível.")
+    try:
+        bling = BlingClient()
+        amazon = AmazonClient()
+        resultado = conferir_amazon(bling_client=bling, tipo=tipo)
+        return resultado
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/auditoria/amazon/ignorar/{item_id}")
+def auditoria_amazon_ignorar(item_id: str):
+    from amazon_conferencia import carregar_fila, salvar_fila
+    itens = carregar_fila()
+    for i in itens:
+        if i.get("id") == item_id:
+            i["status"] = "ignorado"
+    salvar_fila(itens)
+    return {"ok": True}
+
+@app.post("/auditoria/amazon/limpar-resolvidos")
+def auditoria_amazon_limpar_resolvidos():
+    from amazon_conferencia import carregar_fila, salvar_fila, stats_fila
+    itens = [i for i in carregar_fila() if i.get("status") == "pendente"]
+    salvar_fila(itens)
+    return {"ok": True, "stats": stats_fila()}
+
+@app.post("/auditoria/amazon/limpar-tudo")
+def auditoria_amazon_limpar_tudo():
+    from pathlib import Path as _P
+    _P("data/fila_amazon.json").write_text("[]", encoding="utf-8")
+    return {"ok": True}
+
+@app.get("/amazon/status")
+def amazon_status():
+    try:
+        from amazon_client import AmazonClient
+        c = AmazonClient()
+        token = c._get_access_token()
+        return {"ok": True, "configurado": True, "conectado": bool(token)}
+    except Exception as e:
+        return {"ok": False, "configurado": False, "conectado": False, "erro": str(e)}
