@@ -167,6 +167,21 @@
           <div class="stat-value warn" id="stat-negativo">0</div>
           <div class="stat-sub" id="stat-negativo-sub">SKUs com saldo negativo no Bling</div>
         </div>
+        <div class="stat-card" onclick="window.location='/auditoria-automatica'" style="cursor:pointer">
+          <div class="stat-label">🛒 Divergências ML</div>
+          <div class="stat-value warn" id="stat-div-ml">—</div>
+          <div class="stat-sub">estoque Bling ≠ ML</div>
+        </div>
+        <div class="stat-card" onclick="window.location='/auditoria-automatica'" style="cursor:pointer">
+          <div class="stat-label">🛍️ Divergências Shopify</div>
+          <div class="stat-value warn" id="stat-div-shopify">—</div>
+          <div class="stat-sub">estoque Bling ≠ Shopify</div>
+        </div>
+        <div class="stat-card" onclick="window.location='/auditoria-automatica'" style="cursor:pointer">
+          <div class="stat-label">📦 Divergências Amazon</div>
+          <div class="stat-value warn" id="stat-div-amazon">—</div>
+          <div class="stat-sub">estoque Bling ≠ Amazon</div>
+        </div>
 
   <!-- MÓDULOS PRINCIPAIS -->
   <div class="section-title">Módulos principais</div>
@@ -289,6 +304,24 @@ async function carregarStats(){
     document.getElementById('stat-ml-estoque').textContent = pendentes;
     document.getElementById('badge-auditoria').textContent = pendentes;
     document.getElementById('badge-auditoria').style.display = pendentes > 0 ? 'block' : 'none';
+    const elML = document.getElementById('stat-div-ml');
+    if(elML){elML.textContent=pendentes||'0';elML.className='stat-value '+(pendentes>0?'warn':'green');}
+  }catch(e){}
+  // Divergências Shopify
+  try{
+    const resShop = await fetch('/auditoria/shopify');
+    const dataShop = await resShop.json();
+    const nShop = (dataShop.itens||[]).filter(i=>i.tipo==='estoque'&&i.status==='pendente').length;
+    const elShop = document.getElementById('stat-div-shopify');
+    if(elShop){elShop.textContent=nShop||'0';elShop.className='stat-value '+(nShop>0?'warn':'green');}
+  }catch(e){}
+  // Divergências Amazon
+  try{
+    const resAmz = await fetch('/auditoria/amazon');
+    const dataAmz = await resAmz.json();
+    const nAmz = (dataAmz.itens||[]).filter(i=>i.tipo==='estoque'&&i.status==='pendente').length;
+    const elAmz = document.getElementById('stat-div-amazon');
+    if(elAmz){elAmz.textContent=nAmz||'0';elAmz.className='stat-value '+(nAmz>0?'warn':'green');}
   }catch(e){}
 
   // Status Bling
