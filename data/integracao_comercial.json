@@ -29,6 +29,14 @@
     "Shopify": {
       "tipo": "percentual",
       "valor": 16
+    },
+    "Mercado Livre Full Classico": {
+      "tipo": "percentual",
+      "valor": 0
+    },
+    "Mercado Livre Full Premium": {
+      "tipo": "percentual",
+      "valor": 0
     }
   },
   "forcas_canais": {
