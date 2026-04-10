@@ -1,0 +1,12 @@
+{
+  "gold_special_30_200_MLB6284": {
+    "ts": 1775798144.1529293,
+    "data": {
+      "comissao_pct": 0.12,
+      "frete_operacional": 0.0,
+      "total_ml": 3.76,
+      "voce_recebe": 27.56,
+      "source": "api"
+    }
+  }
+}
