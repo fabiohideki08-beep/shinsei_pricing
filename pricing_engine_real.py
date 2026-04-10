@@ -116,7 +116,11 @@ def _resolver_preco_por_objetivo(custo_base, frete, taxa_fixa, comissao, imposto
         return (custo_base + frete + taxa_fixa + lucro_alvo) / max(1 - comissao - imposto, 0.0001)
     raise ValueError("Objetivo inválido.")
 
-def _calcular_um_canal(regras: List[Dict], canal: str, custo_base: float, peso: float, imposto: float, objetivo: str, tipo_alvo: str, valor_alvo: float):
+def _calcular_um_canal(regras: List[Dict], canal: str, custo_base: float, peso: float, imposto: float, objetivo: str, tipo_alvo: str, valor_alvo: float, embalagem: float = 0):
+    # Para canais Full, embalagem é por conta do ML
+    if 'Full' in canal:
+        custo_base = custo_base - _safe_float(embalagem, 0)
+        custo_base = max(custo_base, 0)
     preco = max(custo_base * 1.5, 1.0)
     regra = None
     for _ in range(25):
@@ -182,7 +186,7 @@ def calcular_canais(regras, preco_compra, embalagem, peso, imposto, quantidade, 
     resultados = []
     for canal in canais:
         try:
-            resultados.append(_calcular_um_canal(regras, canal, custo_base, peso_usado, imposto, objetivo, tipo_alvo, valor_alvo))
+            resultados.append(_calcular_um_canal(regras, canal, custo_base, peso_usado, imposto, objetivo, tipo_alvo, valor_alvo, embalagem=_safe_float(embalagem, 0)))
         except Exception:
             continue
     resultados_ordenados = sorted(resultados, key=lambda x: (x.get("indice_final", 0), x.get("lucro_liquido", 0)), reverse=True)
