@@ -57,6 +57,7 @@ PUBLIC_PATHS = {
     "/ml/callback",
     "/mercado-livre",
     "/regras/modelo/download",
+    "/regras/importar-excel",
     "/docs",
     "/openapi.json",
     "/redoc",
@@ -235,6 +236,7 @@ async def api_key_dep(x_api_key: str | None = Security(_api_key_header)) -> str:
     if not x_api_key or not hmac.compare_digest(x_api_key, chave):
         raise HTTPException(status_code=403, detail="API key invÃ¡lida.")
     return x_api_key
+
 
 
 
