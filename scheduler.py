@@ -1,4 +1,4 @@
-"""
+﻿"""
 scheduler.py — Shinsei Pricing
 Agendador de atualização automática de preços.
 
@@ -177,7 +177,7 @@ def _ciclo_atualizacao() -> dict:
                 logger.debug("Erro ao salvar alerta estoque negativo: %s", _e)
 
       
-        custo = float(produto.get("precoCusto") or produto.get("preco_custo") or 0)
+        custo = float((produto.get("fornecedor") or {}).get("precoCusto") or (produto.get("fornecedor") or {}).get("precoCompra") or produto.get("precoCusto") or produto.get("preco_custo") or 0)
         if custo <= 0:
             logger.debug("SKU %s ignorado: sem custo no Bling", sku)
             resumo["ignorados"] += 1
