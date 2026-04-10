@@ -183,13 +183,32 @@ def _ciclo_atualizacao() -> dict:
             resumo["ignorados"] += 1
             continue
 
+        # Configura API ML em tempo real se habilitado
+        if cfg_raw.get('ml_api_real', False):
+            try:
+                from pricing_engine_real import configurar_ml_api
+                # Busca peso do produto do Bling
+                _peso_g = int(float(produto.get('pesoBruto') or produto.get('pesoLiquido') or 0.3) * 1000)
+                _dim = produto.get('dimensoes') or {}
+                _vol_g = int((_dim.get('largura',10) * _dim.get('altura',5) * _dim.get('profundidade',10)) / 6 )
+                _peso_fat = max(_peso_g, _vol_g)
+                configurar_ml_api(True, _peso_fat, "")
+            except Exception as _e:
+                logger.debug("Erro ao configurar ML API: %s", _e)
+        else:
+            try:
+                from pricing_engine_real import configurar_ml_api
+                configurar_ml_api(False)
+            except Exception:
+                pass
+
         try:
             resultado = montar_precificacao(
                 regras=regras,
                 criterio="sku",
                 valor_busca=sku,
-                embalagem=0,
-                imposto=4.0,   # valor padrão; idealmente puxar da config
+                embalagem=float(cfg_raw.get('embalagem_padrao', 0)),
+                imposto=float(cfg_raw.get('imposto_padrao', 4.0)),
                 quantidade=1,
                 objetivo="lucro_liquido",
                 tipo_alvo="percentual",

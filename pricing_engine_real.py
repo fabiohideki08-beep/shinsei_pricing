@@ -2,6 +2,26 @@ from __future__ import annotations
 
 from typing import Dict, List, Any
 
+# ML API em tempo real (opcional)
+try:
+    from ml_pricing_engine import get_ml_taxa_real as _get_ml_taxa_real
+    _ML_API_DISPONIVEL = True
+except ImportError:
+    _ML_API_DISPONIVEL = False
+    _get_ml_taxa_real = None
+
+# Flag global para usar API ML em tempo real
+_ML_API_REAL = False
+_ML_PESO_G = 0
+_ML_CATEGORY_ID = ""
+
+def configurar_ml_api(usar_api: bool, peso_g: int = 0, category_id: str = ""):
+    global _ML_API_REAL, _ML_PESO_G, _ML_CATEGORY_ID
+    _ML_API_REAL = usar_api and _ML_API_DISPONIVEL
+    _ML_PESO_G = peso_g
+    _ML_CATEGORY_ID = category_id
+
+
 FORMULA_VERSION = "v3.4.0-composicao"
 
 def _safe_float(v, default=0.0):
@@ -112,10 +132,20 @@ def _calcular_um_canal(regras: List[Dict], canal: str, custo_base: float, peso: 
     frete = _round2(regra["taxa_frete"])
     taxa_fixa = _round2(regra["taxa_fixa"])
     comissao_pct = regra["comissao"]
+    frete_op_api = 0.0
+    # Usa taxa ML em tempo real se configurado
+    if _ML_API_REAL and _get_ml_taxa_real and canal in ("Mercado Livre Classico", "Mercado Livre Premium"):
+        _listing = "gold_special" if "Classico" in canal else "gold_pro"
+        try:
+            _taxa = _get_ml_taxa_real(_listing, preco_final, _ML_PESO_G or 300, _ML_CATEGORY_ID)
+            comissao_pct = _taxa.get("comissao_pct", comissao_pct)
+            frete_op_api = _taxa.get("frete_operacional", 0.0)
+        except Exception:
+            pass
     imposto_pct = imposto
     comissao_valor = _round2(preco_final * comissao_pct)
     imposto_valor = _round2(preco_final * imposto_pct)
-    receita_liquida = _round2(preco_final - frete - taxa_fixa - comissao_valor)
+    receita_liquida = _round2(preco_final - frete - taxa_fixa - comissao_valor - frete_op_api)
     lucro_bruto = _round2(receita_liquida - custo_base)
     lucro_liquido = _round2(lucro_bruto - imposto_valor)
     margem_liquida_percentual = _round2((lucro_liquido / preco_final) * 100 if preco_final else 0)
