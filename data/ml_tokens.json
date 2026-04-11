@@ -1,11 +1,11 @@
 {
-  "connected_at": "2026-04-10T04:28:24.689151+00:00",
+  "connected_at": "2026-04-11T04:59:57.246072+00:00",
   "client_id": "7778060735093672",
   "redirect_uri": "https://butyrically-unrespirable-beverly.ngrok-free.dev/ml/callback",
-  "access_token": "APP_USR-7778060735093672-041000-0869643f014a8534debc5de123b4c2a6-733168645",
+  "access_token": "APP_USR-7778060735093672-041100-28c89d76431242949862e3eb7863c8e3-733168645",
   "token_type": "Bearer",
   "expires_in": 21600,
   "scope": "offline_access read urn:global:admin:info:/read-only urn:global:admin:info:/read-write urn:global:admin:oauth:/read-only urn:global:admin:oauth:/read-write urn:global:admin:users:/read-only urn:ml:all:comunication:/read-write urn:ml:all:publish-sync:/read-write urn:ml:mktp:ads:/read-write urn:ml:mktp:comunication:/read-write urn:ml:mktp:metrics:/read-only urn:ml:mktp:offers:/read-write urn:ml:mktp:orders-shipments:/read-write urn:ml:mktp:publish-sync:/read-write write",
   "user_id": 733168645,
-  "refresh_token": "TG-69d87c6b767b8f0001cab3b2-733168645"
+  "refresh_token": "TG-69d9d54e59c3bd000145a720-733168645"
 }
