@@ -59,8 +59,12 @@
     "diferenca": -99,
     "status": "pendente",
     "criado_em": "2026-04-10T06:23:06.640921",
-    "atualizado_em": null,
-    "permalink": "https://produto.mercadolivre.com.br/MLB-3229155491-sige-expert-mascara-capilar-regeneraco-pos-quimica-tratamento-intenso-250g-_JM"
+    "atualizado_em": "2026-04-11T15:58:01.475956",
+    "permalink": "https://produto.mercadolivre.com.br/MLB-3229155491-sige-expert-mascara-capilar-regeneraco-pos-quimica-tratamento-intenso-250g-_JM",
+    "resultado": {
+      "ok": false,
+      "erro": "{\"message\":\"Validation error\",\"error\":\"validation_error\",\"status\":400,\"cause\":[{\"department\":\"items\",\"cause_id\":466,\"type\":\"error\",\"code\":\"item.available_quantity.not_updatable\",\"references\":[\"item.av"
+    }
   },
   {
     "id": "ml_div_MLB4044676160_20260410062343",
@@ -1018,8 +1022,12 @@
     "diferenca": -2,
     "status": "pendente",
     "criado_em": "2026-04-10T06:44:20.569473",
-    "atualizado_em": null,
-    "permalink": "https://produto.mercadolivre.com.br/MLB-3979176443-desodorante-roll-on-antiperspirante-blue-giovanna-baby-50ml-tradicional-_JM"
+    "atualizado_em": "2026-04-11T15:53:23.754284",
+    "permalink": "https://produto.mercadolivre.com.br/MLB-3979176443-desodorante-roll-on-antiperspirante-blue-giovanna-baby-50ml-tradicional-_JM",
+    "resultado": {
+      "ok": false,
+      "erro": "{\"message\":\"Validation error\",\"error\":\"validation_error\",\"status\":400,\"cause\":[{\"department\":\"items\",\"cause_id\":466,\"type\":\"error\",\"code\":\"item.available_quantity.not_updatable\",\"references\":[\"item.av"
+    }
   },
   {
     "id": "ml_semsku_MLB5321328576_20260410064427",
