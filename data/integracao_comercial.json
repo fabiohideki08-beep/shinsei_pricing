@@ -8,23 +8,23 @@
   "gordura_por_canal": {
     "Mercado Livre Classico": {
       "tipo": "percentual",
-      "valor": 0
+      "valor": 20
     },
     "Mercado Livre Premium": {
       "tipo": "percentual",
-      "valor": 0
+      "valor": 20
     },
     "Shopee": {
       "tipo": "percentual",
-      "valor": 0
+      "valor": 20
     },
     "Amazon": {
       "tipo": "percentual",
-      "valor": 0
+      "valor": 20
     },
     "Shein": {
       "tipo": "percentual",
-      "valor": 0
+      "valor": 20
     },
     "Shopify": {
       "tipo": "percentual",
@@ -52,9 +52,9 @@
   "peso_lucro": 0.2,
   "regra_estoque": {
     "ativo": true,
-    "limite": 1,
+    "limite": 2,
     "tipo": "percentual",
-    "valor": 30
+    "valor": 20
   },
   "modo_auto": false,
   "auto_margem_ok": 25.0,
