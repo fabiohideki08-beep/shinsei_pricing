@@ -485,45 +485,48 @@ def fila_aprovar(item_id: str):
 
 @app.post("/fila/completar/{item_id}")
 async def fila_completar(item_id: str, request: Request):
-    """Salva peso ou custo no Bling para produto incompleto e recalcula."""
+    """Salva peso ou custo localmente para produto incompleto e agenda recalculo."""
+    import json as _json
     data = await request.json()
     tipo = data.get("tipo")  # "peso" ou "custo"
     valor = float(data.get("valor", 0))
     if tipo not in ("peso", "custo") or valor <= 0:
-        raise HTTPException(status_code=400, detail="Tipo ou valor inválido.")
+        raise HTTPException(status_code=400, detail="Tipo ou valor inv\u00e1lido.")
     item = buscar_item_fila(item_id)
     if not item:
-        raise HTTPException(status_code=404, detail="Item não encontrado na fila.")
+        raise HTTPException(status_code=404, detail="Item n\u00e3o encontrado na fila.")
     sku = item.get("sku")
     if not sku:
-        raise HTTPException(status_code=400, detail="SKU não encontrado no item.")
+        raise HTTPException(status_code=400, detail="SKU n\u00e3o encontrado no item.")
     try:
-        client = BlingClient()
-        busca = client.get_product_by_sku(sku)
-        if not busca.get("encontrado"):
-            raise HTTPException(status_code=404, detail=f"SKU {sku} não encontrado no Bling.")
-        produto = busca.get("produto", {})
-        produto_id = produto.get("id")
-        if not produto_id:
-            raise HTTPException(status_code=400, detail="ID do produto não encontrado.")
         if tipo == "peso":
-            patch = {"pesoBruto": valor, "pesoLiquido": valor}
+            _override_path = BASE_DIR / "data" / "peso_override.json"
+            _overrides = {}
+            if _override_path.exists():
+                try:
+                    _overrides = _json.loads(_override_path.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+            _overrides[str(sku)] = valor
+            _override_path.write_text(_json.dumps(_overrides, ensure_ascii=False, indent=2), encoding="utf-8")
+            logger.info("Peso override salvo: SKU %s = %s kg", sku, valor)
         else:
-            # Atualiza custo via fornecedor
-            fornecedores = produto.get("fornecedores") or []
-            if fornecedores:
-                fornecedores[0]["precoCusto"] = valor
-                patch = {"fornecedores": fornecedores}
-            else:
-                patch = {"fornecedores": [{"precoCusto": valor}]}
-        client.update_product(int(produto_id), patch)
-        # Remove da fila para recalcular
+            _override_path = BASE_DIR / "data" / "custo_override.json"
+            _overrides = {}
+            if _override_path.exists():
+                try:
+                    _overrides = _json.loads(_override_path.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+            _overrides[str(sku)] = {"custo": valor, "origem": "manual_fila"}
+            _override_path.write_text(_json.dumps(_overrides, ensure_ascii=False, indent=2), encoding="utf-8")
+            logger.info("Custo override salvo: SKU %s = R$%s", sku, valor)
         atualizar_status_fila(item_id, "rejeitado", resultado={"motivo": f"{tipo} preenchido: {valor}"})
-        logger.info("Produto %s atualizado no Bling: %s=%s", sku, tipo, valor)
-        return {"ok": True, "mensagem": f"{tipo.capitalize()} salvo no Bling. O produto será recalculado no próximo ciclo."}
+        return {"ok": True, "mensagem": f"{tipo.capitalize()} salvo. O produto ser\u00e1 recalculado no pr\u00f3ximo ciclo do scheduler."}
     except HTTPException:
         raise
     except Exception as e:
+        logger.error("Erro ao completar produto %s: %s", sku, e)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/fila/rejeitar/{item_id}")

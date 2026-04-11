@@ -541,6 +541,17 @@ def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto,
     estoque = int(((produto.get("estoque") or {}).get("saldoVirtualTotal") or 0))
     peso_extraido = extrair_peso_do_produto_bling(produto)
     peso_usado = float(peso_override or 0) if float(peso_override or 0) > 0 else float(peso_extraido["peso"] or 0)
+    # Fallback: peso_override.json local (para produtos sem peso no Bling)
+    if peso_usado <= 0:
+        try:
+            _peso_override_path = _Path(__file__).parent / "data" / "peso_override.json"
+            if _peso_override_path.exists():
+                _peso_overrides = __import__('json').loads(_peso_override_path.read_text(encoding='utf-8'))
+                _sku_key = str(sku or valor_busca or "")
+                if _sku_key in _peso_overrides:
+                    peso_usado = float(_peso_overrides[_sku_key])
+        except Exception:
+            pass
 
     if preco_custo <= 0:
         return {
