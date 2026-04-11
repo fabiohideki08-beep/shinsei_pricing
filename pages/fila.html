@@ -56,10 +56,12 @@ function renderItemIncompleto(item){
   const placeholder = campos.includes('peso') ? 'ex: 0.300' : 'ex: 15.90';
   const erro_msg = item.erro_msg || '';
 
+  const nome_produto = item.nome || '';
   return `<div class="item" style="border-left:4px solid #7c3aed" id="card-${id}">
     <div class="item-head">
       <div>
         <div class="title">${titulo}</div>
+        ${nome_produto ? `<div style="font-size:13px;color:#9fb0d9;margin-bottom:4px">${nome_produto}</div>` : ''}
         <div class="meta">
           <span class="pill" style="background:#7c3aed;color:#fff">INCOMPLETO</span>
           <span class="pill">SKU ${sku}</span>
