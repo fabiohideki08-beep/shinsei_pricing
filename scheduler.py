@@ -508,6 +508,15 @@ def _ciclo_atualizacao() -> dict:
 
 
 
+
+def _ja_existe_incompleto(db_mod, sku: str) -> bool:
+    """Verifica se já existe um item incompleto pendente para o SKU."""
+    try:
+        itens = db_mod.listar_fila(status="incompleto")
+        return any(i.get("sku") == sku for i in itens)
+    except Exception:
+        return False
+
 def _enfileirar_resultado(db_mod, resultado: dict, sku: str, modo: str) -> None:
 
     """Adiciona o resultado do motor à fila de aprovação."""
