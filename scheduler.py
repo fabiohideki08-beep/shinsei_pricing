@@ -441,11 +441,35 @@ def _ciclo_atualizacao() -> dict:
 
 
             if resultado.get("erro"):
-
+                erro_codigo = resultado.get("erro_codigo", "")
                 logger.warning("SKU %s: erro no motor — %s", sku, resultado["erro"])
-
+                # Enfileira produtos com dados incompletos para preenchimento manual
+                if erro_codigo in ("peso_ausente", "custo_ausente", "composicao_sem_custo") and db_mod:
+                    import uuid as _uuid, datetime as _dt
+                    _agora = _dt.datetime.now().isoformat()
+                    _item = {
+                        "id": _uuid.uuid4().hex,
+                        "status": "incompleto",
+                        "sku": sku,
+                        "nome": resultado.get("acao", sku),
+                        "criado_em": _agora,
+                        "atualizado_em": _agora,
+                        "marketplaces": {},
+                        "auditoria": resultado,
+                        "payload_original": {"origem": "scheduler", "modo_aprovacao": modo_aprovacao},
+                        "historico_decisao": [],
+                        "resultado_aplicacao": None,
+                        "dados_incompletos": {
+                            "peso_ausente": erro_codigo == "peso_ausente",
+                            "custo_ausente": erro_codigo in ("custo_ausente", "composicao_sem_custo"),
+                            "erro": resultado.get("erro"),
+                        }
+                    }
+                    if not db_mod.ja_existe_pendente(sku):
+                        db_mod.inserir_item_fila(_item)
+                        logger.info("SKU %s enfileirado como incompleto: %s", sku, erro_codigo)
                 resumo["erros"] += 1
-
+                continue
                 continue
 
 
