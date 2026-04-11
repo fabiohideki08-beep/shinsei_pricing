@@ -25,6 +25,12 @@ from logging_config import configurar_logging
 from auth import verificar_api_key
 
 configurar_logging()
+
+# Cache de links por SKU (evita chamadas repetidas à API)
+_links_cache: dict = {}
+_links_cache_ttl: dict = {}
+_LINKS_CACHE_SECONDS = 3600  # 1 hora
+
 logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).parent
@@ -465,6 +471,10 @@ def fila_reset_total():
 async def fila_links(sku: str):
     """Retorna links diretos para edição do produto em cada marketplace."""
     import time
+    # Verifica cache
+    now = time.time()
+    if sku in _links_cache and now - _links_cache_ttl.get(sku, 0) < _LINKS_CACHE_SECONDS:
+        return {"ok": True, "sku": sku, "links": _links_cache[sku], "cached": True}
     links = {}
     try:
         client = BlingClient()
@@ -512,6 +522,9 @@ async def fila_links(sku: str):
                     links["shopify"] = f"https://admin.shopify.com/store/pknw4n-eg/products/{product_id}"
     except Exception:
         pass
+    # Salva no cache
+    _links_cache[sku] = links
+    _links_cache_ttl[sku] = time.time()
     return {"ok": True, "sku": sku, "links": links}
 
 @app.post("/fila/aprovar/{item_id}")
