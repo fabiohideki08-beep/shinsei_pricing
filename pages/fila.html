@@ -62,25 +62,27 @@ function renderItemIncompleto(item){
       </div>` : ''}
     </div>
     <div style="font-size:12px;color:#9fb0d9">Erro: ${di.erro || aud.erro || '-'}</div>
-      <div style="margin-top:10px;display:flex;gap:12px;flex-wrap:wrap">
-        <a href="https://www.bling.com.br/produtos.php" target="_blank"
-          style="color:#7c3aed;font-size:12px;text-decoration:underline">
-          ↗️ Abrir Bling
-        </a>
-        <a href="https://www.mercadolivre.com.br/anuncios" target="_blank"
-          style="color:#f59e0b;font-size:12px;text-decoration:underline">
-          ↗️ Abrir Mercado Livre
-        </a>
-        <a href="https://admin.shopify.com/store/pknw4n-eg/products" target="_blank"
-          style="color:#22c55e;font-size:12px;text-decoration:underline">
-          ↗️ Abrir Shopify
-        </a>
-        <a href="https://sellercentral.amazon.com.br/inventory" target="_blank"
-          style="color:#f97316;font-size:12px;text-decoration:underline">
-          ↗️ Abrir Amazon
-        </a>
+      <div id="links_${item.id}" style="margin-top:10px;display:flex;gap:12px;flex-wrap:wrap">
+        <span style="color:#9fb0d9;font-size:12px">Carregando links...</span>
       </div>
+      <script>setTimeout(()=>carregarLinksIncompleto('${item.sku}','${item.id}'),100);</script>
   </div>`;
+}
+
+async function carregarLinksIncompleto(sku, cardId){
+  try {
+    const r = await fetch('/fila/links/'+sku);
+    const d = await r.json();
+    const links = d.links || {};
+    const el = document.getElementById('links_'+cardId);
+    if(!el) return;
+    let html = '';
+    if(links.bling) html += `<a href="${links.bling}" target="_blank" style="color:#a78bfa;font-size:12px;text-decoration:underline">↗️ Bling</a>`;
+    if(links.ml) html += `<a href="${links.ml}" target="_blank" style="color:#f59e0b;font-size:12px;text-decoration:underline;margin-left:12px">↗️ Mercado Livre</a>`;
+    if(links.shopify) html += `<a href="${links.shopify}" target="_blank" style="color:#22c55e;font-size:12px;text-decoration:underline;margin-left:12px">↗️ Shopify</a>`;
+    if(links.amazon) html += `<a href="${links.amazon}" target="_blank" style="color:#f97316;font-size:12px;text-decoration:underline;margin-left:12px">↗️ Amazon</a>`;
+    el.innerHTML = html || '<span style="color:#9fb0d9;font-size:12px">Carregando links...</span>';
+  } catch(e) {}
 }
 
 async function salvarDadosIncompletos(id, tipo){

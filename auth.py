@@ -101,6 +101,8 @@ PUBLIC_PATHS = {
 PUBLIC_PREFIXES = (
     "/fila/aprovar/",
     "/fila/rejeitar/",
+    "/fila/completar/",
+    "/fila/links/",
     "/auditoria/shopify/",
     "/auditoria/ml-estoque/",
     "/static/",

@@ -460,6 +460,60 @@ def fila_reset_total():
     reset_fila()
     return {"ok":True,"message":"Fila completamente limpa","stats":stats_fila()}
 
+
+@app.get("/fila/links/{sku}")
+async def fila_links(sku: str):
+    """Retorna links diretos para edição do produto em cada marketplace."""
+    import time
+    links = {}
+    try:
+        client = BlingClient()
+        busca = client.get_product_by_sku(sku)
+        if busca.get("encontrado"):
+            produto_id = busca.get("produto", {}).get("id")
+            if produto_id:
+                links["bling"] = f"https://www.bling.com.br/produtos.php#edit/{produto_id}"
+    except Exception:
+        pass
+    # ML - busca MLB IDs pelo SKU
+    try:
+        import json as _j, requests as _rq
+        _ml_tokens = _j.loads((BASE_DIR / "data" / "ml_tokens.json").read_text(encoding="utf-8"))
+        _ml_token = _ml_tokens.get("access_token", "")
+        _ml_r = _rq.get(
+            f"https://api.mercadolibre.com/users/733168645/items/search?seller_custom_field={sku}",
+            headers={"Authorization": f"Bearer {_ml_token}"},
+            timeout=8
+        )
+        if _ml_r.status_code == 200:
+            items = _ml_r.json().get("results", [])
+            if items:
+                links["ml"] = f"https://www.mercadolivre.com.br/anuncios/product?item_id={items[0]}"
+    except Exception:
+        pass
+    # Amazon - link com SKU no inventário
+    links["amazon"] = f"https://sellercentral.amazon.com.br/myinventory/inventory?searchField=all&searchTerm={sku}"
+    # Shopify - busca product_id pelo SKU via API
+    try:
+        import requests as _req, json as _json
+        _cfg = _json.loads((BASE_DIR / "data" / "shopify_config.json").read_text(encoding="utf-8"))
+        _shop = _cfg.get("shop_url", "pknw4n-eg.myshopify.com")
+        _token = _cfg.get("access_token", "")
+        _r = _req.get(
+            f"https://{_shop}/admin/api/2024-01/variants.json?sku={sku}&limit=1",
+            headers={"X-Shopify-Access-Token": _token},
+            timeout=8
+        )
+        if _r.status_code == 200:
+            variants = _r.json().get("variants", [])
+            if variants:
+                product_id = variants[0].get("product_id")
+                if product_id:
+                    links["shopify"] = f"https://admin.shopify.com/store/pknw4n-eg/products/{product_id}"
+    except Exception:
+        pass
+    return {"ok": True, "sku": sku, "links": links}
+
 @app.post("/fila/aprovar/{item_id}")
 def fila_aprovar(item_id: str):
     item = buscar_item_fila(item_id)
