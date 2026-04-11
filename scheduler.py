@@ -560,7 +560,7 @@ def _enfileirar_resultado(db_mod, resultado: dict, sku: str, modo: str) -> None:
 
         "sku": sku,
 
-        "nome": resultado.get("produto_bling", {}).get("nome", ""),
+        "nome": produto.get("nome", "") or resultado.get("produto_bling", {}).get("nome", ""),
 
         "criado_em": agora,
 
