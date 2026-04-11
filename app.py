@@ -1103,9 +1103,15 @@ async def set_integracao_config(request: Request):
             except (TypeError, ValueError):
                 pass
 
-    for campo in ["fila_auto_ao_calcular", "modo_auto"]:
+    for campo in ["fila_auto_ao_calcular", "modo_auto", "ml_api_real"]:
         if campo in data:
             cfg_atual[campo] = bool(data[campo])
+    for campo in ["embalagem_padrao", "imposto_padrao"]:
+        if campo in data:
+            try:
+                cfg_atual[campo] = float(data[campo])
+            except (TypeError, ValueError):
+                pass
 
     # Sub-dicts
     if "gordura_por_canal" in data and isinstance(data["gordura_por_canal"], dict):
