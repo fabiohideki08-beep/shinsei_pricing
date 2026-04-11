@@ -94,15 +94,42 @@ function renderItemIncompleto(item){
 async function salvarIncompleto(id, sku, tipo){
   const valEl = document.getElementById('val-'+id);
   const val = parseFloat(valEl?.value);
-  if(!val || val <= 0){ alert('Informe um valor válido.'); return; }
+  if(!val || val <= 0){ 
+    mostrarFeedbackCard(id, 'Informe um valor válido.', false);
+    return; 
+  }
+  const btnEl = valEl?.parentElement?.querySelector('button');
+  if(btnEl){ btnEl.disabled=true; btnEl.textContent='Salvando...'; }
   const r = await fetch('/fila/completar/'+id, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({tipo, valor:val})
   });
   const d = await r.json();
-  if(d.ok){ alert(d.mensagem || 'Salvo! Será recalculado no próximo ciclo.'); carregarFila(); }
-  else alert(d.detail || 'Erro ao salvar.');
+  if(d.ok){ 
+    mostrarFeedbackCard(id, '✅ ' + (d.mensagem || 'Salvo! Será recalculado no próximo ciclo.'), true);
+    setTimeout(()=>carregarFila(), 2000);
+  } else {
+    mostrarFeedbackCard(id, '❌ ' + (d.detail || 'Erro ao salvar.'), false);
+    if(btnEl){ btnEl.disabled=false; btnEl.textContent='Salvar no Bling'; }
+  }
+}
+
+function mostrarFeedbackCard(id, msg, sucesso){
+  const card = document.getElementById('card-'+id);
+  if(!card) return;
+  // Remove feedback anterior
+  const antigo = card.querySelector('.feedback-msg');
+  if(antigo) antigo.remove();
+  // Cria novo feedback
+  const div = document.createElement('div');
+  div.className = 'feedback-msg';
+  div.style.cssText = `margin-top:10px;padding:10px 14px;border-radius:6px;font-size:13px;font-weight:600;background:${sucesso?'rgba(34,197,94,.15)':'rgba(239,68,68,.15)'};color:${sucesso?'#22c55e':'#ef4444'};border:1px solid ${sucesso?'rgba(34,197,94,.3)':'rgba(239,68,68,.3)'}`;
+  div.textContent = msg;
+  // Insere após o botão salvar
+  const form = card.querySelector('div[style*="display:flex"]');
+  if(form) form.parentElement.appendChild(div);
+  else card.appendChild(div);
 }
 
 async function ignorarIncompleto(id){

@@ -450,6 +450,7 @@ def _ciclo_atualizacao() -> dict:
                     _item = {
                         "id": _uuid.uuid4().hex,
                         "status": "incompleto",
+                        "campos_faltando": ["peso"] if erro_codigo == "peso_ausente" else ["custo", "composicao"] if erro_codigo == "composicao_sem_custo" else ["custo"] if erro_codigo == "custo_ausente" else [],
                         "sku": sku,
                         "nome": resultado.get("acao", sku),
                         "criado_em": _agora,
