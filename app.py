@@ -482,6 +482,50 @@ def fila_aprovar(item_id: str):
     return {"ok": True, "message": "PreÃ§os aplicados no Bling.", "resultado": resultado, "stats": stats_fila()}
 
 
+
+@app.post("/fila/completar/{item_id}")
+async def fila_completar(item_id: str, request: Request):
+    """Salva peso ou custo no Bling para produto incompleto e recalcula."""
+    data = await request.json()
+    tipo = data.get("tipo")  # "peso" ou "custo"
+    valor = float(data.get("valor", 0))
+    if tipo not in ("peso", "custo") or valor <= 0:
+        raise HTTPException(status_code=400, detail="Tipo ou valor inválido.")
+    item = buscar_item_fila(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado na fila.")
+    sku = item.get("sku")
+    if not sku:
+        raise HTTPException(status_code=400, detail="SKU não encontrado no item.")
+    try:
+        client = BlingClient()
+        busca = client.get_product_by_sku(sku)
+        if not busca.get("encontrado"):
+            raise HTTPException(status_code=404, detail=f"SKU {sku} não encontrado no Bling.")
+        produto = busca.get("produto", {})
+        produto_id = produto.get("id")
+        if not produto_id:
+            raise HTTPException(status_code=400, detail="ID do produto não encontrado.")
+        if tipo == "peso":
+            patch = {"pesoBruto": valor, "pesoLiquido": valor}
+        else:
+            # Atualiza custo via fornecedor
+            fornecedores = produto.get("fornecedores") or []
+            if fornecedores:
+                fornecedores[0]["precoCusto"] = valor
+                patch = {"fornecedores": fornecedores}
+            else:
+                patch = {"fornecedores": [{"precoCusto": valor}]}
+        client.update_product(int(produto_id), patch)
+        # Remove da fila para recalcular
+        atualizar_status_fila(item_id, "rejeitado", resultado={"motivo": f"{tipo} preenchido: {valor}"})
+        logger.info("Produto %s atualizado no Bling: %s=%s", sku, tipo, valor)
+        return {"ok": True, "mensagem": f"{tipo.capitalize()} salvo no Bling. O produto será recalculado no próximo ciclo."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/fila/rejeitar/{item_id}")
 def fila_rejeitar(item_id: str, payload: dict = Body(default={})):
     item = buscar_item_fila(item_id)
