@@ -465,7 +465,7 @@ def _ciclo_atualizacao() -> dict:
                             "erro": resultado.get("erro"),
                         }
                     }
-                    if not db_mod.ja_existe_pendente(sku):
+                    if not db_mod.ja_existe_pendente(sku) and not _ja_existe_incompleto(db_mod, sku):
                         db_mod.inserir_item_fila(_item)
                         logger.info("SKU %s enfileirado como incompleto: %s", sku, erro_codigo)
                 resumo["erros"] += 1
