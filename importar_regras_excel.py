@@ -11,6 +11,7 @@ MAPA_CANAIS = {
     "Classico": "Mercado Livre Classico",
     "Premium": "Mercado Livre Premium",
     "Shopfy": "Shopify",
+    "Shopify": "Shopify",
 }
 
 
@@ -72,7 +73,7 @@ def main():
                 "peso_max": para_float(peso_max),
                 "preco_min": para_float(preco_min),
                 "preco_max": para_float(preco_max),
-                "frete": para_float(taxa_frete),
+                "taxa_frete": para_float(taxa_frete),
                 "comissao": para_float(comissao),
                 "taxa_fixa": para_float(taxa_fixa),
             }

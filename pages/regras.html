@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Regras de Precificação — Shinsei</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',Arial,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}
+  header{background:#1e293b;border-bottom:1px solid #334155;padding:16px 24px;display:flex;align-items:center;gap:16px}
+  header h1{font-size:1.2rem;font-weight:600;color:#f1f5f9}
+  header p{font-size:.8rem;color:#94a3b8}
+  nav{display:flex;gap:8px;margin-left:auto}
+  nav a{color:#94a3b8;text-decoration:none;font-size:.82rem;padding:6px 12px;border-radius:6px;border:1px solid #334155;transition:.15s}
+  nav a:hover,nav a.active{background:#3b82f6;color:#fff;border-color:#3b82f6}
+  .container{max-width:1400px;margin:0 auto;padding:24px}
+  .toolbar{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+  .toolbar h2{font-size:1rem;font-weight:600;color:#f1f5f9;margin-right:auto}
+  btn, .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:7px;border:none;cursor:pointer;font-size:.82rem;font-weight:500;transition:.15s}
+  .btn-primary{background:#3b82f6;color:#fff}.btn-primary:hover{background:#2563eb}
+  .btn-success{background:#10b981;color:#fff}.btn-success:hover{background:#059669}
+  .btn-warning{background:#f59e0b;color:#fff}.btn-warning:hover{background:#d97706}
+  .btn-danger{background:#ef4444;color:#fff}.btn-danger:hover{background:#dc2626}
+  .btn-ghost{background:#1e293b;color:#94a3b8;border:1px solid #334155}.btn-ghost:hover{background:#334155;color:#f1f5f9}
+  .search-bar{display:flex;gap:8px;align-items:center}
+  .search-bar input,.search-bar select{background:#1e293b;border:1px solid #334155;color:#e2e8f0;padding:7px 11px;border-radius:7px;font-size:.82rem;outline:none}
+  .search-bar input:focus,.search-bar select:focus{border-color:#3b82f6}
+  .stats{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+  .stat{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px 16px;font-size:.78rem;color:#94a3b8}
+  .stat strong{color:#f1f5f9;font-size:.95rem;display:block}
+  .table-wrap{overflow-x:auto;border-radius:10px;border:1px solid #334155}
+  table{width:100%;border-collapse:collapse;font-size:.8rem}
+  thead tr{background:#1e293b}
+  th{padding:10px 12px;text-align:left;color:#94a3b8;font-weight:500;white-space:nowrap;border-bottom:1px solid #334155}
+  th.sortable{cursor:pointer;user-select:none}th.sortable:hover{color:#f1f5f9}
+  td{padding:9px 12px;border-bottom:1px solid #1e293b;white-space:nowrap}
+  tr:hover td{background:#1e293b55}
+  tr:last-child td{border-bottom:none}
+  .canal-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.72rem;font-weight:500}
+  .c-ml-c{background:#1d4ed855;color:#93c5fd}.c-ml-p{background:#4f46e555;color:#a5b4fc}
+  .c-shopee{background:#c2410c55;color:#fb923c}.c-amazon{background:#0f766e55;color:#5eead4}
+  .c-shein{background:#be185d55;color:#f9a8d4}.c-shopify{background:#16653455;color:#86efac}
+  .actions{display:flex;gap:4px}
+  .btn-icon{padding:5px 8px;border-radius:5px;border:none;cursor:pointer;font-size:.78rem;transition:.15s}
+  .btn-icon.edit{background:#1d4ed820;color:#93c5fd}.btn-icon.edit:hover{background:#1d4ed8;color:#fff}
+  .btn-icon.del{background:#7f1d1d20;color:#fca5a5}.btn-icon.del:hover{background:#ef4444;color:#fff}
+  .pagination{display:flex;align-items:center;gap:6px;margin-top:14px;font-size:.8rem;color:#94a3b8}
+  .pagination button{background:#1e293b;border:1px solid #334155;color:#94a3b8;padding:5px 10px;border-radius:5px;cursor:pointer}
+  .pagination button:hover:not(:disabled){background:#334155;color:#f1f5f9}
+  .pagination button:disabled{opacity:.4;cursor:default}
+  .pagination .page-info{color:#f1f5f9}
+  /* Modal */
+  .overlay{position:fixed;inset:0;background:#00000088;display:none;align-items:center;justify-content:center;z-index:50}
+  .overlay.open{display:flex}
+  .modal{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:24px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto}
+  .modal h3{font-size:1rem;font-weight:600;color:#f1f5f9;margin-bottom:18px}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .form-group{display:flex;flex-direction:column;gap:5px}
+  .form-group.full{grid-column:1/-1}
+  .form-group label{font-size:.76rem;color:#94a3b8;font-weight:500}
+  .form-group input,.form-group select{background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 11px;border-radius:6px;font-size:.83rem;outline:none}
+  .form-group input:focus,.form-group select:focus{border-color:#3b82f6}
+  .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+  .toast{position:fixed;bottom:24px;right:24px;padding:12px 18px;border-radius:8px;font-size:.82rem;z-index:100;opacity:0;transition:opacity .3s;pointer-events:none}
+  .toast.show{opacity:1}.toast.ok{background:#10b981;color:#fff}.toast.err{background:#ef4444;color:#fff}
+  .upload-area{border:2px dashed #334155;border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:.15s;color:#94a3b8;font-size:.83rem}
+  .upload-area:hover{border-color:#3b82f6;color:#93c5fd}
+  .upload-area input{display:none}
+  .progress{height:4px;background:#334155;border-radius:2px;margin-top:8px;overflow:hidden;display:none}
+  .progress-bar{height:100%;background:#3b82f6;width:0;transition:width .3s}
+  .empty{text-align:center;padding:40px;color:#475569}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Shinsei Pricing — Regras</h1>
+    <p>Faixas de precificação por canal e peso</p>
+  </div>
+  <nav>
+    <a href="/">Início</a>
+    <a href="/simulador">Simulador</a>
+    <a href="/fila">Fila</a>
+    <a href="/regras" class="active">Regras</a>
+  </nav>
+</header>
+
+<div class="container">
+  <div class="toolbar">
+    <h2>Regras de Precificação</h2>
+    <div class="search-bar">
+      <select id="filtroCanal" onchange="filtrar()">
+        <option value="">Todos os canais</option>
+        <option>Mercado Livre Classico</option>
+        <option>Mercado Livre Premium</option>
+        <option>Shopee</option>
+        <option>Amazon</option>
+        <option>Shein</option>
+        <option>Shopify</option>
+      </select>
+      <input id="filtroTexto" placeholder="Buscar..." oninput="filtrar()">
+    </div>
+    <button class="btn btn-ghost" onclick="document.getElementById('uploadModal').classList.add('open')">⬆ Importar Excel</button>
+    <a id="downloadBtn" class="btn btn-ghost" href="/regras/modelo/download">⬇ Planilha modelo</a>
+    <button class="btn btn-success" onclick="abrirModalNovo()">+ Nova regra</button>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="table-wrap">
+    <table id="tabelaRegras">
+      <thead>
+        <tr>
+          <th>Canal</th>
+          <th class="sortable" onclick="ordenar('peso_min')">Peso mín ↕</th>
+          <th class="sortable" onclick="ordenar('peso_max')">Peso máx ↕</th>
+          <th>Preço mín</th>
+          <th>Preço máx</th>
+          <th>Taxa fixa</th>
+          <th>Taxa frete</th>
+          <th>Comissão</th>
+          <th>Status</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="empty" id="empty" style="display:none">Nenhuma regra encontrada.</div>
+  </div>
+
+  <div class="pagination">
+    <button id="btnPrev" onclick="mudarPagina(-1)">‹ Anterior</button>
+    <span class="page-info" id="pageInfo"></span>
+    <button id="btnNext" onclick="mudarPagina(1)">Próxima ›</button>
+  </div>
+</div>
+
+<!-- Modal: Nova / Editar regra -->
+<div class="overlay" id="regraModal">
+  <div class="modal">
+    <h3 id="modalTitulo">Nova regra</h3>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Canal</label>
+        <select id="fCanal">
+          <option>Mercado Livre Classico</option>
+          <option>Mercado Livre Premium</option>
+          <option>Shopee</option>
+          <option>Amazon</option>
+          <option>Shein</option>
+          <option>Shopify</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Peso mín (kg)</label>
+        <input type="number" id="fPesoMin" step="0.001" min="0">
+      </div>
+      <div class="form-group">
+        <label>Peso máx (kg)</label>
+        <input type="number" id="fPesoMax" step="0.001" min="0">
+      </div>
+      <div class="form-group">
+        <label>Preço mín (R$)</label>
+        <input type="number" id="fPrecoMin" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>Preço máx (R$)</label>
+        <input type="number" id="fPrecoMax" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>Taxa fixa (R$)</label>
+        <input type="number" id="fTaxaFixa" step="0.01" min="0" value="0">
+      </div>
+      <div class="form-group">
+        <label>Taxa frete (R$)</label>
+        <input type="number" id="fTaxaFrete" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>Comissão (ex: 0.12)</label>
+        <input type="number" id="fComissao" step="0.001" min="0" max="1">
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="fAtivo">
+          <option value="true">Ativo</option>
+          <option value="false">Inativo</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="fecharModal('regraModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarRegra()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Upload Excel -->
+<div class="overlay" id="uploadModal">
+  <div class="modal">
+    <h3>Importar planilha Excel</h3>
+    <p style="font-size:.8rem;color:#94a3b8;margin-bottom:14px">Selecione o arquivo .xlsx com a aba "Regras" ou "Aba2". As colunas devem seguir o modelo disponível para download.</p>
+    <label class="upload-area" id="uploadArea">
+      <input type="file" id="fileInput" accept=".xlsx" onchange="selecionarArquivo(this)">
+      <div id="uploadLabel">Clique ou arraste o arquivo .xlsx aqui</div>
+      <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+    </label>
+    <div style="margin-top:12px;font-size:.76rem;color:#64748b">
+      <strong style="color:#94a3b8">Atenção:</strong> A importação <strong>substitui</strong> todas as regras existentes.
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="fecharModal('uploadModal')">Cancelar</button>
+      <button class="btn btn-primary" id="btnImportar" onclick="importarExcel()" disabled>Importar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let todasRegras = [], filtradas = [], ordenacaoCol = '', ordenacaoDir = 1;
+let paginaAtual = 1; const POR_PAGINA = 50;
+let editandoIdx = null;
+
+async function carregarRegras() {
+  try {
+    const r = await fetch('/regras/listar');
+    const data = await r.json();
+    todasRegras = data.regras || [];
+    filtrar();
+    renderStats();
+  } catch(e) { toast('Erro ao carregar regras', 'err'); }
+}
+
+function renderStats() {
+  const canais = {};
+  todasRegras.forEach(r => { canais[r.canal] = (canais[r.canal]||0) + 1; });
+  const s = document.getElementById('stats');
+  let html = `<div class="stat"><strong>${todasRegras.length}</strong>Total de regras</div>`;
+  Object.entries(canais).forEach(([c,n]) => {
+    html += `<div class="stat"><strong>${n}</strong>${c}</div>`;
+  });
+  s.innerHTML = html;
+}
+
+function canalClass(c) {
+  const m = {'Mercado Livre Classico':'c-ml-c','Mercado Livre Premium':'c-ml-p','Shopee':'c-shopee','Amazon':'c-amazon','Shein':'c-shein','Shopify':'c-shopify'};
+  return m[c] || 'c-ml-c';
+}
+
+function filtrar() {
+  const canal = document.getElementById('filtroCanal').value;
+  const texto = document.getElementById('filtroTexto').value.toLowerCase();
+  filtradas = todasRegras.filter((r,i) => {
+    r._idx = i;
+    if (canal && r.canal !== canal) return false;
+    if (texto && !JSON.stringify(r).toLowerCase().includes(texto)) return false;
+    return true;
+  });
+  if (ordenacaoCol) {
+    filtradas.sort((a,b) => (a[ordenacaoCol]-b[ordenacaoCol]) * ordenacaoDir);
+  }
+  paginaAtual = 1;
+  renderTabela();
+}
+
+function ordenar(col) {
+  if (ordenacaoCol === col) ordenacaoDir *= -1;
+  else { ordenacaoCol = col; ordenacaoDir = 1; }
+  filtrar();
+}
+
+function renderTabela() {
+  const inicio = (paginaAtual-1)*POR_PAGINA;
+  const pagina = filtradas.slice(inicio, inicio+POR_PAGINA);
+  const tbody = document.getElementById('tbody');
+  const empty = document.getElementById('empty');
+
+  if (!pagina.length) { tbody.innerHTML=''; empty.style.display='block'; } else {
+    empty.style.display='none';
+    tbody.innerHTML = pagina.map(r => `
+      <tr>
+        <td><span class="canal-badge ${canalClass(r.canal)}">${r.canal}</span></td>
+        <td>${r.peso_min}</td><td>${r.peso_max}</td>
+        <td>R$ ${Number(r.preco_min||0).toFixed(2)}</td>
+        <td>R$ ${Number(r.preco_max||0).toFixed(2)}</td>
+        <td>R$ ${Number(r.taxa_fixa||0).toFixed(2)}</td>
+        <td>R$ ${Number(r.taxa_frete||0).toFixed(2)}</td>
+        <td>${(Number(r.comissao||0)*100).toFixed(1)}%</td>
+        <td><span style="color:${r.ativo!==false?'#4ade80':'#f87171'};font-size:.75rem">${r.ativo!==false?'✓ Ativo':'✗ Inativo'}</span></td>
+        <td><div class="actions">
+          <button class="btn-icon edit" onclick="abrirModalEditar(${r._idx})">✏</button>
+          <button class="btn-icon del" onclick="excluirRegra(${r._idx})">✕</button>
+        </div></td>
+      </tr>`).join('');
+  }
+
+  const total = filtradas.length;
+  const totalPag = Math.max(1, Math.ceil(total/POR_PAGINA));
+  document.getElementById('pageInfo').textContent = `Página ${paginaAtual} de ${totalPag} (${total} regras)`;
+  document.getElementById('btnPrev').disabled = paginaAtual <= 1;
+  document.getElementById('btnNext').disabled = paginaAtual >= totalPag;
+}
+
+function mudarPagina(d) { paginaAtual += d; renderTabela(); }
+
+function abrirModalNovo() {
+  editandoIdx = null;
+  document.getElementById('modalTitulo').textContent = 'Nova regra';
+  ['fPesoMin','fPesoMax','fPrecoMin','fPrecoMax','fTaxaFixa','fTaxaFrete','fComissao'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('fTaxaFixa').value = '0';
+  document.getElementById('fAtivo').value = 'true';
+  document.getElementById('regraModal').classList.add('open');
+}
+
+function abrirModalEditar(idx) {
+  editandoIdx = idx;
+  const r = todasRegras[idx];
+  document.getElementById('modalTitulo').textContent = 'Editar regra';
+  document.getElementById('fCanal').value = r.canal;
+  document.getElementById('fPesoMin').value = r.peso_min;
+  document.getElementById('fPesoMax').value = r.peso_max;
+  document.getElementById('fPrecoMin').value = r.preco_min;
+  document.getElementById('fPrecoMax').value = r.preco_max;
+  document.getElementById('fTaxaFixa').value = r.taxa_fixa || 0;
+  document.getElementById('fTaxaFrete').value = r.taxa_frete;
+  document.getElementById('fComissao').value = r.comissao;
+  document.getElementById('fAtivo').value = r.ativo !== false ? 'true' : 'false';
+  document.getElementById('regraModal').classList.add('open');
+}
+
+function fecharModal(id) { document.getElementById(id).classList.remove('open'); }
+
+async function salvarRegra() {
+  const regra = {
+    canal: document.getElementById('fCanal').value,
+    peso_min: parseFloat(document.getElementById('fPesoMin').value)||0,
+    peso_max: parseFloat(document.getElementById('fPesoMax').value)||0,
+    preco_min: parseFloat(document.getElementById('fPrecoMin').value)||0,
+    preco_max: parseFloat(document.getElementById('fPrecoMax').value)||0,
+    taxa_fixa: parseFloat(document.getElementById('fTaxaFixa').value)||0,
+    taxa_frete: parseFloat(document.getElementById('fTaxaFrete').value)||0,
+    comissao: parseFloat(document.getElementById('fComissao').value)||0,
+    ativo: document.getElementById('fAtivo').value === 'true',
+  };
+  const url = editandoIdx !== null ? `/regras/editar/${editandoIdx}` : '/regras/adicionar';
+  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(regra)});
+  const d = await r.json();
+  if (d.ok) { toast(editandoIdx !== null ? 'Regra atualizada!' : 'Regra adicionada!', 'ok'); fecharModal('regraModal'); carregarRegras(); }
+  else toast('Erro: ' + (d.erro||'desconhecido'), 'err');
+}
+
+async function excluirRegra(idx) {
+  if (!confirm('Excluir esta regra?')) return;
+  const r = await fetch(`/regras/excluir/${idx}`, {method:'DELETE'});
+  const d = await r.json();
+  if (d.ok) { toast('Regra excluída.', 'ok'); carregarRegras(); }
+  else toast('Erro ao excluir.', 'err');
+}
+
+let arquivoSelecionado = null;
+function selecionarArquivo(input) {
+  arquivoSelecionado = input.files[0];
+  if (arquivoSelecionado) {
+    document.getElementById('uploadLabel').textContent = '📄 ' + arquivoSelecionado.name;
+    document.getElementById('btnImportar').disabled = false;
+  }
+}
+
+async function importarExcel() {
+  if (!arquivoSelecionado) return;
+  const progress = document.querySelector('.progress');
+  const bar = document.getElementById('progressBar');
+  progress.style.display = 'block'; bar.style.width = '30%';
+  const fd = new FormData(); fd.append('file', arquivoSelecionado);
+  bar.style.width = '60%';
+  const r = await fetch('/regras/importar-excel', {method:'POST', body:fd});
+  bar.style.width = '100%';
+  const d = await r.json();
+  setTimeout(() => { progress.style.display='none'; bar.style.width='0'; }, 600);
+  if (d.ok) {
+    toast(`✓ ${d.total} regras importadas!`, 'ok');
+    fecharModal('uploadModal');
+    arquivoSelecionado = null;
+    document.getElementById('uploadLabel').textContent = 'Clique ou arraste o arquivo .xlsx aqui';
+    document.getElementById('btnImportar').disabled = true;
+    carregarRegras();
+  } else toast('Erro: ' + (d.erro||'falha na importação'), 'err');
+}
+
+function toast(msg, tipo) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = `toast ${tipo} show`;
+  setTimeout(() => t.className = 'toast', 2800);
+}
+
+carregarRegras();
+</script>
+</body>
+</html>

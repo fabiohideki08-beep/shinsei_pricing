@@ -58,5 +58,7 @@
   },
   "modo_auto": false,
   "auto_margem_ok": 25.0,
-  "auto_margem_fila": 15.0
+  "auto_margem_fila": 15.0,
+  "ml_api_real": true,
+  "embalagem_padrao": 0.5
 }

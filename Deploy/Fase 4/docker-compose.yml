@@ -1,0 +1,120 @@
+services:
+
+  # ── Aplicação principal ──────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: shinsei_app
+    restart: unless-stopped
+    env_file:
+      - .env                      # todas as variáveis sensíveis ficam aqui
+    environment:
+      - DATABASE_URL=sqlite:///data/shinsei.db
+      - LOG_DIR=logs
+      - SCHEDULER_ATIVO=true
+    volumes:
+      - shinsei_data:/app/data    # banco SQLite + configs persistem entre deploys
+      - shinsei_logs:/app/logs    # logs separados do container
+    expose:
+      - "8000"                    # não expõe direto — passa pelo nginx
+    networks:
+      - shinsei_net
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ── Nginx reverse proxy + HTTPS ──────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: shinsei_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - shinsei_certbot:/etc/letsencrypt:ro    # certificados Let's Encrypt
+      - shinsei_certbot_www:/var/www/certbot:ro # desafio ACME
+    networks:
+      - shinsei_net
+    depends_on:
+      app:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  # ── Certbot — renovação automática de certificado TLS ────────
+  certbot:
+    image: certbot/certbot:latest
+    container_name: shinsei_certbot
+    volumes:
+      - shinsei_certbot:/etc/letsencrypt
+      - shinsei_certbot_www:/var/www/certbot
+    # Roda manualmente para emitir, depois fica em sleep para renovação
+    entrypoint: >
+      sh -c "trap exit TERM;
+             while :; do
+               certbot renew --webroot -w /var/www/certbot --quiet;
+               sleep 12h & wait $${!};
+             done"
+    networks:
+      - shinsei_net
+
+  # ── Backup automático do banco SQLite ────────────────────────
+  backup:
+    image: alpine:3.20
+    container_name: shinsei_backup
+    restart: unless-stopped
+    volumes:
+      - shinsei_data:/data:ro           # leitura do banco
+      - shinsei_backups:/backups        # destino dos backups
+    # Faz backup diário às 03:00, mantém os últimos 30 dias
+    command: >
+      sh -c "
+        while true; do
+          sleep 86400;
+          DATE=\$$(date +%Y%m%d_%H%M%S);
+          cp /data/shinsei.db /backups/shinsei_\$${DATE}.db 2>/dev/null || true;
+          find /backups -name '*.db' -mtime +30 -delete 2>/dev/null || true;
+          echo \"\$$(date): backup shinsei_\$${DATE}.db criado\";
+        done
+      "
+    networks:
+      - shinsei_net
+
+# ─────────────────────────────────────────────────────────────
+# Volumes nomeados — persistem entre docker compose down/up
+# ─────────────────────────────────────────────────────────────
+volumes:
+  shinsei_data:
+    driver: local
+  shinsei_logs:
+    driver: local
+  shinsei_certbot:
+    driver: local
+  shinsei_certbot_www:
+    driver: local
+  shinsei_backups:
+    driver: local
+
+# ─────────────────────────────────────────────────────────────
+# Rede interna — app e nginx se comunicam sem expor porta do app
+# ─────────────────────────────────────────────────────────────
+networks:
+  shinsei_net:
+    driver: bridge

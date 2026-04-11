@@ -322,5 +322,70 @@
     "diferenca": -4.6,
     "detectado_em": "2026-04-10T00:27:27.249953",
     "status": "pendente"
+  },
+  {
+    "id": "amz_preco_7702045423358_20260410225849",
+    "sku": "7702045423358",
+    "asin": "B0F23KHL1K",
+    "nome": "Igora Royal Highlifts 60g - 12.21 Super Clareador Fumê Cinza",
+    "tipo": "preco",
+    "order_id": "702-1294828-1124204",
+    "preco_bling": 32.5,
+    "preco_amazon": 52.9,
+    "diferenca": -20.4,
+    "detectado_em": "2026-04-10T22:57:32.859384",
+    "status": "pendente"
+  },
+  {
+    "id": "amz_preco_7897042013913_20260410225901",
+    "sku": "7897042013913",
+    "asin": "B07R461Z4L",
+    "nome": "Creme Tratamento Skala 1Kg Manga-Castanha Do Pa",
+    "tipo": "preco",
+    "order_id": "701-9110753-3433848",
+    "preco_bling": 16.9,
+    "preco_amazon": 20.5,
+    "diferenca": -3.6,
+    "detectado_em": "2026-04-10T22:57:32.859384",
+    "status": "pendente"
+  },
+  {
+    "id": "amz_preco_7908324404333_20260410225912",
+    "sku": "7908324404333",
+    "asin": "B0DHJL48FG",
+    "nome": "Kit Shampoo e Condicionador Longos Ox para Cabelos Enfraquec",
+    "tipo": "preco",
+    "order_id": "702-0333915-2530660",
+    "preco_bling": 29.9,
+    "preco_amazon": 40.5,
+    "diferenca": -10.6,
+    "detectado_em": "2026-04-10T22:57:32.859384",
+    "status": "pendente"
+  },
+  {
+    "id": "amz_preco_7899884215975_20260410225915",
+    "sku": "7899884215975",
+    "asin": "B0DFQFKGSK",
+    "nome": "Alfaparf - Água Oxigenada 20 Volumes 1L",
+    "tipo": "preco",
+    "order_id": "702-6399843-2979463",
+    "preco_bling": 61.99,
+    "preco_amazon": 67.9,
+    "diferenca": -5.91,
+    "detectado_em": "2026-04-10T22:57:32.859384",
+    "status": "pendente"
+  },
+  {
+    "id": "amz_preco_7897042016907_20260410225917",
+    "sku": "7897042016907",
+    "asin": "B09P4P4F54",
+    "nome": "SKALA Creme Skala Genetiqs 1Kg",
+    "tipo": "preco",
+    "order_id": "701-7502747-5713016",
+    "preco_bling": 16.9,
+    "preco_amazon": 19.5,
+    "diferenca": -2.6,
+    "detectado_em": "2026-04-10T22:57:32.859384",
+    "status": "pendente"
   }
 ]

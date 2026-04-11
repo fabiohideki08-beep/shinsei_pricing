@@ -1,0 +1,21 @@
+{
+  "modo_aprovacao": "manual",
+  "fila_auto_ao_calcular": true,
+  "peso_forca": 0.4,
+  "peso_equilibrio": 0.4,
+  "peso_lucro": 0.2,
+  "forcas_canais": {
+    "Mercado Livre Classico": 0.8,
+    "Mercado Livre Premium": 0.75,
+    "Shopee": 0.6,
+    "Amazon": 0.7,
+    "Shein": 0.55,
+    "Shopify": 0.65
+  },
+  "regra_estoque": {
+    "ativo": false,
+    "limite": 2,
+    "tipo": "percentual",
+    "valor": 0
+  }
+}
