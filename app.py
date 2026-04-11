@@ -277,7 +277,7 @@ def fila_page():
 
 @app.get("/health")
 def health():
-    itens = carregar_fila()
+    itens = [i for i in carregar_fila() if i.get("status") in ("pendente","incompleto")]
     return {"status":"Shinsei Pricing rodando","engine":pricing_module.__name__,"bling_client":bool(BlingClient),"bling_update_engine":bool(aplicar_precos_multicanal),"modo_busca":"sku_only","fila":_fila_stats(itens)}
 
 @app.get("/bling/status")
@@ -434,7 +434,7 @@ def integracao_preview(payload: IntegracaoPayload):
 
 @app.get("/fila/lista")
 def fila_lista():
-    itens = carregar_fila()
+    itens = [i for i in carregar_fila() if i.get("status") in ("pendente","incompleto")]
     return {"itens":itens,"stats":stats_fila()}
 
 @app.post("/fila/adicionar")
@@ -1910,7 +1910,7 @@ def auditoria_negativo_limpar_tudo():
 @app.get("/auditoria/amazon")
 def auditoria_amazon_lista(status: str = "", tipo: str = ""):
     from amazon_conferencia import carregar_fila, stats_fila
-    itens = carregar_fila()
+    itens = [i for i in carregar_fila() if i.get("status") in ("pendente","incompleto")]
     if status:
         itens = [i for i in itens if i.get("status") == status]
     if tipo:
@@ -1934,7 +1934,7 @@ def auditoria_amazon_conferir(tipo: str = ""):
 @app.post("/auditoria/amazon/ignorar/{item_id}")
 def auditoria_amazon_ignorar(item_id: str):
     from amazon_conferencia import carregar_fila, salvar_fila
-    itens = carregar_fila()
+    itens = [i for i in carregar_fila() if i.get("status") in ("pendente","incompleto")]
     for i in itens:
         if i.get("id") == item_id:
             i["status"] = "ignorado"
@@ -1963,5 +1963,6 @@ def amazon_status():
         return {"ok": True, "configurado": True, "conectado": bool(token)}
     except Exception as e:
         return {"ok": False, "configurado": False, "conectado": False, "erro": str(e)}
+
 
 
