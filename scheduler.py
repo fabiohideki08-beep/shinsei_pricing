@@ -462,7 +462,9 @@ def _ciclo_atualizacao() -> dict:
                         "dados_incompletos": {
                             "peso_ausente": erro_codigo == "peso_ausente",
                             "custo_ausente": erro_codigo in ("custo_ausente", "composicao_sem_custo"),
+                            "composicao": erro_codigo == "composicao_sem_custo",
                             "erro": resultado.get("erro"),
+                            "componentes_sem_custo": _buscar_componentes_sem_custo(produto) if erro_codigo == "composicao_sem_custo" else [],
                         }
                     }
                     if not db_mod.ja_existe_pendente(sku) and not _ja_existe_incompleto(db_mod, sku):

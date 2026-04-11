@@ -585,7 +585,32 @@ async def fila_completar(item_id: str, request: Request):
                     _overrides = _json.loads(_override_path.read_text(encoding="utf-8"))
                 except Exception:
                     pass
+            # Salva override para o SKU principal
             _overrides[str(sku)] = {"custo": valor, "origem": "manual_fila"}
+            # Se for composição, salva também para o componente e tenta atualizar no Bling
+            dados_inc = item.get("dados_incompletos") or {}
+            comps_sem_custo = dados_inc.get("componentes_sem_custo") or []
+            if comps_sem_custo:
+                comp = comps_sem_custo[0]
+                comp_sku = comp.get("sku")
+                comp_id = comp.get("id")
+                if comp_sku:
+                    _overrides[str(comp_sku)] = {"custo": valor, "origem": "manual_fila"}
+                    logger.info("Custo override componente: SKU %s = R$%s", comp_sku, valor)
+                # Tenta atualizar custo do componente no Bling via fornecedor
+                if comp_id and BlingClient:
+                    try:
+                        _bling = BlingClient()
+                        _prod_comp = _bling.get_product(int(comp_id))
+                        _forn = _prod_comp.get("fornecedor") or {}
+                        if _forn.get("id"):
+                            _forn_patch = {**_forn, "precoCusto": valor, "precoCompra": valor}
+                            _patch = {k: v for k, v in _prod_comp.items() if k not in ("estoque", "variacoes", "estrutura", "midia")}
+                            _patch["fornecedor"] = _forn_patch
+                            _bling.update_product(int(comp_id), _patch)
+                            logger.info("Custo componente atualizado no Bling: id=%s valor=%s", comp_id, valor)
+                    except Exception as _e:
+                        logger.warning("Erro ao atualizar componente %s no Bling: %s", comp_id, _e)
             _override_path.write_text(_json.dumps(_overrides, ensure_ascii=False, indent=2), encoding="utf-8")
             logger.info("Custo override salvo: SKU %s = R$%s", sku, valor)
         atualizar_status_fila(item_id, "rejeitado", resultado={"motivo": f"{tipo} preenchido: {valor}"})

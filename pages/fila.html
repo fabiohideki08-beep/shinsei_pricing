@@ -42,8 +42,12 @@ function renderItemIncompleto(item){
   const campos = item.campos_faltando || [];
   const sku = item.sku || '';
   const id = item.id || '';
+  const comps = (item.dados_incompletos || {}).componentes_sem_custo || [];
+  const comp_nome = comps.length > 0 ? comps[0].nome || comps[0].sku || '' : '';
   const titulo = campos.includes('peso')
     ? 'Preencha o peso do produto no Bling.'
+    : campos.includes('composicao') && comp_nome
+    ? `Componente sem custo: ${comp_nome}`
     : campos.includes('custo') || campos.includes('composicao')
     ? 'Preencha o preço de compra no estoque ou revise a composição do anúncio.'
     : 'Dados incompletos para precificação.';
