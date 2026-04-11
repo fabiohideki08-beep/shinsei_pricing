@@ -961,7 +961,9 @@ async function limparFilaCompleta(tipo){
 }
 
 // AMAZON
-async function carregarAmazon(){
+let _amazonFiltroTipo = '';
+async function carregarAmazon(filtroTipo){
+  if(filtroTipo !== undefined) _amazonFiltroTipo = filtroTipo;
   const res = await fetch('/auditoria/amazon').catch(()=>null);
   if(!res) return;
   const data = await res.json();
@@ -972,7 +974,8 @@ async function carregarAmazon(){
   if(badge) badge.textContent = n;
   const tbody = document.getElementById('tabela-amazon');
   const empty = document.getElementById('amazon-empty');
-  const itens = data.itens || [];
+  let itens = data.itens || [];
+  if(_amazonFiltroTipo) itens = itens.filter(i=>i.tipo===_amazonFiltroTipo);
   if(!tbody) return;
   if(!itens.length){ tbody.innerHTML=''; if(empty){empty.style.display='block';} return; }
   if(empty) empty.style.display='none';
@@ -985,7 +988,7 @@ async function conferirAmazon(tipo){
   if(btn){btn.disabled=true;btn.textContent='Conferindo...';}
   const res = await fetch('/auditoria/amazon/conferir'+(tipo?'?tipo='+tipo:''),{method:'POST'}).catch(()=>null);
   if(res){const d=await res.json();mostrarNotice(d.ok?'Amazon OK: '+d.verificados+' verificados':'Erro: '+(d.erro||'?'),d.ok?'ok':'err');}
-  carregarAmazon();
+  carregarAmazon(tipo);
   if(btn){btn.disabled=false;btn.textContent=btnLabel[tipo]||'Conferir';}
 }
 async function ignorarAmazon(id){
