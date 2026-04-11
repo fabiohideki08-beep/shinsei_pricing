@@ -488,7 +488,7 @@ async def fila_links(sku: str):
         if _ml_r.status_code == 200:
             items = _ml_r.json().get("results", [])
             if items:
-                links["ml"] = f"https://www.mercadolivre.com.br/anuncios/product?item_id={items[0]}"
+                links["ml"] = f"https://www.mercadolivre.com.br/anuncios/{items[0]}/modificar"
     except Exception:
         pass
     # Amazon - link com SKU no inventário
