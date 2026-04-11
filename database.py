@@ -1,14 +1,14 @@
-"""
-database.py — Shinsei Pricing
-Camada de persistência SQLite.
+﻿"""
+database.py â€” Shinsei Pricing
+Camada de persistÃªncia SQLite.
 Substitui leitura/escrita direta de fila_aprovacao.json e regras.json.
 
 Uso:
     from database import get_db, init_db
-    init_db()          # chamar uma vez na inicialização do app
-    db = get_db()      # retorna conexão thread-safe
+    init_db()          # chamar uma vez na inicializaÃ§Ã£o do app
+    db = get_db()      # retorna conexÃ£o thread-safe
 
-Migração dos JSONs existentes:
+MigraÃ§Ã£o dos JSONs existentes:
     python database.py migrate
 """
 
@@ -41,9 +41,9 @@ def _db_path() -> str:
     return url  # caminho direto
 
 
-# ─────────────────────────────────────────────
-# Conexão
-# ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ConexÃ£o
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _connect() -> sqlite3.Connection:
     conn = sqlite3.connect(_db_path(), check_same_thread=False)
@@ -53,7 +53,7 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
-# Pool simples: uma conexão por thread (FastAPI usa thread pool)
+# Pool simples: uma conexÃ£o por thread (FastAPI usa thread pool)
 import threading
 _local = threading.local()
 
@@ -75,9 +75,9 @@ def db_transaction() -> Generator[sqlite3.Connection, None, None]:
         raise
 
 
-# ─────────────────────────────────────────────
-# DDL — criação das tabelas
-# ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# DDL â€” criaÃ§Ã£o das tabelas
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS regras (
@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS fila_aprovacao (
     criado_em       TEXT NOT NULL,
     atualizado_em   TEXT NOT NULL,
     payload_json    TEXT NOT NULL,             -- JSON completo do item (marketplaces, auditoria etc.)
-    resultado_aplicacao_json TEXT              -- resultado após aprovação/rejeição
+    resultado_aplicacao_json TEXT              -- resultado apÃ³s aprovaÃ§Ã£o/rejeiÃ§Ã£o
 );
 
 CREATE INDEX IF NOT EXISTS idx_fila_status ON fila_aprovacao(status);
@@ -123,16 +123,16 @@ CREATE TABLE IF NOT EXISTS config (
 
 
 def init_db() -> None:
-    """Cria as tabelas se não existirem. Seguro para chamar múltiplas vezes."""
+    """Cria as tabelas se nÃ£o existirem. Seguro para chamar mÃºltiplas vezes."""
     conn = get_db()
     conn.executescript(_DDL)
     conn.commit()
     logger.info("Banco de dados inicializado em %s", _db_path())
 
 
-# ─────────────────────────────────────────────
-# Helpers — conversão Row → dict
-# ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Helpers â€” conversÃ£o Row â†’ dict
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _row_to_dict(row: sqlite3.Row) -> dict:
     return dict(row)
@@ -173,9 +173,9 @@ def _fila_row_to_dict(row: sqlite3.Row) -> dict:
     return base
 
 
-# ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Regras CRUD
-# ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def listar_regras(apenas_ativas: bool = False) -> list[dict]:
     conn = get_db()
@@ -249,7 +249,7 @@ def excluir_regra(idx: int) -> bool:
 
 
 def substituir_todas_regras(regras: list[dict]) -> int:
-    """Apaga todas as regras e insere as novas (usado na importação Excel)."""
+    """Apaga todas as regras e insere as novas (usado na importaÃ§Ã£o Excel)."""
     with db_transaction() as conn:
         conn.execute("DELETE FROM regras")
     for r in regras:
@@ -257,9 +257,9 @@ def substituir_todas_regras(regras: list[dict]) -> int:
     return len(regras)
 
 
-# ─────────────────────────────────────────────
-# Fila de aprovação CRUD
-# ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Fila de aprovaÃ§Ã£o CRUD
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def listar_fila(status: str | None = None, limit: int = 500) -> list[dict]:
     conn = get_db()
@@ -286,7 +286,7 @@ def buscar_item_fila(item_id: str) -> dict | None:
 
 def inserir_item_fila(item: dict) -> None:
     """Insere um item na fila. O item deve ter id, status, sku, criado_em."""
-    # Campos de topo são indexados; o resto vai no payload_json
+    # Campos de topo sÃ£o indexados; o resto vai no payload_json
     top = {"id", "status", "sku", "nome", "criado_em", "atualizado_em", "resultado_aplicacao"}
     payload = {k: v for k, v in item.items() if k not in {"resultado_aplicacao"}}
     resultado = item.get("resultado_aplicacao")
@@ -326,7 +326,7 @@ def stats_fila() -> dict:
     rows = conn.execute(
         "SELECT status, COUNT(*) as n FROM fila_aprovacao GROUP BY status"
     ).fetchall()
-    stats = {"pendente": 0, "aprovado": 0, "rejeitado": 0}
+    stats = {"pendente": 0, "aprovado": 0, "rejeitado": 0, "incompleto": 0}
     for r in rows:
         if r["status"] in stats:
             stats[r["status"]] = r["n"]
@@ -351,7 +351,7 @@ def reset_fila() -> int:
 
 
 def ja_existe_pendente(sku: str, canal: str | None = None) -> bool:
-    """Verifica se já existe um item pendente para o mesmo SKU (e canal, se informado)."""
+    """Verifica se jÃ¡ existe um item pendente para o mesmo SKU (e canal, se informado)."""
     conn = get_db()
     row = conn.execute(
         "SELECT id FROM fila_aprovacao WHERE sku=? AND status='pendente' LIMIT 1",
@@ -360,9 +360,9 @@ def ja_existe_pendente(sku: str, canal: str | None = None) -> bool:
     return row is not None
 
 
-# ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Config CRUD
-# ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def get_config(chave: str, default: Any = None) -> Any:
     conn = get_db()
@@ -385,9 +385,9 @@ def set_config(chave: str, valor: Any) -> None:
         )
 
 
-# ─────────────────────────────────────────────
-# Migração dos JSONs legados
-# ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# MigraÃ§Ã£o dos JSONs legados
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def migrar_json_legado(
     regras_path: Path | None = None,
@@ -396,7 +396,7 @@ def migrar_json_legado(
 ) -> dict:
     """
     Importa dados dos arquivos JSON legados para o SQLite.
-    Seguro para chamar múltiplas vezes (usa INSERT OR REPLACE para fila,
+    Seguro para chamar mÃºltiplas vezes (usa INSERT OR REPLACE para fila,
     e substitui as regras por completo).
     """
     resultado = {"regras": 0, "fila": 0, "config": False}
@@ -444,9 +444,9 @@ def migrar_json_legado(
     return resultado
 
 
-# ─────────────────────────────────────────────
-# CLI — python database.py migrate
-# ─────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# CLI â€” python database.py migrate
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 if __name__ == "__main__":
     import sys
@@ -457,7 +457,7 @@ if __name__ == "__main__":
     if cmd == "migrate":
         init_db()
         resultado = migrar_json_legado()
-        print(f"Migração concluída: {resultado}")
+        print(f"MigraÃ§Ã£o concluÃ­da: {resultado}")
 
     elif cmd == "init":
         init_db()
@@ -470,6 +470,7 @@ if __name__ == "__main__":
 
     else:
         print("Uso: python database.py [migrate|init|stats]")
-        print("  migrate  — importa dados dos JSONs legados para o SQLite")
-        print("  init     — cria as tabelas sem migrar dados")
-        print("  stats    — exibe contagens atuais")
+        print("  migrate  â€” importa dados dos JSONs legados para o SQLite")
+        print("  init     â€” cria as tabelas sem migrar dados")
+        print("  stats    â€” exibe contagens atuais")
+

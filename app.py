@@ -488,7 +488,7 @@ async def fila_links(sku: str):
         if _ml_r.status_code == 200:
             items = _ml_r.json().get("results", [])
             if items:
-                links["ml"] = f"https://www.mercadolivre.com.br/anuncios/{items[0]}/modificar"
+                links["ml"] = f"https://www.mercadolivre.com.br/anuncios/{items[0]}/editar"
     except Exception:
         pass
     # Amazon - link com SKU no inventário
@@ -1963,3 +1963,5 @@ def amazon_status():
         return {"ok": True, "configurado": True, "conectado": bool(token)}
     except Exception as e:
         return {"ok": False, "configurado": False, "conectado": False, "erro": str(e)}
+
+
