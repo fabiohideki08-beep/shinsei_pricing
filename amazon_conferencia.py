@@ -41,7 +41,7 @@ def stats_fila() -> dict:
 def conferir_amazon(bling_client=None, max_items: int = 200, tipo: str = "") -> dict:
     """
     Confere estoque e pedidos Amazon vs Bling.
-    tipo: '' = tudo, 'estoque' = só estoque, 'pedidos' = só pedidos
+    tipo: '' = tudo, 'estoque' = só estoque, 'pedidos' = só pedidos, 'preco' = só preços
     """
     try:
         from amazon_client import AmazonClient
@@ -59,7 +59,7 @@ def conferir_amazon(bling_client=None, max_items: int = 200, tipo: str = "") -> 
     agora = datetime.now().isoformat()
 
     # ── Conferência de estoque FBA ────────────────────────────
-    if tipo in ("", "estoque"):
+    if tipo in ("", "estoque"):  # conferência de estoque FBA
         try:
             res = amazon.get_inventory()
             summaries = res.get("payload", {}).get("inventorySummaries", [])
@@ -113,7 +113,7 @@ def conferir_amazon(bling_client=None, max_items: int = 200, tipo: str = "") -> 
             logger.error("Erro ao conferir estoque Amazon: %s", e)
 
     # ── Conferência de pedidos recentes ───────────────────────
-    if tipo in ("", "pedidos"):
+    if tipo in ("", "pedidos", "preco"):  # conferência de pedidos e preços
         try:
             created_after = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
             res = amazon.get_orders(created_after=created_after)
