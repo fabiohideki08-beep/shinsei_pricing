@@ -264,6 +264,72 @@ def _prepare_product_patch(existing: dict) -> dict:
     return patch
 
 
+
+@app.get("/auditoria/ml-sem-sku")
+def auditoria_ml_sem_sku():
+    """Lista anúncios ML ativos sem seller_custom_field (SKU) vinculado."""
+    try:
+        import json as _json, requests as _req
+        from pathlib import Path
+        _tokens_path = BASE_DIR / "data" / "ml_tokens.json"
+        if not _tokens_path.exists():
+            return {"ok": False, "erro": "Token ML não configurado.", "itens": [], "stats": {"sem_sku": 0}}
+        _tokens = _json.loads(_tokens_path.read_text(encoding="utf-8"))
+        _token = _tokens.get("access_token", "")
+        _h = {"Authorization": f"Bearer {_token}"}
+        
+        # Busca anúncios ativos
+        _sem_sku = []
+        _offset = 0
+        _limit = 100
+        while _offset < 500:  # máximo 500 anúncios por vez
+            _r = _req.get(
+                f"https://api.mercadolibre.com/users/733168645/items/search",
+                params={"status": "active", "limit": _limit, "offset": _offset},
+                headers=_h, timeout=15
+            )
+            if _r.status_code != 200:
+                break
+            _data = _r.json()
+            _items = _data.get("results", [])
+            if not _items:
+                break
+            
+            # Busca detalhes em lote (até 20 por vez)
+            for i in range(0, len(_items), 20):
+                _batch = _items[i:i+20]
+                _ids = ",".join(_batch)
+                _r2 = _req.get(
+                    f"https://api.mercadolibre.com/items",
+                    params={"ids": _ids, "attributes": "id,title,available_quantity,seller_custom_field,status,catalog_product_id"},
+                    headers=_h, timeout=15
+                )
+                if _r2.status_code == 200:
+                    for entry in _r2.json():
+                        item = entry.get("body") or entry
+                        if not item.get("seller_custom_field"):
+                            _sem_sku.append({
+                                "id": item.get("id"),
+                                "titulo": item.get("title", "")[:60],
+                                "estoque": item.get("available_quantity", 0),
+                                "status": item.get("status"),
+                                "catalogo": bool(item.get("catalog_product_id")),
+                                "link": f"https://www.mercadolivre.com.br/anuncios/{item.get('id')}/editar",
+                            })
+            
+            _offset += _limit
+            if len(_items) < _limit:
+                break
+        
+        return {
+            "ok": True,
+            "itens": _sem_sku,
+            "stats": {"sem_sku": len(_sem_sku)},
+        }
+    except Exception as e:
+        logger.error("Erro ao verificar ML sem SKU: %s", e)
+        return {"ok": False, "erro": str(e), "itens": [], "stats": {"sem_sku": 0}}
+
 @app.get("/", response_class=HTMLResponse)
 def home():
     html_file = _first_existing([BASE_DIR / "index.html", PAGES_DIR / "simulador.html"])

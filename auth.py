@@ -78,6 +78,7 @@ PUBLIC_PATHS = {
     "/auditoria/amazon/ignorar/",
     "/auditoria/amazon/conferir",
     "/auditoria/amazon",
+    "/auditoria/ml-sem-sku",
     "/fila/reset-total",
     "/auditoria/ml-estoque/limpar-tudo",
     "/auditoria/estoque-negativo/limpar-tudo",
