@@ -128,6 +128,11 @@
       <span>Shopify</span>
       <span class="status-val" id="val-shopify">Verificando...</span>
     </div>
+    <div class="status-item">
+      <div class="dot gray" id="dot-shopee"></div>
+      <span>Shopee</span>
+      <span class="status-val" id="val-shopee">Verificando...</span>
+    </div>
     <div class="status-item" style="margin-left:auto">
       <div class="dot green" id="dot-scheduler"></div>
       <span>Scheduler</span>
@@ -373,6 +378,15 @@ async function carregarStats(){
     const ok = data.connected;
     document.getElementById('dot-shopify').className = 'dot ' + (ok ? 'green' : 'red');
     document.getElementById('val-shopify').textContent = ok ? 'Conectado' : 'Desconectado';
+  }catch(e){}
+
+  // Status Shopee
+  try{
+    const res = await fetch('/shopee/status');
+    const data = await res.json();
+    const ok = data.connected;
+    document.getElementById('dot-shopee').className = 'dot ' + (ok ? 'green' : (data.status === 'not_configured' ? 'gray' : 'red'));
+    document.getElementById('val-shopee').textContent = ok ? 'Conectado' : (data.status === 'not_configured' ? 'Não configurado' : 'Desconectado');
   }catch(e){}
 
   // Health / ciclo
