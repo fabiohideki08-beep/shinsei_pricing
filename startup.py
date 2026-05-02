@@ -62,6 +62,41 @@ if me_token:
 else:
     pr("INFO: MELHOR_ENVIO_TOKEN não definido — usando tabela regional de fallback")
 
+# ── Mercado Livre config (ml_config.json + ml_tokens.json) ───────────────────
+ml_client_id     = os.getenv("ML_CLIENT_ID", "")
+ml_client_secret = os.getenv("ML_CLIENT_SECRET", "")
+ml_redirect_uri  = os.getenv("ML_REDIRECT_URI", "")
+ml_access_token  = os.getenv("ML_ACCESS_TOKEN", "")
+ml_refresh_token = os.getenv("ML_REFRESH_TOKEN", "")
+
+ml_config_path = DATA_DIR / "ml_config.json"
+ml_tokens_path = DATA_DIR / "ml_tokens.json"
+
+if ml_client_id and ml_client_secret:
+    ml_cfg = {
+        "client_id":     ml_client_id,
+        "client_secret": ml_client_secret,
+        "redirect_uri":  ml_redirect_uri,
+        "conexao_ativa": bool(ml_access_token),
+    }
+    ml_config_path.write_text(json.dumps(ml_cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+    pr(f"ml_config.json criado (client_id={ml_client_id})")
+elif not ml_config_path.exists():
+    pr("INFO: ML_CLIENT_ID não definido — ml_config.json não criado")
+
+if ml_access_token and ml_refresh_token:
+    ml_tok = {
+        "access_token":  ml_access_token,
+        "refresh_token": ml_refresh_token,
+        "token_type":    "Bearer",
+        "client_id":     ml_client_id,
+        "salvo_em":      datetime.now(timezone.utc).isoformat(),
+    }
+    ml_tokens_path.write_text(json.dumps(ml_tok, indent=2, ensure_ascii=False), encoding="utf-8")
+    pr("ml_tokens.json criado")
+elif not ml_tokens_path.exists():
+    pr("INFO: ML_ACCESS_TOKEN não definido — ml_tokens.json não criado (OAuth necessário)")
+
 # ── Cria diretórios necessários ───────────────────────────────────────────────
 for d in ["logs", "pages"]:
     Path(__file__).parent.joinpath(d).mkdir(exist_ok=True)
