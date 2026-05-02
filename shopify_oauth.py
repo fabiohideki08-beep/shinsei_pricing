@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import secrets
 import requests
 from pathlib import Path
@@ -12,8 +13,8 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-SHOPIFY_CLIENT_ID = "3336a3010ee22d2e21018a3ce849b360"
-SHOPIFY_CLIENT_SECRET = "SHOPIFY_SECRET_REMOVED"
+SHOPIFY_CLIENT_ID     = os.getenv("SHOPIFY_CLIENT_ID", "3336a3010ee22d2e21018a3ce849b360")
+SHOPIFY_CLIENT_SECRET = os.getenv("SHOPIFY_CLIENT_SECRET", "")
 SHOPIFY_STORE = "pknw4n-eg"
 SHOPIFY_SCOPES = "read_products,write_products,read_inventory,write_inventory,read_locations"
 DATA_DIR = Path(__file__).parent / "data"
