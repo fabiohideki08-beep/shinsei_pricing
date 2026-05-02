@@ -150,6 +150,36 @@
       </div>
     </div>
 
+    <!-- SHOPEE -->
+    <div class="card" id="card-shopee">
+      <div class="card-header">
+        <div class="card-icon">🟠</div>
+        <div>
+          <div class="card-title">Shopee</div>
+          <div class="card-sub">Anúncios e atualização de preços</div>
+        </div>
+        <div style="margin-left:auto" id="status-shopee">
+          <span class="status-badge unknown"><span class="dot gray"></span>Verificando...</span>
+        </div>
+      </div>
+
+      <div id="info-shopee">
+        <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="shopee-status-text">—</span></div>
+        <div class="info-row"><span class="info-label">Shop ID</span><span class="info-value" id="shopee-shop-id">—</span></div>
+        <div class="info-row"><span class="info-label">Token expira em</span><span class="info-value" id="shopee-expires">—</span></div>
+        <div class="info-row"><span class="info-label">Ambiente</span><span class="info-value" id="shopee-env">—</span></div>
+      </div>
+
+      <hr class="divider"/>
+      <div class="section-title">Conectar / Reconectar</div>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 12px">Clique para autorizar a loja Shinsei na Shopee via OAuth.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <a class="btn success" href="/shopee/auth" target="_blank">🔐 Conectar Shopee</a>
+        <button class="btn secondary sm" onclick="renovarShopee()">🔄 Renovar token</button>
+      </div>
+      <div id="notice-shopee" class="notice" style="margin-top:10px"></div>
+    </div>
+
     <!-- SHOPIFY -->
     <div class="card" id="card-shopify">
       <div class="card-header">
@@ -315,10 +345,49 @@ function copiarWebhook(){
   navigator.clipboard.writeText(url).then(() => mostrarNotice('URL copiada!','ok'));
 }
 
+// ── SHOPEE ───────────────────────────────────────────────
+async function verificarShopee(){
+  try{
+    const res = await fetch('/shopee/status');
+    const data = await res.json();
+    const ok = data.connected;
+    setStatus('status-shopee', ok, ok ? 'Conectado' : (data.status === 'not_configured' ? 'Não configurado' : 'Desconectado'));
+    document.getElementById('shopee-status-text').textContent = ok ? '✅ Ativo' : (data.status === 'not_configured' ? '⚙️ Não configurado' : data.expirado ? '⚠️ Token expirado' : '❌ Sem conexão');
+    document.getElementById('shopee-shop-id').textContent = data.shop_id || '—';
+    document.getElementById('shopee-env').textContent = data.sandbox ? 'Sandbox' : 'Produção';
+    if(data.expires_at){
+      const exp = new Date(data.expires_at * 1000);
+      document.getElementById('shopee-expires').textContent = exp.toLocaleString('pt-BR');
+    }
+  }catch(e){
+    setStatus('status-shopee', false, 'Erro');
+    document.getElementById('shopee-status-text').textContent = 'Erro ao verificar';
+  }
+}
+
+async function renovarShopee(){
+  const notice = document.getElementById('notice-shopee');
+  notice.className = 'notice'; notice.textContent = 'Renovando...'; notice.style.display = 'block';
+  try{
+    const res = await fetch('/shopee/refresh', {method:'POST'});
+    const data = await res.json();
+    if(data.success){
+      notice.className = 'notice ok'; notice.textContent = '✅ Token renovado com sucesso!';
+      verificarShopee();
+    } else {
+      notice.className = 'notice err'; notice.textContent = '❌ ' + (data.detail || 'Erro ao renovar');
+    }
+  }catch(e){
+    notice.className = 'notice err'; notice.textContent = '❌ Erro de conexão';
+  }
+  setTimeout(() => { notice.style.display = 'none'; }, 5000);
+}
+
 function verificarTodas(){
   verificarBling();
   verificarML();
   verificarMP();
+  verificarShopee();
   verificarNgrok();
 }
 
