@@ -45,8 +45,8 @@
 <div class="wrap">
   <div class="topbar">
     <div class="brand">
-      <h1><span class="badge-amz">AMAZON</span> Conferência de Estoque</h1>
-      <p>Comparação de estoque FBA vs Bling — detecta e corrige divergências</p>
+      <h1><span class="badge-amz">AMAZON</span> Conferência de Pedidos e Preços</h1>
+      <p>Auditoria de preços de pedidos Amazon vs Bling — detecta divergências em pedidos recentes</p>
     </div>
     <div class="top-actions">
       <a class="btn secondary" href="/integracoes">← Integrações</a>
@@ -62,7 +62,7 @@
     </div>
     <div class="info-row"><span class="info-label">Seller ID</span><span class="info-value" id="info-seller">—</span></div>
     <div class="info-row"><span class="info-label">Marketplace</span><span class="info-value">Amazon.com.br (A2Q3Y263D00KWC)</span></div>
-    <div class="info-row"><span class="info-label">Autenticação</span><span class="info-value" id="info-auth">—</span></div>
+    <div class="info-row"><span class="info-label">Autenticação SP-API</span><span class="info-value" id="info-auth">—</span></div>
     <hr style="border:none;border-top:1px solid var(--line);margin:12px 0"/>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <a class="btn" href="/amazon/auth" target="_blank">🔐 Autorizar Amazon SP-API</a>
@@ -72,12 +72,12 @@
 
   <div id="notice" class="notice"></div>
 
-  <!-- CONFERÊNCIA FBA -->
+  <!-- CONFERÊNCIA DE PREÇOS -->
   <div class="card">
-    <h2>📦 Conferência de Estoque FBA</h2>
+    <h2>💰 Conferência de Preços — Pedidos vs Bling</h2>
     <p style="font-size:13px;color:var(--muted);margin-top:0">
-      Compara o estoque FBA de cada produto Amazon com o estoque do Bling (pelo <code>sellerSKU</code>).
-      Divergências ficam na fila abaixo para revisão.
+      Analisa os pedidos dos últimos 30 dias e compara o preço cobrado na Amazon com o preço registrado no Bling.
+      Divergências acima de R$0,50 entram na fila para revisão.
     </p>
 
     <div class="kpi-grid">
@@ -88,8 +88,7 @@
     </div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
-      <button class="btn" onclick="rodarConferencia('estoque')" id="btn-conf-est">📊 Conferir estoque FBA</button>
-      <button class="btn secondary sm" onclick="rodarConferencia('preco')" id="btn-conf-preco">💰 Conferir preços</button>
+      <button class="btn" onclick="rodarConferencia('preco')" id="btn-conf-preco">💰 Conferir preços dos pedidos</button>
       <button class="btn secondary sm" onclick="carregarFila()">↻ Atualizar</button>
       <button class="btn secondary sm" onclick="limparResolvidos()">🗑️ Limpar resolvidos</button>
     </div>
@@ -103,13 +102,13 @@
     <h2>Como funciona</h2>
     <div style="font-size:13px;color:var(--muted);line-height:1.8">
       <p><strong style="color:var(--text)">1. Autenticação SP-API</strong><br>
-        Clique em "Autorizar Amazon SP-API" para iniciar o OAuth. O sistema salva os tokens automaticamente.</p>
-      <p><strong style="color:var(--text)">2. Conferência de estoque FBA</strong><br>
-        Busca todos os SKUs do inventário FBA via <code>getInventorySummaries</code> e compara com o <code>saldoVirtualTotal</code> do Bling. Produtos com divergência entram na fila.</p>
+        Clique em "Autorizar Amazon SP-API" para iniciar o OAuth LWA (Login with Amazon). O sistema salva os tokens automaticamente.</p>
+      <p><strong style="color:var(--text)">2. Conferência de preços (FBM)</strong><br>
+        Busca pedidos dos últimos 30 dias via <code>getOrders</code> + <code>getOrderItems</code> e compara o preço cobrado na Amazon com o <code>preco</code> do produto no Bling (pelo <code>SellerSKU</code>). Divergências superiores a R$0,50 entram na fila.</p>
       <p><strong style="color:var(--text)">3. Mapeamento por SKU</strong><br>
-        A Amazon usa o mesmo <code>sellerSKU</code> que o Bling — não é necessário arquivo de mapeamento separado.</p>
-      <p><strong style="color:var(--text)">4. Correção automática</strong><br>
-        O botão "Corrigir" atualiza o estoque FBA da Amazon (via <code>updateListingsItem</code>) com o valor do Bling.</p>
+        A Amazon usa o mesmo <code>SellerSKU</code> que o Bling — nenhum arquivo de mapeamento separado é necessário.</p>
+      <p><strong style="color:var(--text)">4. Auditoria de preços</strong><br>
+        Ao detectar uma divergência, o sistema exibe o preço cobrado na Amazon e o preço atual do Bling para que você decida se deve atualizar o listing.</p>
     </div>
   </div>
 </div>
@@ -126,8 +125,8 @@ async function verificarStatus(){
   try {
     const res = await fetch('/amazon/status');
     const data = await res.json();
-    const badge = document.getElementById('status-badge');
     const ok = data.connected;
+    const badge = document.getElementById('status-badge');
     badge.innerHTML = `<span class="status-badge ${ok ? 'connected' : 'disconnected'}">
       <span class="dot ${ok ? 'green' : 'red'}"></span>${ok ? 'Conectada' : 'Desconectada'}</span>`;
     document.getElementById('info-seller').textContent = data.seller_id || '—';
@@ -155,56 +154,50 @@ async function carregarFila(){
       <thead><tr style="border-bottom:1px solid var(--line)">
         <th style="padding:6px 8px;text-align:left;color:var(--muted)">SKU</th>
         <th style="padding:6px 8px;text-align:left;color:var(--muted)">Produto</th>
-        <th style="padding:6px 8px;text-align:center;color:var(--muted)">Tipo</th>
-        <th style="padding:6px 8px;text-align:center;color:var(--muted)">Bling</th>
-        <th style="padding:6px 8px;text-align:center;color:var(--muted)">Amazon</th>
+        <th style="padding:6px 8px;text-align:center;color:var(--muted)">Pedido</th>
+        <th style="padding:6px 8px;text-align:center;color:var(--muted)">Preço Bling</th>
+        <th style="padding:6px 8px;text-align:center;color:var(--muted)">Preço Amazon</th>
         <th style="padding:6px 8px;text-align:center;color:var(--muted)">Dif.</th>
         <th style="padding:6px 8px"></th>
       </tr></thead><tbody>
-      ${itens.map(i => `
-        <tr style="border-bottom:1px solid var(--line)">
-          <td style="padding:8px;font-family:monospace">${i.sku || i.asin || i.id}</td>
-          <td style="padding:8px">${i.titulo || i.produto_nome || '—'}</td>
-          <td style="padding:8px;text-align:center"><span style="font-size:11px;background:#1e3a5f;padding:2px 8px;border-radius:6px">${i.tipo || 'estoque'}</span></td>
-          <td style="padding:8px;text-align:center;font-weight:700">${i.estoque_bling ?? i.preco_bling ?? '—'}</td>
-          <td style="padding:8px;text-align:center;font-weight:700;color:#f59e0b">${i.estoque_amazon ?? i.preco_amazon ?? '—'}</td>
-          <td style="padding:8px;text-align:center;color:#f59e0b;font-weight:700">${i.diferenca !== undefined ? ((i.diferenca > 0 ? '+' : '') + i.diferenca) : '—'}</td>
+      ${itens.map(i => {
+        const pb = i.preco_bling != null ? `R$ ${parseFloat(i.preco_bling).toFixed(2)}` : '—';
+        const pa = i.preco_amazon != null ? `R$ ${parseFloat(i.preco_amazon).toFixed(2)}` : (i.estoque_amazon != null ? i.estoque_amazon : '—');
+        const dif = i.diferenca != null ? ((i.diferenca > 0 ? '+' : '') + 'R$ ' + Math.abs(i.diferenca).toFixed(2)) : '—';
+        const cor = i.diferenca != null && i.diferenca < 0 ? '#ef4444' : '#f59e0b';
+        return `<tr style="border-bottom:1px solid var(--line)">
+          <td style="padding:8px;font-family:monospace">${i.sku || i.id}</td>
+          <td style="padding:8px">${i.nome || i.titulo || '—'}</td>
+          <td style="padding:8px;text-align:center;font-size:11px;color:var(--muted)">${i.order_id || '—'}</td>
+          <td style="padding:8px;text-align:center;font-weight:700">${pb}</td>
+          <td style="padding:8px;text-align:center;font-weight:700;color:${cor}">${pa}</td>
+          <td style="padding:8px;text-align:center;color:${cor};font-weight:700">${dif}</td>
           <td style="padding:8px;text-align:right;display:flex;gap:6px;justify-content:flex-end">
-            <button class="btn sm success" onclick="corrigirItem('${i.id}')">✓</button>
-            <button class="btn sm secondary" onclick="ignorarItem('${i.id}')">—</button>
+            <button class="btn sm secondary" onclick="ignorarItem('${i.id}')">Ignorar</button>
           </td>
-        </tr>`).join('')}
+        </tr>`;}).join('')}
       </tbody></table>`;
   } catch(e){ document.getElementById('fila-container').textContent = 'Erro ao carregar fila.'; }
 }
 
 async function rodarConferencia(tipo){
-  const id = tipo === 'preco' ? 'btn-conf-preco' : 'btn-conf-est';
-  const btn = document.getElementById(id);
+  const btn = document.getElementById('btn-conf-preco');
   btn.disabled = true;
   const orig = btn.textContent;
-  btn.textContent = '⏳ Conferindo...';
-  mostrarNotice('Rodando conferência Amazon vs Bling. Pode levar alguns minutos...', 'ok');
+  btn.textContent = '⏳ Analisando pedidos...';
+  mostrarNotice('Buscando pedidos dos últimos 30 dias. Pode levar alguns minutos...', 'ok');
   try {
     const res = await fetch(`/auditoria/amazon/conferir?tipo=${tipo}`, {method:'POST'});
     const data = await res.json();
     if(data.ok){
-      mostrarNotice(`✅ ${data.verificados || 0} verificados, ${data.divergencias_estoque || data.divergencias || 0} divergências.`, 'ok');
+      const div = data.divergencias_pedidos || data.divergencias || 0;
+      mostrarNotice(`✅ Concluído: ${data.divergencias_pedidos || 0} divergências de preço encontradas.`, 'ok');
       carregarFila();
     } else {
       mostrarNotice(data.detail || data.erro || 'Erro na conferência.', 'err');
     }
   } catch(e){ mostrarNotice('Erro de conexão.', 'err'); }
   finally { btn.disabled = false; btn.textContent = orig; }
-}
-
-async function corrigirItem(id){
-  try {
-    const res = await fetch(`/auditoria/amazon/corrigir/${id}`, {method:'POST'});
-    const data = await res.json();
-    if(data.ok){ mostrarNotice('✅ Corrigido!', 'ok'); carregarFila(); }
-    else { mostrarNotice(data.detail || data.erro || 'Falha.', 'err'); }
-  } catch(e){ mostrarNotice('Erro de conexão.', 'err'); }
 }
 
 async function ignorarItem(id){
@@ -215,7 +208,7 @@ async function ignorarItem(id){
 }
 
 async function limparResolvidos(){
-  if(!confirm('Limpar itens corrigidos/ignorados?')) return;
+  if(!confirm('Limpar itens resolvidos/ignorados?')) return;
   try { await fetch('/auditoria/amazon/limpar-resolvidos', {method:'POST'}); carregarFila(); } catch(e){}
 }
 
