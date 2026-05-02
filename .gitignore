@@ -34,6 +34,7 @@ bling_token.json
 google-ads.yaml
 shinsei-market-seo-*.json
 data/shopee_cookies.txt
+data/melhorenvio_token.json
 
 # ─── Banco de dados local ─────────────────────────────────────
 *.db

@@ -54,6 +54,13 @@ if bling_access and bling_refresh:
 elif not bling_path.exists():
     pr("INFO: BLING_ACCESS_TOKEN não definido — bling_token.json não criado (OAuth necessário)")
 
+# ── Melhor Envio token (se fornecido diretamente via env) ────────────────────
+me_token = os.getenv("MELHOR_ENVIO_TOKEN", "")
+if me_token:
+    pr(f"MELHOR_ENVIO_TOKEN configurado ({len(me_token)} chars) — cotações em tempo real ativas")
+else:
+    pr("INFO: MELHOR_ENVIO_TOKEN não definido — usando tabela regional de fallback")
+
 # ── Cria diretórios necessários ───────────────────────────────────────────────
 for d in ["logs", "pages"]:
     Path(__file__).parent.joinpath(d).mkdir(exist_ok=True)
