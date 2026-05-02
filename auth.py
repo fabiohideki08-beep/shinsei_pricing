@@ -107,11 +107,10 @@ PUBLIC_PREFIXES = (
     "/auditoria/shopify/",
     "/auditoria/ml-estoque/",
     "/static/",
-    "/fila/aprovar/",
-    "/fila/rejeitar/",
-    "/auditoria/shopify/",
-    "/auditoria/ml-estoque/",
     "/pages/",
+    "/frete/",       # Shopify Carrier Service + widget de frete (sem API key)
+    "/amazon/auth",  # Amazon SP-API OAuth (sem API key)
+    "/amazon/callback",
 )
 
 
