@@ -1405,15 +1405,6 @@ def shopify_status():
     token = data.get("access_token", "")
     return {"connected": bool(token) and token != ".", "scope": data.get("scope", ""), "salvo_em": data.get("salvo_em")}
 
-@app.get("/shopify/export-token")
-def shopify_export_token():
-    """Endpoint temporário de setup — exporta token para salvar no Railway."""
-    import json
-    from pathlib import Path as _P
-    cfg = _P("data/shopify_config.json")
-    if not cfg.exists(): return {"erro": "shopify_config.json não encontrado"}
-    data = json.loads(cfg.read_text(encoding="utf-8"))
-    return {"access_token": data.get("access_token", ""), "scope": data.get("scope", "")}
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INTEGRACAO_CFG_PATH = DATA_DIR / "integracao_comercial.json"
