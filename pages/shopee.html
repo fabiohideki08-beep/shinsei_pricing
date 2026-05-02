@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shopee — Shinsei Pricing</title>
+  <style>
+    :root{--bg:#0b1020;--card:#121a31;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#ee4d2d;--ok:#16a34a;--danger:#ef4444}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text);padding:24px}
+    .wrap{max-width:860px;margin:0 auto}
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 18px}
+    .brand h1{margin:0;font-size:22px;display:flex;align-items:center;gap:10px}
+    .brand p{margin:4px 0 0;color:var(--muted);font-size:13px}
+    .top-actions{display:flex;gap:10px}
+    .btn{border:none;background:var(--accent);color:#fff;padding:10px 16px;border-radius:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-size:13px}
+    .btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+    .btn.success{background:#166534}
+    .btn.sm{padding:7px 12px;font-size:12px;border-radius:9px}
+    .card{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:20px;padding:22px;margin-bottom:18px}
+    .card h2{margin:0 0 16px;font-size:16px;font-weight:700}
+    .status-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;font-size:12px;font-weight:700}
+    .status-badge.connected{background:rgba(22,163,74,.15);color:#22c55e;border:1px solid rgba(22,163,74,.3)}
+    .status-badge.disconnected{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
+    .status-badge.unknown{background:rgba(150,150,150,.15);color:#9fb0d9;border:1px solid rgba(150,150,150,.3)}
+    .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+    .dot.green{background:#22c55e} .dot.red{background:#ef4444} .dot.gray{background:#9fb0d9}
+    .info-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+    .info-row:last-child{border-bottom:none}
+    .info-label{color:var(--muted)}
+    .info-value{font-weight:600}
+    .field{margin-bottom:14px}
+    .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:600}
+    .field input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#0d1630;color:#fff;font-size:13px}
+    .field input:focus{outline:none;border-color:var(--accent)}
+    .row-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    @media(max-width:600px){.row-2{grid-template-columns:1fr}}
+    .notice{padding:12px 14px;border-radius:12px;margin-bottom:14px;font-size:13px;display:none}
+    .notice.ok{border:1px solid #166534;background:rgba(22,163,74,.1);color:#bbf7d0;display:block}
+    .notice.err{border:1px solid #991b1b;background:rgba(239,68,68,.1);color:#fca5a5;display:block}
+    .divider{border:none;border-top:1px solid var(--line);margin:16px 0}
+    .section-title{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.06em;margin-bottom:12px;text-transform:uppercase}
+    code{background:#0d1630;padding:3px 7px;border-radius:5px;font-size:12px;color:#9fb0d9}
+    .badge-shopee{background:linear-gradient(135deg,#ee4d2d,#ff7337);color:#fff;padding:3px 10px;border-radius:8px;font-size:12px;font-weight:700}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1><span class="badge-shopee">SHOPEE</span> Integração</h1>
+      <p>Atualização automática de preços via Shopee Open Platform API v2</p>
+    </div>
+    <div class="top-actions">
+      <a class="btn secondary" href="/integracoes">← Integrações</a>
+      <a class="btn secondary" href="/">Início</a>
+    </div>
+  </div>
+
+  <div id="notice" class="notice"></div>
+
+  <!-- STATUS -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="margin:0">Status da conexão</h2>
+      <div id="status-badge"><span class="status-badge unknown"><span class="dot gray"></span>Verificando...</span></div>
+    </div>
+    <div class="info-row"><span class="info-label">Credenciais (.env)</span><span class="info-value" id="info-config">—</span></div>
+    <div class="info-row"><span class="info-label">Shop ID</span><span class="info-value" id="info-shop-id">—</span></div>
+    <div class="info-row"><span class="info-label">Token expira em</span><span class="info-value" id="info-expires">—</span></div>
+    <div class="info-row"><span class="info-label">Obtido em</span><span class="info-value" id="info-obtido">—</span></div>
+    <div class="info-row"><span class="info-label">Renovado em</span><span class="info-value" id="info-renovado">—</span></div>
+    <hr class="divider"/>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <a class="btn" href="/shopee/auth" target="_blank">🔐 Autorizar Shopee</a>
+      <button class="btn secondary" onclick="renovarToken()">🔄 Renovar token</button>
+      <button class="btn secondary sm" onclick="carregarStatus()">↻ Atualizar status</button>
+    </div>
+  </div>
+
+  <!-- CONFIGURAÇÃO .env -->
+  <div class="card">
+    <h2>Configuração de credenciais</h2>
+    <p style="font-size:13px;color:var(--muted);margin-top:0">
+      Adicione as variáveis abaixo no seu arquivo <code>.env</code> e reinicie o servidor.
+      Obtenha as credenciais no <a href="https://open.shopee.com/dashboard" target="_blank" style="color:var(--accent)">Shopee Open Platform</a>.
+    </p>
+    <div style="background:#0d1630;border:1px solid var(--line);border-radius:12px;padding:14px;font-family:monospace;font-size:13px;color:#9fb0d9;line-height:1.8">
+      <div><span style="color:#ee4d2d">SHOPEE_PARTNER_ID</span>=<span style="color:#bbf7d0">seu_partner_id</span></div>
+      <div><span style="color:#ee4d2d">SHOPEE_PARTNER_KEY</span>=<span style="color:#bbf7d0">seu_partner_key_hmac_sha256</span></div>
+      <div><span style="color:#ee4d2d">SHOPEE_SHOP_ID</span>=<span style="color:#bbf7d0">seu_shop_id</span></div>
+    </div>
+  </div>
+
+  <!-- ATUALIZAÇÃO MANUAL DE PREÇO -->
+  <div class="card">
+    <h2>Atualizar preço manualmente</h2>
+    <p style="font-size:13px;color:var(--muted);margin-top:0">
+      Informe o <code>item_id</code> do anúncio na Shopee (visível na URL do anúncio ou via API de produtos) e o novo preço.
+    </p>
+    <div id="notice-preco" class="notice"></div>
+    <div class="row-2">
+      <div class="field">
+        <label>Item ID da Shopee</label>
+        <input type="text" id="item-id" placeholder="Ex.: 123456789">
+      </div>
+      <div class="field">
+        <label>Novo preço (R$)</label>
+        <input type="number" id="novo-preco" min="0" step="0.01" placeholder="Ex.: 49.90">
+      </div>
+    </div>
+    <div class="field">
+      <label>Preço original riscado (opcional)</label>
+      <input type="number" id="preco-original" min="0" step="0.01" placeholder="Deixe vazio para usar o mesmo preço">
+    </div>
+    <button class="btn sm" onclick="atualizarPreco()">💰 Atualizar preço na Shopee</button>
+  </div>
+
+  <!-- MAPEAMENTO SKU → ITEM_ID -->
+  <div class="card">
+    <h2>Mapeamento SKU → Item ID da Shopee</h2>
+    <p style="font-size:13px;color:var(--muted);margin-top:0">
+      Para aplicar preços automaticamente ao aprovar a fila, mapeie o SKU do Bling ao <code>item_id</code> do anúncio na Shopee.
+    </p>
+
+    <div id="notice-map" class="notice"></div>
+
+    <div class="row-2" style="margin-bottom:12px">
+      <div class="field" style="margin:0">
+        <label>SKU (Bling)</label>
+        <input type="text" id="map-sku" placeholder="Ex.: KIT-ALFAPARF-01">
+      </div>
+      <div class="field" style="margin:0">
+        <label>Item ID (Shopee)</label>
+        <input type="text" id="map-item-id" placeholder="Ex.: 987654321">
+      </div>
+    </div>
+    <button class="btn sm" onclick="adicionarMapeamento()" style="margin-bottom:18px">➕ Adicionar mapeamento</button>
+
+    <div class="section-title">Mapeamentos cadastrados</div>
+    <div id="lista-mapeamentos" style="font-size:13px;color:var(--muted)">Carregando...</div>
+  </div>
+
+  <!-- COMO FUNCIONA -->
+  <div class="card">
+    <h2>Como funciona a integração</h2>
+    <div style="font-size:13px;color:var(--muted);line-height:1.8">
+      <p><strong style="color:var(--text)">1. Autorização OAuth</strong><br>
+        Clique em "Autorizar Shopee". Você será redirecionado para a Shopee, que pedirá permissão para o app gerenciar preços da sua loja. Após autorizar, o sistema salva os tokens automaticamente.</p>
+      <p><strong style="color:var(--text)">2. Renovação automática</strong><br>
+        O access_token expira em ~4 horas. O sistema tenta renovar automaticamente ao aplicar preços. Você também pode renovar manualmente clicando em "Renovar token".</p>
+      <p><strong style="color:var(--text)">3. Precificação automática via fila</strong><br>
+        Quando você aprova um item da fila de precificação que possui um <code>shopee_item_id</code> mapeado, o sistema envia o preço calculado para a Shopee automaticamente via <code>POST /api/v2/product/update_price</code>.</p>
+      <p><strong style="color:var(--text)">4. Mapeamento SKU → item_id</strong><br>
+        A Shopee não usa SKU como identificador — use o <code>item_id</code> numérico do anúncio. O mapeamento fica em <code>data/shopee_mapeamento.json</code>.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function mostrarNotice(msg, tipo, id){
+  const el = document.getElementById(id || 'notice');
+  el.className = 'notice ' + tipo;
+  el.textContent = msg;
+  if(tipo === 'ok') setTimeout(() => { el.className = 'notice'; }, 5000);
+}
+
+function setBadge(connected, label){
+  const el = document.getElementById('status-badge');
+  const cls = connected === true ? 'connected' : connected === false ? 'disconnected' : 'unknown';
+  const dot = connected === true ? 'green' : connected === false ? 'red' : 'gray';
+  el.innerHTML = `<span class="status-badge ${cls}"><span class="dot ${dot}"></span>${label}</span>`;
+}
+
+async function carregarStatus(){
+  setBadge(null, 'Verificando...');
+  try {
+    const res = await fetch('/shopee/status');
+    const data = await res.json();
+    const ok = data.conectado;
+    const sandboxLabel = data.sandbox ? ' 🧪 SANDBOX' : '';
+    setBadge(ok, (ok ? 'Conectada' : 'Desconectada') + sandboxLabel);
+    document.getElementById('info-config').textContent = data.motivo
+      ? '⚠️ ' + data.motivo
+      : (ok ? '✅ Configuradas' : '❌ Não configuradas');
+    if(data.shop_id) document.getElementById('info-shop-id').textContent =
+      data.shop_id + (data.sandbox ? ' (sandbox)' : '');
+    if(data.sandbox){
+      let sbEl = document.getElementById('sandbox-notice');
+      if(!sbEl){
+        sbEl = document.createElement('div');
+        sbEl.id = 'sandbox-notice';
+        sbEl.style.cssText = 'background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.3);color:#fde047;border-radius:10px;padding:10px 14px;font-size:13px;margin-top:12px';
+        sbEl.innerHTML = '🧪 <strong>Modo sandbox ativo</strong> — usando credenciais de teste. Defina <code>SHOPEE_SANDBOX=false</code> no .env para produção.';
+        document.querySelector('.card').appendChild(sbEl);
+      }
+    }
+
+    if(ok){
+      // Busca metadados adicionais
+      try {
+        const tr = await fetch('/shopee/tokens');
+        const td = await tr.json();
+        if(td.expires_at){
+          const exp = new Date(td.expires_at * 1000);
+          document.getElementById('info-expires').textContent = exp.toLocaleString('pt-BR');
+        }
+        if(td.obtido_em) document.getElementById('info-obtido').textContent = new Date(td.obtido_em).toLocaleString('pt-BR');
+        if(td.renovado_em) document.getElementById('info-renovado').textContent = new Date(td.renovado_em).toLocaleString('pt-BR');
+      } catch(_){}
+    }
+  } catch(e){
+    setBadge(false, 'Erro');
+    document.getElementById('info-config').textContent = 'Erro ao verificar status';
+  }
+}
+
+async function renovarToken(){
+  try {
+    const res = await fetch('/shopee/refresh', {method:'POST'});
+    const data = await res.json();
+    if(data.success){
+      mostrarNotice('Token renovado com sucesso!', 'ok');
+      carregarStatus();
+    } else {
+      mostrarNotice(data.detail || data.error || 'Falha ao renovar token.', 'err');
+    }
+  } catch(e){
+    mostrarNotice('Erro de conexão ao tentar renovar token.', 'err');
+  }
+}
+
+async function atualizarPreco(){
+  const itemId = document.getElementById('item-id').value.trim();
+  const preco  = parseFloat(document.getElementById('novo-preco').value);
+  const precOrig = parseFloat(document.getElementById('preco-original').value) || null;
+
+  if(!itemId){ mostrarNotice('Informe o Item ID.', 'err', 'notice-preco'); return; }
+  if(!preco || preco <= 0){ mostrarNotice('Informe um preço válido.', 'err', 'notice-preco'); return; }
+
+  try {
+    const payload = {item_id: itemId, preco: preco};
+    if(precOrig && precOrig > 0) payload.preco_original = precOrig;
+    const res = await fetch('/shopee/atualizar-preco', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if(data.success){
+      mostrarNotice(`✅ Preço atualizado com sucesso! Item ${itemId} → R$ ${preco.toFixed(2)}`, 'ok', 'notice-preco');
+    } else {
+      mostrarNotice(data.detail || data.error || 'Falha ao atualizar preço.', 'err', 'notice-preco');
+    }
+  } catch(e){
+    mostrarNotice('Erro de conexão ao atualizar preço.', 'err', 'notice-preco');
+  }
+}
+
+carregarStatus();
+carregarMapeamentos();
+
+async function carregarMapeamentos(){
+  try {
+    const res = await fetch('/shopee/mapeamento');
+    const data = await res.json();
+    const el = document.getElementById('lista-mapeamentos');
+    if(!data.mapeamentos || data.mapeamentos.length === 0){
+      el.textContent = 'Nenhum mapeamento cadastrado ainda.';
+      return;
+    }
+    el.innerHTML = `<table style="width:100%;border-collapse:collapse">
+      <thead><tr style="border-bottom:1px solid var(--line)">
+        <th style="text-align:left;padding:6px 8px;color:var(--muted);font-size:11px;font-weight:600">SKU</th>
+        <th style="text-align:left;padding:6px 8px;color:var(--muted);font-size:11px;font-weight:600">Item ID Shopee</th>
+        <th style="padding:6px 8px"></th>
+      </tr></thead>
+      <tbody>
+        ${data.mapeamentos.map(m => `
+          <tr style="border-bottom:1px solid var(--line)">
+            <td style="padding:8px;font-family:monospace">${m.sku}</td>
+            <td style="padding:8px;font-family:monospace">${m.item_id}</td>
+            <td style="padding:8px;text-align:right">
+              <button class="btn danger sm" onclick="removerMapeamento('${m.sku}')">✕</button>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+  } catch(e) {
+    document.getElementById('lista-mapeamentos').textContent = 'Erro ao carregar mapeamentos.';
+  }
+}
+
+async function adicionarMapeamento(){
+  const sku = document.getElementById('map-sku').value.trim();
+  const itemId = document.getElementById('map-item-id').value.trim();
+  if(!sku || !itemId){ mostrarNotice('Preencha SKU e Item ID.','err','notice-map'); return; }
+  try {
+    const res = await fetch('/shopee/mapeamento', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({sku, item_id: itemId})
+    });
+    const data = await res.json();
+    if(data.success){
+      mostrarNotice(`✅ Mapeamento salvo: ${sku} → ${itemId}`,'ok','notice-map');
+      document.getElementById('map-sku').value='';
+      document.getElementById('map-item-id').value='';
+      carregarMapeamentos();
+    } else {
+      mostrarNotice(data.detail || 'Erro ao salvar.','err','notice-map');
+    }
+  } catch(e){ mostrarNotice('Erro de conexão.','err','notice-map'); }
+}
+
+async function removerMapeamento(sku){
+  if(!confirm(`Remover mapeamento do SKU "${sku}"?`)) return;
+  try {
+    const res = await fetch(`/shopee/mapeamento/${encodeURIComponent(sku)}`, {method:'DELETE'});
+    const data = await res.json();
+    if(data.success){ carregarMapeamentos(); }
+    else { alert(data.detail || 'Erro ao remover.'); }
+  } catch(e){ alert('Erro de conexão.'); }
+}
+</script>
+</body>
+</html>
