@@ -1,5 +1,5 @@
 [deploy]
-startCommand = "python startup.py && uvicorn app:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 30 --log-level info"
+startCommand = "echo '[railway] PORT='$PORT && python startup.py && uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --timeout-keep-alive 30 --log-level info"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"

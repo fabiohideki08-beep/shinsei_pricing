@@ -34,7 +34,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000
 
 # Cria usuário não-root (segurança)
-RUN groupadd -r shinsei && useradd -r -g shinsei -d /app -s /sbin/nologin shinsei
+RUN groupadd -r shinsei && useradd -r -g shinsei -d /app -s /bin/sh shinsei
 
 WORKDIR /app
 
