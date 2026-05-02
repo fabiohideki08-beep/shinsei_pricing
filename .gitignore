@@ -67,10 +67,14 @@ data/pricing_logs.jsonl
 data/webhook_logs.jsonl
 data/run_log.txt
 data/ordenar_log.txt
+data/merchant_custom_labels_log.txt
+data/merchant_gtin_err.txt
+data/merchant_gtin_log.txt
+data/identifier_err.txt
+data/identifier_log.txt
 logs/
 *.log
 *.jsonl
-*.txt
 
 # ─── Imagens geradas / assets de dados ────────────────────────
 data/*.jpg
@@ -108,3 +112,4 @@ data/temp.xlsx
 
 # ─── Claude worktrees (internos) ──────────────────────────────
 .claude/
+railway_vars.env
