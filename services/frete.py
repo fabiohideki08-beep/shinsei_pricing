@@ -107,25 +107,45 @@ def normalize_cep(cep: str) -> str:
 
 
 async def get_city_from_cep(cep: str) -> dict[str, Any]:
-    """Consulta ViaCEP e retorna dict com city/state (e demais campos)."""
+    """
+    Consulta CEP e retorna dict com city/state.
+    Tenta ViaCEP primeiro; se falhar, usa BrasilAPI como fallback.
+    """
     cep = normalize_cep(cep)
-    url = f"https://viacep.com.br/ws/{cep}/json/"
+
+    # ── Tentativa 1: ViaCEP ───────────────────────────────────────────────────
     try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
-            resp = await client.get(url)
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            resp = await client.get(f"https://viacep.com.br/ws/{cep}/json/")
             resp.raise_for_status()
             data = resp.json()
-            if data.get("erro"):
-                logger.warning("ViaCEP: CEP %s não encontrado", cep)
-                return {"city": "", "state": "", "raw": data}
+            if not data.get("erro"):
+                return {
+                    "city": data.get("localidade", ""),
+                    "state": data.get("uf", ""),
+                    "raw": data,
+                }
+    except Exception as exc:
+        logger.debug("ViaCEP indisponível para CEP %s (%s) — tentando BrasilAPI", cep, exc)
+
+    # ── Tentativa 2: BrasilAPI ────────────────────────────────────────────────
+    try:
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            resp = await client.get(
+                f"https://brasilapi.com.br/api/cep/v2/{cep}",
+                headers={"User-Agent": "ShinseMarket/1.0"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
             return {
-                "city": data.get("localidade", ""),
-                "state": data.get("uf", ""),
+                "city": data.get("city", ""),
+                "state": data.get("state", ""),
                 "raw": data,
             }
     except Exception as exc:
-        logger.error("ViaCEP error for CEP %s: %s", cep, exc)
-        return {"city": "", "state": "", "raw": {}}
+        logger.warning("BrasilAPI também falhou para CEP %s: %s", cep, exc)
+
+    return {"city": "", "state": "", "raw": {}}
 
 
 def is_rmsp(city: str, state: str) -> bool:
