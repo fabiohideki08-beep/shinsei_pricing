@@ -99,7 +99,13 @@ class ShopeeOAuthService:
         """Troca o authorization code por access_token + refresh_token."""
         ts   = int(time.time())
         path = "/api/v2/auth/token/get"
-        sign = _assinar(path, ts)
+        # Base string: partner_id + path + timestamp  (endpoint público)
+        base_str = f"{PARTNER_ID}{path}{ts}"
+        sign = hmac.new(PARTNER_KEY.encode(), base_str.encode(), hashlib.sha256).hexdigest()
+
+        logger.info("Shopee trocar_code: partner_id=%s shop_id=%s ts=%s", PARTNER_ID, shop_id, ts)
+        logger.info("Shopee sign base: %r", base_str)
+        logger.info("Shopee sign: %s", sign)
 
         try:
             with httpx.Client(timeout=30) as client:
@@ -108,8 +114,13 @@ class ShopeeOAuthService:
                     json={"code": code, "shop_id": shop_id, "partner_id": PARTNER_ID},
                     params={"partner_id": PARTNER_ID, "timestamp": ts, "sign": sign},
                 )
+                logger.info("Shopee trocar_code HTTP %s: %s", resp.status_code, resp.text[:500])
                 resp.raise_for_status()
                 data = resp.json()
+        except httpx.HTTPStatusError as exc:
+            body = exc.response.text[:500] if exc.response else ""
+            logger.error("Shopee trocar_code HTTP %s: %s", exc.response.status_code, body)
+            return {"success": False, "error": f"HTTP {exc.response.status_code}: {body}"}
         except Exception as exc:
             logger.error("Shopee trocar_code erro: %s", exc)
             return {"success": False, "error": str(exc)}
