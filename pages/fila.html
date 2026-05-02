@@ -14,7 +14,7 @@
 details{margin-top:14px} details>summary{cursor:pointer;color:#c9d7ff;font-weight:700}.empty{background:rgba(18,26,49,.95);border:1px dashed var(--line);border-radius:22px;padding:40px;text-align:center;color:var(--muted)} .mini{font-size:12px;color:var(--muted)} .neg{color:#fca5a5;font-weight:700}
 @media (max-width:1200px){.summary{grid-template-columns:repeat(2,1fr)}} @media (max-width:700px){.summary{grid-template-columns:1fr}.topbar{flex-direction:column;align-items:flex-start}}
 </style></head><body>
-<div class="wrap"><div class="topbar"><div class="brand"><h1>Fila de aprovação</h1><p>Agora com bloqueio de inválidos e histórico completo.</p></div><div class="top-actions"><span class="pill" id="statsPendente">Pendentes: 0</span><span class="pill" id="statsAprovado">Aprovados: 0</span><span id="statsIncompleto" style="background:#7c3aed;color:#fff;padding:4px 12px;border-radius:999px;font-size:13px;cursor:pointer" onclick="filtrarStatus(\'incompleto\')">Incompletos: 0</span> <span class="pill" id="statsRejeitado">Rejeitados: 0</span><a class="btn secondary" href="/simulador">Simulador</a><button class="btn secondary" onclick="carregarFila()">Atualizar</button></div></div><div id="lista" class="grid"></div></div>
+<div class="wrap"><div class="topbar"><div class="brand"><h1>Fila de aprovação</h1><p>Agora com bloqueio de inválidos e histórico completo.</p></div><div class="top-actions"><span class="pill" id="statsPendente">Pendentes: 0</span><span class="pill" id="statsAprovado">Aprovados: 0</span><span id="statsIncompleto" style="background:#7c3aed;color:#fff;padding:4px 12px;border-radius:999px;font-size:13px;cursor:pointer" onclick="filtrarStatus(\'incompleto\')">Incompletos: 0</span> <span class="pill" id="statsRejeitado">Rejeitados: 0</span><a class="btn secondary" href="/simulador">Simulador</a><button class="btn secondary" id="btn-atualizar" onclick="atualizarFila()">Atualizar</button></div></div><div id="lista" class="grid"></div></div>
 <script>
 function moeda(v){return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
 function formatDate(v){if(!v)return '-'; const d=new Date(v); return isNaN(d)?v:d.toLocaleString('pt-BR')}
@@ -31,11 +31,57 @@ function renderItem(item){
       <span id="links-pend-${item.id}" style="font-size:12px;color:#64748b">Carregando...</span>
     </div>
   </div>`}
-async function carregarFila(){const res=await fetch('/fila/lista'); const data=await res.json(); const lista=data.itens||[]; const stats=data.stats||{pendente:0,aprovado:0,rejeitado:0}; document.getElementById('statsPendente').textContent=`Pendentes: ${stats.pendente||0}`; document.getElementById('statsAprovado').textContent=`Aprovados: ${stats.aprovado||0}`; document.getElementById('statsRejeitado').textContent=`Rejeitados: ${stats.rejeitado||0}`;
-    const incEl=document.getElementById('statsIncompleto'); if(incEl) incEl.textContent=`Incompletos: ${stats.incompleto||0}`; const el=document.getElementById('lista'); if(!lista.length){el.innerHTML='<div class="empty">Nenhum item na fila.</div>'; return;} el.innerHTML=lista.map(renderItem).join('');
-  lista.filter(i=>i.status==='incompleto').forEach(i=>setTimeout(()=>carregarLinksCard(i.sku,i.id),100));
-  lista.filter(i=>i.status==='pendente').forEach((i,idx)=>setTimeout(()=>carregarLinksPendente(i.sku,i.id),idx*200));
+async function carregarFila(){
+  try{
+    const res=await fetch('/fila/lista');
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    const lista=data.itens||[];
+    const stats=data.stats||{pendente:0,aprovado:0,rejeitado:0,incompleto:0};
+    document.getElementById('statsPendente').textContent=`Pendentes: ${stats.pendente||0}`;
+    document.getElementById('statsAprovado').textContent=`Aprovados: ${stats.aprovado||0}`;
+    document.getElementById('statsRejeitado').textContent=`Rejeitados: ${stats.rejeitado||0}`;
+    const incEl=document.getElementById('statsIncompleto');
+    if(incEl) incEl.textContent=`Incompletos: ${stats.incompleto||0}`;
+    const el=document.getElementById('lista');
+    if(!lista.length){el.innerHTML='<div class="empty">Nenhum item na fila.</div>'; return;}
+    el.innerHTML=lista.map(renderItem).join('');
+    lista.filter(i=>i.status==='incompleto').forEach(i=>setTimeout(()=>carregarLinksCard(i.sku,i.id),100));
+    lista.filter(i=>i.status==='pendente').forEach((i,idx)=>setTimeout(()=>carregarLinksPendente(i.sku,i.id),idx*200));
+  }catch(e){
+    console.error('Erro ao carregar fila:',e);
+    const el=document.getElementById('lista');
+    if(el) el.innerHTML='<div class="empty" style="color:#fca5a5">Erro ao carregar fila: '+e.message+'</div>';
+  }
 }
+
+async function atualizarFila(){
+  const btn=document.getElementById('btn-atualizar');
+  if(btn){btn.disabled=true; btn.textContent='Atualizando...';}
+  await carregarFila();
+  if(btn){
+    btn.textContent='✓ Atualizado';
+    setTimeout(()=>{btn.textContent='Atualizar';btn.disabled=false;},1500);
+  }
+}
+
+async function carregarLinksPendente(sku, id){
+  try{
+    const r=await fetch('/fila/links/'+sku);
+    if(!r.ok) return;
+    const d=await r.json();
+    const el=document.getElementById('links-pend-'+id);
+    if(!el) return;
+    const ls=d.links||{};
+    const nomes={bling:'Bling',ml:'Mercado Livre',shopify:'Shopify',amazon:'Amazon',shopee:'Shopee'};
+    const icons={bling:'🔵',ml:'🟡',shopify:'🟢',amazon:'🟠',shopee:'🟠'};
+    el.innerHTML=Object.entries(ls).map(([k,v])=>
+      `<a href="${v}" target="_blank" style="color:#4f8cff;font-size:12px;text-decoration:none">${icons[k]||'🔗'} ${nomes[k]||k}</a>`
+    ).join(' ');
+    if(!Object.keys(ls).length) el.textContent='';
+  }catch(e){}
+}
+
 carregarFila();
 
 function renderItemIncompleto(item){
