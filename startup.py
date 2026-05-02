@@ -20,6 +20,18 @@ shopify_token = os.getenv("SHOPIFY_ACCESS_TOKEN", "")
 shopify_shop  = os.getenv("SHOPIFY_SHOP", "pknw4n-eg")
 
 cfg_path = DATA_DIR / "shopify_config.json"
+
+# Se já existe config com token OAuth (diferente do env var), loga e preserva
+if cfg_path.exists():
+    try:
+        _existing = json.loads(cfg_path.read_text(encoding="utf-8"))
+        _existing_token = _existing.get("access_token", "")
+        if _existing_token and _existing_token != shopify_token:
+            pr(f"INFO: Token OAuth encontrado no config (scope={_existing.get('scope','?')})")
+            pr(f"INFO: TOKEN_ATUAL={_existing_token}")  # log completo para recuperar valor
+    except Exception:
+        pass
+
 if shopify_token:
     shopify_cfg = {
         "access_token": shopify_token,
