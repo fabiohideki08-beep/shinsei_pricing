@@ -10,11 +10,15 @@ Regras:
 """
 from __future__ import annotations
 
+import json
 import logging
 import math
 import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
+
+_FRETE_CONFIG_PATH = Path(__file__).parent.parent / "data" / "frete_config.json"
 
 import httpx
 from pydantic import BaseModel
@@ -25,10 +29,41 @@ logger = logging.getLogger("shinsei.frete")
 # Constantes
 # ---------------------------------------------------------------------------
 
-SUBSIDY_PER_ITEM: float = float(os.getenv("FRETE_SUBSIDIO_POR_ITEM", "8.0"))
-# Subsídio do 1º item pode ser diferente (padrão R$4; a partir do 2º usa SUBSIDY_PER_ITEM)
-SUBSIDY_FIRST_ITEM: float = float(os.getenv("FRETE_SUBSIDIO_PRIMEIRO_ITEM", "4.0"))
-ORIGIN_CEP: str = os.getenv("FRETE_CEP_ORIGEM", "06036003")
+# Defaults de env (fallback se frete_config.json não existir)
+_SUBSIDY_PER_ITEM_DEFAULT: float = float(os.getenv("FRETE_SUBSIDIO_POR_ITEM", "8.0"))
+_SUBSIDY_FIRST_ITEM_DEFAULT: float = float(os.getenv("FRETE_SUBSIDIO_PRIMEIRO_ITEM", "4.0"))
+_ORIGIN_CEP_DEFAULT: str = os.getenv("FRETE_CEP_ORIGEM", "06036003")
+_FRETE_REAL_DEFAULT_DEFAULT: float = float(os.getenv("FRETE_REAL_DEFAULT", "18.0"))
+
+# Para compatibilidade com imports existentes (routes/frete.py importa estes nomes)
+SUBSIDY_PER_ITEM: float = _SUBSIDY_PER_ITEM_DEFAULT
+SUBSIDY_FIRST_ITEM: float = _SUBSIDY_FIRST_ITEM_DEFAULT
+ORIGIN_CEP: str = _ORIGIN_CEP_DEFAULT
+
+
+def carregar_config_frete() -> dict:
+    """Lê configuração de frete do JSON (com fallback para defaults de env)."""
+    cfg = {
+        "subsidio_primeiro_item": _SUBSIDY_FIRST_ITEM_DEFAULT,
+        "subsidio_por_item": _SUBSIDY_PER_ITEM_DEFAULT,
+        "frete_real_default": _FRETE_REAL_DEFAULT_DEFAULT,
+        "cep_origem": _ORIGIN_CEP_DEFAULT,
+    }
+    try:
+        if _FRETE_CONFIG_PATH.exists():
+            saved = json.loads(_FRETE_CONFIG_PATH.read_text(encoding="utf-8"))
+            cfg.update({k: v for k, v in saved.items() if v is not None})
+    except Exception:
+        pass
+    return cfg
+
+
+def salvar_config_frete(cfg: dict) -> None:
+    """Salva configuração de frete no JSON."""
+    _FRETE_CONFIG_PATH.parent.mkdir(exist_ok=True)
+    _FRETE_CONFIG_PATH.write_text(
+        json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 MELHOR_ENVIO_TOKEN: str = os.getenv("MELHOR_ENVIO_TOKEN", "")
 MELHOR_ENVIO_SANDBOX: bool = os.getenv("MELHOR_ENVIO_SANDBOX", "true").lower() in ("1", "true", "yes")
@@ -69,16 +104,49 @@ RMSP_MUNICIPALITIES: set[str] = {
 
 RMSP_FREIGHT_VALUE: float = 8.0  # valor simbólico usado para RMSP (sempre grátis após subsídio)
 
+_FRETE_HISTORICO_PATH = Path(__file__).parent.parent / "data" / "frete_historico.json"
+_HISTORICO_MAX = 300  # máximo de registros mantidos
 
-def calcular_subsidio_total(qty_items: int) -> float:
+
+def registrar_historico_frete(entry: dict) -> None:
+    """Salva uma entrada no histórico de fretes (últimos _HISTORICO_MAX registros)."""
+    try:
+        historico: list = []
+        if _FRETE_HISTORICO_PATH.exists():
+            historico = json.loads(_FRETE_HISTORICO_PATH.read_text(encoding="utf-8"))
+        historico.insert(0, entry)
+        historico = historico[:_HISTORICO_MAX]
+        _FRETE_HISTORICO_PATH.parent.mkdir(exist_ok=True)
+        _FRETE_HISTORICO_PATH.write_text(
+            json.dumps(historico, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except Exception as exc:
+        logger.warning("Falha ao gravar histórico de frete: %s", exc)
+
+
+def ler_historico_frete(limit: int = 100) -> list:
+    """Retorna os últimos N registros do histórico."""
+    try:
+        if _FRETE_HISTORICO_PATH.exists():
+            return json.loads(_FRETE_HISTORICO_PATH.read_text(encoding="utf-8"))[:limit]
+    except Exception:
+        pass
+    return []
+
+
+def calcular_subsidio_total(qty_items: int, cfg: dict | None = None) -> float:
     """
     Calcula o subsídio total para N itens.
-    Regra: 1º item = SUBSIDY_FIRST_ITEM (R$4), 2º em diante = SUBSIDY_PER_ITEM (R$8) cada.
-    Ex: qty=1 → R$4 | qty=2 → R$12 | qty=3 → R$20 | qty=4 → R$28
+    Regra: 1º item = subsidio_primeiro_item, 2º em diante = subsidio_por_item.
+    Lê configuração do JSON (dinâmico, sem reiniciar).
     """
+    if cfg is None:
+        cfg = carregar_config_frete()
+    first = float(cfg.get("subsidio_primeiro_item", _SUBSIDY_FIRST_ITEM_DEFAULT))
+    per   = float(cfg.get("subsidio_por_item",      _SUBSIDY_PER_ITEM_DEFAULT))
     if qty_items <= 0:
         return 0.0
-    return round(SUBSIDY_FIRST_ITEM + max(0, qty_items - 1) * SUBSIDY_PER_ITEM, 2)
+    return round(first + max(0, qty_items - 1) * per, 2)
 
 
 # ---------------------------------------------------------------------------
@@ -345,6 +413,8 @@ async def calculate_freight(
     """
     dest_cep = normalize_cep(destination_cep)
     qty_items = max(1, int(qty_items))
+    cfg_frete = carregar_config_frete()
+    origin_cep_cfg = cfg_frete.get("cep_origem", ORIGIN_CEP)
     total_weight_kg = max(0.1, float(total_weight_kg))
     order_value = max(0.0, float(order_value))
 
@@ -359,7 +429,7 @@ async def calculate_freight(
     state = (cep_info.get("state") or "").upper()
     rmsp = is_rmsp(city, state)
 
-    subsidy_total = calcular_subsidio_total(qty_items)
+    subsidy_total = calcular_subsidio_total(qty_items, cfg_frete)
 
     if rmsp:
         # RMSP: frete_real simbólico = R$8, sempre grátis
@@ -387,7 +457,7 @@ async def calculate_freight(
         cheapest_final = 0.0
         is_free_cart = True
     else:
-        raw_options = await get_real_freight(ORIGIN_CEP, dest_cep, total_weight_kg, order_value)
+        raw_options = await get_real_freight(origin_cep_cfg, dest_cep, total_weight_kg, order_value)
 
         # Aplica subsídio a cada opção
         final_options: list[FreightOption] = []
@@ -413,16 +483,12 @@ async def calculate_freight(
         if is_free_cart:
             items_for_free = 0
         else:
-            # Quantos itens no total cobrem o frete mais barato
-            # Regra: 1º item = SUBSIDY_FIRST_ITEM, demais = SUBSIDY_PER_ITEM
-            # total(n) = FIRST + (n-1)*PER >= cheapest_real
-            # n >= 1 + (cheapest_real - FIRST) / PER
-            if cheapest_real <= SUBSIDY_FIRST_ITEM:
+            _first = float(cfg_frete.get("subsidio_primeiro_item", _SUBSIDY_FIRST_ITEM_DEFAULT))
+            _per   = float(cfg_frete.get("subsidio_por_item",      _SUBSIDY_PER_ITEM_DEFAULT))
+            if cheapest_real <= _first:
                 items_needed = 1
             else:
-                items_needed = 1 + math.ceil(
-                    (cheapest_real - SUBSIDY_FIRST_ITEM) / SUBSIDY_PER_ITEM
-                )
+                items_needed = 1 + math.ceil((cheapest_real - _first) / _per)
             items_for_free = max(0, items_needed - qty_items)
 
     result = FreightResult(

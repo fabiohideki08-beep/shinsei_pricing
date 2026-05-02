@@ -1,37 +1,56 @@
 {%- comment -%}
   snippets/frete-widget.liquid
-  Injeta o widget de cálculo e progresso de frete Shinsei Market no carrinho.
-
-  Uso: inclua no template do carrinho (templates/cart.liquid ou sections/cart-items.liquid):
-    {% render 'frete-widget' %}
-
-  Variáveis configuráveis (pode sobrescrever via settings do tema):
-    shinsei_frete_api_base     — URL base da API (ex: https://api.seudominio.com.br)
-    shinsei_frete_subsidio     — R$ de subsídio por item (padrão 8)
-    shinsei_frete_real_default — Frete real padrão sem CEP em R$ (padrão 18)
+  Widget de cálculo e progresso de frete Shinsei Market.
+  Renderizado no servidor (Liquid) para sobreviver ao AJAX do Horizon.
+  Funciona na página /cart E no mini-cart drawer.
 {%- endcomment -%}
 
 {%- liquid
-  assign api_base = settings.shinsei_frete_api_base | default: ''
+  assign api_base = settings.shinsei_frete_api_base | default: 'https://elegant-encouragement-production-6829.up.railway.app'
   assign subsidio_por_item = settings.shinsei_frete_subsidio | default: 8
   assign frete_real_default = settings.shinsei_frete_real_default | default: 18
 -%}
 
-<link
-  rel="stylesheet"
-  href="{{ 'frete-widget.css' | asset_url }}"
-  media="all"
->
+{%- comment -%} CSS: seguro incluir múltiplas vezes — browser deduplica por URL {%- endcomment -%}
+<link rel="stylesheet" href="{{ 'frete-widget.css' | asset_url }}" media="all">
 
+{%- comment -%}
+  Inline script: atualiza a config e carrega o JS dinamicamente se ainda não carregado.
+  Inline scripts SÃO executados pelo Section Rendering API do Shopify (diferente de <script src>).
+{%- endcomment -%}
 <script>
   window.ShinseiFreteConfig = {
     apiBase: {{ api_base | json }},
     subsidioPorItem: {{ subsidio_por_item | times: 1.0 }},
     freteRealDefault: {{ frete_real_default | times: 1.0 }}
   };
+  if (!window.ShinseiFreteInitialized) {
+    var _sf = document.createElement('script');
+    _sf.src = {{ 'frete-widget.js' | asset_url | json }};
+    _sf.async = true;
+    document.head.appendChild(_sf);
+  }
 </script>
 
-<script
-  src="{{ 'frete-widget.js' | asset_url }}"
-  defer
-></script>
+<div id="shinsei-frete-widget">
+  <div class="frete-header">🚚 Frete</div>
+  <div class="frete-cep-input">
+    <input
+      type="text"
+      id="shinsei-cep-input"
+      placeholder="Digite seu CEP"
+      maxlength="9"
+      autocomplete="postal-code"
+      inputmode="numeric"
+    />
+    <button id="shinsei-cep-btn" type="button">Calcular</button>
+  </div>
+  <div class="frete-resultado" id="shinsei-frete-resultado" style="display:none">
+    <div class="frete-barra-container">
+      <div class="frete-barra-fill" id="shinsei-barra-fill" style="width: 0%"></div>
+    </div>
+    <div class="frete-mensagem" id="shinsei-frete-mensagem"></div>
+    <div class="frete-opcoes" id="shinsei-frete-opcoes"></div>
+  </div>
+  <div class="frete-erro" id="shinsei-frete-erro" style="display:none"></div>
+</div>

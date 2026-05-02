@@ -339,6 +339,8 @@
   // Bootstrap
   // ---------------------------------------------------------------------------
   function init() {
+    if (window.ShinseiFreteInitialized) return; // evita dupla inicialização
+    window.ShinseiFreteInitialized = true;
     interceptFetch();   // deve ser primeiro — guarda referência ao fetch original
     setupDelegation();
     fillCepInput();
