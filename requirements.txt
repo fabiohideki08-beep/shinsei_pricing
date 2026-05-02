@@ -7,6 +7,7 @@ uvicorn[standard]>=0.29.0
 pydantic>=2.7.0
 python-dotenv>=1.0.1
 requests>=2.32.0
+httpx>=0.27.0             # motor de frete — chamadas async (ViaCEP, Melhor Envio)
 
 # ── Dados ─────────────────────────────────────────────────────
 openpyxl>=3.1.2          # importação de regras via Excel

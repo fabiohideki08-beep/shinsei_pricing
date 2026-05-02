@@ -1,12 +1,15 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 from dotenv import load_dotenv
 load_dotenv()
-import importlib, json, uuid
+import hashlib
+import hmac as _hmac
+import importlib, json, uuid, threading
+import os
 import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
-from fastapi import Body, FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import BackgroundTasks, Body, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel
@@ -21,6 +24,7 @@ from database import (
     migrar_json_legado,
 )
 from scheduler import iniciar_scheduler_background, parar_scheduler
+from scbot import iniciar_scbot, parar_scbot, executar_ciclo as scbot_executar, carregar_status as scbot_status
 from logging_config import configurar_logging
 from auth import verificar_api_key
 
@@ -45,14 +49,52 @@ PAGES_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(title="Shinsei Pricing")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+# ── Estado da conferência ML em background ────────────────────────────
+_conf_ml: dict = {
+    "rodando": False, "concluido": False, "erro": None,
+    "pagina": 0, "max_paginas": 20,
+    "verificados": 0, "divergencias": 0, "sem_sku": 0, "erros": 0,
+    "iniciado_em": None, "concluido_em": None, "resultado": None,
+}
+
+def _conf_ml_callback(pagina, max_paginas, verificados, divergencias, sem_sku, erros):
+    _conf_ml.update({"pagina": pagina, "max_paginas": max_paginas,
+                     "verificados": verificados, "divergencias": divergencias,
+                     "sem_sku": sem_sku, "erros": erros})
+
+def _rodar_conf_ml_bg():
+    try:
+        from ml_estoque_conferencia import conferir_estoques_ml
+        from bling_client import BlingClient as _BC
+        client = _BC()
+        resultado = conferir_estoques_ml(client, max_paginas=_conf_ml["max_paginas"],
+                                         progresso_callback=_conf_ml_callback)
+        _conf_ml.update({"rodando": False, "concluido": True,
+                         "resultado": resultado, "concluido_em": datetime.utcnow().isoformat()})
+    except Exception as e:
+        _conf_ml.update({"rodando": False, "concluido": True, "erro": str(e),
+                         "concluido_em": datetime.utcnow().isoformat()})
 from routes.batch import router as batch_router
 from routes.ml_unificado import router as ml_router
+from routes.bling import router as bling_page_router
 from monitoring import router as monitoring_router
+from routes.gmc import router as gmc_router
+from routes.shopee import router as shopee_router, aplicar_preco_shopee_por_sku
 app.include_router(batch_router)
 from routes.mercado_livre import router as ml_page_router
 app.include_router(ml_page_router)
 app.include_router(ml_router)
+app.include_router(bling_page_router)
 app.include_router(monitoring_router)
+app.include_router(gmc_router)
+app.include_router(shopee_router)
+try:
+    from routes.frete import router as frete_router
+    app.include_router(frete_router)
+    logger.info("Motor de frete Shinsei registrado em /frete")
+except Exception as _frete_exc:
+    logger.warning("Motor de frete não carregado: %s", _frete_exc)
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
@@ -63,11 +105,13 @@ def startup():
     init_db()
     migrar_json_legado()
     iniciar_scheduler_background()
+    iniciar_scbot()
     logger.info("Shinsei Pricing iniciado")
 
 @app.on_event("shutdown")
 def shutdown():
     parar_scheduler()
+    parar_scbot()
 
 def _optional_import(module_name: str):
     try: return importlib.import_module(module_name)
@@ -75,10 +119,10 @@ def _optional_import(module_name: str):
 
 pricing_module = _optional_import("pricing_engine_real") or _optional_import("pricing_engine")
 if pricing_module is None:
-    raise RuntimeError("pricing_engine_real.py ou pricing_engine.py nÃ£o encontrado.")
+    raise RuntimeError("pricing_engine_real.py ou pricing_engine.py não encontrado.")
 montar_precificacao_bling: Optional[Callable[..., dict]] = getattr(pricing_module, "montar_precificacao_bling", None)
 if montar_precificacao_bling is None:
-    raise RuntimeError("Seu motor atual nÃ£o expÃµe montar_precificacao_bling().")
+    raise RuntimeError("Seu motor atual não expõe montar_precificacao_bling().")
 
 bling_mod = _optional_import("bling_client")
 BlingClient = getattr(bling_mod, "BlingClient", None) if bling_mod else None
@@ -184,7 +228,7 @@ def _diagnostico_preview(preview: dict) -> dict:
             erro_txt = str(aud.get("erro") or "").lower()
             if "sem peso" in erro_txt:
                 codigo = "peso_ausente"
-            elif "composiÃ§Ã£o" in erro_txt or "composicao" in erro_txt:
+            elif "composição" in erro_txt or "composicao" in erro_txt:
                 codigo = "composicao_sem_custo"
             elif "sem custo" in erro_txt:
                 codigo = "custo_ausente"
@@ -192,7 +236,7 @@ def _diagnostico_preview(preview: dict) -> dict:
                 codigo = "erro_motor"
         return {"ok":False,"codigo":codigo,"mensagem":str(aud.get("erro")),"detalhe":aud.get("acao") or ""}
     if not (produto.get("codigo") or aud.get("sku")):
-        return {"ok":False,"codigo":"sku_ausente","mensagem":"SKU ausente no retorno do Bling.","detalhe":"Verifique se o produto encontrado possui CÃ³digo (SKU) cadastrado."}
+        return {"ok":False,"codigo":"sku_ausente","mensagem":"SKU ausente no retorno do Bling.","detalhe":"Verifique se o produto encontrado possui Código (SKU) cadastrado."}
     custo = float(aud.get("custo_usado") or 0)
     peso = float(aud.get("peso_usado") or 0)
     tipo_custo = str(aud.get("tipo_custo") or "").lower()
@@ -201,16 +245,16 @@ def _diagnostico_preview(preview: dict) -> dict:
         return {"ok":False,"codigo":"peso_ausente","mensagem":"Produto sem peso no Bling.","detalhe":"Preencha o peso no produto ou use peso override no simulador."}
     if custo <= 0 and tipo_custo == "composicao":
         faltando = [c.get("sku") or str(c.get("id") or "-") for c in componentes if float(c.get("custo_unitario") or 0) <= 0]
-        return {"ok":False,"codigo":"composicao_sem_custo","mensagem":"ComposiÃ§Ã£o sem custo vÃ¡lido nos componentes.","detalhe":("Componentes sem custo: " + ", ".join(faltando)) if faltando else "Nenhum componente retornou custo vÃ¡lido."}
+        return {"ok":False,"codigo":"composicao_sem_custo","mensagem":"Composição sem custo válido nos componentes.","detalhe":("Componentes sem custo: " + ", ".join(faltando)) if faltando else "Nenhum componente retornou custo válido."}
     if custo <= 0:
-        return {"ok":False,"codigo":"custo_ausente","mensagem":"Produto sem custo no estoque do Bling.","detalhe":"Preencha o preÃ§o de compra/custo do produto no estoque."}
+        return {"ok":False,"codigo":"custo_ausente","mensagem":"Produto sem custo no estoque do Bling.","detalhe":"Preencha o preço de compra/custo do produto no estoque."}
     if not _marketplaces_validos(marketplaces):
-        return {"ok":False,"codigo":"sem_canais","mensagem":"Nenhum canal vÃ¡lido foi calculado.","detalhe":"Verifique peso, custo e faixas da Aba2 para este produto."}
-    return {"ok":True,"codigo":"preview_valido","mensagem":"Preview vÃ¡lido.","detalhe":""}
+        return {"ok":False,"codigo":"sem_canais","mensagem":"Nenhum canal válido foi calculado.","detalhe":"Verifique peso, custo e faixas da Aba2 para este produto."}
+    return {"ok":True,"codigo":"preview_valido","mensagem":"Preview válido.","detalhe":""}
 
 def _preview_valido(preview: dict):
     diag = _diagnostico_preview(preview)
-    return bool(diag.get("ok")), str(diag.get("mensagem") or "Preview invÃ¡lido.")
+    return bool(diag.get("ok")), str(diag.get("mensagem") or "Preview inválido.")
 
 def _montar_item_fila(preview: dict, payload_original: dict | None = None) -> dict:
     aud = preview.get("auditoria") or {}
@@ -345,7 +389,7 @@ def fila_page():
     html_file = PAGES_DIR / "fila.html"
     if html_file.exists():
         return HTMLResponse(html_file.read_text(encoding="utf-8"))
-    raise HTTPException(status_code=404, detail="pages/fila.html nÃ£o encontrado.")
+    raise HTTPException(status_code=404, detail="pages/fila.html não encontrado.")
 
 @app.get("/health")
 def health():
@@ -354,7 +398,7 @@ def health():
 
 @app.get("/bling/status")
 def bling_status():
-    if not BlingClient: return {"ok":False,"erro":"bling_client.py nÃ£o encontrado."}
+    if not BlingClient: return {"ok":False,"erro":"bling_client.py não encontrado."}
     try:
         client = BlingClient()
         return {"ok":True,"configurado":bool(getattr(client,"client_id","") and getattr(client,"client_secret","") and getattr(client,"redirect_uri","")),"token_local":bool(client.has_local_tokens())}
@@ -363,7 +407,7 @@ def bling_status():
 
 @app.get("/bling/auth")
 def bling_auth():
-    if not BlingClient: raise HTTPException(status_code=500, detail="bling_client.py nÃ£o encontrado.")
+    if not BlingClient: raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
     try:
         client = BlingClient()
         return RedirectResponse(client.build_authorize_url())
@@ -372,19 +416,19 @@ def bling_auth():
 
 @app.get("/bling/callback")
 def bling_callback(code: str | None = Query(None), state: str | None = Query(None), error: str | None = Query(None), error_description: str | None = Query(None)):
-    if not BlingClient: raise HTTPException(status_code=500, detail="bling_client.py nÃ£o encontrado.")
+    if not BlingClient: raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
     if error: raise HTTPException(status_code=400, detail=f"Bling OAuth retornou erro: {error}. {error_description or ''}".strip())
-    if not code: raise HTTPException(status_code=400, detail="Callback do Bling sem code de autorizaÃ§Ã£o.")
+    if not code: raise HTTPException(status_code=400, detail="Callback do Bling sem code de autorização.")
     try:
         client = BlingClient()
         token = client.exchange_code_for_token(code, state=state)
-        return {"ok":True,"message":"ConexÃ£o com Bling realizada.","expires_in":token.get("expires_in")}
+        return {"ok":True,"message":"Conexão com Bling realizada.","expires_in":token.get("expires_in")}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
 @app.post("/bling/debug/sku")
 def bling_debug_sku(payload: DebugSkuPayload):
-    if not BlingClient: raise HTTPException(status_code=500, detail="bling_client.py nÃ£o encontrado.")
+    if not BlingClient: raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
     try:
         client = BlingClient()
         return client.debug_product_by_sku(payload.sku)
@@ -393,7 +437,7 @@ def bling_debug_sku(payload: DebugSkuPayload):
 
 @app.post("/bling/produto/buscar")
 def bling_produto_buscar(payload: DebugSkuPayload):
-    if not BlingClient: raise HTTPException(status_code=500, detail="bling_client.py nÃ£o encontrado.")
+    if not BlingClient: raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
     try:
         client = BlingClient()
         return client.get_product_by_sku(payload.sku)
@@ -403,9 +447,9 @@ def bling_produto_buscar(payload: DebugSkuPayload):
 @app.post("/bling/produto/atualizar-peso")
 def bling_produto_atualizar_peso(payload: AtualizacaoCampoBlingPayload):
     if not BlingClient:
-        raise HTTPException(status_code=500, detail="bling_client.py nÃ£o encontrado.")
+        raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
     if float(payload.valor or 0) <= 0:
-        raise HTTPException(status_code=400, detail="Informe um peso vÃ¡lido.")
+        raise HTTPException(status_code=400, detail="Informe um peso válido.")
     try:
         client = BlingClient()
         existing = client.get_product(int(payload.produto_id))
@@ -466,7 +510,7 @@ def integracao_preview(payload: IntegracaoPayload):
     if not regras:
         raise HTTPException(status_code=400, detail="Nenhuma regra cadastrada. Importe a Aba2 primeiro.")
     if (payload.criterio or "sku").strip().lower() != "sku":
-        raise HTTPException(status_code=400, detail="A precificaÃ§Ã£o integrada aceita apenas busca por SKU. Use criterio='sku'.")
+        raise HTTPException(status_code=400, detail="A precificação integrada aceita apenas busca por SKU. Use criterio='sku'.")
     try:
         resultado = montar_precificacao_bling(
             regras=regras, criterio="sku", valor_busca=payload.valor_busca, embalagem=payload.embalagem, imposto=payload.imposto,
@@ -490,16 +534,16 @@ def integracao_preview(payload: IntegracaoPayload):
         if carregar_cfg().get("fila_auto_ao_calcular", True) and valido:
             sku = preview["auditoria"].get("sku") or preview["produto"].get("codigo") or ""
             if ja_existe_pendente(sku):
-                fila_auto = {"adicionado":False,"motivo":"JÃ¡ existe item pendente equivalente na fila."}
+                fila_auto = {"adicionado":False,"motivo":"Já existe item pendente equivalente na fila."}
             else:
                 item = _montar_item_fila(preview, payload.dict())
                 inserir_item_fila(item)
                 _append_jsonl(LOG_PATH, {"evento":"fila_auto_preview","item_id":item["id"],"sku":item["sku"],"quando":item["criado_em"]})
                 fila_auto = {"adicionado":True,"item_id":item["id"]}
         else:
-            fila_auto = {"adicionado":False,"motivo":motivo or diagnostico.get("mensagem") or "Fila automÃ¡tica desativada."}
+            fila_auto = {"adicionado":False,"motivo":motivo or diagnostico.get("mensagem") or "Fila automática desativada."}
         preview["fila_auto"] = fila_auto
-        logger.info("PrecificaÃ§Ã£o: SKU=%s melhor_canal=%s fila=%s", payload.valor_busca, preview.get("melhor_canal"), fila_auto.get("adicionado"))
+        logger.info("Precificação: SKU=%s melhor_canal=%s fila=%s", payload.valor_busca, preview.get("melhor_canal"), fila_auto.get("adicionado"))
         return preview
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Falha no preview: {exc}")
@@ -513,10 +557,10 @@ def fila_lista():
 def fila_adicionar(payload: dict = Body(...)):
     preview = {"ok":payload.get("ok", True),"produto":payload.get("produto_bling") or payload.get("produto") or {},"marketplaces":payload.get("marketplaces") or {},"auditoria":payload.get("auditoria") or {},"raw":payload.get("raw") or {}}
     diag = _diagnostico_preview(preview)
-    if not diag.get("ok"): raise HTTPException(status_code=400, detail=f"Preview invÃ¡lido para fila: {diag.get('mensagem')}")
+    if not diag.get("ok"): raise HTTPException(status_code=400, detail=f"Preview inválido para fila: {diag.get('mensagem')}")
     sku = (preview.get("auditoria") or {}).get("sku") or (preview.get("produto") or {}).get("codigo") or ""
     if ja_existe_pendente(sku):
-        return {"ok":True,"duplicado":True,"message":"JÃ¡ existe item pendente equivalente na fila.","stats":stats_fila()}
+        return {"ok":True,"duplicado":True,"message":"Já existe item pendente equivalente na fila.","stats":stats_fila()}
     item = _montar_item_fila(preview, payload.get("payload_original") or payload.get("raw") or {})
     inserir_item_fila(item)
     _append_jsonl(LOG_PATH, {"evento":"fila_adicionar_manual","item_id":item["id"],"sku":item["sku"],"quando":item["criado_em"]})
@@ -597,22 +641,38 @@ async def fila_links(sku: str):
 def fila_aprovar(item_id: str):
     item = buscar_item_fila(item_id)
     if not item:
-        raise HTTPException(status_code=404, detail="Item nÃ£o encontrado na fila.")
+        raise HTTPException(status_code=404, detail="Item não encontrado na fila.")
     if item.get("status") != "pendente":
-        raise HTTPException(status_code=400, detail=f"Item jÃ¡ com status '{item.get("status")}'.")
+        raise HTTPException(status_code=400, detail=f"Item já com status '{item.get("status")}'.")
     if not BlingClient or not aplicar_precos_multicanal:
-        raise HTTPException(status_code=500, detail="IntegraÃ§Ã£o de aplicaÃ§Ã£o no Bling indisponÃ­vel.")
+        raise HTTPException(status_code=500, detail="Integração de aplicação no Bling indisponível.")
     item_com_gordura = _aplicar_gordura_no_item(item)
     try:
         client = BlingClient()
         resultado = aplicar_precos_multicanal(client, item_com_gordura)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Falha ao aplicar preÃ§os no Bling: {exc}")
+        raise HTTPException(status_code=400, detail=f"Falha ao aplicar preços no Bling: {exc}")
+
+    # ── Tenta aplicar na Shopee se SKU estiver mapeado ──
+    try:
+        sku = item.get("sku") or (item.get("produto_bling") or {}).get("codigo") or ""
+        marketplaces = item.get("marketplaces") or {}
+        shopee_resultado = aplicar_preco_shopee_por_sku(sku, marketplaces)
+        if shopee_resultado:
+            resultado["shopee"] = shopee_resultado
+            if shopee_resultado.get("success"):
+                logger.info("Shopee: preço aplicado sku=%s item_id=%s preco=%.2f",
+                            sku, shopee_resultado.get("item_id"), shopee_resultado.get("preco_aplicado", 0))
+            else:
+                logger.warning("Shopee: falha ao aplicar sku=%s motivo=%s", sku, shopee_resultado.get("motivo"))
+    except Exception as exc_shopee:
+        logger.warning("Shopee: exceção ao aplicar preço sku=%s: %s", item.get("sku"), exc_shopee)
+
     agora = datetime.utcnow().isoformat()
     atualizar_status_fila(item_id, "aprovado", resultado=resultado)
     _append_jsonl(LOG_PATH, {"evento": "fila_aprovado", "item_id": item_id, "quando": agora})
     logger.info("Item aprovado: id=%s sku=%s estrategia=%s", item_id, item.get("sku"), resultado.get("estrategia"))
-    return {"ok": True, "message": "PreÃ§os aplicados no Bling.", "resultado": resultado, "stats": stats_fila()}
+    return {"ok": True, "message": "Preços aplicados no Bling.", "resultado": resultado, "stats": stats_fila()}
 
 
 
@@ -690,7 +750,7 @@ async def fila_completar(item_id: str, request: Request):
 @app.post("/fila/rejeitar/{item_id}")
 def fila_rejeitar(item_id: str, payload: dict = Body(default={})):
     item = buscar_item_fila(item_id)
-    if not item: raise HTTPException(status_code=404, detail="Item nÃ£o encontrado na fila.")
+    if not item: raise HTTPException(status_code=404, detail="Item não encontrado na fila.")
     agora = datetime.utcnow().isoformat()
     motivo = payload.get("motivo") or "Rejeitado manualmente."
     atualizar_status_fila(item_id, "rejeitado", resultado={"motivo": motivo})
@@ -699,7 +759,7 @@ def fila_rejeitar(item_id: str, payload: dict = Body(default={})):
     return {"ok":True,"message":"Item marcado como rejeitado.","stats":stats_fila()}
 
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# FASE 5 â€” IntegraÃ§Ã£o Comercial
+# FASE 5 â€” Integração Comercial
 # Cole este bloco no app.py logo antes de:
 #   
 def _aplicar_gordura_no_item(item: dict) -> dict:
@@ -753,14 +813,167 @@ def _buscar_gordura_canal(canal_key: str, gordura_por_canal: dict) -> dict:
     return padrao
 
 
+def _verificar_assinatura_bling(body_bytes: bytes, header: str) -> bool:
+    """Valida HMAC-SHA256 do webhook Bling (X-Bling-Signature-256: sha256=<hex>)."""
+    secret = os.getenv("BLING_WEBHOOK_SECRET", "")
+    if not secret or not header:
+        return True  # Sem segredo configurado: aceita tudo
+    try:
+        expected = "sha256=" + _hmac.new(secret.encode(), body_bytes, hashlib.sha256).hexdigest()
+        return _hmac.compare_digest(expected, header)
+    except Exception:
+        return False
+
+
 @app.post("/webhooks/bling")
 async def webhook_bling(request: Request):
-    try: body = await request.json()
-    except Exception: body = {}
+    raw = await request.body()
+    sig = request.headers.get("X-Bling-Signature-256", "")
+    if not _verificar_assinatura_bling(raw, sig):
+        logger.warning("Webhook Bling: assinatura inválida — ignorando")
+        return {"ok": False, "erro": "assinatura inválida"}
+    try:
+        body = json.loads(raw)
+    except Exception:
+        body = {}
     evento = body.get("evento") or body.get("event") or "desconhecido"
     logger.info("Webhook Bling recebido: evento=%s", evento)
     _append_jsonl(LOG_PATH, {"evento":"webhook_bling","tipo":evento,"quando":datetime.utcnow().isoformat(),"payload":body})
     return {"ok": True, "recebido": True}
+
+@app.post("/webhooks/ml")
+async def webhook_ml(request: Request, background_tasks: BackgroundTasks):
+    """
+    Recebe notificacoes do Mercado Livre.
+    O ML envia POST: {"resource": "...", "user_id": 123, "topic": "price_suggestion"}
+    Responde 200 imediatamente; processamento pesado vai para background task.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    topic = body.get("topic") or body.get("type") or "desconhecido"
+    resource = body.get("resource", "")
+    user_id = body.get("user_id", "")
+    logger.info("Webhook ML recebido: topic=%s resource=%s user_id=%s", topic, resource, user_id)
+    _append_jsonl(LOG_PATH, {
+        "evento": "webhook_ml",
+        "topic": topic,
+        "resource": resource,
+        "user_id": user_id,
+        "quando": datetime.utcnow().isoformat(),
+        "payload": body,
+    })
+
+    # Processa sugestoes de preco em background (nao bloqueia resposta ao ML)
+    if topic == "price_suggestion" and resource:
+        def _processar_bg():
+            try:
+                from services.ml_price_suggestions import processar_price_suggestion
+                regras = carregar_regras(apenas_ativas=True)
+                client = BlingClient() if BlingClient else None
+                processar_price_suggestion(
+                    resource=resource,
+                    user_id=str(user_id),
+                    bling_client=client,
+                    regras=regras,
+                )
+            except Exception as exc:
+                import traceback
+                logger.warning("Erro bg price_suggestion %s: %s\n%s", resource, exc, traceback.format_exc())
+        background_tasks.add_task(_processar_bg)
+
+    # Captura candidatos a promocao — ML envia preco sugerido diretamente!
+    elif topic == "public_candidates" and resource:
+        def _processar_candidate_bg():
+            try:
+                from services.ml_price_suggestions import _buscar_candidate_promo, _load_sugestoes, _save_sugestoes
+                data = _buscar_candidate_promo(resource)
+                if data:
+                    # Salva o payload bruto para analise posterior
+                    _append_jsonl(LOG_PATH, {
+                        "evento": "public_candidate_ml",
+                        "resource": resource,
+                        "user_id": str(user_id),
+                        "quando": datetime.utcnow().isoformat(),
+                        "payload": data,
+                    })
+                    logger.info("public_candidate salvo: %s", json.dumps(data, ensure_ascii=False)[:400])
+            except Exception as exc:
+                logger.warning("Erro bg public_candidate %s: %s", resource, exc)
+        background_tasks.add_task(_processar_candidate_bg)
+
+    return {"ok": True}
+
+
+@app.get("/marketing/ml/sugestoes")
+def marketing_ml_sugestoes():
+    """Retorna sugestoes de preco recebidas via webhook price_suggestion."""
+    from services.ml_price_suggestions import carregar_sugestoes, resumo_sugestoes
+    return {
+        "ok": True,
+        "resumo": resumo_sugestoes(),
+        "sugestoes": carregar_sugestoes(),
+    }
+
+
+@app.delete("/marketing/ml/sugestoes")
+def marketing_ml_sugestoes_limpar():
+    """Limpa todas as sugestoes salvas."""
+    from services.ml_price_suggestions import limpar_sugestoes
+    limpar_sugestoes()
+    return {"ok": True}
+
+@app.post("/marketing/ml/sugestoes/limpar")
+def marketing_ml_sugestoes_limpar_post():
+    """Alternativa POST para limpar sugestoes (compativel com ngrok/proxies)."""
+    from services.ml_price_suggestions import limpar_sugestoes
+    limpar_sugestoes()
+    return {"ok": True}
+
+
+@app.post("/marketing/ml/sugestoes/reprocessar")
+async def marketing_ml_sugestoes_reprocessar(background_tasks: BackgroundTasks):
+    """Reprocessa todas as sugestoes salvas para calcular margem atual."""
+    from services.ml_price_suggestions import carregar_sugestoes
+
+    sugestoes = carregar_sugestoes()
+    if not sugestoes:
+        return {"ok": True, "mensagem": "Nenhuma sugestao para reprocessar."}
+
+    def _reprocessar_bg():
+        try:
+            from services.ml_price_suggestions import (
+                processar_price_suggestion, _load_sugestoes, _save_sugestoes
+            )
+            regras = carregar_regras(apenas_ativas=True)
+            client = BlingClient() if BlingClient else None
+            lista = _load_sugestoes()
+            if not lista:
+                return
+            # Zera cooldown (usa timestamp antigo mas válido)
+            for s in lista:
+                s["recebido_em"] = "2020-01-01T00:00:00"
+            _save_sugestoes(lista)
+            # Reprocessa cada item
+            for s in lista:
+                try:
+                    processar_price_suggestion(
+                        resource=s.get("resource", f"/marketplace/benchmarks/items/{s['item_id']}/details"),
+                        user_id=s.get("user_id", ""),
+                        bling_client=client,
+                        regras=regras,
+                    )
+                    import time as _t; _t.sleep(0.2)
+                except Exception as e:
+                    logger.warning("Reprocessar %s: %s", s.get("item_id"), e)
+            logger.info("Reprocessamento concluido: %d sugestoes", len(lista))
+        except Exception as exc:
+            logger.warning("Erro reprocessar sugestoes: %s", exc)
+
+    background_tasks.add_task(_reprocessar_bg)
+    return {"ok": True, "mensagem": f"Reprocessando {len(sugestoes)} sugestão(ões) em background..."}
+
 
 
 @app.get("/conferencia-estoque", response_class=HTMLResponse)
@@ -865,14 +1078,12 @@ async def shopify_flow_pricing(request: Request):
     arredondamento = str(cfg.get("arredondamento", "90"))
 
     try:
-        client = BlingClient()
         regras = carregar_regras(apenas_ativas=True)
 
         resultado = montar_precificacao_bling(
-            client=client,
+            regras=regras,
             criterio="sku",
             valor_busca=sku,
-            regras=regras,
             embalagem=float(body.get("embalagem", 1)),
             imposto=float(body.get("imposto", 4)),
             quantidade=int(body.get("quantidade", 1)),
@@ -1022,22 +1233,22 @@ def auditoria_ml_estoque_lista(status: str = "", tipo: str = ""):
 
 @app.post("/auditoria/ml-estoque/conferir")
 def auditoria_ml_estoque_conferir():
-    from ml_estoque_conferencia import conferir_estoques_ml
     if not BlingClient:
         raise HTTPException(status_code=500, detail="Bling não disponível.")
-    try:
-        # Pausa o scheduler durante a conferência para evitar rate limit
-        global _scheduler_pausado
-        _scheduler_pausado = True
-        try:
-            client = BlingClient()
-            resultado = conferir_estoques_ml(client, max_paginas=10)
-        finally:
-            _scheduler_pausado = False
-        return resultado
-    except Exception as e:
-        _scheduler_pausado = False
-        raise HTTPException(status_code=400, detail=str(e))
+    if _conf_ml["rodando"]:
+        return {"ok": True, "em_andamento": True, "message": "Conferência já em andamento.", "estado": _conf_ml}
+    _conf_ml.update({
+        "rodando": True, "concluido": False, "erro": None,
+        "pagina": 0, "verificados": 0, "divergencias": 0,
+        "sem_sku": 0, "erros": 0, "resultado": None,
+        "iniciado_em": datetime.utcnow().isoformat(), "concluido_em": None,
+    })
+    threading.Thread(target=_rodar_conf_ml_bg, daemon=True).start()
+    return {"ok": True, "em_andamento": True, "message": "Conferência iniciada em background."}
+
+@app.get("/auditoria/ml-estoque/conferir/status")
+def auditoria_ml_estoque_conferir_status():
+    return {"ok": True, **_conf_ml}
 
 @app.post("/auditoria/ml-estoque/corrigir/{item_id}")
 def auditoria_ml_estoque_corrigir(item_id: str):
@@ -1186,7 +1397,6 @@ def shopify_status():
     data = json.loads(cfg.read_text(encoding="utf-8"))
     token = data.get("access_token", "")
     return {"connected": bool(token) and token != ".", "scope": data.get("scope", ""), "salvo_em": data.get("salvo_em")}
-if not FILA_PATH.exists(): ...
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INTEGRACAO_CFG_PATH = DATA_DIR / "integracao_comercial.json"
@@ -1249,7 +1459,7 @@ def carregar_integracao_cfg() -> dict:
 
 
 def calcular_preco_virtual(preco_calculado: float, gordura: dict, arredondamento: str = "90") -> float:
-    """Aplica a gordura sobre o preÃ§o calculado e arredonda."""
+    """Aplica a gordura sobre o preço calculado e arredonda."""
     tipo = gordura.get("tipo", "percentual")
     valor = float(gordura.get("valor", 20))
 
@@ -1272,13 +1482,13 @@ def _arredondar_preco(v: float, modo: str) -> float:
     return round(base + 1 + sufixo, 2)
 
 
-# â”€â”€â”€ ROTA: pÃ¡gina de integraÃ§Ã£o comercial â”€â”€â”€
+# â”€â”€â”€ ROTA: página de integração comercial â”€â”€â”€
 @app.get("/integracao-comercial", response_class=HTMLResponse)
 def integracao_comercial_page():
     html_file = PAGES_DIR / "integracao_comercial.html"
     if html_file.exists():
         return HTMLResponse(html_file.read_text(encoding="utf-8"))
-    raise HTTPException(status_code=404, detail="integracao_comercial.html nÃ£o encontrado.")
+    raise HTTPException(status_code=404, detail="integracao_comercial.html não encontrado.")
 
 
 # â”€â”€â”€ ROTA: GET config â”€â”€â”€
@@ -1292,7 +1502,7 @@ def get_integracao_config():
 async def set_integracao_config(request: Request):
     data = await request.json()
     if not isinstance(data, dict):
-        raise HTTPException(status_code=400, detail="Payload invÃ¡lido.")
+        raise HTTPException(status_code=400, detail="Payload inválido.")
 
     cfg_atual = carregar_integracao_cfg()
 
@@ -1338,19 +1548,19 @@ async def set_integracao_config(request: Request):
         }
 
     _save_json(INTEGRACAO_CFG_PATH, cfg_atual)
-    logger.info("ConfiguraÃ§Ã£o de integraÃ§Ã£o comercial atualizada: objetivo=%s", cfg_atual.get("objetivo"))
+    logger.info("Configuração de integração comercial atualizada: objetivo=%s", cfg_atual.get("objetivo"))
 
     return {"ok": True, "config": cfg_atual}
 
 
-# â”€â”€â”€ ROTA: calcular preÃ§o virtual para um canal â”€â”€â”€
+# â”€â”€â”€ ROTA: calcular preço virtual para um canal â”€â”€â”€
 @app.post("/config/calcular-preco-virtual")
 async def calcular_preco_virtual_endpoint(request: Request):
-    """Dado um preÃ§o calculado, retorna o preÃ§o virtual por canal com a gordura configurada."""
+    """Dado um preço calculado, retorna o preço virtual por canal com a gordura configurada."""
     data = await request.json()
     preco = float(data.get("preco", 0))
     if preco <= 0:
-        raise HTTPException(status_code=400, detail="PreÃ§o invÃ¡lido.")
+        raise HTTPException(status_code=400, detail="Preço inválido.")
 
     cfg = carregar_integracao_cfg()
     gordura_por_canal = cfg.get("gordura_por_canal", {})
@@ -1372,379 +1582,6 @@ async def calcular_preco_virtual_endpoint(request: Request):
     return {"ok": True, "canais": resultado}
 
 
-def _aplicar_gordura_no_item(item: dict) -> dict:
-    import copy
-    item_mod = copy.deepcopy(item)
-    cfg = carregar_integracao_cfg()
-    gordura_por_canal = cfg.get("gordura_por_canal", {})
-    arredondamento = str(cfg.get("arredondamento", "90"))
-    marketplaces = item_mod.get("marketplaces", {})
-    if isinstance(marketplaces, dict):
-        for canal_key, dados in marketplaces.items():
-            if not isinstance(dados, dict): continue
-            preco_calculado = float(dados.get("preco_promocional") or dados.get("preco_final") or dados.get("preco") or 0)
-            if preco_calculado <= 0: continue
-            gordura = _buscar_gordura_canal(canal_key, gordura_por_canal)
-            preco_virtual = calcular_preco_virtual(preco_calculado, gordura, arredondamento)
-            dados["preco_promocional"] = round(preco_calculado, 2)
-            dados["preco"] = preco_virtual
-            dados["preco_virtual"] = preco_virtual
-            dados["gordura_aplicada"] = gordura
-    itens_lista = item_mod.get("itens", [])
-    if isinstance(itens_lista, list):
-        for it in itens_lista:
-            if not isinstance(it, dict): continue
-            canal_key = it.get("canal", "")
-            preco_calculado = float(it.get("preco_promocional") or it.get("preco_final") or it.get("preco") or 0)
-            if preco_calculado <= 0: continue
-            gordura = _buscar_gordura_canal(canal_key, gordura_por_canal)
-            preco_virtual = calcular_preco_virtual(preco_calculado, gordura, arredondamento)
-            it["preco_promocional"] = round(preco_calculado, 2)
-            it["preco"] = preco_virtual
-            it["preco_virtual"] = preco_virtual
-    return item_mod
-
-
-def _buscar_gordura_canal(canal_key: str, gordura_por_canal: dict) -> dict:
-    padrao = {"tipo": "percentual", "valor": 20.0}
-    if canal_key in gordura_por_canal: return gordura_por_canal[canal_key]
-    def _norm(s): return s.lower().replace(" ", "_").replace("-", "_")
-    canal_norm = _norm(canal_key)
-    for nome, gordura in gordura_por_canal.items():
-        if _norm(nome) == canal_norm: return gordura
-    aliases = {
-        "mercado_livre_classico": ["ml_classico","mercadolivre_classico","mercado livre classico"],
-        "mercado_livre_premium": ["ml_premium","mercadolivre_premium","mercado livre premium"],
-        "shopee": ["shopee"], "amazon": ["amazon"], "shein": ["shein"], "shopify": ["shopify","shopfy"],
-    }
-    for chave_cfg, alias_list in aliases.items():
-        if canal_norm in [_norm(a) for a in alias_list]:
-            if chave_cfg in gordura_por_canal: return gordura_por_canal[chave_cfg]
-    return padrao
-
-
-@app.post("/webhooks/bling")
-async def webhook_bling(request: Request):
-    try: body = await request.json()
-    except Exception: body = {}
-    evento = body.get("evento") or body.get("event") or "desconhecido"
-    logger.info("Webhook Bling recebido: evento=%s", evento)
-    _append_jsonl(LOG_PATH, {"evento":"webhook_bling","tipo":evento,"quando":datetime.utcnow().isoformat(),"payload":body})
-    return {"ok": True, "recebido": True}
-
-
-@app.get("/conferencia-estoque", response_class=HTMLResponse)
-def conferencia_estoque_page():
-    html_file = PAGES_DIR / "conferencia_estoque.html"
-    if html_file.exists():
-        return HTMLResponse(html_file.read_text(encoding="utf-8"))
-    raise HTTPException(status_code=404, detail="conferencia_estoque.html não encontrado.")
-
-@app.get("/estoque/fila")
-def estoque_fila_lista(status: str = ""):
-    from estoque_conferencia import carregar_fila_estoque, stats_fila_estoque
-    itens = carregar_fila_estoque()
-    if status:
-        itens = [i for i in itens if i.get("status") == status]
-    return {"itens": itens, "stats": stats_fila_estoque()}
-
-@app.post("/estoque/conferir")
-def estoque_conferir():
-    from estoque_conferencia import conferir_estoques
-    if not BlingClient:
-        raise HTTPException(status_code=500, detail="Bling não disponível.")
-    try:
-        client = BlingClient()
-        ml_svc = None
-        try:
-            from services.mercado_livre import MercadoLivreService
-            ml_svc = MercadoLivreService(BASE_DIR)
-        except Exception:
-            pass
-        return conferir_estoques(client, ml_svc)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.post("/estoque/corrigir/{item_id}")
-def estoque_corrigir(item_id: str):
-    from estoque_conferencia import corrigir_item_estoque, stats_fila_estoque
-    ml_svc = None
-    try:
-        from services.mercado_livre import MercadoLivreService
-        ml_svc = MercadoLivreService(BASE_DIR)
-    except Exception:
-        pass
-    resultado = corrigir_item_estoque(item_id, ml_svc)
-    if not resultado.get("ok"):
-        raise HTTPException(status_code=400, detail=resultado.get("erro","Falha ao corrigir."))
-    return {"ok": True, "resultado": resultado, "stats": stats_fila_estoque()}
-
-@app.post("/estoque/ignorar/{item_id}")
-def estoque_ignorar(item_id: str):
-    from estoque_conferencia import ignorar_item_estoque, stats_fila_estoque
-    resultado = ignorar_item_estoque(item_id)
-    return {"ok": resultado.get("ok"), "stats": stats_fila_estoque()}
-
-@app.post("/estoque/limpar-resolvidos")
-def estoque_limpar_resolvidos():
-    from estoque_conferencia import carregar_fila_estoque, salvar_fila_estoque, stats_fila_estoque
-    itens = carregar_fila_estoque()
-    itens = [i for i in itens if i.get("status") == "pendente"]
-    salvar_fila_estoque(itens)
-    return {"ok": True, "stats": stats_fila_estoque()}
-
-
-@app.post("/shopify-flow/pricing-suggestion")
-async def shopify_flow_pricing(request: Request):
-    """
-    Endpoint para Shopify Flow.
-    Recebe payload com SKU do produto, busca no Bling,
-    calcula preços pelo motor e retorna sugestão por canal.
-    Não aplica preços automaticamente.
-    """
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
-
-    # Extrai SKU do payload Shopify (vários formatos possíveis)
-    sku = (
-        body.get("sku")
-        or body.get("variant_sku")
-        or body.get("product", {}).get("variants", [{}])[0].get("sku", "") if isinstance(body.get("product"), dict) else ""
-        or body.get("codigo")
-        or ""
-    )
-    sku = str(sku).strip()
-
-    if not sku:
-        return {
-            "ok": False,
-            "erro": "SKU não encontrado no payload.",
-            "payload_recebido": body,
-        }
-
-    if not BlingClient or not montar_precificacao_bling:
-        return {"ok": False, "erro": "Motor de precificação indisponível."}
-
-    # Carrega configuração comercial
-    cfg = carregar_integracao_cfg()
-    objetivo = cfg.get("objetivo", "lucro_liquido")
-    tipo_alvo = cfg.get("tipo_alvo", "percentual")
-    valor_alvo = float(cfg.get("valor_alvo", 30))
-    arredondamento = str(cfg.get("arredondamento", "90"))
-
-    try:
-        client = BlingClient()
-        regras = carregar_regras(apenas_ativas=True)
-
-        resultado = montar_precificacao_bling(
-            client=client,
-            criterio="sku",
-            valor_busca=sku,
-            regras=regras,
-            embalagem=float(body.get("embalagem", 1)),
-            imposto=float(body.get("imposto", 4)),
-            quantidade=int(body.get("quantidade", 1)),
-            objetivo=objetivo,
-            tipo_alvo=tipo_alvo,
-            valor_alvo=valor_alvo,
-            peso_override=float(body.get("peso_override", 0)),
-            arredondamento=arredondamento,
-            regra_estoque=cfg.get("regra_estoque"),
-        )
-    except Exception as exc:
-        logger.warning("Shopify Flow: erro no motor para SKU=%s: %s", sku, exc)
-        return {"ok": False, "sku": sku, "erro": str(exc)}
-
-    if resultado.get("erro"):
-        return {"ok": False, "sku": sku, "erro": resultado["erro"]}
-
-    # Monta sugestão por canal com gordura
-    gordura_por_canal = cfg.get("gordura_por_canal", {})
-    itens = (resultado.get("integracao") or {}).get("itens") or resultado.get("itens") or []
-    sugestoes = []
-
-    for item in itens:
-        if not isinstance(item, dict):
-            continue
-        canal = item.get("canal", "")
-        preco_calculado = float(
-            item.get("preco_promocional") or item.get("preco_final") or item.get("preco") or 0
-        )
-        if preco_calculado <= 0:
-            continue
-
-        gordura = gordura_por_canal.get(canal, {"tipo": "percentual", "valor": 20})
-        preco_virtual = calcular_preco_virtual(preco_calculado, gordura, arredondamento)
-
-        sugestoes.append({
-            "canal": canal,
-            "preco_calculado": round(preco_calculado, 2),
-            "preco_virtual": preco_virtual,
-            "lucro_liquido": float(item.get("lucro_liquido") or item.get("lucro") or 0),
-            "margem": float(item.get("margem") or item.get("margem_liquida_percentual") or 0),
-        })
-
-    # Sugestão do canal Shopify especificamente
-    shopify_sugestao = next((s for s in sugestoes if "shopify" in s["canal"].lower()), None)
-
-    produto = resultado.get("produto_bling") or {}
-    logger.info("Shopify Flow: SKU=%s canais=%d", sku, len(sugestoes))
-    _append_jsonl(LOG_PATH, {
-        "evento": "shopify_flow_suggestion",
-        "sku": sku,
-        "quando": datetime.utcnow().isoformat(),
-        "canais": len(sugestoes),
-    })
-
-    return {
-        "ok": True,
-        "sku": sku,
-        "produto": {
-            "nome": produto.get("nome") or produto.get("descricao") or "",
-            "codigo": produto.get("codigo") or sku,
-        },
-        "sugestao_shopify": shopify_sugestao,
-        "todos_canais": sugestoes,
-        "objetivo_usado": objetivo,
-        "valor_alvo_usado": valor_alvo,
-    }
-
-
-@app.get("/auditoria-automatica", response_class=HTMLResponse)
-def auditoria_automatica_page():
-    html_file = PAGES_DIR / "auditoria_automatica.html"
-    if html_file.exists():
-        return HTMLResponse(html_file.read_text(encoding="utf-8"))
-    raise HTTPException(status_code=404, detail="auditoria_automatica.html não encontrado.")
-
-@app.get("/auditoria/fila")
-def auditoria_fila_lista(status: str = "", tipo: str = ""):
-    from auditoria_automatica import carregar_fila_auditoria, stats_fila_auditoria
-    itens = carregar_fila_auditoria()
-    if status:
-        itens = [i for i in itens if i.get("status") == status]
-    if tipo:
-        itens = [i for i in itens if i.get("tipo") == tipo]
-    return {"itens": itens, "stats": stats_fila_auditoria()}
-
-@app.post("/auditoria/rodar")
-def auditoria_rodar():
-    from auditoria_automatica import rodar_auditoria
-    if not BlingClient:
-        raise HTTPException(status_code=500, detail="Bling não disponível.")
-    try:
-        client = BlingClient()
-        ml_svc = None
-        try:
-            from services.mercado_livre import MercadoLivreService
-            ml_svc = MercadoLivreService(BASE_DIR)
-        except Exception:
-            pass
-        return rodar_auditoria(client, ml_svc)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.post("/auditoria/corrigir/{item_id}")
-def auditoria_corrigir(item_id: str):
-    from auditoria_automatica import carregar_fila_auditoria, corrigir_estoque, corrigir_preco, stats_fila_auditoria
-    fila = carregar_fila_auditoria()
-    item = next((i for i in fila if i.get("id") == item_id), None)
-    if not item:
-        raise HTTPException(status_code=404, detail="Item não encontrado.")
-    ml_svc = None
-    try:
-        from services.mercado_livre import MercadoLivreService
-        ml_svc = MercadoLivreService(BASE_DIR)
-    except Exception:
-        pass
-    if item.get("tipo") == "estoque":
-        resultado = corrigir_estoque(item_id, ml_svc)
-    else:
-        resultado = corrigir_preco(item_id, ml_svc)
-    if not resultado.get("ok"):
-        raise HTTPException(status_code=400, detail=resultado.get("erro", "Falha ao corrigir."))
-    return {"ok": True, "resultado": resultado, "stats": stats_fila_auditoria()}
-
-@app.post("/auditoria/ignorar/{item_id}")
-def auditoria_ignorar(item_id: str):
-    from auditoria_automatica import ignorar_item, stats_fila_auditoria
-    resultado = ignorar_item(item_id)
-    return {"ok": resultado.get("ok"), "stats": stats_fila_auditoria()}
-
-@app.post("/auditoria/limpar-resolvidos")
-def auditoria_limpar():
-    from auditoria_automatica import limpar_resolvidos, stats_fila_auditoria
-    removidos = limpar_resolvidos()
-    return {"ok": True, "removidos": removidos, "stats": stats_fila_auditoria()}
-
-
-@app.get("/auditoria/ml-estoque")
-def auditoria_ml_estoque_lista(status: str = "", tipo: str = ""):
-    from ml_estoque_conferencia import carregar_fila_estoque_ml, stats_fila_estoque_ml
-    itens = carregar_fila_estoque_ml()
-    if status:
-        itens = [i for i in itens if i.get("status") == status]
-    if tipo:
-        itens = [i for i in itens if i.get("tipo") == tipo]
-    return {"itens": itens, "stats": stats_fila_estoque_ml()}
-
-@app.post("/auditoria/ml-estoque/conferir")
-def auditoria_ml_estoque_conferir():
-    from ml_estoque_conferencia import conferir_estoques_ml
-    if not BlingClient:
-        raise HTTPException(status_code=500, detail="Bling não disponível.")
-    try:
-        # Pausa o scheduler durante a conferência para evitar rate limit
-        global _scheduler_pausado
-        _scheduler_pausado = True
-        try:
-            client = BlingClient()
-            resultado = conferir_estoques_ml(client, max_paginas=10)
-        finally:
-            _scheduler_pausado = False
-        return resultado
-    except Exception as e:
-        _scheduler_pausado = False
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.post("/auditoria/ml-estoque/corrigir/{item_id}")
-def auditoria_ml_estoque_corrigir(item_id: str):
-    from ml_estoque_conferencia import corrigir_estoque_ml
-    resultado = corrigir_estoque_ml(item_id)
-    if not resultado.get("ok"):
-        raise HTTPException(status_code=400, detail=resultado.get("erro", "Falha."))
-    return {"ok": True}
-
-@app.post("/auditoria/ml-estoque/cadastrar-sku/{item_id}")
-async def auditoria_ml_cadastrar_sku(item_id: str, request: Request):
-    from ml_estoque_conferencia import cadastrar_sku_ml
-    data = await request.json()
-    sku = data.get("sku", "").strip()
-    if not sku:
-        raise HTTPException(status_code=400, detail="SKU obrigatório.")
-    client = BlingClient() if BlingClient else None
-    resultado = cadastrar_sku_ml(item_id, sku, client)
-    if not resultado.get("ok"):
-        raise HTTPException(status_code=400, detail=resultado.get("erro", "Falha."))
-    return resultado
-
-@app.post("/auditoria/ml-estoque/ignorar/{item_id}")
-def auditoria_ml_estoque_ignorar(item_id: str):
-    from ml_estoque_conferencia import ignorar_item_ml
-    return ignorar_item_ml(item_id)
-
-
-
-
-@app.get("/integracoes", response_class=HTMLResponse)
-def integracoes_page():
-    html_file = PAGES_DIR / "integracoes.html"
-    if html_file.exists():
-        return HTMLResponse(html_file.read_text(encoding="utf-8"))
-    raise HTTPException(status_code=404)
-
 @app.get("/auditoria/mp-status")
 def auditoria_mp_status():
     import json as _json
@@ -1753,94 +1590,11 @@ def auditoria_mp_status():
     data = _json.loads(mp.read_text(encoding="utf-8")) if mp.exists() else {}
     token = data.get("access_token", "")
     return {"configurado": bool(token) and token != ".", "salvo_em": data.get("salvo_em")}
-
-@app.get("/ml/status")
-def ml_status_endpoint():
-    import json
-    from pathlib import Path as _P
-    tp = _P("data/ml_tokens.json")
-    if not tp.exists(): return {"connected": False}
-    tokens = json.loads(tp.read_text(encoding="utf-8"))
-    at = tokens.get("access_token", "")
-    return {"connected": bool(at) and at != ".", "seller_id": tokens.get("user_id"), "expires_at": tokens.get("expires_at")}
-
-@app.get("/auditoria/shopify")
-def auditoria_shopify_lista(status: str = "", tipo: str = ""):
-    from shopify_conferencia import carregar_fila_shopify, stats_fila_shopify
-    itens = carregar_fila_shopify()
-    if status:
-        itens = [i for i in itens if i.get("status") == status]
-    if tipo:
-        itens = [i for i in itens if i.get("tipo") == tipo]
-    return {"itens": itens, "stats": stats_fila_shopify()}
-
-
-@app.post("/auditoria/shopify/corrigir/{item_id}")
-def auditoria_shopify_corrigir(item_id: str):
-    from shopify_conferencia import corrigir_shopify
-    resultado = corrigir_shopify(item_id)
-    if not resultado.get("ok"):
-        raise HTTPException(status_code=400, detail=resultado.get("erro", "Falha."))
-    return {"ok": True}
-
-@app.post("/auditoria/shopify/ignorar/{item_id}")
-def auditoria_shopify_ignorar(item_id: str):
-    from shopify_conferencia import ignorar_shopify
-    return ignorar_shopify(item_id)
-
-@app.post("/auditoria/shopify/limpar-resolvidos")
-def auditoria_shopify_limpar():
-    from shopify_conferencia import carregar_fila_shopify, salvar_fila_shopify, stats_fila_shopify
-    itens = carregar_fila_shopify()
-    itens = [i for i in itens if i.get("status") == "pendente"]
-    salvar_fila_shopify(itens)
-    return {"ok": True, "stats": stats_fila_shopify()}
-
-@app.post("/auditoria/shopify/token")
-async def auditoria_shopify_token(request: Request):
-    from shopify_conferencia import salvar_shopify_token
-    data = await request.json()
-    token = data.get("access_token", "").strip()
-    if not token:
-        raise HTTPException(status_code=400, detail="Token invalido.")
-    salvar_shopify_token(token)
-    return {"ok": True}
-
-
-@app.get("/shopify/auth")
-def shopify_auth(request: Request):
-    from shopify_oauth import gerar_url_auth
-    from fastapi.responses import RedirectResponse
-    base_url = str(request.base_url).rstrip("/")
-    redirect_uri = base_url + "/shopify/callback"
-    url = gerar_url_auth(redirect_uri)
-    return RedirectResponse(url)
-
-@app.get("/shopify/callback")
-def shopify_callback(code: str = "", state: str = "", request: Request = None):
-    from shopify_oauth import processar_callback
-    from fastapi.responses import HTMLResponse
-    base_url = str(request.base_url).rstrip("/")
-    redirect_uri = base_url + "/shopify/callback"
-    resultado = processar_callback(code, state, redirect_uri)
-    if resultado.get("ok"):
-        return HTMLResponse("<h2>✅ Shopify conectado! Token salvo com sucesso.</h2><p><a href='/integracoes'>Voltar para Integrações</a></p>")
-    return HTMLResponse(f"<h2>❌ Erro: {resultado.get('erro')}</h2>")
-
-@app.get("/shopify/status")
-def shopify_status():
-    import json
-    from pathlib import Path as _P
-    cfg = _P("data/shopify_config.json")
-    if not cfg.exists(): return {"connected": False}
-    data = json.loads(cfg.read_text(encoding="utf-8"))
-    token = data.get("access_token", "")
-    return {"connected": bool(token) and token != ".", "scope": data.get("scope", ""), "salvo_em": data.get("salvo_em")}
 if not FILA_PATH.exists(): _save_json(FILA_PATH, [])
 if not CFG_PATH.exists(): _save_json(CFG_PATH, DEFAULT_CFG)
 
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# MÃ“DULO REGRAS
+# MÓDULO REGRAS
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 MAPA_CANAIS_EXCEL = {
@@ -1866,7 +1620,7 @@ def regras_page():
     html_file = PAGES_DIR / "regras.html"
     if html_file.exists():
         return HTMLResponse(html_file.read_text(encoding="utf-8"))
-    raise HTTPException(status_code=404, detail="pages/regras.html nÃ£o encontrado.")
+    raise HTTPException(status_code=404, detail="pages/regras.html não encontrado.")
 
 @app.get("/regras/listar")
 def regras_listar():
@@ -1889,7 +1643,7 @@ def regras_adicionar(payload: dict = Body(...)):
         "ativo": bool(payload.get("ativo", True)),
     }
     if not nova["canal"]:
-        raise HTTPException(status_code=400, detail="Canal obrigatÃ³rio.")
+        raise HTTPException(status_code=400, detail="Canal obrigatório.")
     novo_id = inserir_regra(nova)
     return {"ok": True, "id": novo_id, "total": len(carregar_regras())}
 
@@ -1908,20 +1662,20 @@ def regras_editar(idx: int, payload: dict = Body(...)):
     }
     ok = atualizar_regra(idx, nova)
     if not ok:
-        raise HTTPException(status_code=404, detail="Regra nÃ£o encontrada.")
+        raise HTTPException(status_code=404, detail="Regra não encontrada.")
     return {"ok": True, "total": len(carregar_regras())}
 
 @app.delete("/regras/excluir/{idx}")
 def regras_excluir(idx: int):
     ok = excluir_regra(idx)
     if not ok:
-        raise HTTPException(status_code=404, detail="Regra nÃ£o encontrada.")
+        raise HTTPException(status_code=404, detail="Regra não encontrada.")
     return {"ok": True, "total": len(carregar_regras())}
 
 @app.post("/regras/importar-excel")
 async def regras_importar_excel(file: UploadFile = File(...)):
     if not file.filename.endswith(".xlsx"):
-        raise HTTPException(status_code=400, detail="Apenas arquivos .xlsx sÃ£o aceitos.")
+        raise HTTPException(status_code=400, detail="Apenas arquivos .xlsx são aceitos.")
     try:
         import io
         import openpyxl
@@ -1957,7 +1711,7 @@ async def regras_importar_excel(file: UploadFile = File(...)):
 def regras_modelo_download():
     modelo = BASE_DIR / "Simulador_modelo.xlsx"
     if not modelo.exists():
-        raise HTTPException(status_code=404, detail="Arquivo modelo nÃ£o encontrado.")
+        raise HTTPException(status_code=404, detail="Arquivo modelo não encontrado.")
     return FileResponse(
         path=str(modelo),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1970,6 +1724,8 @@ def auditoria_estoque_negativo_lista(status: str = ""):
     import json as _j
     fila_path = _P("data/fila_estoque_negativo.json")
     itens = _j.loads(fila_path.read_text(encoding="utf-8")) if fila_path.exists() else []
+    # Exibe apenas itens com estoque realmente negativo
+    itens = [i for i in itens if int(i.get("estoque", 0)) < 0]
     if status:
         itens = [i for i in itens if i.get("status") == status]
     total = len(itens)
@@ -2035,6 +1791,36 @@ def auditoria_amazon_conferir(tipo: str = ""):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/auditoria/amazon/corrigir/{item_id}")
+def auditoria_amazon_corrigir(item_id: str):
+    from amazon_conferencia import carregar_fila, salvar_fila
+    from datetime import datetime, timezone
+    fila = carregar_fila()
+    item = next((i for i in fila if i.get("id") == item_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado na fila.")
+    if item.get("status") != "pendente":
+        raise HTTPException(status_code=400, detail=f"Item já está com status '{item['status']}'.")
+    try:
+        from services.amazon import AmazonService
+        service = AmazonService()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro ao conectar à Amazon: {exc}")
+    tipo = item.get("tipo")
+    sku = item.get("sku")
+    if tipo == "estoque":
+        res = service.atualizar_estoque(sku, item["estoque_bling"])
+    elif tipo == "preco":
+        res = service.atualizar_com_retry(sku, item["preco_bling"])
+    else:
+        raise HTTPException(status_code=400, detail=f"Tipo desconhecido: {tipo}")
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=f"Erro ao corrigir na Amazon: {res.get('error')}")
+    item["status"] = "corrigido"
+    item["corrigido_em"] = datetime.now(timezone.utc).isoformat()
+    salvar_fila(fila)
+    return {"ok": True, "item_id": item_id, "tipo": tipo, "sku": sku}
+
 @app.post("/auditoria/amazon/ignorar/{item_id}")
 def auditoria_amazon_ignorar(item_id: str):
     from amazon_conferencia import carregar_fila, salvar_fila
@@ -2069,4 +1855,541 @@ def amazon_status():
         return {"ok": False, "configurado": False, "conectado": False, "erro": str(e)}
 
 
+# ── Fila unificada de preços (Amazon + Shopify) ───────────────────────────────
 
+def _normalizar_item_preco(item: dict, canal: str) -> dict:
+    """Normaliza item de fila de preço para o formato esperado pelo frontend."""
+    preco_mkt = item.get("preco_amazon") or item.get("preco_shopify") or 0
+    return {
+        "id": item.get("id"),
+        "sku": item.get("sku"),
+        "nome": item.get("nome") or item.get("titulo") or "",
+        "canal": canal,
+        "preco_shinsei": float(item.get("preco_bling") or 0),
+        "preco_marketplace_promocional": float(preco_mkt),
+        "preco_virtual_shinsei": float(item.get("preco_bling") or 0),
+        "preco_marketplace": float(preco_mkt),
+        "diferenca": float(item.get("diferenca") or 0),
+        "status": item.get("status", "pendente"),
+        "detectado_em": item.get("detectado_em") or item.get("criado_em") or "",
+    }
+
+
+@app.get("/auditoria/precos")
+def auditoria_precos_lista(status: str = ""):
+    import json as _json
+    from pathlib import Path as _P
+    itens = []
+    for path, canal in [("data/fila_amazon.json", "Amazon"), ("data/fila_shopify.json", "Shopify")]:
+        try:
+            raw = _json.loads(_P(path).read_text(encoding="utf-8")) if _P(path).exists() else []
+            for i in (raw if isinstance(raw, list) else []):
+                if i.get("tipo") == "preco":
+                    if not status or i.get("status") == status:
+                        itens.append(_normalizar_item_preco(i, canal))
+        except Exception:
+            pass
+    return {"itens": itens, "total": len(itens), "pendentes": sum(1 for i in itens if i["status"] == "pendente")}
+
+
+@app.post("/auditoria/conferir-precos")
+def auditoria_conferir_precos():
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="bling_client.py nao encontrado.")
+    bling = BlingClient()
+    total_verificados = 0
+    total_divergencias = 0
+    erros = []
+    try:
+        from amazon_conferencia import conferir_amazon
+        res = conferir_amazon(bling_client=bling, tipo="preco")
+        if res.get("ok"):
+            total_verificados += res.get("verificados", 0)
+            total_divergencias += res.get("divergencias_preco", 0)
+        else:
+            erros.append("Amazon: " + str(res.get("erro", "falha")))
+    except Exception as e:
+        erros.append(f"Amazon: {e}")
+    try:
+        from shopify_conferencia import conferir_shopify
+        res = conferir_shopify(bling_client=bling, tipo="preco")
+        if res.get("ok"):
+            total_verificados += res.get("verificados", 0)
+            total_divergencias += res.get("divergencias_preco", 0)
+        else:
+            erros.append("Shopify: " + str(res.get("erro", "falha")))
+    except Exception as e:
+        erros.append(f"Shopify: {e}")
+    return {
+        "ok": True,
+        "verificados": total_verificados,
+        "novas_divergencias": total_divergencias,
+        "erros": erros,
+    }
+
+
+@app.post("/auditoria/corrigir-preco/{item_id}")
+def auditoria_corrigir_preco(item_id: str):
+    import json as _json
+    from pathlib import Path as _P
+    from datetime import datetime, timezone
+
+    # Tenta Amazon
+    if item_id.startswith("amz_"):
+        from amazon_conferencia import carregar_fila, salvar_fila
+        fila = carregar_fila()
+        item = next((i for i in fila if i.get("id") == item_id), None)
+        if not item:
+            raise HTTPException(status_code=404, detail="Item nao encontrado.")
+        if item.get("status") != "pendente":
+            raise HTTPException(status_code=400, detail=f"Item ja esta '{item['status']}'.")
+        try:
+            from services.amazon import AmazonService
+            res = AmazonService().atualizar_com_retry(item["sku"], item["preco_bling"])
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+        if not res.get("success"):
+            raise HTTPException(status_code=400, detail=res.get("error", "Falha ao corrigir preco na Amazon."))
+        item["status"] = "corrigido"
+        item["corrigido_em"] = datetime.now(timezone.utc).isoformat()
+        salvar_fila(fila)
+        return {"ok": True}
+
+    # Tenta Shopify
+    if item_id.startswith("shp_"):
+        from shopify_conferencia import corrigir_shopify
+        res = corrigir_shopify(item_id)
+        if not res.get("ok"):
+            raise HTTPException(status_code=400, detail=res.get("erro", "Falha ao corrigir preco na Shopify."))
+        return {"ok": True}
+
+    raise HTTPException(status_code=404, detail="Item nao encontrado em nenhuma fila.")
+
+
+@app.post("/auditoria/ignorar-preco/{item_id}")
+def auditoria_ignorar_preco(item_id: str):
+    from datetime import datetime, timezone
+
+    if item_id.startswith("amz_"):
+        from amazon_conferencia import carregar_fila, salvar_fila
+        fila = carregar_fila()
+        item = next((i for i in fila if i.get("id") == item_id), None)
+        if not item:
+            raise HTTPException(status_code=404, detail="Item nao encontrado.")
+        item["status"] = "ignorado"
+        item["ignorado_em"] = datetime.now(timezone.utc).isoformat()
+        salvar_fila(fila)
+        return {"ok": True}
+
+    if item_id.startswith("shp_"):
+        from shopify_conferencia import ignorar_shopify
+        res = ignorar_shopify(item_id)
+        return {"ok": res.get("ok", False)}
+
+    raise HTTPException(status_code=404, detail="Item nao encontrado em nenhuma fila.")
+
+
+@app.post("/auditoria/mp-token")
+async def auditoria_salvar_mp_token(request: Request):
+    import json as _json
+    from pathlib import Path as _P
+    from datetime import datetime
+    body = await request.json()
+    token = (body.get("access_token") or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Token vazio.")
+    path = _P("data/mp_token.json")
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(_json.dumps({"access_token": token, "salvo_em": datetime.utcnow().isoformat()}, indent=2), encoding="utf-8")
+    return {"ok": True}
+
+
+
+
+
+# ─── MARKETING ML ──────────────────────────────────────────────────────────────
+
+@app.get("/marketing", response_class=HTMLResponse)
+def marketing_page():
+    html_file = PAGES_DIR / "marketing.html"
+    if html_file.exists():
+        return HTMLResponse(html_file.read_text(encoding="utf-8"))
+    raise HTTPException(status_code=404, detail="pages/marketing.html nao encontrado.")
+
+
+@app.post("/marketing/ml/analisar")
+async def marketing_ml_analisar(request: Request):
+    body = await request.json()
+    desconto_pct = float(body.get("desconto_pct", 10))
+    margem_alvo = float(body.get("margem_alvo", 20))
+    max_itens = int(body.get("max_itens", 500))
+    imposto_padrao = float(body.get("imposto_padrao", 12.0))
+
+    import json as _json
+    from pathlib import Path as _P
+    tokens_path = _P("data/ml_tokens.json")
+    if not tokens_path.exists():
+        raise HTTPException(status_code=400, detail="Token ML nao configurado. Faca login em /ml/login.")
+    tokens = _json.loads(tokens_path.read_text(encoding="utf-8"))
+    seller_id = str(tokens.get("user_id", ""))
+    if not seller_id:
+        raise HTTPException(status_code=400, detail="seller_id nao encontrado no token ML.")
+
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="Bling nao disponivel.")
+
+    from services.marketing_ml import analisar_campanhas_ml
+    try:
+        client = BlingClient()
+        resultado = analisar_campanhas_ml(
+            seller_id=seller_id,
+            bling_client=client,
+            desconto_pct=desconto_pct,
+            margem_alvo=margem_alvo,
+            imposto_padrao=imposto_padrao,
+            max_itens=max_itens,
+        )
+        return resultado
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/marketing/ml/participar")
+async def marketing_ml_participar(request: Request):
+    """Atualiza o preco dos itens selecionados no ML para o preco da campanha."""
+    body = await request.json()
+    itens = body.get("itens", [])  # [{item_id, preco_campanha}, ...]
+    if not itens:
+        raise HTTPException(status_code=400, detail="Nenhum item selecionado.")
+
+    from services.marketing_ml import atualizar_preco_ml
+    resultados = []
+    for item in itens:
+        res = atualizar_preco_ml(item["item_id"], float(item["preco_campanha"]))
+        resultados.append(res)
+        import time as _time
+        _time.sleep(0.3)
+
+    ok = sum(1 for r in resultados if r.get("ok"))
+    erros = len(resultados) - ok
+    return {"ok": True, "atualizados": ok, "erros": erros, "detalhes": resultados}
+
+
+# ─── MARKETING AMAZON ──────────────────────────────────────────────────────────
+
+@app.get("/marketing/amazon/cache")
+def marketing_amazon_cache():
+    """Retorna resultado cacheado da última análise Amazon (sem refazer a análise)."""
+    from services.amazon_marketing import carregar_cache_amazon
+    cache = carregar_cache_amazon()
+    if not cache:
+        return {"ok": False, "erro": "Sem análise em cache"}
+    return cache
+
+
+@app.post("/marketing/amazon/analisar")
+async def marketing_amazon_analisar(request: Request):
+    body = await request.json()
+    margem_alvo = float(body.get("margem_alvo", 20))
+    imposto_padrao = float(body.get("imposto_padrao", 12.0))
+    max_itens = int(body.get("max_itens", 500))
+
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="Bling nao disponivel.")
+
+    from services.amazon_marketing import analisar_buy_box_amazon
+    try:
+        client = BlingClient()
+        regras = carregar_regras(apenas_ativas=True)
+        resultado = analisar_buy_box_amazon(
+            bling_client=client,
+            regras=regras,
+            margem_alvo=margem_alvo,
+            imposto_padrao=imposto_padrao,
+            max_itens=max_itens,
+        )
+        return resultado
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/marketing/amazon/participar")
+async def marketing_amazon_participar(request: Request):
+    """Atualiza preço dos itens selecionados na Amazon para cobrir a Buy Box."""
+    body = await request.json()
+    itens = body.get("itens", [])
+    if not itens:
+        raise HTTPException(status_code=400, detail="Nenhum item selecionado.")
+
+    from services.amazon_marketing import atualizar_preco_amazon
+    import time as _time
+    resultados = []
+    for item in itens:
+        res = atualizar_preco_amazon(item["sku"], float(item["preco_buy_box"]))
+        resultados.append(res)
+        _time.sleep(0.3)
+
+    ok = sum(1 for r in resultados if r.get("ok"))
+    erros = len(resultados) - ok
+    return {"ok": True, "atualizados": ok, "erros": erros, "detalhes": resultados}
+
+
+# ── SEO Health ────────────────────────────────────────────────────────────────
+
+SEO_CACHE_PATH = DATA_DIR / "seo_health_cache.json"
+
+
+@app.get("/seo-health", response_class=HTMLResponse)
+def seo_health_page():
+    path = PAGES_DIR / "seo_health.html"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="seo_health.html não encontrado.")
+    return HTMLResponse(path.read_text(encoding="utf-8"))
+
+
+@app.get("/seo-health/dados")
+def seo_health_dados():
+    cache = _load_json(SEO_CACHE_PATH, None)
+    if not cache:
+        return {"ok": False, "erro": "Nenhuma análise em cache. Clique em Analisar agora."}
+    return {"ok": True, **cache}
+
+
+@app.post("/seo-health/analisar")
+async def seo_health_analisar():
+    """Audita coleções, produtos e blog do Shopify e salva cache."""
+    import asyncio, importlib.util
+    seo_path = BASE_DIR / "shinsei_seo.py"
+    if not seo_path.exists():
+        raise HTTPException(status_code=500, detail="shinsei_seo.py não encontrado.")
+
+    def _run():
+        spec = importlib.util.spec_from_file_location("shinsei_seo", seo_path)
+        seo = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(seo)
+        return seo.health_score()
+
+    try:
+        loop = asyncio.get_event_loop()
+        resultado = await loop.run_in_executor(None, _run)
+        _save_json(SEO_CACHE_PATH, resultado)
+        return {"ok": True, **resultado}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/seo-health/pagespeed")
+async def seo_health_pagespeed():
+    """Busca scores do PageSpeed Insights (mobile + desktop) e atualiza cache."""
+    try:
+        import importlib.util, os as _os
+        seo_path = BASE_DIR / "shinsei_seo.py"
+        if not seo_path.exists():
+            raise HTTPException(status_code=500, detail="shinsei_seo.py não encontrado.")
+        spec = importlib.util.spec_from_file_location("shinsei_seo", seo_path)
+        seo = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(seo)
+
+        import requests as _req
+        store = getattr(seo, "STORE", "pknw4n-eg")
+        api_key = _os.getenv("PAGESPEED_API_KEY", "")
+        url_loja = f"https://www.shinseimarket.com.br"
+        ps_url = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
+        scores = {}
+        for strategy in ("mobile", "desktop"):
+            params = [
+                ("url", url_loja),
+                ("strategy", strategy),
+                ("category", "performance"),
+                ("category", "seo"),
+                ("category", "accessibility"),
+                ("category", "best-practices"),
+            ]
+            if api_key:
+                params.append(("key", api_key))
+            r = _req.get(ps_url, params=params, timeout=90)
+            if r.status_code == 200:
+                d = r.json()
+                cats = d.get("lighthouseResult", {}).get("categories", {})
+                audits = d.get("lighthouseResult", {}).get("audits", {})
+                oportunidades = [
+                    v.get("title", "") for v in audits.values()
+                    if isinstance(v, dict) and v.get("score") is not None
+                    and float(v.get("score", 1)) < 0.9 and v.get("title")
+                    and v.get("details", {}).get("type") not in ("table", "list", "criticalrequestchain")
+                ]
+                scores[strategy] = {
+                    "performance": round((cats.get("performance", {}).get("score") or 0) * 100),
+                    "seo": round((cats.get("seo", {}).get("score") or 0) * 100),
+                    "accessibility": round((cats.get("accessibility", {}).get("score") or 0) * 100),
+                    "best_practices": round((cats.get("best-practices", {}).get("score") or 0) * 100),
+                    "lcp": audits.get("largest-contentful-paint", {}).get("displayValue", "—"),
+                    "cls": audits.get("cumulative-layout-shift", {}).get("displayValue", "—"),
+                    "tbt": audits.get("total-blocking-time", {}).get("displayValue", "—"),
+                    "fcp": audits.get("first-contentful-paint", {}).get("displayValue", "—"),
+                    "ttfb": audits.get("server-response-time", {}).get("displayValue", "—"),
+                    "oportunidades": oportunidades[:10],
+                }
+            else:
+                scores[strategy] = None
+
+        cache = _load_json(SEO_CACHE_PATH, {})
+        cache["pagespeed"] = scores
+        _save_json(SEO_CACHE_PATH, cache)
+        return {"ok": True, "pagespeed": scores}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/seo-health/merchant")
+async def seo_health_merchant():
+    """Audita cobertura do feed Google Merchant Center via Shopify API."""
+    import requests as _req, asyncio, random as _rand
+
+    cfg_path = DATA_DIR / "shopify_config.json"
+    if not cfg_path.exists():
+        raise HTTPException(status_code=500, detail="shopify_config.json não encontrado.")
+
+    token = _load_json(cfg_path, {}).get("access_token", "")
+    if not token:
+        raise HTTPException(status_code=500, detail="Token Shopify não configurado.")
+
+    hdrs = {"X-Shopify-Access-Token": token}
+    store = "pknw4n-eg"
+    base = f"https://{store}.myshopify.com/admin/api/2024-01"
+
+    def _fetch_shopify():
+        # Buscar 1ª página (250 produtos) para estimativa rápida de cobertura
+        all_prods = []
+        url = f"{base}/products.json?limit=250&fields=id,vendor,product_type"
+        for _ in range(6):  # até 6 páginas = 1500 produtos
+            try:
+                r = _req.get(url, headers=hdrs, timeout=20)
+                prods = r.json().get("products", [])
+                if not prods:
+                    break
+                all_prods.extend(prods)
+                links = r.headers.get("Link", "")
+                url = None
+                for part in links.split(","):
+                    if 'rel="next"' in part:
+                        url = part.strip().split(";")[0].strip("<> ")
+                        break
+                if not url:
+                    break
+            except Exception:
+                break
+
+        total = len(all_prods)
+        if total == 0:
+            return None
+
+        sem_type = sum(1 for p in all_prods if not (p.get("product_type") or "").strip())
+        vendor_errado = sum(1 for p in all_prods if p.get("vendor", "") in ("Shinsei Market", ""))
+
+        # Checar google_product_category numa amostra de 40 produtos
+        sample = _rand.sample(all_prods, min(40, total))
+        com_gcat = 0
+        for p in sample:
+            try:
+                rm = _req.get(f"{base}/products/{p['id']}/metafields.json?namespace=mm-google-shopping&limit=1",
+                              headers=hdrs, timeout=10)
+                if rm.json().get("metafields"):
+                    com_gcat += 1
+            except Exception:
+                pass
+        pct_gcat = round(com_gcat / len(sample) * 100) if sample else 0
+        estimado_gcat = round(total * pct_gcat / 100)
+
+        return {
+            "analisado_em": datetime.utcnow().isoformat(),
+            "total_produtos": total,
+            "com_product_type": total - sem_type,
+            "sem_product_type": sem_type,
+            "pct_product_type": round((total - sem_type) / total * 100),
+            "vendor_incorreto": vendor_errado,
+            "pct_vendor_ok": round((total - vendor_errado) / total * 100),
+            "estimado_google_cat": estimado_gcat,
+            "pct_google_cat": pct_gcat,
+            "pendencias_merchant": [
+                {
+                    "prioridade": "alto",
+                    "titulo": "Forçar re-sincronização no Merchant Center",
+                    "descricao": "product_type, vendor e google_product_category foram atualizados. O Merchant Center precisa re-processar o feed para refletir as mudanças.",
+                    "impacto": "Produtos aprovados começam a aparecer no Google Shopping em até 24h",
+                    "acao_url": "https://merchants.google.com/",
+                    "acao_label": "Abrir Merchant Center",
+                },
+                {
+                    "prioridade": "alto",
+                    "titulo": "Verificar produtos reprovados no Merchant Center",
+                    "descricao": "Após o re-sync, verifique em Produtos → Problemas se há itens suspensos por dado ausente, preço divergente ou imagem inválida.",
+                    "impacto": "Cada produto reprovado é tráfego perdido de Shopping",
+                    "acao_url": "https://merchants.google.com/",
+                    "acao_label": "Ver Problemas",
+                },
+                {
+                    "prioridade": "medio",
+                    "titulo": "Ativar campanhas Performance Max",
+                    "descricao": "Com product_type e google_product_category definidos, o Google Ads consegue segmentar campanhas PMax por categoria. Criar grupos de ativos por linha (Coloração, Tratamento, Maquiagem).",
+                    "impacto": "Performance Max com dados estruturados pode aumentar impressões em 30-50%",
+                    "acao_url": "https://ads.google.com/",
+                    "acao_label": "Abrir Google Ads",
+                },
+                {
+                    "prioridade": "medio",
+                    "titulo": "Configurar e-mail de review pós-compra (Judge.me)",
+                    "descricao": "Reviews com estrelas aparecem nos anúncios Shopping como Seller Ratings. Configurar envio automático 7 dias após entrega no painel Judge.me.",
+                    "impacto": "Seller Ratings aumentam CTR do Shopping em média 17%",
+                    "acao_url": "https://judge.me/",
+                    "acao_label": "Abrir Judge.me",
+                },
+                {
+                    "prioridade": "baixo",
+                    "titulo": "Expandir para Google Merchant Center — Promoções",
+                    "descricao": "Cadastrar promoções no Merchant Center (ex: frete grátis acima de R$99) para exibir badge 'Promoção' nos anúncios Shopping.",
+                    "impacto": "Badge de promoção aumenta CTR em média 12%",
+                    "acao_url": "https://merchants.google.com/",
+                    "acao_label": "Ver Promoções",
+                },
+            ],
+        }
+
+    try:
+        loop = asyncio.get_event_loop()
+        resultado = await loop.run_in_executor(None, _fetch_shopify)
+        if not resultado:
+            raise HTTPException(status_code=500, detail="Não foi possível buscar dados do Shopify.")
+        cache = _load_json(SEO_CACHE_PATH, {})
+        cache["merchant"] = resultado
+        _save_json(SEO_CACHE_PATH, cache)
+        return {"ok": True, "merchant": resultado}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── SCBOT — Robô de Indexação Google ──────────────────────────────────────
+
+@app.get("/scbot/status")
+def scbot_status_endpoint():
+    """Retorna status e histórico do SCBOT."""
+    return {"ok": True, "scbot": scbot_status()}
+
+
+@app.post("/scbot/executar")
+async def scbot_executar_endpoint(urls_extras: list[str] = None):
+    """Dispara um ciclo manual do SCBOT (ignora agendamento diário)."""
+    import asyncio
+    loop = asyncio.get_event_loop()
+    resultado = await loop.run_in_executor(None, lambda: scbot_executar(urls_extras or []))
+    # Salva no cache de SEO Health também
+    cache = _load_json(SEO_CACHE_PATH, {})
+    cache["scbot"] = scbot_status()
+    _save_json(SEO_CACHE_PATH, cache)
+    return {"ok": True, "resultado": resultado}
