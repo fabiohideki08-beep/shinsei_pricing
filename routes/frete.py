@@ -18,8 +18,10 @@ from pydantic import BaseModel
 
 from services.frete import (
     SUBSIDY_PER_ITEM,
+    SUBSIDY_FIRST_ITEM,
     FreightResult,
     calculate_freight,
+    calcular_subsidio_total,
     normalize_cep,
 )
 
@@ -236,8 +238,9 @@ async def progresso_frete(
     """
     Cálculo rápido sem CEP para updates em tempo real no widget.
     Usa o frete_real fornecido (padrão R$18 = média SP interior).
+    Regra de subsídio: 1º item = R$4, 2º em diante = R$8 cada.
     """
-    subsidio = round(SUBSIDY_PER_ITEM * qty, 2)
+    subsidio = calcular_subsidio_total(qty)
     frete_final = max(0.0, round(frete_real - subsidio, 2))
     eh_gratis = frete_final == 0.0
 
@@ -245,7 +248,13 @@ async def progresso_frete(
         itens_faltando = 0
         mensagem = "🎉 Parabéns! Você ganhou frete grátis!"
     else:
-        itens_necessarios = math.ceil(frete_real / SUBSIDY_PER_ITEM)
+        # Quantos itens no total cobrem o frete_real
+        # 1º item = R$4, demais = R$8: total(n) = 4 + (n-1)*8
+        # Resolva: 4 + (n-1)*8 >= frete_real → n >= 1 + (frete_real-4)/8
+        if frete_real <= SUBSIDY_FIRST_ITEM:
+            itens_necessarios = 1
+        else:
+            itens_necessarios = 1 + math.ceil((frete_real - SUBSIDY_FIRST_ITEM) / SUBSIDY_PER_ITEM)
         itens_faltando = max(0, itens_necessarios - qty)
         if itens_faltando == 1:
             mensagem = "Adicione 1 item para frete grátis!"
@@ -258,6 +267,7 @@ async def progresso_frete(
         "qty_items": qty,
         "frete_real": frete_real,
         "subsidio": subsidio,
+        "subsidio_primeiro_item": SUBSIDY_FIRST_ITEM,
         "subsidio_por_item": SUBSIDY_PER_ITEM,
         "frete_final": frete_final,
         "itens_faltando": itens_faltando,

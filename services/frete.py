@@ -26,6 +26,8 @@ logger = logging.getLogger("shinsei.frete")
 # ---------------------------------------------------------------------------
 
 SUBSIDY_PER_ITEM: float = float(os.getenv("FRETE_SUBSIDIO_POR_ITEM", "8.0"))
+# Subsídio do 1º item pode ser diferente (padrão R$4; a partir do 2º usa SUBSIDY_PER_ITEM)
+SUBSIDY_FIRST_ITEM: float = float(os.getenv("FRETE_SUBSIDIO_PRIMEIRO_ITEM", "4.0"))
 ORIGIN_CEP: str = os.getenv("FRETE_CEP_ORIGEM", "06036003")
 
 MELHOR_ENVIO_TOKEN: str = os.getenv("MELHOR_ENVIO_TOKEN", "")
@@ -66,6 +68,18 @@ RMSP_MUNICIPALITIES: set[str] = {
 }
 
 RMSP_FREIGHT_VALUE: float = 8.0  # valor simbólico usado para RMSP (sempre grátis após subsídio)
+
+
+def calcular_subsidio_total(qty_items: int) -> float:
+    """
+    Calcula o subsídio total para N itens.
+    Regra: 1º item = SUBSIDY_FIRST_ITEM (R$4), 2º em diante = SUBSIDY_PER_ITEM (R$8) cada.
+    Ex: qty=1 → R$4 | qty=2 → R$12 | qty=3 → R$20 | qty=4 → R$28
+    """
+    if qty_items <= 0:
+        return 0.0
+    return round(SUBSIDY_FIRST_ITEM + max(0, qty_items - 1) * SUBSIDY_PER_ITEM, 2)
+
 
 # ---------------------------------------------------------------------------
 # Modelos Pydantic
@@ -345,7 +359,7 @@ async def calculate_freight(
     state = (cep_info.get("state") or "").upper()
     rmsp = is_rmsp(city, state)
 
-    subsidy_total = round(SUBSIDY_PER_ITEM * qty_items, 2)
+    subsidy_total = calcular_subsidio_total(qty_items)
 
     if rmsp:
         # RMSP: frete_real simbólico = R$8, sempre grátis
@@ -399,8 +413,16 @@ async def calculate_freight(
         if is_free_cart:
             items_for_free = 0
         else:
-            # Quantos itens precisam para zerare o frete mais barato
-            items_needed = math.ceil(cheapest_real / SUBSIDY_PER_ITEM)
+            # Quantos itens no total cobrem o frete mais barato
+            # Regra: 1º item = SUBSIDY_FIRST_ITEM, demais = SUBSIDY_PER_ITEM
+            # total(n) = FIRST + (n-1)*PER >= cheapest_real
+            # n >= 1 + (cheapest_real - FIRST) / PER
+            if cheapest_real <= SUBSIDY_FIRST_ITEM:
+                items_needed = 1
+            else:
+                items_needed = 1 + math.ceil(
+                    (cheapest_real - SUBSIDY_FIRST_ITEM) / SUBSIDY_PER_ITEM
+                )
             items_for_free = max(0, items_needed - qty_items)
 
     result = FreightResult(
