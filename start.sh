@@ -9,4 +9,6 @@ exec uvicorn app:app \
     --port "${PORT:-8000}" \
     --workers 1 \
     --timeout-keep-alive 30 \
-    --log-level info
+    --log-level info \
+    --proxy-headers \
+    --forwarded-allow-ips='*'

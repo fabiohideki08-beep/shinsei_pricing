@@ -1368,12 +1368,20 @@ async def auditoria_shopify_token(request: Request):
     return {"ok": True}
 
 
+def _shopify_redirect_uri(request: Request) -> str:
+    """Constrói redirect_uri correto mesmo atrás de proxy HTTPS (Railway/ngrok)."""
+    env_url = os.getenv("SHOPIFY_CALLBACK_URL", "")
+    if env_url:
+        return env_url
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.url.netloc)
+    return f"{scheme}://{host}/shopify/callback"
+
 @app.get("/shopify/auth")
 def shopify_auth(request: Request):
     from shopify_oauth import gerar_url_auth
     from fastapi.responses import RedirectResponse
-    base_url = str(request.base_url).rstrip("/")
-    redirect_uri = base_url + "/shopify/callback"
+    redirect_uri = _shopify_redirect_uri(request)
     url = gerar_url_auth(redirect_uri)
     return RedirectResponse(url)
 
@@ -1381,8 +1389,7 @@ def shopify_auth(request: Request):
 def shopify_callback(code: str = "", state: str = "", request: Request = None):
     from shopify_oauth import processar_callback
     from fastapi.responses import HTMLResponse
-    base_url = str(request.base_url).rstrip("/")
-    redirect_uri = base_url + "/shopify/callback"
+    redirect_uri = _shopify_redirect_uri(request)
     resultado = processar_callback(code, state, redirect_uri)
     if resultado.get("ok"):
         return HTMLResponse("<h2>✅ Shopify conectado! Token salvo com sucesso.</h2><p><a href='/integracoes'>Voltar para Integrações</a></p>")
