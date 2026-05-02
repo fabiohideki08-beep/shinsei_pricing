@@ -38,10 +38,10 @@ if shopify_token:
 elif not cfg_path.exists():
     pr("AVISO: SHOPIFY_ACCESS_TOKEN não definido — shopify_config.json não criado")
 
-# ── bling_token.json (se tokens fornecidos via env) ───────────────────────────
+# ── bling_tokens.json (se tokens fornecidos via env) ─────────────────────────
 bling_access  = os.getenv("BLING_ACCESS_TOKEN", "")
 bling_refresh = os.getenv("BLING_REFRESH_TOKEN", "")
-bling_path    = Path(__file__).parent / "bling_token.json"
+bling_path    = DATA_DIR / "bling_tokens.json"   # data/bling_tokens.json
 
 if bling_access and bling_refresh:
     bling_cfg = {
@@ -51,9 +51,9 @@ if bling_access and bling_refresh:
         "salvo_em":      datetime.now(timezone.utc).isoformat(),
     }
     bling_path.write_text(json.dumps(bling_cfg, indent=2, ensure_ascii=False), encoding="utf-8")
-    pr("bling_token.json criado")
+    pr("bling_tokens.json criado")
 elif not bling_path.exists():
-    pr("INFO: BLING_ACCESS_TOKEN não definido — bling_token.json não criado (OAuth necessário)")
+    pr("INFO: BLING_ACCESS_TOKEN não definido — bling_tokens.json não criado (OAuth necessário)")
 
 # ── Melhor Envio token (se fornecido diretamente via env) ────────────────────
 me_token = os.getenv("MELHOR_ENVIO_TOKEN", "")
