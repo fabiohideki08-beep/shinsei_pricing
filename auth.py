@@ -53,7 +53,6 @@ PUBLIC_PATHS = {
     "/bling/auth",
     "/bling/callback",
     "/bling/status",
-    "/bling/export-tokens",
     "/ml/login",
     "/ml/callback",
     "/mercado-livre",

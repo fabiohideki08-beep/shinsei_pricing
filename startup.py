@@ -38,20 +38,29 @@ if shopify_token:
 elif not cfg_path.exists():
     pr("AVISO: SHOPIFY_ACCESS_TOKEN não definido — shopify_config.json não criado")
 
-# ── bling_tokens.json (se tokens fornecidos via env) ─────────────────────────
+# ── bling_tokens.json (criptografado, formato esperado pelo BlingClient) ──────
+import hashlib, base64
+
+def _bling_xor(data: bytes, key: bytes) -> bytes:
+    return bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
+
 bling_access  = os.getenv("BLING_ACCESS_TOKEN", "")
 bling_refresh = os.getenv("BLING_REFRESH_TOKEN", "")
-bling_path    = DATA_DIR / "bling_tokens.json"   # data/bling_tokens.json
+bling_cid     = os.getenv("BLING_CLIENT_ID", "")
+bling_csec    = os.getenv("BLING_CLIENT_SECRET", "")
+bling_path    = DATA_DIR / "bling_tokens.json"
 
 if bling_access and bling_refresh:
-    bling_cfg = {
+    raw_token = {
         "access_token":  bling_access,
         "refresh_token": bling_refresh,
         "token_type":    "Bearer",
-        "salvo_em":      datetime.now(timezone.utc).isoformat(),
+        "expires_in":    21600,
     }
-    bling_path.write_text(json.dumps(bling_cfg, indent=2, ensure_ascii=False), encoding="utf-8")
-    pr("bling_tokens.json criado")
+    key = hashlib.sha256((bling_csec + (bling_cid or "token-key")).encode()).digest()
+    enc = base64.b64encode(_bling_xor(json.dumps(raw_token).encode(), key)).decode()
+    bling_path.write_text(json.dumps({"encrypted": enc}, ensure_ascii=False), encoding="utf-8")
+    pr("bling_tokens.json criado (criptografado)")
 elif not bling_path.exists():
     pr("INFO: BLING_ACCESS_TOKEN não definido — bling_tokens.json não criado (OAuth necessário)")
 

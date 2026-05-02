@@ -426,20 +426,6 @@ def bling_callback(code: str | None = Query(None), state: str | None = Query(Non
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-@app.get("/bling/export-tokens")
-def bling_export_tokens():
-    """Endpoint temporário de setup — exporta tokens para copiar para o Railway."""
-    try:
-        client = BlingClient()
-        t = client.tokens
-        return {
-            "access_token":  t.get("access_token", ""),
-            "refresh_token": t.get("refresh_token", ""),
-            "expires_in":    t.get("expires_in", ""),
-        }
-    except Exception as e:
-        return {"erro": str(e)}
-
 @app.post("/bling/debug/sku")
 def bling_debug_sku(payload: DebugSkuPayload):
     if not BlingClient: raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
