@@ -108,6 +108,28 @@ if ml_access_token and ml_refresh_token:
 elif not ml_tokens_path.exists():
     pr("INFO: ML_ACCESS_TOKEN não definido — ml_tokens.json não criado (OAuth necessário)")
 
+# ── Shopee tokens (shopee_tokens.json) ───────────────────────────────────────
+shopee_access_token  = os.getenv("SHOPEE_ACCESS_TOKEN", "")
+shopee_refresh_token = os.getenv("SHOPEE_REFRESH_TOKEN", "")
+shopee_shop_id       = os.getenv("SHOPEE_SHOP_ID", "")
+shopee_partner_id    = os.getenv("SHOPEE_PARTNER_ID", "")
+shopee_tokens_path   = DATA_DIR / "shopee_tokens.json"
+
+if shopee_access_token and shopee_refresh_token and shopee_shop_id:
+    import time as _time2
+    shopee_tok = {
+        "access_token":  shopee_access_token,
+        "refresh_token": shopee_refresh_token,
+        "expires_at":    _time2.time() + 14400,  # será renovado automaticamente
+        "shop_id":       int(shopee_shop_id),
+        "partner_id":    int(shopee_partner_id) if shopee_partner_id else 0,
+        "obtido_em":     datetime.now(timezone.utc).isoformat(),
+    }
+    shopee_tokens_path.write_text(json.dumps(shopee_tok, indent=2, ensure_ascii=False), encoding="utf-8")
+    pr(f"shopee_tokens.json criado (shop_id={shopee_shop_id})")
+elif not shopee_tokens_path.exists():
+    pr("INFO: SHOPEE_ACCESS_TOKEN não definido — shopee_tokens.json não criado (OAuth necessário)")
+
 # ── Cria diretórios necessários ───────────────────────────────────────────────
 for d in ["logs", "pages"]:
     Path(__file__).parent.joinpath(d).mkdir(exist_ok=True)
