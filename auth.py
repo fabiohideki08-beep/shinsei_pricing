@@ -109,8 +109,9 @@ PUBLIC_PREFIXES = (
     "/static/",
     "/pages/",
     "/frete/",       # Shopify Carrier Service + widget de frete (sem API key)
-    "/amazon/auth",  # Amazon SP-API OAuth (sem API key)
+    "/amazon/auth",   # Amazon SP-API OAuth (sem API key)
     "/amazon/callback",
+    "/shopee/",       # Shopee OAuth e endpoints (sem API key)
 )
 
 
