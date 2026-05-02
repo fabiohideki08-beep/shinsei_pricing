@@ -983,6 +983,20 @@ def conferencia_estoque_page():
         return HTMLResponse(html_file.read_text(encoding="utf-8"))
     raise HTTPException(status_code=404, detail="conferencia_estoque.html não encontrado.")
 
+@app.get("/amazon", response_class=HTMLResponse)
+def amazon_page():
+    html_file = PAGES_DIR / "amazon.html"
+    if html_file.exists():
+        return HTMLResponse(html_file.read_text(encoding="utf-8"))
+    raise HTTPException(status_code=404, detail="amazon.html não encontrado.")
+
+@app.get("/shopify", response_class=HTMLResponse)
+def shopify_page():
+    html_file = PAGES_DIR / "shopify.html"
+    if html_file.exists():
+        return HTMLResponse(html_file.read_text(encoding="utf-8"))
+    raise HTTPException(status_code=404, detail="shopify.html não encontrado.")
+
 @app.get("/estoque/fila")
 def estoque_fila_lista(status: str = ""):
     from estoque_conferencia import carregar_fila_estoque, stats_fila_estoque

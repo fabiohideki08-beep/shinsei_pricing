@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Amazon — Shinsei Pricing</title>
+  <style>
+    :root{--bg:#0b1020;--card:#121a31;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#ff9900;--ok:#16a34a;--danger:#ef4444}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text);padding:24px}
+    .wrap{max-width:960px;margin:0 auto}
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 18px}
+    .brand h1{margin:0;font-size:22px;display:flex;align-items:center;gap:10px}
+    .brand p{margin:4px 0 0;color:var(--muted);font-size:13px}
+    .top-actions{display:flex;gap:10px}
+    .btn{border:none;background:var(--accent);color:#000;padding:10px 16px;border-radius:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-size:13px}
+    .btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+    .btn.success{background:#166534;color:#fff}
+    .btn.danger{background:#7f1d1d;color:#fff}
+    .btn.sm{padding:7px 12px;font-size:12px;border-radius:9px}
+    .card{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:20px;padding:22px;margin-bottom:18px}
+    .card h2{margin:0 0 16px;font-size:16px;font-weight:700}
+    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+    .kpi{background:#0d1630;border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center}
+    .kpi-val{font-size:24px;font-weight:700}
+    .kpi-lbl{font-size:11px;color:var(--muted)}
+    .notice{padding:12px 14px;border-radius:12px;margin-bottom:14px;font-size:13px;display:none}
+    .notice.ok{border:1px solid #166534;background:rgba(22,163,74,.1);color:#bbf7d0;display:block}
+    .notice.err{border:1px solid #991b1b;background:rgba(239,68,68,.1);color:#fca5a5;display:block}
+    .section-title{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.06em;margin-bottom:12px;text-transform:uppercase}
+    .status-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;font-size:12px;font-weight:700}
+    .connected{background:rgba(22,163,74,.15);color:#22c55e;border:1px solid rgba(22,163,74,.3)}
+    .disconnected{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
+    .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+    .dot.green{background:#22c55e} .dot.red{background:#ef4444}
+    .info-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+    .info-row:last-child{border-bottom:none}
+    .info-label{color:var(--muted)} .info-value{font-weight:600}
+    .badge-amz{background:linear-gradient(135deg,#ff9900,#e47911);color:#111;padding:3px 10px;border-radius:8px;font-size:12px;font-weight:700}
+    code{background:#0d1630;padding:3px 7px;border-radius:5px;font-size:12px;color:#9fb0d9}
+    @media(max-width:600px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1><span class="badge-amz">AMAZON</span> Conferência de Estoque</h1>
+      <p>Comparação de estoque FBA vs Bling — detecta e corrige divergências</p>
+    </div>
+    <div class="top-actions">
+      <a class="btn secondary" href="/integracoes">← Integrações</a>
+      <a class="btn secondary" href="/">Início</a>
+    </div>
+  </div>
+
+  <!-- STATUS -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="margin:0">Status da conexão Amazon</h2>
+      <div id="status-badge"><span class="status-badge" style="background:rgba(150,150,150,.15);color:#9fb0d9;border:1px solid rgba(150,150,150,.3)"><span class="dot" style="background:#9fb0d9"></span>Verificando...</span></div>
+    </div>
+    <div class="info-row"><span class="info-label">Seller ID</span><span class="info-value" id="info-seller">—</span></div>
+    <div class="info-row"><span class="info-label">Marketplace</span><span class="info-value">Amazon.com.br (A2Q3Y263D00KWC)</span></div>
+    <div class="info-row"><span class="info-label">Autenticação</span><span class="info-value" id="info-auth">—</span></div>
+    <hr style="border:none;border-top:1px solid var(--line);margin:12px 0"/>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <a class="btn" href="/amazon/auth" target="_blank">🔐 Autorizar Amazon SP-API</a>
+      <button class="btn secondary sm" onclick="verificarStatus()">↻ Verificar status</button>
+    </div>
+  </div>
+
+  <div id="notice" class="notice"></div>
+
+  <!-- CONFERÊNCIA FBA -->
+  <div class="card">
+    <h2>📦 Conferência de Estoque FBA</h2>
+    <p style="font-size:13px;color:var(--muted);margin-top:0">
+      Compara o estoque FBA de cada produto Amazon com o estoque do Bling (pelo <code>sellerSKU</code>).
+      Divergências ficam na fila abaixo para revisão.
+    </p>
+
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-val" id="kpi-pendente">—</div><div class="kpi-lbl">Pendentes</div></div>
+      <div class="kpi"><div class="kpi-val" style="color:#22c55e" id="kpi-corrigido">—</div><div class="kpi-lbl">Corrigidos</div></div>
+      <div class="kpi"><div class="kpi-val" style="color:#9fb0d9" id="kpi-ignorado">—</div><div class="kpi-lbl">Ignorados</div></div>
+      <div class="kpi"><div class="kpi-val" id="kpi-total">—</div><div class="kpi-lbl">Total</div></div>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+      <button class="btn" onclick="rodarConferencia('estoque')" id="btn-conf-est">📊 Conferir estoque FBA</button>
+      <button class="btn secondary sm" onclick="rodarConferencia('preco')" id="btn-conf-preco">💰 Conferir preços</button>
+      <button class="btn secondary sm" onclick="carregarFila()">↻ Atualizar</button>
+      <button class="btn secondary sm" onclick="limparResolvidos()">🗑️ Limpar resolvidos</button>
+    </div>
+
+    <div class="section-title">Divergências pendentes</div>
+    <div id="fila-container" style="font-size:13px;color:var(--muted)">Carregando...</div>
+  </div>
+
+  <!-- COMO FUNCIONA -->
+  <div class="card">
+    <h2>Como funciona</h2>
+    <div style="font-size:13px;color:var(--muted);line-height:1.8">
+      <p><strong style="color:var(--text)">1. Autenticação SP-API</strong><br>
+        Clique em "Autorizar Amazon SP-API" para iniciar o OAuth. O sistema salva os tokens automaticamente.</p>
+      <p><strong style="color:var(--text)">2. Conferência de estoque FBA</strong><br>
+        Busca todos os SKUs do inventário FBA via <code>getInventorySummaries</code> e compara com o <code>saldoVirtualTotal</code> do Bling. Produtos com divergência entram na fila.</p>
+      <p><strong style="color:var(--text)">3. Mapeamento por SKU</strong><br>
+        A Amazon usa o mesmo <code>sellerSKU</code> que o Bling — não é necessário arquivo de mapeamento separado.</p>
+      <p><strong style="color:var(--text)">4. Correção automática</strong><br>
+        O botão "Corrigir" atualiza o estoque FBA da Amazon (via <code>updateListingsItem</code>) com o valor do Bling.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+function mostrarNotice(msg, tipo){
+  const el = document.getElementById('notice');
+  el.className = 'notice ' + tipo;
+  el.textContent = msg;
+  if(tipo === 'ok') setTimeout(() => el.className = 'notice', 6000);
+}
+
+async function verificarStatus(){
+  try {
+    const res = await fetch('/amazon/status');
+    const data = await res.json();
+    const badge = document.getElementById('status-badge');
+    const ok = data.connected;
+    badge.innerHTML = `<span class="status-badge ${ok ? 'connected' : 'disconnected'}">
+      <span class="dot ${ok ? 'green' : 'red'}"></span>${ok ? 'Conectada' : 'Desconectada'}</span>`;
+    document.getElementById('info-seller').textContent = data.seller_id || '—';
+    document.getElementById('info-auth').textContent = ok ? '✅ Tokens válidos' : '❌ Necessário autorizar';
+  } catch(e){
+    document.getElementById('info-auth').textContent = 'Erro ao verificar';
+  }
+}
+
+async function carregarFila(){
+  try {
+    const res = await fetch('/auditoria/amazon');
+    const data = await res.json();
+    const stats = data.stats || {};
+    document.getElementById('kpi-pendente').textContent = stats.pendente ?? '—';
+    document.getElementById('kpi-corrigido').textContent = stats.corrigido ?? '—';
+    document.getElementById('kpi-ignorado').textContent = stats.ignorado ?? '—';
+    document.getElementById('kpi-total').textContent = stats.total ?? '—';
+
+    const itens = (data.itens || []).filter(i => i.status === 'pendente' || i.status === 'incompleto');
+    const el = document.getElementById('fila-container');
+    if(!itens.length){ el.innerHTML = '<span>Nenhuma divergência pendente.</span>'; return; }
+
+    el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="border-bottom:1px solid var(--line)">
+        <th style="padding:6px 8px;text-align:left;color:var(--muted)">SKU</th>
+        <th style="padding:6px 8px;text-align:left;color:var(--muted)">Produto</th>
+        <th style="padding:6px 8px;text-align:center;color:var(--muted)">Tipo</th>
+        <th style="padding:6px 8px;text-align:center;color:var(--muted)">Bling</th>
+        <th style="padding:6px 8px;text-align:center;color:var(--muted)">Amazon</th>
+        <th style="padding:6px 8px;text-align:center;color:var(--muted)">Dif.</th>
+        <th style="padding:6px 8px"></th>
+      </tr></thead><tbody>
+      ${itens.map(i => `
+        <tr style="border-bottom:1px solid var(--line)">
+          <td style="padding:8px;font-family:monospace">${i.sku || i.asin || i.id}</td>
+          <td style="padding:8px">${i.titulo || i.produto_nome || '—'}</td>
+          <td style="padding:8px;text-align:center"><span style="font-size:11px;background:#1e3a5f;padding:2px 8px;border-radius:6px">${i.tipo || 'estoque'}</span></td>
+          <td style="padding:8px;text-align:center;font-weight:700">${i.estoque_bling ?? i.preco_bling ?? '—'}</td>
+          <td style="padding:8px;text-align:center;font-weight:700;color:#f59e0b">${i.estoque_amazon ?? i.preco_amazon ?? '—'}</td>
+          <td style="padding:8px;text-align:center;color:#f59e0b;font-weight:700">${i.diferenca !== undefined ? ((i.diferenca > 0 ? '+' : '') + i.diferenca) : '—'}</td>
+          <td style="padding:8px;text-align:right;display:flex;gap:6px;justify-content:flex-end">
+            <button class="btn sm success" onclick="corrigirItem('${i.id}')">✓</button>
+            <button class="btn sm secondary" onclick="ignorarItem('${i.id}')">—</button>
+          </td>
+        </tr>`).join('')}
+      </tbody></table>`;
+  } catch(e){ document.getElementById('fila-container').textContent = 'Erro ao carregar fila.'; }
+}
+
+async function rodarConferencia(tipo){
+  const id = tipo === 'preco' ? 'btn-conf-preco' : 'btn-conf-est';
+  const btn = document.getElementById(id);
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = '⏳ Conferindo...';
+  mostrarNotice('Rodando conferência Amazon vs Bling. Pode levar alguns minutos...', 'ok');
+  try {
+    const res = await fetch(`/auditoria/amazon/conferir?tipo=${tipo}`, {method:'POST'});
+    const data = await res.json();
+    if(data.ok){
+      mostrarNotice(`✅ ${data.verificados || 0} verificados, ${data.divergencias_estoque || data.divergencias || 0} divergências.`, 'ok');
+      carregarFila();
+    } else {
+      mostrarNotice(data.detail || data.erro || 'Erro na conferência.', 'err');
+    }
+  } catch(e){ mostrarNotice('Erro de conexão.', 'err'); }
+  finally { btn.disabled = false; btn.textContent = orig; }
+}
+
+async function corrigirItem(id){
+  try {
+    const res = await fetch(`/auditoria/amazon/corrigir/${id}`, {method:'POST'});
+    const data = await res.json();
+    if(data.ok){ mostrarNotice('✅ Corrigido!', 'ok'); carregarFila(); }
+    else { mostrarNotice(data.detail || data.erro || 'Falha.', 'err'); }
+  } catch(e){ mostrarNotice('Erro de conexão.', 'err'); }
+}
+
+async function ignorarItem(id){
+  try {
+    await fetch(`/auditoria/amazon/ignorar/${id}`, {method:'POST'});
+    carregarFila();
+  } catch(e){}
+}
+
+async function limparResolvidos(){
+  if(!confirm('Limpar itens corrigidos/ignorados?')) return;
+  try { await fetch('/auditoria/amazon/limpar-resolvidos', {method:'POST'}); carregarFila(); } catch(e){}
+}
+
+verificarStatus();
+carregarFila();
+</script>
+</body>
+</html>

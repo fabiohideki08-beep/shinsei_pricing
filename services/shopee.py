@@ -298,3 +298,78 @@ class ShopeeService:
         except Exception as exc:
             logger.error("Shopee listar_produtos erro: %s", exc)
             return {"error": str(exc)}
+
+    def obter_info_items(self, item_ids: list) -> dict:
+        """Busca nome/status de itens em lote (máx 50 por chamada)."""
+        if not item_ids:
+            return {"response": {"item_list": []}}
+        path = "/api/v2/product/get_item_base_info"
+        params = self._params_auth(path)
+        params["item_id_list"] = ",".join(str(i) for i in item_ids[:50])
+        params["need_tax_info"] = "false"
+        params["need_complaint_policy"] = "false"
+        try:
+            with httpx.Client(timeout=30) as client:
+                resp = client.get(f"{API_BASE}/product/get_item_base_info", params=params)
+                resp.raise_for_status()
+                return resp.json()
+        except Exception as exc:
+            logger.error("Shopee get_item_base_info erro: %s", exc)
+            return {"error": str(exc)}
+
+    def obter_estoque_item(self, item_id: int) -> int:
+        """Retorna estoque total do item somando todos os modelos. -1 em caso de erro."""
+        path = "/api/v2/product/get_model_list"
+        params = self._params_auth(path)
+        params["item_id"] = int(item_id)
+        try:
+            with httpx.Client(timeout=20) as client:
+                resp = client.get(f"{API_BASE}/product/get_model_list", params=params)
+                resp.raise_for_status()
+                data = resp.json()
+            if data.get("error"):
+                logger.warning("Shopee get_model_list error item=%s: %s", item_id, data.get("message"))
+                return -1
+            models = (data.get("response") or {}).get("model") or []
+            total = 0
+            for model in models:
+                si = model.get("stock_info") or {}
+                # Tenta seller_stock primeiro (estoque real do vendedor)
+                seller_stocks = si.get("seller_stock") or []
+                if seller_stocks:
+                    total += sum(int(s.get("stock") or 0) for s in seller_stocks)
+                else:
+                    # Fallback: stock_list current_stock
+                    for s in (si.get("stock_list") or []):
+                        if s.get("stock_type") == 1:  # tipo 1 = seller stock
+                            total += int(s.get("current_stock") or 0)
+            return total
+        except Exception as exc:
+            logger.error("Shopee get_model_list erro item=%s: %s", item_id, exc)
+            return -1
+
+    def atualizar_estoque(self, item_id: int, quantidade: int, model_id: int = 0) -> dict:
+        """Atualiza estoque de um item/modelo na Shopee."""
+        path = "/api/v2/product/update_stock"
+        params = self._params_auth(path)
+        body = {
+            "item_id": int(item_id),
+            "stock_list": [{
+                "model_id": int(model_id),
+                "seller_stock": [{"location_id": "", "stock": int(quantidade)}],
+            }],
+        }
+        try:
+            with httpx.Client(timeout=20) as client:
+                resp = client.post(f"{API_BASE}/product/update_stock", params=params, json=body)
+                resp.raise_for_status()
+                data = resp.json()
+            if data.get("error"):
+                msg = data.get("message", str(data["error"]))
+                logger.warning("Shopee update_stock error item=%s: %s", item_id, msg)
+                return {"success": False, "error": msg, "data": data}
+            logger.info("Shopee estoque atualizado: item_id=%s qty=%d", item_id, quantidade)
+            return {"success": True, "data": data}
+        except Exception as exc:
+            logger.error("Shopee update_stock erro: %s", exc)
+            return {"success": False, "error": str(exc)}

@@ -5,8 +5,10 @@ Endpoints para OAuth, status e atualização de preços na Shopee.
 """
 from __future__ import annotations
 
+import difflib
 import json
 import logging
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
@@ -261,6 +263,255 @@ def shopee_mapeamento_remover(sku: str):
     del m[sku]
     _save_mapeamento(m)
     return {"success": True, "removido": sku, "total": len(m)}
+
+
+# ─────────────────────────────────────────────
+# Função utilitária para uso interno (fila_aprovar)
+# ─────────────────────────────────────────────
+
+# ─────────────────────────────────────────────
+# Produtos da Shopee (para auto-mapeamento)
+# ─────────────────────────────────────────────
+
+@router.get("/shopee/produtos")
+def shopee_produtos():
+    """
+    Retorna todos os produtos ativos da Shopee com item_id e nome.
+    Faz paginação automática e busca nomes via get_item_base_info.
+    """
+    try:
+        svc = ShopeeService()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    todos: list[dict] = []
+    offset = 0
+    max_iter = 20  # segurança: máx 20 × 50 = 1000 itens
+
+    for _ in range(max_iter):
+        data = svc.listar_produtos(offset=offset, page_size=50)
+        if data.get("error"):
+            break
+        resp = data.get("response") or {}
+        items = resp.get("item") or []
+        if not items:
+            break
+
+        # Busca nomes em lote
+        ids = [i["item_id"] for i in items]
+        info_data = svc.obter_info_items(ids)
+        info_map = {
+            i["item_id"]: i
+            for i in ((info_data.get("response") or {}).get("item_list") or [])
+        }
+        time.sleep(0.3)
+
+        for item in items:
+            iid = item["item_id"]
+            info = info_map.get(iid, {})
+            todos.append({
+                "item_id": str(iid),
+                "nome": info.get("item_name") or f"Item {iid}",
+                "status": item.get("item_status", "NORMAL"),
+            })
+
+        if not resp.get("has_next_item"):
+            break
+        offset = resp.get("next_offset", offset + 50)
+        time.sleep(0.3)
+
+    return {"success": True, "total": len(todos), "produtos": todos}
+
+
+# ─────────────────────────────────────────────
+# Auto-mapeamento SKU ↔ item_id
+# ─────────────────────────────────────────────
+
+@router.post("/shopee/mapeamento/auto")
+def shopee_mapeamento_auto():
+    """
+    Puxa todos os produtos da Shopee e tenta associar automaticamente
+    com SKUs do Bling usando similaridade de nomes.
+
+    Retorna sugestões para revisão — não salva automaticamente.
+    """
+    try:
+        svc = ShopeeService()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    # 1. Coleta todos os produtos da Shopee
+    shopee_items: list[dict] = []
+    offset = 0
+    for _ in range(20):
+        data = svc.listar_produtos(offset=offset, page_size=50)
+        if data.get("error"):
+            break
+        resp = data.get("response") or {}
+        items = resp.get("item") or []
+        if not items:
+            break
+        ids = [i["item_id"] for i in items]
+        info_data = svc.obter_info_items(ids)
+        info_map = {
+            i["item_id"]: i
+            for i in ((info_data.get("response") or {}).get("item_list") or [])
+        }
+        time.sleep(0.3)
+        for item in items:
+            iid = item["item_id"]
+            info = info_map.get(iid, {})
+            shopee_items.append({
+                "item_id": str(iid),
+                "nome": (info.get("item_name") or f"Item {iid}").lower().strip(),
+                "nome_original": info.get("item_name") or f"Item {iid}",
+            })
+        if not resp.get("has_next_item"):
+            break
+        offset = resp.get("next_offset", offset + 50)
+        time.sleep(0.3)
+
+    if not shopee_items:
+        raise HTTPException(status_code=400, detail="Nenhum produto encontrado na Shopee.")
+
+    # 2. Coleta produtos do Bling
+    bling_produtos: list[dict] = []
+    try:
+        from bling_client import BlingClient
+        bc = BlingClient()
+        pagina = 1
+        while pagina <= 30:
+            r = bc._get(f"produtos?situacao=A&pagina={pagina}&limite=100")
+            prods = (r.get("data") or [])
+            if not prods:
+                break
+            for p in prods:
+                cod = (p.get("codigo") or "").strip()
+                nome = (p.get("nome") or "").lower().strip()
+                if cod and nome:
+                    bling_produtos.append({"sku": cod, "nome": nome, "nome_original": p.get("nome", "")})
+            pagina += 1
+            time.sleep(0.2)
+    except Exception as exc:
+        logger.warning("Auto-mapeamento: erro ao buscar Bling: %s", exc)
+
+    # 3. Mapeamento atual para excluir já mapeados
+    mapeamento_atual = _load_mapeamento()
+    itens_ja_mapeados = set(mapeamento_atual.values())
+
+    # 4. Matching por similaridade de nomes
+    sugestoes: list[dict] = []
+    for si in shopee_items:
+        if si["item_id"] in itens_ja_mapeados:
+            continue  # já mapeado
+
+        melhor_sku = ""
+        melhor_nome_bling = ""
+        melhor_score = 0.0
+
+        for bp in bling_produtos:
+            score = difflib.SequenceMatcher(
+                None, si["nome"], bp["nome"]
+            ).ratio()
+            if score > melhor_score:
+                melhor_score = score
+                melhor_sku = bp["sku"]
+                melhor_nome_bling = bp["nome_original"]
+
+        sugestoes.append({
+            "item_id": si["item_id"],
+            "nome_shopee": si["nome_original"],
+            "sku_sugerido": melhor_sku if melhor_score >= 0.65 else "",
+            "nome_bling": melhor_nome_bling if melhor_score >= 0.65 else "",
+            "score": round(melhor_score, 3),
+            "confianca": (
+                "alta" if melhor_score >= 0.85
+                else "media" if melhor_score >= 0.65
+                else "baixa"
+            ),
+        })
+
+    sugestoes.sort(key=lambda x: x["score"], reverse=True)
+    return {
+        "success": True,
+        "total_shopee": len(shopee_items),
+        "total_bling": len(bling_produtos),
+        "ja_mapeados": len(itens_ja_mapeados),
+        "sugestoes": sugestoes,
+    }
+
+
+@router.post("/shopee/mapeamento/confirmar")
+async def shopee_mapeamento_confirmar(request: Request):
+    """Salva em lote os mapeamentos confirmados pelo usuário."""
+    body = await request.json()
+    confirmados = body.get("confirmados") or []
+    if not confirmados:
+        raise HTTPException(status_code=400, detail="Nenhum mapeamento enviado.")
+
+    m = _load_mapeamento()
+    salvos = 0
+    for entry in confirmados:
+        sku = str(entry.get("sku", "")).strip()
+        item_id = str(entry.get("item_id", "")).strip()
+        if sku and item_id:
+            m[sku] = item_id
+            salvos += 1
+
+    _save_mapeamento(m)
+    return {"success": True, "salvos": salvos, "total": len(m)}
+
+
+# ─────────────────────────────────────────────
+# Conferência de estoque Shopee ↔ Bling
+# ─────────────────────────────────────────────
+
+@router.get("/shopee/conferencia/fila")
+def shopee_conf_fila(status: str = "", tipo: str = ""):
+    from shopee_conferencia import carregar_fila, stats_fila
+    itens = carregar_fila()
+    if status:
+        itens = [i for i in itens if i.get("status") == status]
+    if tipo:
+        itens = [i for i in itens if i.get("tipo") == tipo]
+    return {"itens": itens, "stats": stats_fila()}
+
+
+@router.post("/shopee/conferencia/conferir")
+def shopee_conf_conferir():
+    from shopee_conferencia import conferir_shopee
+    try:
+        from bling_client import BlingClient
+        bc = BlingClient()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Bling não disponível: {exc}")
+    resultado = conferir_shopee(bc)
+    if not resultado.get("ok"):
+        raise HTTPException(status_code=400, detail=resultado.get("erro", "Erro ao conferir."))
+    return resultado
+
+
+@router.post("/shopee/conferencia/corrigir/{item_id}")
+def shopee_conf_corrigir(item_id: str):
+    from shopee_conferencia import corrigir_shopee
+    resultado = corrigir_shopee(item_id)
+    if not resultado.get("ok"):
+        raise HTTPException(status_code=400, detail=resultado.get("erro", "Erro ao corrigir."))
+    return resultado
+
+
+@router.post("/shopee/conferencia/ignorar/{item_id}")
+def shopee_conf_ignorar(item_id: str):
+    from shopee_conferencia import ignorar_shopee
+    return ignorar_shopee(item_id)
+
+
+@router.post("/shopee/conferencia/limpar")
+def shopee_conf_limpar():
+    from shopee_conferencia import carregar_fila, salvar_fila, stats_fila
+    itens = [i for i in carregar_fila() if i.get("status") == "pendente"]
+    salvar_fila(itens)
+    return {"ok": True, "stats": stats_fila()}
 
 
 # ─────────────────────────────────────────────

@@ -125,6 +125,33 @@
 
     <div id="notice-map" class="notice"></div>
 
+    <!-- Auto-mapeamento -->
+    <div style="background:rgba(238,77,45,.07);border:1px solid rgba(238,77,45,.25);border-radius:12px;padding:14px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:6px">🤖 Auto-mapeamento inteligente</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+        Busca todos os produtos da Shopee e tenta associar automaticamente com os SKUs do Bling por similaridade de nome.
+        Revise as sugestões antes de confirmar.
+      </div>
+      <button class="btn sm" onclick="rodarAutoMapeamento()" id="btn-auto-map">🔍 Buscar sugestões de mapeamento</button>
+    </div>
+
+    <!-- Sugestões de auto-mapeamento -->
+    <div id="sugestoes-container" style="display:none;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="section-title" style="margin:0">Sugestões de mapeamento</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn sm success" onclick="confirmarSelecionados()">✅ Confirmar selecionados</button>
+          <button class="btn sm secondary" onclick="selecionarAlta()">Selecionar confiança alta</button>
+          <button class="btn sm secondary" onclick="limparSugestoes()">✕ Fechar</button>
+        </div>
+      </div>
+      <div id="sugestoes-lista"></div>
+    </div>
+
+    <hr class="divider"/>
+
+    <!-- Mapeamento manual -->
+    <div class="section-title">Adicionar mapeamento manual</div>
     <div class="row-2" style="margin-bottom:12px">
       <div class="field" style="margin:0">
         <label>SKU (Bling)</label>
@@ -137,8 +164,48 @@
     </div>
     <button class="btn sm" onclick="adicionarMapeamento()" style="margin-bottom:18px">➕ Adicionar mapeamento</button>
 
-    <div class="section-title">Mapeamentos cadastrados</div>
+    <div class="section-title">Mapeamentos cadastrados (<span id="total-mapeamentos">0</span>)</div>
     <div id="lista-mapeamentos" style="font-size:13px;color:var(--muted)">Carregando...</div>
+  </div>
+
+  <!-- CONFERÊNCIA DE ESTOQUE -->
+  <div class="card">
+    <h2>📦 Conferência de Estoque — Shopee vs Bling</h2>
+    <p style="font-size:13px;color:var(--muted);margin-top:0">
+      Compara o estoque de cada produto mapeado entre o Bling e a Shopee.
+      Divergências são listadas abaixo para correção.
+    </p>
+
+    <div id="notice-conf" class="notice"></div>
+
+    <!-- KPIs -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px" id="conf-kpis">
+      <div style="background:#0d1630;border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:22px;font-weight:700" id="kpi-pendente">—</div>
+        <div style="font-size:11px;color:var(--muted)">Pendentes</div>
+      </div>
+      <div style="background:#0d1630;border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:#22c55e" id="kpi-corrigido">—</div>
+        <div style="font-size:11px;color:var(--muted)">Corrigidos</div>
+      </div>
+      <div style="background:#0d1630;border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:#9fb0d9" id="kpi-ignorado">—</div>
+        <div style="font-size:11px;color:var(--muted)">Ignorados</div>
+      </div>
+      <div style="background:#0d1630;border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:22px;font-weight:700" id="kpi-total">—</div>
+        <div style="font-size:11px;color:var(--muted)">Total</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+      <button class="btn" onclick="rodarConferencia()" id="btn-conferir">🔄 Rodar conferência</button>
+      <button class="btn secondary sm" onclick="carregarFila()">↻ Atualizar fila</button>
+      <button class="btn secondary sm" onclick="limparResolvidos()">🗑️ Limpar resolvidos</button>
+    </div>
+
+    <div class="section-title">Divergências encontradas</div>
+    <div id="conf-fila" style="font-size:13px;color:var(--muted)">Carregando...</div>
   </div>
 
   <!-- COMO FUNCIONA -->
@@ -266,6 +333,8 @@ async function carregarMapeamentos(){
     const res = await fetch('/shopee/mapeamento');
     const data = await res.json();
     const el = document.getElementById('lista-mapeamentos');
+    const tot = document.getElementById('total-mapeamentos');
+    if(tot) tot.textContent = data.total || 0;
     if(!data.mapeamentos || data.mapeamentos.length === 0){
       el.textContent = 'Nenhum mapeamento cadastrado ainda.';
       return;
@@ -323,6 +392,222 @@ async function removerMapeamento(sku){
     else { alert(data.detail || 'Erro ao remover.'); }
   } catch(e){ alert('Erro de conexão.'); }
 }
+
+// ── Auto-mapeamento ──────────────────────────────────────────────────────────
+
+let _sugestoes = [];
+
+async function rodarAutoMapeamento(){
+  const btn = document.getElementById('btn-auto-map');
+  btn.disabled = true;
+  btn.textContent = '⏳ Buscando produtos...';
+  mostrarNotice('Buscando produtos na Shopee e no Bling. Aguarde...', 'ok', 'notice-map');
+  try {
+    const res = await fetch('/shopee/mapeamento/auto', {method:'POST'});
+    const data = await res.json();
+    if(!data.success){
+      mostrarNotice(data.detail || 'Erro ao buscar sugestões.', 'err', 'notice-map');
+      return;
+    }
+    _sugestoes = data.sugestoes || [];
+    mostrarNotice(
+      `Encontrados ${data.total_shopee} produtos na Shopee, ${data.total_bling} no Bling. ${data.ja_mapeados} já mapeados.`,
+      'ok', 'notice-map'
+    );
+    renderizarSugestoes();
+  } catch(e){
+    mostrarNotice('Erro de conexão ao rodar auto-mapeamento.', 'err', 'notice-map');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔍 Buscar sugestões de mapeamento';
+  }
+}
+
+function corBadge(conf){
+  if(conf === 'alta') return '#22c55e';
+  if(conf === 'media') return '#f59e0b';
+  return '#ef4444';
+}
+
+function renderizarSugestoes(){
+  const cont = document.getElementById('sugestoes-container');
+  const lista = document.getElementById('sugestoes-lista');
+  cont.style.display = 'block';
+  if(!_sugestoes.length){ lista.textContent = 'Nenhuma sugestão disponível.'; return; }
+
+  let html = `<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="border-bottom:1px solid var(--line)">
+      <th style="padding:6px 4px;text-align:left;color:var(--muted);font-size:11px;width:30px"><input type="checkbox" id="chk-all" onchange="toggleAll(this.checked)"></th>
+      <th style="padding:6px 8px;text-align:left;color:var(--muted)">Produto Shopee</th>
+      <th style="padding:6px 8px;text-align:left;color:var(--muted)">SKU Bling sugerido</th>
+      <th style="padding:6px 8px;text-align:left;color:var(--muted)">Nome Bling</th>
+      <th style="padding:6px 8px;text-align:center;color:var(--muted)">Conf.</th>
+    </tr></thead><tbody>`;
+
+  _sugestoes.forEach((s, idx) => {
+    const cor = corBadge(s.confianca);
+    html += `<tr style="border-bottom:1px solid var(--line)">
+      <td style="padding:6px 4px"><input type="checkbox" class="chk-sug" data-idx="${idx}" ${s.sku_sugerido && s.confianca !== 'baixa' ? 'checked' : ''}></td>
+      <td style="padding:6px 8px">
+        <div style="font-weight:600">${s.nome_shopee}</div>
+        <div style="color:var(--muted);font-size:11px">item_id: ${s.item_id}</div>
+      </td>
+      <td style="padding:6px 8px">
+        <input type="text" class="sug-sku" data-idx="${idx}" value="${s.sku_sugerido}"
+          style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:4px 8px;border-radius:6px;font-size:12px;width:150px">
+      </td>
+      <td style="padding:6px 8px;color:var(--muted)">${s.nome_bling || '—'}</td>
+      <td style="padding:6px 8px;text-align:center">
+        <span style="color:${cor};font-size:11px;font-weight:700">${s.confianca} (${(s.score*100).toFixed(0)}%)</span>
+      </td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  lista.innerHTML = html;
+}
+
+function toggleAll(checked){
+  document.querySelectorAll('.chk-sug').forEach(c => c.checked = checked);
+}
+
+function selecionarAlta(){
+  document.querySelectorAll('.chk-sug').forEach(c => {
+    const idx = parseInt(c.dataset.idx);
+    c.checked = _sugestoes[idx]?.confianca === 'alta';
+  });
+}
+
+async function confirmarSelecionados(){
+  const confirmados = [];
+  document.querySelectorAll('.chk-sug:checked').forEach(c => {
+    const idx = parseInt(c.dataset.idx);
+    const skuInput = document.querySelector(`.sug-sku[data-idx="${idx}"]`);
+    const sku = (skuInput?.value || '').trim();
+    const item_id = _sugestoes[idx]?.item_id || '';
+    if(sku && item_id) confirmados.push({sku, item_id});
+  });
+  if(!confirmados.length){
+    mostrarNotice('Selecione ao menos um item para confirmar.', 'err', 'notice-map');
+    return;
+  }
+  try {
+    const res = await fetch('/shopee/mapeamento/confirmar', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({confirmados})
+    });
+    const data = await res.json();
+    if(data.success){
+      mostrarNotice(`✅ ${data.salvos} mapeamentos salvos! Total: ${data.total}`, 'ok', 'notice-map');
+      limparSugestoes();
+      carregarMapeamentos();
+    } else {
+      mostrarNotice(data.detail || 'Erro ao salvar.', 'err', 'notice-map');
+    }
+  } catch(e){ mostrarNotice('Erro de conexão.', 'err', 'notice-map'); }
+}
+
+function limparSugestoes(){
+  document.getElementById('sugestoes-container').style.display = 'none';
+  _sugestoes = [];
+}
+
+// ── Conferência de estoque ────────────────────────────────────────────────────
+
+async function carregarFila(){
+  try {
+    const res = await fetch('/shopee/conferencia/fila');
+    const data = await res.json();
+    const stats = data.stats || {};
+    document.getElementById('kpi-pendente').textContent = stats.pendente ?? '—';
+    document.getElementById('kpi-corrigido').textContent = stats.corrigido ?? '—';
+    document.getElementById('kpi-ignorado').textContent = stats.ignorado ?? '—';
+    document.getElementById('kpi-total').textContent = stats.total ?? '—';
+
+    const itens = (data.itens || []).filter(i => i.status === 'pendente');
+    const el = document.getElementById('conf-fila');
+    if(!itens.length){
+      el.innerHTML = '<span style="color:var(--muted)">Nenhuma divergência pendente.</span>';
+      return;
+    }
+    el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="border-bottom:1px solid var(--line)">
+        <th style="padding:6px 8px;text-align:left;color:var(--muted)">SKU</th>
+        <th style="padding:6px 8px;text-align:left;color:var(--muted)">Produto</th>
+        <th style="padding:6px 8px;text-align:center;color:var(--muted)">Bling</th>
+        <th style="padding:6px 8px;text-align:center;color:var(--muted)">Shopee</th>
+        <th style="padding:6px 8px;text-align:center;color:var(--muted)">Dif.</th>
+        <th style="padding:6px 8px"></th>
+      </tr></thead><tbody>
+      ${itens.map(i => `
+        <tr style="border-bottom:1px solid var(--line)">
+          <td style="padding:8px;font-family:monospace">${i.sku}</td>
+          <td style="padding:8px">${i.titulo || '—'}</td>
+          <td style="padding:8px;text-align:center;font-weight:700">${i.estoque_bling ?? '—'}</td>
+          <td style="padding:8px;text-align:center;font-weight:700;color:${(i.diferenca||0)>0?'#f59e0b':'#ef4444'}">${i.estoque_shopee ?? '—'}</td>
+          <td style="padding:8px;text-align:center;color:${(i.diferenca||0)>0?'#f59e0b':'#ef4444'};font-weight:700">${(i.diferenca||0)>0?'+':''}${i.diferenca ?? '—'}</td>
+          <td style="padding:8px;text-align:right;display:flex;gap:6px;justify-content:flex-end">
+            <button class="btn sm success" onclick="corrigirItem('${i.id}')">✓ Corrigir</button>
+            <button class="btn sm secondary" onclick="ignorarItem('${i.id}')">Ignorar</button>
+          </td>
+        </tr>`).join('')}
+      </tbody></table>`;
+  } catch(e){
+    document.getElementById('conf-fila').textContent = 'Erro ao carregar fila.';
+  }
+}
+
+async function rodarConferencia(){
+  const btn = document.getElementById('btn-conferir');
+  btn.disabled = true;
+  btn.textContent = '⏳ Conferindo...';
+  mostrarNotice('Rodando conferência Shopee vs Bling. Pode levar alguns minutos...', 'ok', 'notice-conf');
+  try {
+    const res = await fetch('/shopee/conferencia/conferir', {method:'POST'});
+    const data = await res.json();
+    if(data.ok){
+      mostrarNotice(
+        `✅ Concluído: ${data.verificados} verificados, ${data.divergencias} divergências, ${data.erros} erros.`,
+        'ok', 'notice-conf'
+      );
+      carregarFila();
+    } else {
+      mostrarNotice(data.detail || data.erro || 'Erro na conferência.', 'err', 'notice-conf');
+    }
+  } catch(e){
+    mostrarNotice('Erro de conexão ao rodar conferência.', 'err', 'notice-conf');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 Rodar conferência';
+  }
+}
+
+async function corrigirItem(id){
+  try {
+    const res = await fetch(`/shopee/conferencia/corrigir/${id}`, {method:'POST'});
+    const data = await res.json();
+    if(data.ok){ mostrarNotice('✅ Estoque corrigido na Shopee!', 'ok', 'notice-conf'); carregarFila(); }
+    else { mostrarNotice(data.detail || data.erro || 'Falha ao corrigir.', 'err', 'notice-conf'); }
+  } catch(e){ mostrarNotice('Erro de conexão.', 'err', 'notice-conf'); }
+}
+
+async function ignorarItem(id){
+  try {
+    const res = await fetch(`/shopee/conferencia/ignorar/${id}`, {method:'POST'});
+    const data = await res.json();
+    if(data.ok){ carregarFila(); }
+  } catch(e){}
+}
+
+async function limparResolvidos(){
+  if(!confirm('Limpar itens corrigidos e ignorados?')) return;
+  try {
+    await fetch('/shopee/conferencia/limpar', {method:'POST'});
+    carregarFila();
+  } catch(e){}
+}
+
+carregarFila();
 </script>
 </body>
 </html>

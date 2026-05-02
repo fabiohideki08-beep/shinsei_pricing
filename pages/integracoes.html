@@ -178,6 +178,32 @@
         <button class="btn secondary sm" onclick="renovarShopee()">🔄 Renovar token</button>
       </div>
       <div id="notice-shopee" class="notice" style="margin-top:10px"></div>
+      <hr class="divider"/>
+      <a class="btn secondary sm" href="/shopee">📦 Mapeamento e conferência de estoque →</a>
+    </div>
+
+    <!-- AMAZON -->
+    <div class="card" id="card-amazon">
+      <div class="card-header">
+        <div class="card-icon">📦</div>
+        <div>
+          <div class="card-title">Amazon</div>
+          <div class="card-sub">FBA — estoque e preços via SP-API</div>
+        </div>
+        <div style="margin-left:auto" id="status-amazon">
+          <span class="status-badge unknown"><span class="dot gray"></span>Verificando...</span>
+        </div>
+      </div>
+      <div>
+        <div class="info-row"><span class="info-label">Marketplace</span><span class="info-value">Amazon.com.br</span></div>
+        <div class="info-row"><span class="info-label">Autenticação</span><span class="info-value" id="amazon-auth-text">—</span></div>
+        <div class="info-row"><span class="info-label">Seller ID</span><span class="info-value" id="amazon-seller-id">—</span></div>
+      </div>
+      <hr class="divider"/>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <a class="btn success sm" href="/amazon/auth" target="_blank">🔐 Conectar Amazon</a>
+        <a class="btn secondary sm" href="/amazon">📊 Conferência de estoque →</a>
+      </div>
     </div>
 
     <!-- SHOPIFY -->
@@ -207,6 +233,8 @@
         Carregando...
       </div>
       <button class="btn secondary sm" style="margin-top:8px" onclick="copiarWebhook()">📋 Copiar URL</button>
+      <hr class="divider"/>
+      <a class="btn secondary sm" href="/shopify">📊 Conferência de estoque e preços →</a>
     </div>
 
   </div>
@@ -383,10 +411,25 @@ async function renovarShopee(){
   setTimeout(() => { notice.style.display = 'none'; }, 5000);
 }
 
+async function verificarAmazon(){
+  try{
+    const res = await fetch('/amazon/status');
+    const data = await res.json();
+    const ok = data.connected;
+    setStatus('status-amazon', ok, ok ? 'Conectado' : 'Desconectado');
+    document.getElementById('amazon-auth-text').textContent = ok ? '✅ Tokens válidos' : '❌ Necessário autorizar';
+    document.getElementById('amazon-seller-id').textContent = data.seller_id || '—';
+  }catch(e){
+    setStatus('status-amazon', false, 'Erro');
+    document.getElementById('amazon-auth-text').textContent = 'Erro ao verificar';
+  }
+}
+
 function verificarTodas(){
   verificarBling();
   verificarML();
   verificarMP();
+  verificarAmazon();
   verificarShopee();
   verificarNgrok();
 }
