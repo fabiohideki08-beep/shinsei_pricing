@@ -51,11 +51,13 @@ bling_csec    = os.getenv("BLING_CLIENT_SECRET", "")
 bling_path    = DATA_DIR / "bling_tokens.json"
 
 if bling_access and bling_refresh:
+    import time as _time
     raw_token = {
         "access_token":  bling_access,
         "refresh_token": bling_refresh,
         "token_type":    "Bearer",
         "expires_in":    21600,
+        "expires_at":    _time.time() + 21600,  # BlingClient usa expires_at para checar validade
     }
     key = hashlib.sha256((bling_csec + (bling_cid or "token-key")).encode()).digest()
     enc = base64.b64encode(_bling_xor(json.dumps(raw_token).encode(), key)).decode()
