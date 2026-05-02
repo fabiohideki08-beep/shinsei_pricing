@@ -56,16 +56,9 @@ USER shinsei
 EXPOSE $PORT
 
 # Health check — usa o endpoint /health já existente
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT}/health')" \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD python -c "import urllib.request, os; urllib.request.urlopen('http://localhost:' + os.environ.get('PORT','8000') + '/health')" \
     || exit 1
 
-# Comando de inicialização
-# --workers 2: 2 processos (ajuste conforme CPU disponível)
-# --timeout-keep-alive 30: aguarda 30s antes de fechar conexões idle
-CMD ["python", "-m", "uvicorn", "app:app", \
-     "--host", "0.0.0.0", \
-     "--port", "8000", \
-     "--workers", "2", \
-     "--timeout-keep-alive", "30", \
-     "--log-level", "info"]
+# Comando de inicialização — usa $PORT injetado pelo Railway
+CMD ["sh", "-c", "python startup.py && uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --timeout-keep-alive 30 --log-level info"]
