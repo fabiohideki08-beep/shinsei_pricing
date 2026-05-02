@@ -1875,7 +1875,7 @@ def amazon_auth(request: Request):
     if not app_id:
         return {"ok": False, "erro": "Defina AMAZON_APP_ID no Railway com o ID do app SP-API"}
     state = _sec.token_hex(16)
-    _P("data/amazon_oauth_state.json").write_text(
+    (DATA_DIR / "amazon_oauth_state.json").write_text(
         _json.dumps({"state": state}), encoding="utf-8"
     )
     redirect_uri = os.getenv("AMAZON_CALLBACK_URL",
@@ -1905,7 +1905,7 @@ def amazon_callback(
     import json as _json, requests as _req
     from datetime import datetime, timezone
     try:
-        saved_state_path = _P("data/amazon_oauth_state.json")
+        saved_state_path = DATA_DIR / "amazon_oauth_state.json"
         if saved_state_path.exists():
             saved = _json.loads(saved_state_path.read_text(encoding="utf-8"))
             if saved.get("state") and saved.get("state") != state:
@@ -1937,7 +1937,7 @@ def amazon_callback(
             "selling_partner_id": selling_partner_id,
             "salvo_em":           datetime.now(timezone.utc).isoformat(),
         }
-        _P("data/amazon_tokens.json").write_text(
+        (DATA_DIR / "amazon_tokens.json").write_text(
             _json.dumps(tokens, indent=2, ensure_ascii=False), encoding="utf-8"
         )
         refresh_token = data.get("refresh_token", "")
