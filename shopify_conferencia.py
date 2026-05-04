@@ -53,7 +53,8 @@ def _shopify_headers(token: str) -> dict:
 
 def _shopify_get_token() -> Optional[str]:
     config = _load_json(SHOPIFY_CONFIG_PATH, {})
-    return config.get("access_token") or "SHOPIFY_TOKEN_REMOVED"
+    token = config.get("access_token", "").strip()
+    return token if token else None
 
 def _shopify_listar_produtos(token: str, limit: int = 250, page_info: str = None) -> tuple[list, Optional[str]]:
     """Lista produtos da Shopify com paginaÃ§Ã£o."""

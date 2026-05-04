@@ -50,6 +50,9 @@ PAGES_DIR.mkdir(exist_ok=True)
 app = FastAPI(title="Shinsei Pricing")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
+# ── Flags de controle de background ──────────────────────────────────
+_scheduler_pausado: bool = False
+
 # ── Estado da conferência ML em background ────────────────────────────
 _conf_ml: dict = {
     "rodando": False, "concluido": False, "erro": None,
@@ -68,11 +71,15 @@ def _rodar_conf_ml_bg():
         from ml_estoque_conferencia import conferir_estoques_ml
         from bling_client import BlingClient as _BC
         client = _BC()
-        resultado = conferir_estoques_ml(client, max_paginas=_conf_ml["max_paginas"],
-                                         progresso_callback=_conf_ml_callback)
+        resultado = conferir_estoques_ml(
+            client,
+            max_paginas=_conf_ml["max_paginas"],
+            progresso_cb=_conf_ml_callback,
+        )
         _conf_ml.update({"rodando": False, "concluido": True,
                          "resultado": resultado, "concluido_em": datetime.utcnow().isoformat()})
     except Exception as e:
+        logger.exception("Erro na conferência ML em background: %s", e)
         _conf_ml.update({"rodando": False, "concluido": True, "erro": str(e),
                          "concluido_em": datetime.utcnow().isoformat()})
 from routes.batch import router as batch_router
@@ -1317,8 +1324,7 @@ def integracoes_page():
 @app.get("/ml/status")
 def ml_status_endpoint():
     import json
-    from pathlib import Path as _P
-    tp = _P("data/ml_tokens.json")
+    tp = DATA_DIR / "ml_tokens.json"
     if not tp.exists(): return {"connected": False}
     tokens = json.loads(tp.read_text(encoding="utf-8"))
     at = tokens.get("access_token", "")
@@ -1412,8 +1418,7 @@ def shopify_callback(code: str = "", state: str = "", request: Request = None):
 @app.get("/shopify/status")
 def shopify_status():
     import json
-    from pathlib import Path as _P
-    cfg = _P("data/shopify_config.json")
+    cfg = DATA_DIR / "shopify_config.json"
     if not cfg.exists(): return {"connected": False}
     data = json.loads(cfg.read_text(encoding="utf-8"))
     token = data.get("access_token", "")
@@ -1607,8 +1612,7 @@ async def calcular_preco_virtual_endpoint(request: Request):
 @app.get("/auditoria/mp-status")
 def auditoria_mp_status():
     import json as _json
-    from pathlib import Path as _P
-    mp = _P("data/mp_token.json")
+    mp = DATA_DIR / "mp_token.json"
     data = _json.loads(mp.read_text(encoding="utf-8")) if mp.exists() else {}
     token = data.get("access_token", "")
     return {"configurado": bool(token) and token != ".", "salvo_em": data.get("salvo_em")}
@@ -1742,9 +1746,8 @@ def regras_modelo_download():
 
 @app.get("/auditoria/estoque-negativo")
 def auditoria_estoque_negativo_lista(status: str = ""):
-    from pathlib import Path as _P
     import json as _j
-    fila_path = _P("data/fila_estoque_negativo.json")
+    fila_path = DATA_DIR / "fila_estoque_negativo.json"
     itens = _j.loads(fila_path.read_text(encoding="utf-8")) if fila_path.exists() else []
     # Exibe apenas itens com estoque realmente negativo
     itens = [i for i in itens if int(i.get("estoque", 0)) < 0]
@@ -1756,23 +1759,23 @@ def auditoria_estoque_negativo_lista(status: str = ""):
 
 @app.post("/auditoria/estoque-negativo/ignorar/{item_id}")
 def auditoria_estoque_negativo_ignorar(item_id: str):
-    from pathlib import Path as _P
     import json as _j
-    fila_path = _P("data/fila_estoque_negativo.json")
+    fila_path = DATA_DIR / "fila_estoque_negativo.json"
     itens = _j.loads(fila_path.read_text(encoding="utf-8")) if fila_path.exists() else []
     for i in itens:
         if i.get("id") == item_id:
             i["status"] = "ignorado"
+    DATA_DIR.mkdir(exist_ok=True)
     fila_path.write_text(_j.dumps(itens, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"ok": True}
 
 @app.post("/auditoria/estoque-negativo/limpar")
 def auditoria_estoque_negativo_limpar():
-    from pathlib import Path as _P
     import json as _j
-    fila_path = _P("data/fila_estoque_negativo.json")
+    fila_path = DATA_DIR / "fila_estoque_negativo.json"
     itens = _j.loads(fila_path.read_text(encoding="utf-8")) if fila_path.exists() else []
     itens = [i for i in itens if i.get("status") == "pendente"]
+    DATA_DIR.mkdir(exist_ok=True)
     fila_path.write_text(_j.dumps(itens, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"ok": True, "pendentes": len(itens)}
 
@@ -1784,9 +1787,8 @@ def auditoria_shopify_limpar_tudo():
 
 @app.post("/auditoria/estoque-negativo/limpar-tudo")
 def auditoria_negativo_limpar_tudo():
-    from pathlib import Path as _P
-    import json as _j
-    _P("data/fila_estoque_negativo.json").write_text("[]", encoding="utf-8")
+    DATA_DIR.mkdir(exist_ok=True)
+    (DATA_DIR / "fila_estoque_negativo.json").write_text("[]", encoding="utf-8")
     return {"ok": True}
 
 @app.get("/auditoria/amazon")
@@ -1862,8 +1864,8 @@ def auditoria_amazon_limpar_resolvidos():
 
 @app.post("/auditoria/amazon/limpar-tudo")
 def auditoria_amazon_limpar_tudo():
-    from pathlib import Path as _P
-    _P("data/fila_amazon.json").write_text("[]", encoding="utf-8")
+    DATA_DIR.mkdir(exist_ok=True)
+    (DATA_DIR / "fila_amazon.json").write_text("[]", encoding="utf-8")
     return {"ok": True}
 
 @app.get("/amazon/status")
@@ -1929,7 +1931,8 @@ def amazon_callback(
         client_id     = os.getenv("AMAZON_CLIENT_ID", "")
         client_secret = os.getenv("AMAZON_CLIENT_SECRET", "")
         redirect_uri  = os.getenv("AMAZON_CALLBACK_URL",
-                                   "https://elegant-encouragement-production-6829.up.railway.app/amazon/callback")
+                                   f"{request.headers.get('x-forwarded-proto', request.url.scheme)}"
+                                   f"://{request.headers.get('x-forwarded-host', request.url.netloc)}/amazon/callback")
 
         resp = _req.post(
             "https://api.amazon.com/auth/o2/token",
@@ -2102,14 +2105,13 @@ def auditoria_ignorar_preco(item_id: str):
 @app.post("/auditoria/mp-token")
 async def auditoria_salvar_mp_token(request: Request):
     import json as _json
-    from pathlib import Path as _P
     from datetime import datetime
     body = await request.json()
     token = (body.get("access_token") or "").strip()
     if not token:
         raise HTTPException(status_code=400, detail="Token vazio.")
-    path = _P("data/mp_token.json")
-    path.parent.mkdir(exist_ok=True)
+    path = DATA_DIR / "mp_token.json"
+    DATA_DIR.mkdir(exist_ok=True)
     path.write_text(_json.dumps({"access_token": token, "salvo_em": datetime.utcnow().isoformat()}, indent=2), encoding="utf-8")
     return {"ok": True}
 
@@ -2136,8 +2138,7 @@ async def marketing_ml_analisar(request: Request):
     imposto_padrao = float(body.get("imposto_padrao", 12.0))
 
     import json as _json
-    from pathlib import Path as _P
-    tokens_path = _P("data/ml_tokens.json")
+    tokens_path = DATA_DIR / "ml_tokens.json"
     if not tokens_path.exists():
         raise HTTPException(status_code=400, detail="Token ML nao configurado. Faca login em /ml/login.")
     tokens = _json.loads(tokens_path.read_text(encoding="utf-8"))

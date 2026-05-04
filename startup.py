@@ -22,19 +22,31 @@ shopify_shop  = os.getenv("SHOPIFY_SHOP", "pknw4n-eg")
 cfg_path = DATA_DIR / "shopify_config.json"
 
 if shopify_token:
-    shopify_cfg = {
-        "access_token": shopify_token,
-        "shop": shopify_shop,
-        "shop_url": f"{shopify_shop}.myshopify.com",
-        "salvo_em": datetime.now(timezone.utc).isoformat(),
-    }
-    # Adiciona frete callback URL se configurada
-    frete_url = os.getenv("FRETE_CALLBACK_URL", "")
-    if frete_url:
-        shopify_cfg["frete_callback_url"] = frete_url
-
-    cfg_path.write_text(json.dumps(shopify_cfg, indent=2, ensure_ascii=False), encoding="utf-8")
-    pr(f"shopify_config.json criado (shop={shopify_shop})")
+    # Só sobrescreve se o arquivo não existe ainda (preserva token atualizado via OAuth no volume)
+    if not cfg_path.exists():
+        shopify_cfg = {
+            "access_token": shopify_token,
+            "shop": shopify_shop,
+            "shop_url": f"{shopify_shop}.myshopify.com",
+            "salvo_em": datetime.now(timezone.utc).isoformat(),
+        }
+        frete_url = os.getenv("FRETE_CALLBACK_URL", "")
+        if frete_url:
+            shopify_cfg["frete_callback_url"] = frete_url
+        cfg_path.write_text(json.dumps(shopify_cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+        pr(f"shopify_config.json criado (shop={shopify_shop})")
+    else:
+        # Garante que frete_callback_url está sempre atualizado sem sobrescrever o token
+        frete_url = os.getenv("FRETE_CALLBACK_URL", "")
+        if frete_url:
+            try:
+                existing = json.loads(cfg_path.read_text(encoding="utf-8"))
+                if existing.get("frete_callback_url") != frete_url:
+                    existing["frete_callback_url"] = frete_url
+                    cfg_path.write_text(json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
+            except Exception:
+                pass
+        pr(f"shopify_config.json já existe no volume — token OAuth preservado")
 elif not cfg_path.exists():
     pr("AVISO: SHOPIFY_ACCESS_TOKEN não definido — shopify_config.json não criado")
 
@@ -52,17 +64,44 @@ bling_path    = DATA_DIR / "bling_tokens.json"
 
 if bling_access and bling_refresh:
     import time as _time
-    raw_token = {
-        "access_token":  bling_access,
-        "refresh_token": bling_refresh,
-        "token_type":    "Bearer",
-        "expires_in":    21600,
-        "expires_at":    _time.time() + 21600,  # BlingClient usa expires_at para checar validade
-    }
-    key = hashlib.sha256((bling_csec + (bling_cid or "token-key")).encode()).digest()
-    enc = base64.b64encode(_bling_xor(json.dumps(raw_token).encode(), key)).decode()
-    bling_path.write_text(json.dumps({"encrypted": enc}, ensure_ascii=False), encoding="utf-8")
-    pr("bling_tokens.json criado (criptografado)")
+    import urllib.request as _urllib
+    import urllib.parse as _urlparse
+
+    # Se já existe token no volume (salvo via OAuth), não sobrescreve.
+    # O BlingClient faz refresh automático quando expirar.
+    if bling_path.exists():
+        pr("bling_tokens.json já existe no volume — token OAuth preservado")
+    else:
+        # Primeira vez: tenta renovar via refresh_token para garantir token fresco
+        if bling_cid and bling_csec:
+            try:
+                import base64 as _b64mod
+                _basic = _b64mod.b64encode(f"{bling_cid}:{bling_csec}".encode()).decode()
+                _data = _urlparse.urlencode({"grant_type": "refresh_token", "refresh_token": bling_refresh}).encode()
+                _req = _urllib.Request(
+                    "https://www.bling.com.br/Api/v3/oauth/token",
+                    data=_data,
+                    headers={"Authorization": f"Basic {_basic}", "Content-Type": "application/x-www-form-urlencoded"},
+                )
+                with _urllib.urlopen(_req, timeout=20) as _resp:
+                    _new = json.loads(_resp.read())
+                    bling_access  = _new.get("access_token", bling_access)
+                    bling_refresh = _new.get("refresh_token", bling_refresh)
+                    pr("Bling: token renovado via refresh com sucesso")
+            except Exception as _e:
+                pr(f"AVISO: refresh do token Bling falhou ({_e}) — usando token da env var")
+
+        raw_token = {
+            "access_token":  bling_access,
+            "refresh_token": bling_refresh,
+            "token_type":    "Bearer",
+            "expires_in":    21600,
+            "expires_at":    _time.time() + 21600,
+        }
+        key = hashlib.sha256((bling_csec + (bling_cid or "token-key")).encode()).digest()
+        enc = base64.b64encode(_bling_xor(json.dumps(raw_token).encode(), key)).decode()
+        bling_path.write_text(json.dumps({"encrypted": enc}, ensure_ascii=False), encoding="utf-8")
+        pr("bling_tokens.json criado (criptografado)")
 elif not bling_path.exists():
     pr("INFO: BLING_ACCESS_TOKEN não definido — bling_tokens.json não criado (OAuth necessário)")
 
@@ -96,15 +135,71 @@ elif not ml_config_path.exists():
     pr("INFO: ML_CLIENT_ID não definido — ml_config.json não criado")
 
 if ml_access_token and ml_refresh_token:
+    import urllib.request as _urllib
+    import urllib.parse as _urlparse
+
+    ml_user_id = os.getenv("ML_USER_ID", "").strip()
+
+    # Se o volume já tem um ml_tokens.json, usa o refresh_token de lá
+    # (pode ser mais novo que o da env var, pois o MLClient atualiza em runtime)
+    _vol_refresh = ml_refresh_token
+    if ml_tokens_path.exists():
+        try:
+            _vol_tok = json.loads(ml_tokens_path.read_text(encoding="utf-8"))
+            _vol_refresh = _vol_tok.get("refresh_token", ml_refresh_token)
+            if not ml_user_id:
+                ml_user_id = str(_vol_tok.get("user_id", ""))
+            pr(f"ml_tokens.json encontrado no volume — usando refresh_token do volume")
+        except Exception:
+            pass
+
+    # Sempre renova o token via refresh para garantir validade
+    if ml_client_id and ml_client_secret:
+        # Tenta primeiro com o refresh_token do volume; se falhar, usa o da env var
+        for _rt in ([_vol_refresh, ml_refresh_token] if _vol_refresh != ml_refresh_token else [_vol_refresh]):
+            try:
+                _data = _urlparse.urlencode({
+                    "grant_type":    "refresh_token",
+                    "client_id":     ml_client_id,
+                    "client_secret": ml_client_secret,
+                    "refresh_token": _rt,
+                }).encode()
+                _req = _urllib.Request("https://api.mercadolibre.com/oauth/token", data=_data)
+                with _urllib.urlopen(_req, timeout=15) as _resp:
+                    _new = json.loads(_resp.read())
+                    ml_access_token  = _new.get("access_token", ml_access_token)
+                    ml_refresh_token = _new.get("refresh_token", ml_refresh_token)
+                    if not ml_user_id:
+                        ml_user_id = str(_new.get("user_id", ""))
+                    pr(f"Tokens ML renovados via refresh. user_id={ml_user_id}")
+                    break
+            except Exception as _e:
+                pr(f"AVISO: refresh ML falhou com token {'volume' if _rt == _vol_refresh else 'env'} ({_e})")
+    else:
+        # Sem credenciais para refresh — tenta validar o access_token atual
+        if not ml_user_id:
+            try:
+                _req = _urllib.Request(
+                    "https://api.mercadolibre.com/users/me",
+                    headers={"Authorization": f"Bearer {ml_access_token}"}
+                )
+                with _urllib.urlopen(_req, timeout=10) as _resp:
+                    _me = json.loads(_resp.read())
+                    ml_user_id = str(_me.get("id", ""))
+                    pr(f"user_id obtido via /users/me: {ml_user_id}")
+            except Exception as _e:
+                pr(f"AVISO: /users/me falhou ({_e})")
+
     ml_tok = {
         "access_token":  ml_access_token,
         "refresh_token": ml_refresh_token,
         "token_type":    "Bearer",
         "client_id":     ml_client_id,
+        "user_id":       ml_user_id,
         "salvo_em":      datetime.now(timezone.utc).isoformat(),
     }
     ml_tokens_path.write_text(json.dumps(ml_tok, indent=2, ensure_ascii=False), encoding="utf-8")
-    pr("ml_tokens.json criado")
+    pr(f"ml_tokens.json atualizado (user_id={ml_user_id or 'não obtido'})")
 elif not ml_tokens_path.exists():
     pr("INFO: ML_ACCESS_TOKEN não definido — ml_tokens.json não criado (OAuth necessário)")
 
@@ -129,6 +224,34 @@ if shopee_access_token and shopee_refresh_token and shopee_shop_id:
     pr(f"shopee_tokens.json criado (shop_id={shopee_shop_id})")
 elif not shopee_tokens_path.exists():
     pr("INFO: SHOPEE_ACCESS_TOKEN não definido — shopee_tokens.json não criado (OAuth necessário)")
+
+# ── GMC Blacklist (copia do código para o volume na primeira vez) ─────────────
+_bl_src  = Path(__file__).parent / "gmc_blacklist_default.json"
+_bl_dest = DATA_DIR / "gmc_blacklist.json"
+if _bl_src.exists() and not _bl_dest.exists():
+    try:
+        import shutil as _shutil
+        _shutil.copy2(str(_bl_src), str(_bl_dest))
+        pr("gmc_blacklist.json copiado para o volume")
+    except Exception as _e:
+        pr(f"AVISO: falha ao copiar gmc_blacklist.json ({_e})")
+
+# ── Google Service Account (GMC — Content API) ───────────────────────────────
+gsa_b64 = os.getenv("GOOGLE_SA_JSON", "")
+gsa_path = DATA_DIR / "google_service_account.json"
+if gsa_b64:
+    if not gsa_path.exists():
+        try:
+            gsa_json = base64.b64decode(gsa_b64.encode()).decode("utf-8")
+            gsa_path.write_text(gsa_json, encoding="utf-8")
+            pr("google_service_account.json criado a partir de GOOGLE_SA_JSON")
+        except Exception as _e:
+            pr(f"AVISO: falha ao gravar google_service_account.json ({_e})")
+    else:
+        pr("google_service_account.json já existe no volume — preservado")
+else:
+    if not gsa_path.exists():
+        pr("INFO: GOOGLE_SA_JSON não definido — google_service_account.json não criado")
 
 # ── Cria diretórios necessários ───────────────────────────────────────────────
 for d in ["logs", "pages"]:

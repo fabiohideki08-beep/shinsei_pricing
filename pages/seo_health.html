@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>SEO Health — Shinsei Market</title>
+  <style>
+    :root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--danger:#ef4444;--ok:#22c55e;--warn:#f5b301}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text);min-height:100vh}
+    .wrap{max-width:1300px;margin:0 auto;padding:22px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 20px;position:sticky;top:16px;z-index:10}
+    .brand h1{margin:0;font-size:20px}.brand p{margin:4px 0 0;color:var(--muted);font-size:12px}
+    .btn{border:none;background:var(--accent);color:#fff;padding:10px 16px;border-radius:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:13px;text-decoration:none}
+    .btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+    .btn.success{background:#166534}.btn.warn{background:#92400e;color:#fde68a}
+    .btn:disabled{opacity:.4;cursor:not-allowed}
+    .spin{animation:spin 1s linear infinite;display:inline-block}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* HERO SCORE */
+    .hero{display:grid;grid-template-columns:auto 1fr;gap:32px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:28px 32px;margin-bottom:24px}
+    .gauge-wrap{position:relative;width:160px;height:160px;flex-shrink:0}
+    .gauge-wrap svg{transform:rotate(-90deg)}
+    .gauge-bg{fill:none;stroke:var(--line);stroke-width:14}
+    .gauge-fill{fill:none;stroke-width:14;stroke-linecap:round;transition:stroke-dashoffset .8s ease,stroke .8s}
+    .gauge-text{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700}
+    .gauge-text .score-num{font-size:42px;line-height:1}
+    .gauge-text .score-lbl{font-size:12px;color:var(--muted);margin-top:2px}
+    .hero-info h2{margin:0 0 6px;font-size:22px}
+    .hero-info p{margin:0 0 16px;color:var(--muted);font-size:13px}
+    .hero-pills{display:flex;gap:10px;flex-wrap:wrap}
+    .pill-stat{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-size:13px;text-align:center;min-width:100px}
+    .pill-stat .ps-num{font-size:22px;font-weight:700}
+    .pill-stat .ps-lbl{font-size:11px;color:var(--muted);margin-top:2px}
+    .ps-num.red{color:var(--danger)}.ps-num.yellow{color:var(--warn)}.ps-num.green{color:var(--ok)}
+
+    /* CARDS GRID */
+    .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-bottom:24px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
+    .card h3{margin:0 0 14px;font-size:15px;display:flex;align-items:center;gap:8px}
+    .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:13px}
+    .bar-wrap{flex:1;height:8px;background:var(--line);border-radius:4px;overflow:hidden}
+    .bar-fill{height:8px;border-radius:4px;transition:width .6s}
+    .bar-ok{background:var(--ok)}.bar-warn{background:var(--warn)}.bar-err{background:var(--danger)}
+    .bar-label{width:60px;text-align:right;font-size:12px;color:var(--muted)}
+    .stat-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(38,52,88,.4);font-size:13px}
+    .stat-row:last-child{border-bottom:none}
+    .stat-val{font-weight:700}
+    .stat-val.ok{color:var(--ok)}.stat-val.warn{color:var(--warn)}.stat-val.err{color:var(--danger)}
+
+    /* PAGESPEED */
+    .ps-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+    .ps-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
+    .ps-card h3{margin:0 0 16px;font-size:15px}
+    .ps-scores{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+    .ps-score-item{background:var(--card2);border-radius:10px;padding:10px;text-align:center}
+    .ps-score-item .val{font-size:24px;font-weight:700}
+    .ps-score-item .lbl{font-size:10px;color:var(--muted);margin-top:2px}
+    .vitals{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+    .vital{background:var(--card2);border-radius:8px;padding:8px 12px;font-size:12px;text-align:center}
+    .vital .vv{font-weight:700;font-size:14px}.vital .vl{color:var(--muted);font-size:10px;margin-top:2px}
+    .ops-list{list-style:none;margin:0;padding:0}
+    .ops-list li{font-size:12px;padding:5px 0;border-bottom:1px solid rgba(38,52,88,.3);color:var(--muted);display:flex;gap:6px;align-items:flex-start}
+    .ops-list li:last-child{border-bottom:none}
+
+    /* PENDÊNCIAS */
+    .pendencias{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:24px}
+    .pendencias h3{margin:0 0 16px;font-size:15px}
+    .pend-item{display:flex;align-items:flex-start;gap:14px;padding:12px 0;border-bottom:1px solid rgba(38,52,88,.4)}
+    .pend-item:last-child{border-bottom:none}
+    .pend-prior{font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;white-space:nowrap;margin-top:1px}
+    .prior-alto{background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3)}
+    .prior-medio{background:rgba(245,179,1,.12);color:var(--warn);border:1px solid rgba(245,179,1,.25)}
+    .prior-baixo{background:rgba(34,197,94,.1);color:var(--ok);border:1px solid rgba(34,197,94,.2)}
+    .pend-info{flex:1}
+    .pend-titulo{font-size:13px;font-weight:700;margin-bottom:3px}
+    .pend-desc{font-size:12px;color:var(--muted)}
+    .pend-impacto{font-size:11px;margin-top:4px;color:var(--accent)}
+
+    /* MERCHANT CENTER */
+    .merchant-section{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:24px}
+    .merchant-section h3{margin:0 0 16px;font-size:15px;display:flex;align-items:center;gap:8px}
+    .merchant-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:18px}
+    .merchant-metric{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+    .merchant-metric .mm-val{font-size:26px;font-weight:700;line-height:1}
+    .merchant-metric .mm-lbl{font-size:11px;color:var(--muted);margin-top:4px}
+    .merchant-metric .mm-sub{font-size:11px;margin-top:6px}
+    .mm-bar{height:5px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:8px}
+    .mm-bar-fill{height:100%;border-radius:3px;transition:width .6s}
+    .merchant-pend{margin-top:4px}
+    .merchant-pend-item{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid rgba(38,52,88,.4);font-size:13px}
+    .merchant-pend-item:last-child{border-bottom:none}
+    .merchant-pend-body{flex:1}
+    .merchant-pend-title{font-weight:700;margin-bottom:2px}
+    .merchant-pend-desc{font-size:12px;color:var(--muted);margin-bottom:4px}
+    .merchant-pend-impact{font-size:11px;color:var(--accent)}
+    .merchant-pend-action{font-size:12px;white-space:nowrap;margin-top:6px}
+    .merchant-pend-action a{color:var(--accent);text-decoration:none;border:1px solid var(--accent);border-radius:6px;padding:3px 10px;display:inline-block}
+    .merchant-pend-action a:hover{background:rgba(79,140,255,.1)}
+    /* SCBOT */
+    .scbot-section{background:var(--card);border:1px solid rgba(34,197,94,.25);border-radius:16px;padding:20px;margin-bottom:24px}
+    .scbot-section h3{margin:0 0 16px;font-size:15px;display:flex;align-items:center;gap:8px;color:#22c55e}
+    .scbot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-bottom:18px}
+    .scbot-metric{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+    .scbot-metric .sm-val{font-size:26px;font-weight:700;color:#22c55e;line-height:1}
+    .scbot-metric .sm-lbl{font-size:11px;color:var(--muted);margin-top:4px}
+    .scbot-metric .sm-sub{font-size:11px;margin-top:4px;color:var(--muted)}
+    .scbot-log{background:var(--card2);border-radius:10px;padding:12px 14px;font-size:12px;max-height:220px;overflow-y:auto}
+    .scbot-log-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(38,52,88,.4)}
+    .scbot-log-row:last-child{border-bottom:none}
+    .scbot-ok{color:#22c55e}.scbot-err{color:var(--danger)}
+    .scbot-focus{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+    .scbot-tag{background:rgba(34,197,94,.12);color:#22c55e;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700}
+
+    /* TIMESTAMP */
+    .ts-bar{font-size:11px;color:var(--muted);margin-bottom:16px;display:flex;align-items:center;gap:10px}
+    .ts-dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:4px}
+    .ts-dot.warn{background:var(--warn)}.ts-dot.old{background:var(--danger)}
+
+    /* TOAST */
+    #toast{position:fixed;bottom:28px;right:28px;z-index:9999;padding:14px 20px;border-radius:14px;font-size:14px;font-weight:600;max-width:380px;box-shadow:0 4px 24px rgba(0,0,0,.5);opacity:0;transform:translateY(16px);transition:opacity .25s,transform .25s;pointer-events:none}
+    #toast.show{opacity:1;transform:translateY(0)}
+    #toast.ok{background:#166534;color:#bbf7d0;border:1px solid #15803d}
+    #toast.err{background:#7f1d1d;color:#fca5a5;border:1px solid #991b1b}
+    #toast.warn{background:#78350f;color:#fde68a;border:1px solid #92400e}
+    .loading-state{text-align:center;padding:60px 20px;color:var(--muted);font-size:14px}
+    @media(max-width:768px){.hero{grid-template-columns:1fr}.gauge-wrap{margin:0 auto}.ps-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div id="toast"></div>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1>🔍 SEO Health — Shinsei Market</h1>
+      <p>Monitoramento de otimização para mecanismos de busca da loja Shopify</p>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <span id="tsBar" class="ts-bar" style="margin:0"></span>
+      <button class="btn secondary" id="btnMerchant" onclick="atualizarMerchant()">🛒 Merchant</button>
+      <button class="btn secondary" id="btnPageSpeed" onclick="rodarPageSpeed()">📊 PageSpeed</button>
+      <button class="btn secondary" id="btnScbot" onclick="dispararScbot()" style="border-color:rgba(34,197,94,.4);color:#22c55e">🤖 SCBOT</button>
+      <button class="btn" id="btnAnalisar" onclick="analisar()">🔄 Analisar agora</button>
+      <a class="btn secondary" href="/">Início</a>
+    </div>
+  </div>
+
+  <div id="mainContent">
+    <div class="loading-state">
+      <div style="font-size:32px;margin-bottom:12px"><span class="spin">⏳</span></div>
+      Carregando dados de SEO...
+    </div>
+  </div>
+</div>
+
+<script>
+const _H = {'Content-Type':'application/json','ngrok-skip-browser-warning':'1'};
+let _dados = null;
+let _toastTimer;
+
+function toast(msg, tipo='ok'){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show '+tipo;
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.className='', tipo==='err' ? 6000 : 4000);
+}
+
+// ── GAUGE ──
+function renderGauge(score){
+  const R = 68, C = 2*Math.PI*R;
+  const cor = score >= 80 ? '#22c55e' : score >= 50 ? '#f5b301' : '#ef4444';
+  const offset = C - (score/100)*C;
+  return `
+    <div class="gauge-wrap">
+      <svg width="160" height="160" viewBox="0 0 160 160">
+        <circle class="gauge-bg" cx="80" cy="80" r="${R}"/>
+        <circle class="gauge-fill" cx="80" cy="80" r="${R}"
+          stroke="${cor}"
+          stroke-dasharray="${C}"
+          stroke-dashoffset="${offset}"/>
+      </svg>
+      <div class="gauge-text">
+        <span class="score-num" style="color:${cor}">${score}</span>
+        <span class="score-lbl">/ 100</span>
+      </div>
+    </div>`;
+}
+
+// ── BARRA ──
+function barra(val, total, tipo){
+  const pct = total > 0 ? Math.round((val/total)*100) : 0;
+  return `<div class="bar-wrap"><div class="bar-fill bar-${tipo}" style="width:${pct}%"></div></div>`;
+}
+
+// ── SCORE LABEL ──
+function scoreLabel(s){ return s>=80?'🟢 Ótimo':s>=60?'🟡 Bom':s>=40?'🟠 Regular':'🔴 Crítico'; }
+
+// ── SCORE BREAKDOWN ──
+function renderBreakdown(d){
+  const det = d.score_detalhes || {};
+  const items = [
+    {label:'Meta SEO — Coleções', pts: det.A_meta_col||0, max:15},
+    {label:'Meta SEO — Produtos',  pts: det.B_meta_prod||0, max:12},
+    {label:'Imagens',              pts: det.C_imagens||0,   max:8},
+    {label:'Conteúdo / Blog',      pts: det.D_conteudo||0,  max:10},
+    {label:'PageSpeed Mobile',     pts: det.E_ps_mobile||0, max:20, warn: det.E_ps_mobile===0},
+    {label:'PageSpeed Desktop',    pts: det.F_ps_desktop||0,max:10, warn: det.F_ps_desktop===0},
+    {label:'SEO Técnico',          pts: det.G_tecnico||0,   max:25},
+  ];
+  return `<div style="background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:24px">
+    <h3 style="margin:0 0 16px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Pontuação por categoria</h3>
+    ${items.map(it=>{
+      const pct = it.max ? (it.pts/it.max)*100 : 0;
+      const clr = pct>=80?'var(--ok)':pct>=50?'var(--warn)':'var(--danger)';
+      return `<div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px">
+          <span>${it.label}${it.warn?' <span style="color:var(--warn);font-size:11px">⚠ não analisado</span>':''}</span>
+          <span style="font-weight:700;color:${clr}">${it.pts}/${it.max}</span>
+        </div>
+        <div style="height:6px;background:var(--line);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${clr};border-radius:4px;transition:width .6s"></div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ── TÉCNICO ──
+function renderTecnico(d){
+  const tec = d.tecnico || {};
+  const chk = (ok, label) =>
+    `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px">
+      <span style="color:${ok?'var(--ok)':'var(--danger)'};font-size:16px">${ok?'✓':'✗'}</span>
+      <span>${label}</span>
+    </div>`;
+  return `<div class="card">
+    <h3>🔧 SEO Técnico</h3>
+    ${chk(tec.https,    'HTTPS ativo')}
+    ${chk(tec.sitemap,  'sitemap.xml acessível')}
+    ${chk(tec.robots,   'robots.txt configurado')}
+    ${chk(tec.og,       'Open Graph tags presentes')}
+    ${chk(tec.schema,   'Schema.org / JSON-LD presente')}
+    ${chk(tec.canonical,'Tag canonical presente')}
+  </div>`;
+}
+
+// ── RENDER PRINCIPAL ──
+function render(d){
+  const score    = d.score || 0;
+  const col      = d.colecoes || {};
+  const prod     = d.produtos || {};
+  const blog     = d.blog || {};
+  const ps       = d.pagespeed || {};
+  const pends    = d.pendencias || [];
+  const ts       = d.analisado_em ? new Date(d.analisado_em+'Z').toLocaleString('pt-BR') : '—';
+  const agora    = Date.now();
+  const diffMin  = d.analisado_em ? Math.round((agora - new Date(d.analisado_em+'Z').getTime())/60000) : 999;
+  const dotCls   = diffMin < 30 ? '' : diffMin < 120 ? 'warn' : 'old';
+
+  // Timestamp bar
+  document.getElementById('tsBar').innerHTML =
+    `<span class="ts-dot ${dotCls}"></span>Última análise: ${ts}`;
+
+  // Monta HTML
+  let html = `
+  <!-- HERO -->
+  <div class="hero">
+    ${renderGauge(score)}
+    <div class="hero-info">
+      <h2>${scoreLabel(score)} — Score SEO: ${score}/100</h2>
+      <p>Análise completa da loja Shopify pknw4n-eg.myshopify.com</p>
+      <div class="hero-pills">
+        <div class="pill-stat">
+          <div class="ps-num ${col.sem_title>0?'red':'green'}">${col.total||0}</div>
+          <div class="ps-lbl">Coleções</div>
+        </div>
+        <div class="pill-stat">
+          <div class="ps-num ${prod.sem_title>0?'yellow':'green'}">${prod.total||0}</div>
+          <div class="ps-lbl">Produtos</div>
+        </div>
+        <div class="pill-stat">
+          <div class="ps-num ${blog.sem_title>0?'yellow':'green'}">${blog.total||0}</div>
+          <div class="ps-lbl">Posts de Blog</div>
+        </div>
+        <div class="pill-stat">
+          <div class="ps-num ${(prod.imgs_sem_alt||0)>0?'yellow':'green'}">${prod.imgs_sem_alt||0}</div>
+          <div class="ps-lbl">Imgs sem alt</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  ${renderBreakdown(d)}
+
+  <!-- CARDS -->
+  <div class="cards-grid">
+
+    <!-- COLEÇÕES -->
+    <div class="card">
+      <h3>🗂 Coleções (${col.total||0})</h3>
+      <div class="stat-row">
+        <span>Com meta title</span>
+        <span class="stat-val ${(col.total-col.sem_title)==col.total?'ok':col.sem_title>20?'err':'warn'}">
+          ${(col.total||0)-(col.sem_title||0)} / ${col.total||0}
+        </span>
+      </div>
+      <div class="bar-row" style="margin:4px 0 10px">
+        ${barra((col.total||0)-(col.sem_title||0), col.total||1, (col.sem_title||0)===0?'ok':col.sem_title>20?'err':'warn')}
+      </div>
+      <div class="stat-row">
+        <span>Com meta description</span>
+        <span class="stat-val ${(col.sem_desc||0)===0?'ok':col.sem_desc>20?'err':'warn'}">
+          ${(col.total||0)-(col.sem_desc||0)} / ${col.total||0}
+        </span>
+      </div>
+      <div class="stat-row">
+        <span>Com descrição HTML</span>
+        <span class="stat-val ${(col.sem_body||0)===0?'ok':'warn'}">
+          ${(col.total||0)-(col.sem_body||0)} / ${col.total||0}
+        </span>
+      </div>
+    </div>
+
+    <!-- PRODUTOS -->
+    <div class="card">
+      <h3>📦 Produtos (${prod.total||0})</h3>
+      <div class="stat-row">
+        <span>Com meta title</span>
+        <span class="stat-val ${(prod.sem_title||0)===0?'ok':prod.sem_title>50?'err':'warn'}">
+          ${(prod.total||0)-(prod.sem_title||0)} / ${prod.total||0}
+        </span>
+      </div>
+      <div class="bar-row" style="margin:4px 0 10px">
+        ${barra((prod.total||0)-(prod.sem_title||0), prod.total||1, (prod.sem_title||0)===0?'ok':prod.sem_title>50?'err':'warn')}
+      </div>
+      <div class="stat-row">
+        <span>Com meta description</span>
+        <span class="stat-val ${(prod.sem_desc||0)===0?'ok':'warn'}">
+          ${(prod.total||0)-(prod.sem_desc||0)} / ${prod.total||0}
+        </span>
+      </div>
+      <div class="stat-row">
+        <span>Imagens com alt text</span>
+        <span class="stat-val ${(prod.imgs_sem_alt||0)===0?'ok':'warn'}">
+          ${(prod.total_imgs||0)-(prod.imgs_sem_alt||0)} / ${prod.total_imgs||0}
+        </span>
+      </div>
+    </div>
+
+    <!-- BLOG -->
+    <div class="card">
+      <h3>✍️ Blog (${blog.total||0} posts)</h3>
+      <div class="stat-row">
+        <span>Com meta title</span>
+        <span class="stat-val ${(blog.sem_title||0)===0?'ok':'warn'}">
+          ${(blog.total||0)-(blog.sem_title||0)} / ${blog.total||0}
+        </span>
+      </div>
+      <div class="bar-row" style="margin:4px 0 10px">
+        ${barra((blog.total||0)-(blog.sem_title||0), blog.total||1, (blog.sem_title||0)===0?'ok':'warn')}
+      </div>
+      <div class="stat-row"><span>Posts publicados</span><span class="stat-val ok">${blog.publicados||blog.total||0}</span></div>
+      <div class="stat-row"><span>Blogs ativos</span><span class="stat-val">${blog.num_blogs||1}</span></div>
+    </div>
+
+    <!-- PAGESPEED MOBILE -->
+    <div class="card" id="cardPsMobile">
+      <h3>📱 PageSpeed Mobile</h3>
+      ${renderPS(ps.mobile)}
+    </div>
+
+    <!-- PAGESPEED DESKTOP -->
+    <div class="card" id="cardPsDesktop">
+      <h3>🖥 PageSpeed Desktop</h3>
+      ${renderPS(ps.desktop)}
+    </div>
+
+    <!-- TÉCNICO -->
+    ${renderTecnico(d)}
+
+  </div>
+
+  <!-- MERCHANT CENTER -->
+  ${renderMerchant(d.merchant)}
+
+  <!-- SCBOT -->
+  ${renderScbot(d.scbot)}
+
+  <!-- PENDÊNCIAS -->
+  <div class="pendencias">
+    <h3>🔧 Pendências e melhorias (${pends.length})</h3>
+    ${pends.length ? pends.map(renderPend).join('') : '<p style="color:var(--ok);font-size:13px">✅ Nenhuma pendência encontrada!</p>'}
+  </div>`;
+
+  document.getElementById('mainContent').innerHTML = html;
+}
+
+function renderPS(ps){
+  if(!ps || !ps.performance) return `
+    <div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">
+      <div style="font-size:24px;margin-bottom:8px">📊</div>
+      Clique em "PageSpeed" para analisar
+    </div>`;
+  const cor = v => v>=90?'var(--ok)':v>=50?'var(--warn)':'var(--danger)';
+  return `
+    <div class="ps-scores">
+      <div class="ps-score-item"><div class="val" style="color:${cor(ps.performance)}">${ps.performance}</div><div class="lbl">Performance</div></div>
+      <div class="ps-score-item"><div class="val" style="color:${cor(ps.seo)}">${ps.seo}</div><div class="lbl">SEO</div></div>
+      <div class="ps-score-item"><div class="val" style="color:${cor(ps.accessibility)}">${ps.accessibility}</div><div class="lbl">Acessibilidade</div></div>
+      <div class="ps-score-item"><div class="val" style="color:${cor(ps.best_practices)}">${ps.best_practices}</div><div class="lbl">Boas Práticas</div></div>
+    </div>
+    <div class="vitals">
+      <div class="vital"><div class="vv">${ps.lcp||'—'}</div><div class="vl">LCP</div></div>
+      <div class="vital"><div class="vv">${ps.cls||'—'}</div><div class="vl">CLS</div></div>
+      <div class="vital"><div class="vv">${ps.tbt||'—'}</div><div class="vl">TBT</div></div>
+      <div class="vital"><div class="vv">${ps.fcp||'—'}</div><div class="vl">FCP</div></div>
+      <div class="vital"><div class="vv">${ps.ttfb||'—'}</div><div class="vl">TTFB</div></div>
+    </div>
+    ${ps.oportunidades && ps.oportunidades.length ? `
+    <ul class="ops-list">
+      ${ps.oportunidades.slice(0,6).map(o=>`<li>⚠ ${o}</li>`).join('')}
+    </ul>` : ''}`;
+}
+
+function renderMerchant(m){
+  if(!m) return `
+    <div class="merchant-section">
+      <h3>🛒 Google Merchant Center</h3>
+      <div style="color:var(--muted);font-size:13px;padding:12px 0;text-align:center">
+        Clique em <strong>Merchant</strong> para carregar os dados do feed.
+      </div>
+    </div>`;
+
+  const cor = pct => pct>=90?'var(--ok)':pct>=60?'var(--warn)':'var(--danger)';
+  const ts = m.analisado_em ? new Date(m.analisado_em+'Z').toLocaleString('pt-BR') : '—';
+  const pends = m.pendencias_merchant || [];
+  const priorCls = p => p==='alto'?'prior-alto':p==='medio'?'prior-medio':'prior-baixo';
+
+  return `
+  <div class="merchant-section">
+    <h3>🛒 Google Merchant Center
+      <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:8px">atualizado em ${ts}</span>
+    </h3>
+
+    <div class="merchant-grid">
+      <div class="merchant-metric">
+        <div class="mm-val" style="color:${cor(m.pct_product_type||0)}">${m.pct_product_type||0}%</div>
+        <div class="mm-lbl">product_type definido</div>
+        <div class="mm-sub" style="color:${cor(m.pct_product_type||0)}">${m.com_product_type||0} / ${m.total_produtos||0} produtos</div>
+        <div class="mm-bar"><div class="mm-bar-fill" style="width:${m.pct_product_type||0}%;background:${cor(m.pct_product_type||0)}"></div></div>
+      </div>
+      <div class="merchant-metric">
+        <div class="mm-val" style="color:${cor(m.pct_vendor_ok||0)}">${m.pct_vendor_ok||0}%</div>
+        <div class="mm-lbl">Marca (vendor) correta</div>
+        <div class="mm-sub" style="color:${(m.vendor_incorreto||0)>0?'var(--warn)':'var(--ok)'}">
+          ${(m.vendor_incorreto||0)>0 ? `${m.vendor_incorreto} com "Shinsei Market"` : '✓ Todas corretas'}
+        </div>
+        <div class="mm-bar"><div class="mm-bar-fill" style="width:${m.pct_vendor_ok||0}%;background:${cor(m.pct_vendor_ok||0)}"></div></div>
+      </div>
+      <div class="merchant-metric">
+        <div class="mm-val" style="color:${cor(m.pct_google_cat||0)}">${m.pct_google_cat||0}%</div>
+        <div class="mm-lbl">google_product_category</div>
+        <div class="mm-sub" style="color:${cor(m.pct_google_cat||0)}">~${m.estimado_google_cat||0} / ${m.total_produtos||0} produtos</div>
+        <div class="mm-bar"><div class="mm-bar-fill" style="width:${m.pct_google_cat||0}%;background:${cor(m.pct_google_cat||0)}"></div></div>
+      </div>
+      <div class="merchant-metric">
+        <div class="mm-val" style="color:var(--ok)">${m.total_produtos||0}</div>
+        <div class="mm-lbl">Total de produtos</div>
+        <div class="mm-sub" style="color:var(--muted)">no catálogo Shopify</div>
+        <div class="mm-bar"><div class="mm-bar-fill" style="width:100%;background:var(--ok)"></div></div>
+      </div>
+    </div>
+
+    ${pends.length ? `
+    <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Pendências e ações</div>
+    <div class="merchant-pend">
+      ${pends.map(p=>`
+        <div class="merchant-pend-item">
+          <span class="pend-prior ${priorCls(p.prioridade)}">${p.prioridade.toUpperCase()}</span>
+          <div class="merchant-pend-body">
+            <div class="merchant-pend-title">${p.titulo}</div>
+            <div class="merchant-pend-desc">${p.descricao}</div>
+            ${p.impacto?`<div class="merchant-pend-impact">📈 ${p.impacto}</div>`:''}
+            ${p.acao_url?`<div class="merchant-pend-action"><a href="${p.acao_url}" target="_blank">${p.acao_label||'Abrir'} ↗</a></div>`:''}
+          </div>
+        </div>`).join('')}
+    </div>` : ''}
+  </div>`;
+}
+
+function renderPend(p){
+  const cls = p.prioridade==='alto' ? 'prior-alto' : p.prioridade==='medio' ? 'prior-medio' : 'prior-baixo';
+  return `<div class="pend-item">
+    <span class="pend-prior ${cls}">${p.prioridade.toUpperCase()}</span>
+    <div class="pend-info">
+      <div class="pend-titulo">${p.titulo}</div>
+      <div class="pend-desc">${p.descricao}</div>
+      ${p.impacto ? `<div class="pend-impacto">📈 ${p.impacto}</div>` : ''}
+    </div>
+    ${p.quantidade ? `<span style="font-size:13px;font-weight:700;color:var(--warn);white-space:nowrap">${p.quantidade}</span>` : ''}
+  </div>`;
+}
+
+// ── AÇÕES ──
+async function analisar(){
+  const btn = document.getElementById('btnAnalisar');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin">⏳</span> Analisando...';
+  try {
+    const res = await fetch('/seo-health/analisar', {method:'POST', headers:_H});
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.detail || 'Erro');
+    _dados = data;
+    render(data);
+    toast('✅ Análise concluída', 'ok');
+  } catch(e){
+    toast('Erro: '+e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🔄 Analisar agora';
+  }
+}
+
+async function rodarPageSpeed(){
+  const btn = document.getElementById('btnPageSpeed');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin">⏳</span> Aguarde ~60s...';
+  toast('📊 Rodando PageSpeed Insights...', 'warn');
+  try {
+    const res = await fetch('/seo-health/pagespeed', {method:'POST', headers:_H});
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.detail || 'Erro');
+    if(_dados) { _dados.pagespeed = data.pagespeed; render(_dados); }
+    toast('✅ PageSpeed concluído', 'ok');
+  } catch(e){
+    toast('Erro PageSpeed: '+e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '📊 PageSpeed';
+  }
+}
+
+async function atualizarMerchant(){
+  const btn = document.getElementById('btnMerchant');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin">⏳</span> Verificando...';
+  toast('🛒 Verificando feed do Merchant Center...', 'warn');
+  try {
+    const res = await fetch('/seo-health/merchant', {method:'POST', headers:_H});
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.detail || 'Erro');
+    if(_dados) { _dados.merchant = data.merchant; render(_dados); }
+    toast('✅ Dados do Merchant atualizados', 'ok');
+  } catch(e){
+    toast('Erro Merchant: '+e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🛒 Merchant';
+  }
+}
+
+// ── SCBOT ──
+function renderScbot(s){
+  if(!s) return `
+    <div class="scbot-section">
+      <h3>🤖 SCBOT — Robô de Indexação Google</h3>
+      <p style="color:var(--muted);font-size:13px">Nenhum ciclo executado ainda. Clique em <strong>SCBOT</strong> para disparar manualmente ou aguarde o ciclo automático das 09:00.</p>
+    </div>`;
+
+  const ult = s.ultimo_ciclo;
+  const creds = s.credenciais_ok;
+  const hist = s.historico_recente || [];
+  const diasAtivos = hist.filter(h=>h.ok).length;
+  const totalEnviadas = hist.reduce((a,h)=>a+(h.enviadas||0),0);
+
+  const statusCor = creds ? '#22c55e' : 'var(--danger)';
+  const statusTxt = creds ? 'Credenciais OK' : 'Credenciais ausentes';
+
+  const focoHoje = ult?.foco_dia || [];
+  const focoBadges = focoHoje.map(f=>`<span class="scbot-tag">${f}</span>`).join('');
+
+  const logRows = hist.slice().reverse().map(h=>`
+    <div class="scbot-log-row">
+      <span style="color:var(--muted)">${(h.data||'').substring(0,16).replace('T',' ')}</span>
+      <span class="${h.ok?'scbot-ok':'scbot-err'}">${h.ok ? '✅ '+h.enviadas+' URLs' : '❌ '+( h.erro||'erro')}</span>
+      <span style="color:var(--muted);font-size:11px">${(h.foco_dia||[]).join(', ')}</span>
+    </div>`).join('');
+
+  return `
+  <div class="scbot-section">
+    <h3>🤖 SCBOT — Robô de Indexação Google
+      <span style="margin-left:auto;font-size:11px;font-weight:400;color:${statusCor}">${statusTxt}</span>
+    </h3>
+    <div class="scbot-grid">
+      <div class="scbot-metric">
+        <div class="sm-val">${ult ? ult.enviadas : '—'}</div>
+        <div class="sm-lbl">URLs enviadas (último ciclo)</div>
+        <div class="sm-sub">Quota: 200/dia</div>
+      </div>
+      <div class="scbot-metric">
+        <div class="sm-val">${diasAtivos}</div>
+        <div class="sm-lbl">Dias ativos (últimos ${hist.length})</div>
+        <div class="sm-sub">Ciclo: diário às 09:00</div>
+      </div>
+      <div class="scbot-metric">
+        <div class="sm-val">${totalEnviadas.toLocaleString('pt-BR')}</div>
+        <div class="sm-lbl">Total URLs indexadas</div>
+        <div class="sm-sub">Histórico recente</div>
+      </div>
+      <div class="scbot-metric">
+        <div class="sm-val" style="font-size:14px;color:var(--text)">${ult ? (ult.data||'').substring(0,10) : '—'}</div>
+        <div class="sm-lbl">Último ciclo</div>
+        <div class="sm-sub">${ult ? (ult.erros||0)+' erros' : ''}</div>
+      </div>
+    </div>
+    ${focoHoje.length ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Foco de hoje:</div><div class="scbot-focus">${focoBadges}</div>` : ''}
+    ${logRows ? `<div style="font-size:12px;color:var(--muted);margin-bottom:8px;margin-top:12px">Histórico de ciclos:</div><div class="scbot-log">${logRows}</div>` : ''}
+  </div>`;
+}
+
+async function dispararScbot(){
+  const btn = document.getElementById('btnScbot');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin">⏳</span> Indexando...';
+  toast('🤖 SCBOT disparado — enviando URLs ao Google...', 'warn');
+  try {
+    const res = await fetch('/scbot/executar', {method:'POST', headers:_H});
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.detail || 'Erro');
+    const r = data.resultado || {};
+    if(_dados) { _dados.scbot = data.scbot || _dados.scbot; render(_dados); }
+    toast(`✅ SCBOT: ${r.enviadas||0} URLs enviadas ao Google`, 'ok');
+  } catch(e){
+    toast('Erro SCBOT: '+e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🤖 SCBOT';
+  }
+}
+
+// ── INIT ──
+async function init(){
+  try {
+    const res = await fetch('/seo-health/dados', {headers:{'ngrok-skip-browser-warning':'1'}});
+    const data = await res.json();
+    _dados = data;
+    render(data);
+  } catch(e){
+    document.getElementById('mainContent').innerHTML =
+      `<div class="loading-state">❌ Erro ao carregar dados.<br><br>
+       <button class="btn" onclick="analisar()">🔄 Analisar agora</button></div>`;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

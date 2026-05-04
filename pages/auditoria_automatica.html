@@ -552,10 +552,31 @@ function renderTabelaEstoqueML(itens){
     let acoes = '—';
     if(item.status === 'pendente'){
       if(isSemSku){
-        acoes = `<div class="actions-row">
-          <input type="text" placeholder="SKU Bling" id="sku_input_${item.id}" style="padding:6px;border-radius:8px;border:1px solid var(--warn);background:#0d1630;color:#fff;width:120px;font-size:12px"/>
-          <button class="btn success sm" onclick="cadastrarSKU('${item.id}')">💾 Salvar SKU</button>
-          <button class="btn secondary sm" onclick="ignorarML('${item.id}')">🚫</button>
+        // Monta opções de candidatos Bling (se houver)
+        const candidatos = item.candidatos_bling || [];
+        let selectCandidatos = '';
+        if(candidatos.length > 1){
+          const opts = candidatos.map(c =>
+            `<option value="${c.codigo}">${c.codigo} — ${c.nome.substring(0,40)} (est:${c.estoque})</option>`
+          ).join('');
+          selectCandidatos = `<select id="sku_select_${item.id}"
+            style="padding:5px;border-radius:6px;border:1px solid var(--accent);background:#0d1630;color:#fff;font-size:11px;max-width:220px"
+            onchange="document.getElementById('sku_input_${item.id}').value=this.value">
+            <option value="">— Selecione —</option>${opts}
+          </select>`;
+        }
+        const skuSugerido = item.sku_sugerido || '';
+        const inputBorder = skuSugerido ? 'var(--success,#22c55e)' : 'var(--warn)';
+        acoes = `<div class="actions-row" style="flex-direction:column;align-items:flex-start;gap:4px">
+          ${selectCandidatos}
+          <div style="display:flex;gap:4px;align-items:center">
+            <input type="text" placeholder="SKU Bling" id="sku_input_${item.id}"
+              value="${skuSugerido}"
+              style="padding:6px;border-radius:8px;border:1px solid ${inputBorder};background:#0d1630;color:#fff;width:130px;font-size:12px"/>
+            <button class="btn success sm" onclick="cadastrarSKU('${item.id}')">💾 Salvar SKU</button>
+            <button class="btn secondary sm" onclick="ignorarML('${item.id}')">🚫</button>
+          </div>
+          ${skuSugerido ? `<small style="color:#22c55e;font-size:10px">✨ Sugerido pelo Bling</small>` : (candidatos.length > 0 ? `<small style="color:#f59e0b;font-size:10px">${candidatos.length} candidato(s) encontrado(s)</small>` : '')}
         </div>`;
       } else {
         acoes = `<div class="actions-row">
@@ -565,8 +586,12 @@ function renderTabelaEstoqueML(itens){
       }
     }
 
-    const estoqueBlinkCell = isSemSku ? '<td style="color:var(--muted)">—</td>' : `<td style="color:#22c55e;font-weight:700">${item.estoque_bling??'—'}</td>`;
-    const difCell = isSemSku ? '<td><span class="tag alerta">Sem SKU</span></td>' : `<td class="${(item.diferenca||0) > 0 ? 'dif-pos' : 'dif-neg'}">${(item.diferenca||0) > 0 ? '+' : ''}${item.diferenca??'—'}</td>`;
+    const estoqueBlinkCell = (isSemSku && !item.estoque_bling && item.estoque_bling !== 0)
+      ? '<td style="color:var(--muted)">—</td>'
+      : `<td style="color:#22c55e;font-weight:700">${item.estoque_bling??'—'}</td>`;
+    const difCell = (isSemSku && item.diferenca === null)
+      ? '<td><span class="tag alerta">Sem SKU</span></td>'
+      : `<td class="${(item.diferenca||0) > 0 ? 'dif-pos' : 'dif-neg'}">${(item.diferenca||0) > 0 ? '+' : ''}${item.diferenca??'—'}</td>`;
 
     return `<tr>
       <td><strong>${item.item_id_ml||'—'}</strong><br/>${permalink}</td>
@@ -620,31 +645,65 @@ async function conferirEstoqueML(tipo=''){
     }
   }, 1500);
 
-  try{
-    const res = await fetch('/auditoria/ml-estoque/conferir' + (tipo ? '?tipo='+tipo : ''), {method:'POST'});
-    const data = await res.json();
-    clearInterval(intervalo);
-    progBar.style.width = '100%';
+  let pollInterval = null;
 
-    if(data.ok){
-      const temProblemas = (data.sem_sku + data.novas_divergencias) > 0;
-      progBar.style.background = temProblemas ? 'var(--warn)' : 'var(--ok)';
-      progTexto.textContent = `Concluído! ${data.verificados} verificados — ${data.sem_sku} sem SKU, ${data.novas_divergencias} novas divergências, ${data.erros} erros.`;
-      mostrarNotice(
-        `ML: ${data.verificados} anúncios verificados — ${data.sem_sku} sem SKU, ${data.novas_divergencias} divergências de estoque.`,
-        temProblemas ? 'warn' : 'ok'
-      );
-    }
-    carregarEstoqueML();
-  }catch(e){
+  const finalizarConferencia = (sucesso, msg) => {
     clearInterval(intervalo);
-    progBar.style.background = 'var(--danger)';
-    progTexto.textContent = 'Erro ao conferir estoque ML.';
-    mostrarNotice('Erro ao conferir estoque ML.','err');
-  }finally{
+    if(pollInterval) clearInterval(pollInterval);
+    progBar.style.width = '100%';
+    progBar.style.background = sucesso ? (sucesso === 'warn' ? 'var(--warn)' : 'var(--ok)') : 'var(--danger)';
+    progTexto.textContent = msg;
     if(btnConf) btnConf.disabled = false;
     if(btnTudo){ btnTudo.disabled = false; btnTudo.innerHTML = '🔍 Conferir tudo agora'; }
-    setTimeout(() => { progWrap.style.display = 'none'; }, 6000);
+    setTimeout(() => { progWrap.style.display = 'none'; }, 8000);
+    carregarEstoqueML();
+  };
+
+  try{
+    const res = await fetch('/auditoria/ml-estoque/conferir' + (tipo ? '?tipo='+tipo : ''), {method:'POST'});
+    const startData = await res.json();
+
+    if(!startData.ok){
+      finalizarConferencia(false, startData.detail || startData.erro || 'Erro ao iniciar conferência.');
+      mostrarNotice(startData.detail || 'Erro ao iniciar conferência ML.', 'err');
+      return;
+    }
+
+    // Conferência iniciada em background — fazer polling do status
+    pollInterval = setInterval(async () => {
+      try{
+        const statusRes = await fetch('/auditoria/ml-estoque/conferir/status');
+        const status = await statusRes.json();
+
+        // Atualizar barra de progresso com dados reais
+        if(status.max_paginas && status.pagina){
+          const pct = Math.min(Math.round((status.pagina / status.max_paginas) * 95), 95);
+          progSimulado = pct;
+          progBar.style.width = pct + '%';
+          progTexto.textContent = `Varrendo anúncios ML... (página ${status.pagina}/${status.max_paginas})`;
+        }
+
+        if(status.concluido){
+          const r = status.resultado || {};
+          const verificados = r.verificados ?? status.verificados ?? 0;
+          const semSku = r.sem_sku ?? status.sem_sku ?? 0;
+          const divergencias = r.novas_divergencias ?? status.divergencias ?? 0;
+          const erros = r.erros ?? status.erros ?? 0;
+
+          const temProblemas = (semSku + divergencias) > 0;
+          const msg = `Concluído! ${verificados} verificados — ${semSku} sem SKU, ${divergencias} novas divergências, ${erros} erros.`;
+          finalizarConferencia(temProblemas ? 'warn' : true, msg);
+          mostrarNotice(
+            `ML: ${verificados} anúncios verificados — ${semSku} sem SKU, ${divergencias} divergências de estoque.`,
+            temProblemas ? 'warn' : 'ok'
+          );
+        }
+      }catch(e){ /* ignora erro pontual de polling */ }
+    }, 2000);
+
+  }catch(e){
+    finalizarConferencia(false, 'Erro ao conferir estoque ML.');
+    mostrarNotice('Erro ao conferir estoque ML.','err');
   }
 }
 

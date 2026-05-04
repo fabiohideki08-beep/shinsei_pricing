@@ -143,7 +143,7 @@
 
 <div class="main">
 
-  <!-- STATS -->
+  <!-- STATS ROW 1 -->
   <div class="stats-row" style="margin-top:24px">
     <div class="stat-card">
       <div class="stat-label">Fila de aprovação</div>
@@ -167,33 +167,54 @@
     </div>
   </div>
 
-        <div class="stat-card" onclick="window.location='/auditoria-automatica'" style="cursor:pointer;border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.06)">
-          <div class="stat-label">⚠️ Estoque Negativo</div>
-          <div class="stat-value warn" id="stat-negativo">0</div>
-          <div class="stat-sub" id="stat-negativo-sub">SKUs com saldo negativo no Bling</div>
-        </div>
-        <div class="stat-card" onclick="window.location='/auditoria-automatica'" style="cursor:pointer">
-          <div class="stat-label">🛒 Divergências ML</div>
-          <div class="stat-value warn" id="stat-div-ml">—</div>
-          <div class="stat-sub">estoque Bling ≠ ML</div>
-        </div>
-        <div class="stat-card" onclick="window.location='/auditoria-automatica'" style="cursor:pointer">
-          <div class="stat-label">🛍️ Divergências Shopify</div>
-          <div class="stat-value warn" id="stat-div-shopify">—</div>
-          <div class="stat-sub">estoque Bling ≠ Shopify</div>
-        </div>
-        <div class="stat-card" onclick="window.location='/auditoria-automatica'" style="cursor:pointer">
-          <div class="stat-label">📦 Divergências Amazon</div>
-          <div class="stat-value warn" id="stat-div-amazon">—</div>
-          <div class="stat-sub">estoque Bling ≠ Amazon</div>
-        </div>
+  <!-- STATS ROW 2 -->
+  <div class="stats-row">
+    <div class="stat-card" onclick="window.location='/auditoria-automatica'" style="cursor:pointer;border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.06)">
+      <div class="stat-label">⚠️ Estoque Negativo</div>
+      <div class="stat-value warn" id="stat-negativo">0</div>
+      <div class="stat-sub" id="stat-negativo-sub">SKUs com saldo negativo no Bling</div>
+    </div>
+    <div class="stat-card" onclick="window.location='/auditoria-automatica'" style="cursor:pointer">
+      <div class="stat-label">🛒 Divergências ML</div>
+      <div class="stat-value warn" id="stat-div-ml">—</div>
+      <div class="stat-sub">estoque Bling ≠ ML</div>
+    </div>
+    <div class="stat-card" onclick="window.location='/auditoria-automatica'" style="cursor:pointer">
+      <div class="stat-label">🛍️ Divergências Shopify</div>
+      <div class="stat-value warn" id="stat-div-shopify">—</div>
+      <div class="stat-sub">estoque Bling ≠ Shopify</div>
+    </div>
+    <div class="stat-card" onclick="window.location='/auditoria-automatica'" style="cursor:pointer">
+      <div class="stat-label">📦 Divergências Amazon</div>
+      <div class="stat-value warn" id="stat-div-amazon">—</div>
+      <div class="stat-sub">estoque Bling ≠ Amazon</div>
+    </div>
+  </div>
 
-  
-        <div class="stat-card" onclick="window.location='/auditoria-automatica'" style="cursor:pointer;border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.06)">
-          <div class="stat-label">⚠️ ML Sem SKU</div>
-          <div class="stat-value warn" id="stat-ml-sem-sku">—</div>
-          <div class="stat-sub">Anúncios ativos sem SKU vinculado</div>
-        </div>
+  <!-- STATS ROW 3 -->
+  <div class="stats-row">
+    <div class="stat-card" onclick="window.location='/auditoria-automatica'" style="cursor:pointer;border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.06)">
+      <div class="stat-label">⚠️ ML Sem SKU</div>
+      <div class="stat-value warn" id="stat-ml-sem-sku">—</div>
+      <div class="stat-sub">Anúncios ativos sem SKU vinculado</div>
+    </div>
+    <div class="stat-card" onclick="window.location='/gmc'" style="cursor:pointer">
+      <div class="stat-label">🛒 GMC Reprovados</div>
+      <div class="stat-value warn" id="stat-gmc-reprovados">—</div>
+      <div class="stat-sub">produtos reprovados no Merchant Center</div>
+    </div>
+    <div class="stat-card" onclick="window.location='/gmc'" style="cursor:pointer">
+      <div class="stat-label">⚠️ GMC Limitados</div>
+      <div class="stat-value warn" id="stat-gmc-limitados">—</div>
+      <div class="stat-sub">produtos com erros no Merchant Center</div>
+    </div>
+    <div class="stat-card" onclick="window.location='/seo-health'" style="cursor:pointer">
+      <div class="stat-label">🔍 SEO Score</div>
+      <div class="stat-value blue" id="stat-seo-score">—</div>
+      <div class="stat-sub">saúde SEO da loja</div>
+    </div>
+  </div>
+
   <!-- MÓDULOS PRINCIPAIS -->
   <div class="section-title">Módulos principais</div>
   <div class="hero-grid">
@@ -256,9 +277,80 @@
       <span class="card-arrow">→</span>
     </a>
 
+    <a href="/seo-health" class="module-card">
+      <span class="card-icon">🔍</span>
+      <h3>SEO Health</h3>
+      <p>Análise de qualidade da loja, PageSpeed e pendências no Google Merchant Center.</p>
+      <span class="card-tag ativo">Ativo</span>
+      <span class="card-arrow">→</span>
+    </a>
+
+    <a href="/gmc" class="module-card">
+      <span class="card-icon">🛒</span>
+      <h3>Google Merchant Center</h3>
+      <p>Escaneie erros de produto, corrija automaticamente e gerencie a blacklist de exclusão.</p>
+      <div class="card-badge" id="badge-gmc">—</div>
+      <span class="card-tag ativo">Ativo</span>
+      <span class="card-arrow">→</span>
+    </a>
+
+    <a href="/conferencia-estoque" class="module-card">
+      <span class="card-icon">📦</span>
+      <h3>Conferência ML</h3>
+      <p>Confira e sincronize estoques do Mercado Livre com o Bling, com busca de SKU por GTIN e título.</p>
+      <span class="card-tag novo">Novo</span>
+      <span class="card-arrow">→</span>
+    </a>
+
+    <a href="/marketing" class="module-card">
+      <span class="card-icon">📢</span>
+      <h3>Marketing</h3>
+      <p>Gestão de campanhas, kits e promoções integradas aos canais de venda.</p>
+      <span class="card-tag beta">Beta</span>
+      <span class="card-arrow">→</span>
+    </a>
+
   </div>
 
-  <!-- MÓDULOS SECUNDÁRIOS -->
+  <!-- CANAIS -->
+  <div class="section-title">Canais de venda</div>
+  <div class="secondary-grid">
+
+    <a href="/mercado-livre" class="mini-card">
+      <div class="mini-icon">🛍️</div>
+      <div class="mini-text">
+        <h4>Mercado Livre</h4>
+        <p>Painel e anúncios ML</p>
+      </div>
+    </a>
+
+    <a href="/shopify" class="mini-card">
+      <div class="mini-icon">🟢</div>
+      <div class="mini-text">
+        <h4>Shopify</h4>
+        <p>Produtos e preços da loja</p>
+      </div>
+    </a>
+
+    <a href="/amazon" class="mini-card">
+      <div class="mini-icon">📦</div>
+      <div class="mini-text">
+        <h4>Amazon</h4>
+        <p>Catálogo e preços Amazon</p>
+      </div>
+    </a>
+
+    <a href="/shopee" class="mini-card">
+      <div class="mini-icon">🟠</div>
+      <div class="mini-text">
+        <h4>Shopee</h4>
+        <p>Produtos e preços Shopee</p>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- FERRAMENTAS -->
   <div class="section-title">Ferramentas</div>
   <div class="secondary-grid">
 
@@ -275,6 +367,22 @@
       <div class="mini-text">
         <h4>Reconectar ML</h4>
         <p>OAuth Mercado Livre</p>
+      </div>
+    </a>
+
+    <a href="/oee" class="mini-card">
+      <div class="mini-icon">⚙️</div>
+      <div class="mini-text">
+        <h4>OEE</h4>
+        <p>Eficiência operacional</p>
+      </div>
+    </a>
+
+    <a href="/sie" class="mini-card">
+      <div class="mini-icon">📈</div>
+      <div class="mini-text">
+        <h4>SIE</h4>
+        <p>Indicadores estratégicos</p>
       </div>
     </a>
 
@@ -408,6 +516,31 @@ document.addEventListener('DOMContentLoaded', carregarStats);
                 if(el){el.textContent=n;el.className='stat-value '+(n>0?'warn':'green');}
                 const sub=document.getElementById('stat-negativo-sub');
                 if(sub&&n>0)sub.textContent=n+' SKU(s) com saldo negativo — clique para ver';
+            }).catch(()=>{});
+
+        // GMC status
+        fetch('/gmc/status')
+            .then(r=>r.json()).then(d=>{
+                const reprovados = d.resumo?.total_reprovados || 0;
+                const limitados  = d.resumo?.total_limitados  || 0;
+                const elR = document.getElementById('stat-gmc-reprovados');
+                const elL = document.getElementById('stat-gmc-limitados');
+                const badge = document.getElementById('badge-gmc');
+                if(elR){elR.textContent=reprovados;elR.className='stat-value '+(reprovados>0?'warn':'green');}
+                if(elL){elL.textContent=limitados; elL.className='stat-value '+(limitados>0?'warn':'green');}
+                if(badge){
+                    const total = reprovados + limitados;
+                    badge.textContent = total;
+                    badge.className = 'card-badge' + (total > 0 ? ' show' : '');
+                }
+            }).catch(()=>{});
+
+        // ML Sem SKU
+        fetch('/auditoria/ml-sem-sku')
+            .then(r=>r.json()).then(d=>{
+                const n = d.stats?.sem_sku || 0;
+                const el = document.getElementById('stat-ml-sem-sku');
+                if(el){el.textContent=n;el.className='stat-value '+(n>0?'warn':'green');}
             }).catch(()=>{});
 </script>
 </body>

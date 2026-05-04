@@ -25,6 +25,7 @@ def carregar_fila() -> list:
 
 
 def salvar_fila(itens: list):
+    FILA_PATH.parent.mkdir(exist_ok=True)
     FILA_PATH.write_text(json.dumps(itens, ensure_ascii=False, indent=2), encoding="utf-8")
 
 

@@ -45,20 +45,27 @@ COPY --from=builder /install /usr/local
 # (arquivos sensíveis são excluídos pelo .dockerignore)
 COPY --chown=shinsei:shinsei . .
 
-# Cria diretórios de dados e logs com permissão correta
+# Copia o entrypoint e garante permissão de execução (ainda como root)
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Cria diretórios de dados e logs com permissão correta para a imagem base
+# (em runtime o volume Railway sobrepõe /app/data como root —
+#  o docker-entrypoint.sh corrige o chown antes de iniciar o app)
 RUN mkdir -p data logs \
     && chown -R shinsei:shinsei data logs
 
-# Muda para usuário não-root
-USER shinsei
+# NOTA: não usamos USER shinsei aqui porque o entrypoint precisa rodar
+# como root para corrigir as permissões do volume antes de trocar de usuário.
+# O docker-entrypoint.sh faz o "su shinsei" internamente.
 
 # Expõe a porta da aplicação
 EXPOSE $PORT
 
 # Health check — usa o endpoint /health já existente
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
     CMD python -c "import urllib.request, os; urllib.request.urlopen('http://localhost:' + os.environ.get('PORT','8000') + '/health')" \
     || exit 1
 
-# Comando de inicialização — usa $PORT injetado pelo Railway
-CMD ["sh", "-c", "python startup.py && uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --timeout-keep-alive 30 --log-level info"]
+# Entrypoint: corrige permissões do volume como root e depois executa start.sh como shinsei
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

@@ -161,7 +161,21 @@ class BlingClient:
             timeout=30,
         )
         if response.status_code != 200:
-            raise BlingAuthError(f"Erro ao renovar token: {response.text}")
+            err_body = response.text
+            # Detecta "Empresa inativa" para mensagem mais clara
+            try:
+                err_json = response.json()
+                err_msg = (err_json.get("error", {}) or {}).get("message", "")
+                if "inativa" in err_msg.lower() or "inactive" in err_msg.lower():
+                    raise BlingAuthError(
+                        "Conta Bling inativa — verifique seu plano/assinatura no painel Bling "
+                        "e reconecte em /bling/auth."
+                    )
+            except BlingAuthError:
+                raise
+            except Exception:
+                pass
+            raise BlingAuthError(f"Erro ao renovar token: {err_body}")
         data = response.json()
         data["expires_at"] = time.time() + int(data.get("expires_in", 0))
         self._save_tokens(data)
@@ -376,6 +390,64 @@ class BlingClient:
             "produtos": [produto],
             "debug_sku": report,
         }
+
+    def search_by_gtin(self, gtin: str) -> list[dict]:
+        """
+        Busca produtos no Bling pelo GTIN/EAN.
+        Retorna lista de {'id', 'codigo', 'nome', 'estoque'}.
+        """
+        gtin = str(gtin or "").strip()
+        if not gtin:
+            return []
+        try:
+            payload = self._get("/produtos", params={"gtin": gtin, "limite": 10})
+            items = payload.get("data", [])
+            if not isinstance(items, list):
+                return []
+            result = []
+            for item in items:
+                p = self._normalize_product(item)
+                codigo = str(p.get("codigo") or "").strip()
+                if not codigo:
+                    continue
+                estoque = int((p.get("estoque") or {}).get("saldoVirtualTotal") or 0)
+                result.append({
+                    "id":      p.get("id"),
+                    "codigo":  codigo,
+                    "nome":    p.get("nome") or p.get("descricao") or "",
+                    "estoque": estoque,
+                    "gtin":    gtin,
+                })
+            return result
+        except Exception:
+            return []
+
+    def search_by_name(self, name: str, limit: int = 10) -> list[dict]:
+        """
+        Busca produtos no Bling pelo campo descrição (nome).
+        Retorna lista de {'id', 'codigo', 'nome', 'estoque'}.
+        """
+        try:
+            payload = self._get("/produtos", params={"descricao": name.strip(), "limite": limit})
+            items = payload.get("data", [])
+            if not isinstance(items, list):
+                return []
+            result = []
+            for item in items:
+                p = self._normalize_product(item)
+                codigo = str(p.get("codigo") or "").strip()
+                if not codigo:
+                    continue
+                estoque = int((p.get("estoque") or {}).get("saldoVirtualTotal") or 0)
+                result.append({
+                    "id":      p.get("id"),
+                    "codigo":  codigo,
+                    "nome":    p.get("nome") or p.get("descricao") or "",
+                    "estoque": estoque,
+                })
+            return result
+        except Exception:
+            return []
 
     def update_product(self, product_id: int, payload: dict) -> dict:
         return self._put(f"/produtos/{int(product_id)}", payload)

@@ -72,6 +72,165 @@ def _ml_get_item_sku(item: dict) -> Optional[str]:
             if v: return str(v).strip()
     return None
 
+
+def _ml_get_attr(item: dict, attr_id: str) -> Optional[str]:
+    """Retorna o value_name de um atributo ML pelo ID."""
+    for a in item.get("attributes", []):
+        if a.get("id") == attr_id:
+            v = a.get("value_name")
+            return str(v).strip() if v else None
+    return None
+
+
+def _normalizar_titulo(titulo: str) -> str:
+    """Remove sufixos de loja e normaliza o título para busca no Bling."""
+    import re
+    titulo = re.split(r"\s[–—]\s", titulo)[0]
+    titulo = re.sub(r"\(\d+\)", "", titulo)
+    return titulo.strip()
+
+
+def _termos_busca_titulo(titulo: str) -> list[str]:
+    """
+    Gera termos de busca progressivamente menores e mais específicos.
+    Prioriza palavras não-genéricas (remove Kit, Ox, volumes, preposições).
+    """
+    import re
+    titulo_limpo = _normalizar_titulo(titulo)
+    palavras = titulo_limpo.split()
+
+    # Palavras genéricas que poluem a busca no Bling
+    SKIP = {"kit", "ox", "com", "de", "da", "do", "e", "em", "para", "vol",
+            "ml", "g", "kg", "un", "unidades", "todas", "as", "cores", "+"}
+
+    # Filtra palavras significativas (sem números isolados, sem skip words)
+    significativas = [
+        p for p in palavras
+        if p.lower() not in SKIP and not re.match(r"^\d+$", p)
+    ]
+
+    termos = []
+    # Termo 1: título completo (até 8 palavras)
+    if len(palavras) >= 4:
+        termos.append(" ".join(palavras[:8]))
+    # Termo 2: só palavras significativas (até 6)
+    if significativas:
+        termos.append(" ".join(significativas[:6]))
+    # Termo 3: apenas as últimas 4 palavras significativas (marca + produto)
+    if len(significativas) > 3:
+        termos.append(" ".join(significativas[-4:]))
+    # Termo 4: últimas 2 palavras significativas (mínimo fallback)
+    if len(significativas) > 1:
+        termos.append(" ".join(significativas[-2:]))
+
+    # Deduplica mantendo ordem
+    seen, unique = set(), []
+    for t in termos:
+        if t not in seen and len(t) >= 5:
+            seen.add(t)
+            unique.append(t)
+    return unique
+
+
+def _buscar_sku_no_bling(bling_client, item: dict) -> dict:
+    """
+    Busca o SKU no Bling para um anúncio ML sem SKU.
+    Estratégia em 3 etapas:
+      1. GTIN do item (atributo ML) — mais confiável
+      2. Série de buscas por título com termos progressivamente menores
+      3. Marca + linha do produto (fallback)
+
+    Retorna:
+      - encontrado: bool
+      - sku: str | None
+      - nome_bling: str | None
+      - estoque: int | None
+      - candidatos: list
+      - confianca: 'alta' | 'media' | 'baixa'
+      - metodo: str
+    """
+    titulo = item.get("title") or item.get("titulo") or ""
+    titulo_limpo = _normalizar_titulo(titulo)
+
+    # ── Etapa 1: busca por GTIN ─────────────────────────────────────────
+    gtin = _ml_get_attr(item, "GTIN")
+    if gtin:
+        try:
+            candidatos = bling_client.search_by_gtin(gtin)
+        except Exception:
+            candidatos = []
+        if candidatos:
+            c = candidatos[0]
+            return {
+                "encontrado": True,
+                "sku":        c["codigo"],
+                "nome_bling": c["nome"],
+                "estoque":    c["estoque"],
+                "candidatos": candidatos,
+                "confianca":  "alta",
+                "metodo":     "gtin",
+            }
+
+    # ── Etapa 2: busca por título com termos progressivos ───────────────
+    if titulo_limpo:
+        termos = _termos_busca_titulo(titulo_limpo)
+        for termo in termos:
+            try:
+                candidatos = bling_client.search_by_name(termo, limit=10)
+            except Exception:
+                candidatos = []
+            if not candidatos:
+                continue
+
+            if len(candidatos) == 1:
+                c = candidatos[0]
+                return {
+                    "encontrado": True,
+                    "sku":        c["codigo"],
+                    "nome_bling": c["nome"],
+                    "estoque":    c["estoque"],
+                    "candidatos": candidatos,
+                    "confianca":  "media",
+                    "metodo":     f"titulo:{termo[:30]}",
+                }
+            # Múltiplos: retorna para o usuário escolher
+            return {
+                "encontrado": False,
+                "candidatos": candidatos,
+                "confianca":  "baixa",
+                "metodo":     f"titulo:{termo[:30]}",
+            }
+
+    # ── Etapa 3: busca por marca + linha ────────────────────────────────
+    brand = _ml_get_attr(item, "BRAND")
+    line  = _ml_get_attr(item, "LINE")
+    if brand:
+        termo_marca = f"{brand} {line}".strip() if line else brand
+        try:
+            candidatos = bling_client.search_by_name(termo_marca, limit=10)
+        except Exception:
+            candidatos = []
+        if len(candidatos) == 1:
+            c = candidatos[0]
+            return {
+                "encontrado": True,
+                "sku":        c["codigo"],
+                "nome_bling": c["nome"],
+                "estoque":    c["estoque"],
+                "candidatos": candidatos,
+                "confianca":  "baixa",
+                "metodo":     f"marca:{termo_marca}",
+            }
+        if candidatos:
+            return {
+                "encontrado": False,
+                "candidatos": candidatos,
+                "confianca":  "baixa",
+                "metodo":     f"marca:{termo_marca}",
+            }
+
+    return {"encontrado": False, "candidatos": [], "metodo": "nenhum"}
+
 def _ml_listar_anuncios(seller_id: int, limit: int = 50, offset: int = 0) -> list[str]:
     """Busca IDs de anúncios ativos do seller."""
     try:
@@ -132,7 +291,7 @@ def _ml_atualizar_estoque(item_id: str, quantidade: int) -> dict:
     except Exception as e:
         return {"ok": False, "erro": str(e)}
 
-def conferir_estoques_ml(bling_client, max_paginas: int = 5) -> dict:
+def conferir_estoques_ml(bling_client, max_paginas: int = 5, progresso_cb=None) -> dict:
     """
     Varre anúncios ativos do ML e confere estoque vs Bling.
     """
@@ -166,28 +325,50 @@ def conferir_estoques_ml(bling_client, max_paginas: int = 5) -> dict:
 
                 sku = _ml_get_item_sku(item)
                 qty_ml = int(item.get("available_quantity") or 0)
-                titulo = item.get("title", "")[:60]
+                titulo = item.get("title", "")[:80]  # título para exibição (não afeta busca)
 
                 # ── Caso 1: sem SKU ──────────────────────────────
                 if not sku:
+                    # Busca SKU no Bling: GTIN → título → marca
+                    try:
+                        time.sleep(0.3)
+                        busca = _buscar_sku_no_bling(bling_client, item)
+                    except Exception:
+                        busca = {"encontrado": False, "candidatos": [], "metodo": "erro"}
+
+                    sku_sugerido   = busca.get("sku")
+                    estoque_bling  = busca.get("estoque", 0) or 0
+                    nome_bling     = busca.get("nome_bling", "")
+                    confianca      = busca.get("confianca", "")
+                    metodo         = busca.get("metodo", "")
+
                     sem_sku += 1
                     chave = (item_id, "sem_sku")
                     if chave not in chaves_pendentes:
-                        fila.append({
-                            "id": f"ml_semsku_{item_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
-                            "item_id_ml": item_id,
-                            "titulo": titulo,
-                            "sku": None,
-                            "tipo": "sem_sku",
-                            "estoque_bling": None,
-                            "estoque_ml": qty_ml,
-                            "diferenca": None,
-                            "status": "pendente",
-                            "criado_em": datetime.utcnow().isoformat(),
-                            "atualizado_em": None,
-                            "permalink": item.get("permalink", ""),
-                        })
+                        entry = {
+                            "id":             f"ml_semsku_{item_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+                            "item_id_ml":     item_id,
+                            "titulo":         item.get("title", titulo),
+                            "sku":            None,
+                            "sku_sugerido":   sku_sugerido,
+                            "nome_bling":     nome_bling,
+                            "tipo":           "sem_sku",
+                            "estoque_bling":  estoque_bling if sku_sugerido else None,
+                            "estoque_ml":     qty_ml,
+                            "diferenca":      (estoque_bling - qty_ml) if sku_sugerido else None,
+                            "status":         "pendente",
+                            "criado_em":      datetime.utcnow().isoformat(),
+                            "atualizado_em":  None,
+                            "permalink":      item.get("permalink", ""),
+                            "candidatos_bling": busca.get("candidatos", []),
+                            "confianca_sku":  confianca,
+                            "metodo_busca":   metodo,
+                        }
+                        fila.append(entry)
                         chaves_pendentes.add(chave)
+
+                    if busca.get("encontrado") and sku_sugerido and estoque_bling != qty_ml:
+                        divergencias += 1
                     continue
 
                 # ── Caso 2: tem SKU → confere com Bling ──────────
@@ -227,11 +408,31 @@ def conferir_estoques_ml(bling_client, max_paginas: int = 5) -> dict:
                             )
                 except Exception as e:
                     erros += 1
+                    err_str = str(e)
                     logger.warning("Erro ao buscar SKU %s no Bling: %s", sku, e)
+                    # Se é erro de auth Bling, aborta a conferência inteira (não adianta continuar)
+                    if "inativa" in err_str.lower() or "autenticado" in err_str.lower() or "Empresa inativa" in err_str:
+                        logger.error("BLING AUTH: %s — conferência interrompida", err_str)
+                        salvar_fila_estoque_ml(fila)
+                        return {
+                            "ok": False,
+                            "erro": f"Bling desconectado: {err_str}",
+                            "verificados": verificados,
+                            "sem_sku": sem_sku,
+                            "novas_divergencias": divergencias,
+                            "erros": erros,
+                            "total_pendentes": len([i for i in fila if i.get("status") == "pendente"]),
+                        }
 
             except Exception as e:
                 erros += 1
                 logger.warning("Erro ao processar item ML %s: %s", item_id, e)
+
+        if progresso_cb:
+            try:
+                progresso_cb(pagina + 1, max_paginas, verificados, divergencias, sem_sku, erros)
+            except Exception:
+                pass
 
         if (pagina + 1) * limit >= total:
             break
