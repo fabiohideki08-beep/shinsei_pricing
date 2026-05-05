@@ -2,6 +2,26 @@ from __future__ import annotations
 
 from typing import Dict, List, Any
 
+# ML API em tempo real (opcional)
+try:
+    from ml_pricing_engine import get_ml_taxa_real as _get_ml_taxa_real
+    _ML_API_DISPONIVEL = True
+except ImportError:
+    _ML_API_DISPONIVEL = False
+    _get_ml_taxa_real = None
+
+# Flag global para usar API ML em tempo real
+_ML_API_REAL = False
+_ML_PESO_G = 0
+_ML_CATEGORY_ID = ""
+
+def configurar_ml_api(usar_api: bool, peso_g: int = 0, category_id: str = ""):
+    global _ML_API_REAL, _ML_PESO_G, _ML_CATEGORY_ID
+    _ML_API_REAL = usar_api and _ML_API_DISPONIVEL
+    _ML_PESO_G = peso_g
+    _ML_CATEGORY_ID = category_id
+
+
 FORMULA_VERSION = "v3.4.0-composicao"
 
 def _safe_float(v, default=0.0):
@@ -96,7 +116,11 @@ def _resolver_preco_por_objetivo(custo_base, frete, taxa_fixa, comissao, imposto
         return (custo_base + frete + taxa_fixa + lucro_alvo) / max(1 - comissao - imposto, 0.0001)
     raise ValueError("Objetivo inválido.")
 
-def _calcular_um_canal(regras: List[Dict], canal: str, custo_base: float, peso: float, imposto: float, objetivo: str, tipo_alvo: str, valor_alvo: float):
+def _calcular_um_canal(regras: List[Dict], canal: str, custo_base: float, peso: float, imposto: float, objetivo: str, tipo_alvo: str, valor_alvo: float, embalagem: float = 0):
+    # Para canais Full, embalagem é por conta do ML
+    if 'Full' in canal:
+        custo_base = custo_base - _safe_float(embalagem, 0)
+        custo_base = max(custo_base, 0)
     preco = max(custo_base * 1.5, 1.0)
     regra = None
     for _ in range(25):
@@ -112,10 +136,20 @@ def _calcular_um_canal(regras: List[Dict], canal: str, custo_base: float, peso: 
     frete = _round2(regra["taxa_frete"])
     taxa_fixa = _round2(regra["taxa_fixa"])
     comissao_pct = regra["comissao"]
+    frete_op_api = 0.0
+    # Usa taxa ML em tempo real se configurado
+    if _ML_API_REAL and _get_ml_taxa_real and canal in ("Mercado Livre Classico", "Mercado Livre Premium"):
+        _listing = "gold_special" if "Classico" in canal else "gold_pro"
+        try:
+            _taxa = _get_ml_taxa_real(_listing, preco_final, _ML_PESO_G or 300, _ML_CATEGORY_ID)
+            comissao_pct = _taxa.get("comissao_pct", comissao_pct)
+            frete_op_api = _taxa.get("frete_operacional", 0.0)
+        except Exception:
+            pass
     imposto_pct = imposto
     comissao_valor = _round2(preco_final * comissao_pct)
     imposto_valor = _round2(preco_final * imposto_pct)
-    receita_liquida = _round2(preco_final - frete - taxa_fixa - comissao_valor)
+    receita_liquida = _round2(preco_final - frete - taxa_fixa - comissao_valor - frete_op_api)
     lucro_bruto = _round2(receita_liquida - custo_base)
     lucro_liquido = _round2(lucro_bruto - imposto_valor)
     margem_liquida_percentual = _round2((lucro_liquido / preco_final) * 100 if preco_final else 0)
@@ -152,7 +186,7 @@ def calcular_canais(regras, preco_compra, embalagem, peso, imposto, quantidade, 
     resultados = []
     for canal in canais:
         try:
-            resultados.append(_calcular_um_canal(regras, canal, custo_base, peso_usado, imposto, objetivo, tipo_alvo, valor_alvo))
+            resultados.append(_calcular_um_canal(regras, canal, custo_base, peso_usado, imposto, objetivo, tipo_alvo, valor_alvo, embalagem=_safe_float(embalagem, 0)))
         except Exception:
             continue
     resultados_ordenados = sorted(resultados, key=lambda x: (x.get("indice_final", 0), x.get("lucro_liquido", 0)), reverse=True)
@@ -288,6 +322,8 @@ def extrair_custo_do_estoque_bling(produto: dict) -> dict:
         ("produto.precoCompra", produto.get("precoCompra")),
         ("produto.preco_compra", produto.get("preco_compra")),
         ("produto.precoCusto", produto.get("precoCusto")),
+        ("fornecedor.precoCusto", (produto.get("fornecedor") or {}).get("precoCusto")),
+        ("fornecedor.precoCompra", (produto.get("fornecedor") or {}).get("precoCompra")),
     ]
 
     for origem, valor in candidatos_diretos:
@@ -307,6 +343,20 @@ def extrair_custo_do_estoque_bling(produto: dict) -> dict:
         if not origem.startswith("produto.estoque"):
             return {"custo": round(float(valor), 4), "origem": origem, "warning": "Fallback por varredura no produto."}
 
+    # Override local de custo (salvo pelo simulador para produtos sem fornecedor)
+    try:
+        from pathlib import Path as _Path
+        import json as _json
+        _override_path = _Path(__file__).parent / "data" / "custo_override.json"
+        if _override_path.exists():
+            _overrides = _json.loads(_override_path.read_text(encoding="utf-8"))
+            _sku = produto.get("codigo") or ""
+            _pid = str(produto.get("id") or "")
+            _override = _overrides.get(_sku) or _overrides.get(_pid)
+            if _override and float(_override.get("custo", 0)) > 0:
+                return {"custo": round(float(_override["custo"]), 4), "origem": "override_local", "warning": "Custo salvo localmente pelo simulador."}
+    except Exception:
+        pass
     return {"custo": 0.0, "origem": None, "warning": "Preço de compra não encontrado no estoque nem no produto."}
 
 def _buscar_componentes_em_objeto(obj: Any, prefixo: str = "") -> list[dict]:
@@ -438,6 +488,7 @@ def resolver_custo_produto_ou_composicao(client, produto: dict) -> dict:
         detalhes.append({
             "sku": (produto_comp.get("codigo") or comp.get("sku")),
             "id": produto_comp.get("id") or comp.get("id"),
+            "nome": produto_comp.get("nome") or produto_comp.get("descricao") or "",
             "quantidade": _safe_float(comp.get("quantidade"), 1),
             "custo_unitario": _round2(custo_unit),
             "subtotal": _round2(subtotal),
@@ -485,18 +536,36 @@ def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto,
     produto = busca.get("produto", {})
     custo_resolvido = resolver_custo_produto_ou_composicao(client, produto)
     preco_custo = float(custo_resolvido["custo_total"] or 0)
+
+
     estoque = int(((produto.get("estoque") or {}).get("saldoVirtualTotal") or 0))
     peso_extraido = extrair_peso_do_produto_bling(produto)
     peso_usado = float(peso_override or 0) if float(peso_override or 0) > 0 else float(peso_extraido["peso"] or 0)
+    # Fallback: peso_override.json local (para produtos sem peso no Bling)
+    if peso_usado <= 0:
+        try:
+            _peso_override_path = _Path(__file__).parent / "data" / "peso_override.json"
+            if _peso_override_path.exists():
+                _peso_overrides = __import__('json').loads(_peso_override_path.read_text(encoding='utf-8'))
+                _sku_key = str(sku or valor_busca or "")
+                if _sku_key in _peso_overrides:
+                    peso_usado = float(_peso_overrides[_sku_key])
+        except Exception:
+            pass
 
     if preco_custo <= 0:
         return {
             "erro": "Produto sem custo válido no Bling",
+            "erro_codigo": "composicao_sem_custo" if str(custo_resolvido.get("origem") or "").lower() == "componentes_do_anuncio" else "custo_ausente",
             "acao": "Preencha o preço de compra no estoque ou revise a composição do anúncio.",
             "custo_extraido": custo_resolvido,
         }
     if peso_usado <= 0:
-        return {"erro": "Produto sem peso", "acao": "Preencha o peso no Bling ou use peso override."}
+        return {
+            "erro": "Produto sem peso",
+            "erro_codigo": "peso_ausente",
+            "acao": "Preencha o peso no Bling ou use peso override.",
+        }
 
     sku = produto.get("codigo") or valor_busca
     calculo = calcular_canais(regras, preco_custo, embalagem, peso_usado, imposto, quantidade, objetivo, tipo_alvo, valor_alvo, intelligence_config=intelligence_config, historical_data=historical_data, sku=sku)

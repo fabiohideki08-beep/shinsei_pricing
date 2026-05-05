@@ -1,0 +1,64 @@
+{
+  "objetivo": "markup",
+  "tipo_alvo": "percentual",
+  "valor_alvo": 33.0,
+  "arredondamento": "90",
+  "modo_aprovacao": "manual",
+  "fila_auto_ao_calcular": true,
+  "gordura_por_canal": {
+    "Mercado Livre Classico": {
+      "tipo": "percentual",
+      "valor": 20
+    },
+    "Mercado Livre Premium": {
+      "tipo": "percentual",
+      "valor": 20
+    },
+    "Shopee": {
+      "tipo": "percentual",
+      "valor": 20
+    },
+    "Amazon": {
+      "tipo": "percentual",
+      "valor": 20
+    },
+    "Shein": {
+      "tipo": "percentual",
+      "valor": 20
+    },
+    "Shopify": {
+      "tipo": "percentual",
+      "valor": 16
+    },
+    "Mercado Livre Full Classico": {
+      "tipo": "percentual",
+      "valor": 0
+    },
+    "Mercado Livre Full Premium": {
+      "tipo": "percentual",
+      "valor": 0
+    }
+  },
+  "forcas_canais": {
+    "Mercado Livre Classico": 0.8,
+    "Mercado Livre Premium": 0.75,
+    "Shopee": 0.6,
+    "Amazon": 0.7,
+    "Shein": 0.15,
+    "Shopify": 0.1
+  },
+  "peso_forca": 0.4,
+  "peso_equilibrio": 0.4,
+  "peso_lucro": 0.2,
+  "regra_estoque": {
+    "ativo": true,
+    "limite": 2,
+    "tipo": "percentual",
+    "valor": 20
+  },
+  "modo_auto": false,
+  "auto_margem_ok": 25.0,
+  "auto_margem_fila": 15.0,
+  "ml_api_real": true,
+  "embalagem_padrao": 0.5
+}

@@ -1,0 +1,1123 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auditoria Automática — Shinsei Pricing</title>
+  <style>
+    :root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--danger:#ef4444;--ok:#16a34a;--warn:#f5b301}
+    *{box-sizing:border-box} body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text)}
+    .wrap{max-width:1400px;margin:0 auto;padding:22px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 18px;position:sticky;top:16px;z-index:10}
+    .brand h1{margin:0;font-size:22px}.brand p{margin:4px 0 0;color:var(--muted);font-size:13px}.top-actions{display:flex;gap:10px;align-items:center}
+    .btn{border:none;background:var(--accent);color:#fff;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-size:13px}
+    .btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+    .btn.success{background:var(--ok)} .btn.danger{background:var(--danger)} .btn.warn{background:var(--warn);color:#000}
+    .btn.sm{padding:7px 10px;font-size:12px;border-radius:9px}
+    .btn:disabled{opacity:.4;cursor:not-allowed}
+
+    /* STATS GLOBAIS */
+    .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+    .stat{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;transition:border-color .2s}
+    .stat:hover{border-color:var(--accent)}
+    .stat.active{border-color:var(--accent);background:rgba(79,140,255,.08)}
+    .stat .label{color:var(--muted);font-size:12px;display:flex;align-items:center;gap:6px}
+    .stat .value{font-size:28px;font-weight:700;margin-top:6px}
+    .stat .value.warn{color:var(--warn)}.stat .value.ok{color:#22c55e}.stat .value.danger{color:var(--danger)}
+    .stat .sub{font-size:11px;color:var(--muted);margin-top:4px}
+
+    /* SEÇÕES */
+    .secao{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:20px;padding:18px;margin-bottom:16px}
+    .secao-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px}
+    .secao-titulo{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:700}
+    .secao-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .badge-count{background:var(--warn);color:#000;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700}
+    .badge-count.zero{background:rgba(34,197,94,.2);color:#22c55e}
+
+    /* TABELA */
+    .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:14px}
+    table{width:100%;border-collapse:collapse;min-width:750px}
+    th,td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;text-align:left}
+    th{background:#10182f;color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.04em}
+    tr:last-child td{border-bottom:none}
+    tr:hover td{background:rgba(79,140,255,.04)}
+    .tag{display:inline-block;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700}
+    .tag.pendente{background:rgba(245,179,1,.15);color:#f5b301}
+    .tag.corrigido{background:rgba(34,197,94,.15);color:#22c55e}
+    .tag.ignorado{background:rgba(150,150,150,.15);color:#9fb0d9}
+    .tag.alerta{background:rgba(239,68,68,.15);color:#ef4444}
+    .dif-pos{color:#ef4444;font-weight:700}
+    .dif-neg{color:#22c55e;font-weight:700}
+    .actions-row{display:flex;gap:6px}
+
+    /* NOTICE */
+    .notice{padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:#0d1630;color:#cbd5ff;font-size:13px;margin-bottom:14px;display:none}
+    .notice.ok{border-color:#166534;background:rgba(22,163,74,.1);color:#bbf7d0;display:block}
+    .notice.warn{border-color:#92400e;background:rgba(245,158,11,.1);color:#fde68a;display:block}
+    .notice.err{border-color:#991b1b;background:rgba(239,68,68,.1);color:#fca5a5;display:block}
+
+    /* EMPTY */
+    .hero-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:120px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);gap:8px}
+    .hero-empty .ico{font-size:32px}
+
+    /* COMING SOON */
+    .coming-soon{padding:20px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:14px}
+    .coming-soon .ico{font-size:36px;display:block;margin-bottom:8px}
+
+    .spin{animation:spin 1s linear infinite;display:inline-block}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* FILTROS */
+    .filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+    .filtro-btn{padding:6px 12px;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-size:12px;font-weight:600}
+    .filtro-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+    @media(max-width:900px){.stats-grid{grid-template-columns:1fr 1fr}.topbar{flex-direction:column;align-items:flex-start}}
+    @media(max-width:600px){.stats-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1>🔍 Auditoria Automática</h1>
+      <p>Conferência de estoque, preços, comissões e fretes em todos os canais</p>
+    </div>
+    <div class="top-actions">
+      <a class="btn secondary" href="/">Início</a>
+      <a class="btn secondary" href="/simulador">Simulador</a>
+      <a class="btn secondary" href="/fila">Fila preços</a>
+      <button class="btn warn" id="btnConferirTudo" onclick="conferirTudo()">🔍 Conferir tudo agora</button>
+      <button class="btn secondary" onclick="limparResolvidos()">🧹 Limpar resolvidos</button>
+    </div>  </div>
+
+  <div id="notice-global" class="notice"></div>
+
+  <!-- STATS GLOBAIS -->
+  <div class="stats-grid">
+    <div class="stat active" onclick="mostrarSecao('estoque', this)">
+      <div class="label">📦 Estoque</div>
+      <div class="value warn" id="statEstoque">—</div>
+      <div class="sub">divergências pendentes</div>
+    </div>
+    <div class="stat" onclick="mostrarSecao('preco', this)">
+      <div class="label">💰 Preço</div>
+      <div class="value warn" id="statPreco">—</div>
+      <div class="sub">divergências pendentes</div>
+    </div>
+    <div class="stat" onclick="mostrarSecao('estoque-ml', this)">
+      <div class="label">🛒 Estoque ML</div>
+      <div class="value warn" id="statEstoqueML">—</div>
+      <div class="sub">pendentes (sem SKU + divergências)</div>
+    </div>
+    <div class="stat" onclick="mostrarSecao('shopify', this)">
+      <div class="label">🛍️ Shopify</div>
+      <div class="value warn" id="statShopify">—</div>
+      <div class="sub">divergências pendentes</div>
+    </div>
+
+    <div class="stat" onclick="mostrarSecao('amazon', this)">
+      <div class="label">&#x1F6D2; Amazon</div>
+      <div class="value warn" id="statAmazon">&mdash;</div>
+      <div class="sub">diverg&ecirc;ncias pendentes</div>
+    </div>
+    <div class="stat" onclick="mostrarSecaoNegativo()" style="cursor:pointer;border:1px solid rgba(239,68,68,.5);background:rgba(239,68,68,.1)">
+      <div class="label">⚠️ Estoque Negativo</div>
+      <div class="value warn" id="stat-negativo-card">0</div>
+      <div class="sub">SKUs com saldo negativo no Bling</div>
+    </div>
+    <div class="stat" onclick="mostrarSecao('comissao', this)">
+      <div class="label">📊 Comissão</div>
+      <div class="value" id="statComissao">—</div>
+      <div class="sub">alertas pendentes</div>
+    </div>
+    <div class="stat" onclick="mostrarSecao('frete', this)">
+      <div class="label">🚚 Frete</div>
+      <div class="value" id="statFrete">—</div>
+      <div class="sub">alertas pendentes</div>
+    </div>
+  </div>
+
+  <!-- SEÇÃO: ESTOQUE -->
+  <div class="secao" id="secao-estoque">
+    <div class="secao-header">
+      <div class="secao-titulo">
+        📦 Conferência de Estoque
+        <span class="badge-count zero" id="badgeEstoque">0</span>
+      </div>
+      <div class="secao-actions">
+        <div class="filtros">
+          <button class="filtro-btn active" onclick="filtrarEstoque('', this)">Todos</button>
+          <button class="filtro-btn" onclick="filtrarEstoque('pendente', this)">Pendentes</button>
+          <button class="filtro-btn" onclick="filtrarEstoque('corrigido', this)">Corrigidos</button>
+          <button class="filtro-btn" onclick="filtrarEstoque('ignorado', this)">Ignorados</button>
+        </div>
+        <button class="btn sm warn" onclick="conferirEstoque()">🔄 Conferir estoque</button>
+      </div>
+    </div>
+    <div id="tabelaEstoque">
+      <div class="hero-empty"><div class="ico">📦</div><div>Nenhuma divergência de estoque.</div></div>
+    </div>
+  </div>
+
+  <!-- SEÇÃO: ESTOQUE ML -->
+  <div class="secao" id="secao-estoque-ml" style="display:none">
+    <div class="secao-header">
+      <div class="secao-titulo">
+        🛒 Conferência de Estoque ML
+        <span class="badge-count zero" id="badgeEstoqueML">0</span>
+      </div>
+      <div class="secao-actions">
+        <div class="filtros">
+          <button class="filtro-btn active" onclick="filtrarML('', '', this)">Todos</button>
+          <button class="filtro-btn" onclick="filtrarML('pendente', '', this)">Pendentes</button>
+          <button class="filtro-btn" onclick="filtrarML('', 'sem_sku', this)">Sem SKU</button>
+          <button class="filtro-btn" onclick="filtrarML('', 'divergencia', this)">Divergências</button>
+          <button class="filtro-btn" onclick="filtrarML('corrigido', '', this)">Corrigidos</button>
+        </div>
+        <button class="btn sm warn" id="btnConferirMLEstoque" onclick="conferirEstoqueML('estoque')">📦 Conferir estoque</button>
+        <button class="btn sm warn" id="btnConferirMLPreco" onclick="conferirEstoqueML('preco')" style="background:#7c3aed">💰 Conferir preços</button>
+        <button class="btn sm success" onclick="corrigirTodosML('divergencia')" id="btnCorrigirTodosML">📦 Corrigir estoque</button>
+        <button class="btn sm secondary" onclick="limparFilaCompleta('ml')" style="background:#374151">🗑️ Limpar fila</button>
+        <button class="btn sm success" onclick="corrigirTodosMLPreco()" id="btnCorrigirTodosMLPreco" style="background:#7c3aed">💰 Corrigir preços</button>
+      </div>
+    </div>
+    <div id="progressoML" style="display:none;padding:10px;background:rgba(79,140,255,.08);border-radius:12px;margin-bottom:12px;font-size:13px;color:var(--muted)">
+      <div id="progressoMLTexto">Aguardando...</div>
+      <div style="height:6px;background:var(--line);border-radius:4px;margin-top:8px">
+        <div id="progressoMLBar" style="height:6px;background:var(--accent);border-radius:4px;width:0%;transition:width .3s"></div>
+      </div>
+    </div>
+    <div id="tabelaEstoqueML">
+      <div class="hero-empty"><div class="ico">🛒</div><div>Clique em "Conferir ML" para iniciar.</div></div>
+    </div>
+  </div>
+
+  <!-- SEÇÃO: SHOPIFY -->
+  <div class="secao" id="secao-shopify" style="display:none">
+    <div class="secao-header">
+      <div class="secao-titulo">
+        🛍️ Conferência Shopify
+        <span class="badge-count zero" id="badgeShopify">0</span>
+      </div>
+      <div class="secao-actions">
+        <div class="filtros">
+          <button class="filtro-btn active" onclick="filtrarShopify('', '', this)">Todos</button>
+          <button class="filtro-btn" onclick="filtrarShopify('pendente', '', this)">Pendentes</button>
+          <button class="filtro-btn" onclick="filtrarShopify('', 'estoque', this)">Estoque</button>
+          <button class="filtro-btn" onclick="filtrarShopify('', 'preco', this)">Preço</button>
+          <button class="filtro-btn" onclick="filtrarShopify('corrigido', '', this)">Corrigidos</button>
+        </div>
+        <button class="btn sm warn" id="btnConferirShopifyEstoque" onclick="conferirShopify('estoque')">📦 Conferir estoque</button>
+        <button class="btn sm warn" id="btnConferirShopifyPreco" onclick="conferirShopify('preco')" style="background:#7c3aed">💰 Conferir preços</button>
+        <button class="btn sm success" onclick="corrigirTodosShopify('estoque')">📦 Corrigir estoque</button>
+        <button class="btn sm secondary" onclick="limparFilaCompleta('shopify')" style="background:#374151">🗑️ Limpar fila</button>
+        <button class="btn sm success" onclick="corrigirTodosShopify('preco')" style="background:#7c3aed">💰 Corrigir preços</button>
+      </div>
+    </div>
+    <div id="progressoShopify" style="display:none;padding:10px;background:rgba(79,140,255,.08);border-radius:12px;margin-bottom:12px;font-size:13px;color:var(--muted)">
+      <div id="progressoShopifyTexto">Aguardando...</div>
+      <div style="height:6px;background:var(--line);border-radius:4px;margin-top:8px">
+        <div id="progressoShopifyBar" style="height:6px;background:var(--accent);border-radius:4px;width:0%;transition:width .3s"></div>
+      </div>
+    </div>
+    <div id="tabelaShopify">
+      <div class="hero-empty"><div class="ico">🛍️</div><div>Clique em "Conferir Shopify" para iniciar.</div></div>
+    </div>
+  </div>
+
+  <!-- SEÇÃO: PREÇO -->
+  <div class="secao" id="secao-preco" style="display:none">
+    <div class="secao-header">
+      <div class="secao-titulo">
+        💰 Conferência de Preço
+        <span class="badge-count zero" id="badgePreco">0</span>
+      </div>
+      <div class="secao-actions">
+        <div class="filtros">
+          <button class="filtro-btn active" onclick="filtrarPreco('', this)">Todos</button>
+          <button class="filtro-btn" onclick="filtrarPreco('pendente', this)">Pendentes</button>
+          <button class="filtro-btn" onclick="filtrarPreco('corrigido', this)">Corrigidos</button>
+          <button class="filtro-btn" onclick="filtrarPreco('ignorado', this)">Ignorados</button>
+        </div>
+        <button class="btn sm warn" onclick="conferirPrecos()">🔄 Conferir preços</button>
+      </div>
+    </div>
+    <div id="tabelaPreco">
+      <div class="hero-empty"><div class="ico">💰</div><div>Nenhuma divergência de preço.</div></div>
+    </div>
+  </div>
+
+  <!-- SEÇÃO: COMISSÃO -->
+  <div class="secao" id="secao-comissao" style="display:none">
+    <div class="secao-header">
+      <div class="secao-titulo">📊 Conferência de Comissão</div>
+    </div>
+    <div class="coming-soon">
+      <span class="ico">🔧</span>
+      <strong>Em breve</strong>
+      <p style="margin:8px 0 0;font-size:13px">Aguardando configuração do Access Token do Mercado Pago.<br>Quando configurado, esta seção comparará as comissões reais cobradas vs as usadas no cálculo.</p>
+      <div style="margin-top:12px">
+        <input id="mpAccessToken" type="password" placeholder="Cole o Access Token do Mercado Pago aqui" style="padding:10px;border-radius:10px;border:1px solid var(--line);background:#0d1630;color:#fff;width:400px;max-width:100%"/>
+        <button class="btn sm" style="margin-left:8px" onclick="salvarMPToken()">Salvar token</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEÇÃO: FRETE -->
+  <div class="secao" id="secao-frete" style="display:none">
+    <div class="secao-header">
+      <div class="secao-titulo">🚚 Conferência de Frete</div>
+    </div>
+    <div class="coming-soon">
+      <span class="ico">🔧</span>
+      <strong>Em breve</strong>
+      <p style="margin:8px 0 0;font-size:13px">Aguardando configuração do Access Token do Mercado Pago.<br>Quando configurado, esta seção comparará os fretes reais cobrados vs os usados no cálculo.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─── NAVEGAÇÃO ────────────────────────────────────────────
+const secoes = ['estoque','estoque-ml','shopify','preco','comissao','frete','amazon'];
+let filtroEstoque = '';
+let filtroPreco = '';
+
+function mostrarSecao(nome, statEl) {
+  secoes.forEach(s => {
+    document.getElementById('secao-' + s).style.display = s === nome ? 'block' : 'none';
+  });
+  document.querySelectorAll('.stat').forEach(el => el.classList.remove('active'));
+  if(statEl) statEl.classList.add('active');
+}
+
+// ─── NOTICE ──────────────────────────────────────────────
+function mostrarNotice(msg, tipo='ok'){
+  const el = document.getElementById('notice-global');
+  el.className = 'notice ' + tipo;
+  el.textContent = msg;
+  if(tipo === 'ok') setTimeout(() => el.className = 'notice', 4000);
+}
+
+// ─── ESTOQUE ─────────────────────────────────────────────
+async function carregarEstoque(){
+  try{
+    const url = '/estoque/fila' + (filtroEstoque ? '?status=' + filtroEstoque : '');
+    const res = await fetch(url);
+    const data = await res.json();
+    const itens = data.itens || [];
+    const stats = data.stats || {};
+    const pendentes = stats.pendente || 0;
+    document.getElementById('statEstoque').textContent = pendentes;
+    document.getElementById('statEstoque').className = 'value ' + (pendentes > 0 ? 'warn' : 'ok');
+    document.getElementById('badgeEstoque').textContent = pendentes;
+    document.getElementById('badgeEstoque').className = 'badge-count ' + (pendentes > 0 ? '' : 'zero');
+    renderTabelaEstoque(itens);
+  }catch(e){ console.error(e); }
+}
+
+function renderTabelaEstoque(itens){
+  const wrap = document.getElementById('tabelaEstoque');
+  if(!itens.length){
+    wrap.innerHTML = '<div class="hero-empty"><div class="ico">✅</div><div>Nenhuma divergência de estoque.</div></div>';
+    return;
+  }
+  const rows = itens.map(item => {
+    const dif = item.diferenca || 0;
+    const difClass = dif > 0 ? 'dif-pos' : 'dif-neg';
+    const acoes = item.status === 'pendente' ? `
+      <div class="actions-row">
+        <button class="btn success sm" onclick="corrigirEstoque('${item.id}')">✅ Corrigir</button>
+        <button class="btn secondary sm" onclick="ignorarEstoque('${item.id}')">🚫 Ignorar</button>
+      </div>` : '—';
+    return `<tr>
+      <td><strong>${item.sku||'—'}</strong></td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.nome||'—'}</td>
+      <td>${item.canal||'—'}</td>
+      <td style="color:#22c55e;font-weight:700">${item.estoque_bling??'—'}</td>
+      <td style="color:#4f8cff;font-weight:700">${item.estoque_marketplace??'—'}</td>
+      <td class="${difClass}">${dif > 0 ? '+' + dif : dif}</td>
+      <td><span class="tag ${item.status||'pendente'}">${item.status||'pendente'}</span></td>
+      <td style="font-size:11px;color:var(--muted)">${item.criado_em ? new Date(item.criado_em).toLocaleString('pt-BR') : ''}</td>
+      <td>${acoes}</td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>SKU</th><th>Produto</th><th>Canal</th><th>Bling</th><th>Marketplace</th><th>Diferença</th><th>Status</th><th>Detectado</th><th>Ação</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function filtrarEstoque(status, btn){
+  filtroEstoque = status;
+  document.querySelectorAll('#secao-estoque .filtro-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  carregarEstoque();
+}
+
+async function conferirEstoque(){
+  const btn = document.getElementById('btnConferirTudo');
+  try{
+    const res = await fetch('/estoque/conferir', {method:'POST'});
+    const data = await res.json();
+    if(data.ok) mostrarNotice(`Estoque: ${data.verificados} verificados, ${data.novas_divergencias} novas divergências.`, data.novas_divergencias > 0 ? 'warn' : 'ok');
+    carregarEstoque();
+  }catch(e){ mostrarNotice('Erro ao conferir estoque.', 'err'); }
+}
+
+async function corrigirEstoque(id){
+  if(!confirm('Corrigir estoque no marketplace com o valor do Bling?')) return;
+  try{
+    const res = await fetch('/estoque/corrigir/' + id, {method:'POST'});
+    const data = await res.json();
+    mostrarNotice(data.ok ? 'Estoque corrigido!' : 'Erro: ' + (data.detail||'falha'), data.ok ? 'ok' : 'err');
+    carregarEstoque();
+  }catch(e){ mostrarNotice('Erro de conexão.','err'); }
+}
+
+async function ignorarEstoque(id){
+  try{
+    await fetch('/estoque/ignorar/' + id, {method:'POST'});
+    carregarEstoque();
+  }catch(e){}
+}
+
+// ─── PREÇO ───────────────────────────────────────────────
+async function carregarPrecos(){
+  try{
+    const url = '/auditoria/precos' + (filtroPreco ? '?status=' + filtroPreco : '');
+    const res = await fetch(url);
+    if(!res.ok){ renderTabelaPreco([]); return; }
+    const data = await res.json();
+    const itens = data.itens || [];
+    const pendentes = itens.filter(i => i.status === 'pendente').length;
+    document.getElementById('statPreco').textContent = pendentes;
+    document.getElementById('statPreco').className = 'value ' + (pendentes > 0 ? 'warn' : 'ok');
+    document.getElementById('badgePreco').textContent = pendentes;
+    document.getElementById('badgePreco').className = 'badge-count ' + (pendentes > 0 ? '' : 'zero');
+    renderTabelaPreco(itens);
+  }catch(e){ renderTabelaPreco([]); }
+}
+
+function renderTabelaPreco(itens){
+  const wrap = document.getElementById('tabelaPreco');
+  if(!itens.length){
+    wrap.innerHTML = '<div class="hero-empty"><div class="ico">✅</div><div>Nenhuma divergência de preço.</div></div>';
+    return;
+  }
+  const rows = itens.map(item => {
+    const difPromo = (item.preco_shinsei - item.preco_marketplace_promocional).toFixed(2);
+    const difVirt = (item.preco_virtual_shinsei - item.preco_marketplace).toFixed(2);
+    const acoes = item.status === 'pendente' ? `
+      <div class="actions-row">
+        <button class="btn success sm" onclick="corrigirPreco('${item.id}')">✅ Corrigir</button>
+        <button class="btn secondary sm" onclick="ignorarPreco('${item.id}')">🚫 Ignorar</button>
+      </div>` : '—';
+    return `<tr>
+      <td><strong>${item.sku||'—'}</strong></td>
+      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.nome||'—'}</td>
+      <td>${item.canal||'—'}</td>
+      <td style="color:#22c55e">R$ ${(item.preco_shinsei||0).toFixed(2).replace('.',',')}</td>
+      <td style="color:#4f8cff">R$ ${(item.preco_marketplace_promocional||0).toFixed(2).replace('.',',')}</td>
+      <td class="${parseFloat(difPromo) > 0 ? 'dif-pos' : 'dif-neg'}">R$ ${difPromo.replace('.',',')}</td>
+      <td style="color:#f5b301">R$ ${(item.preco_virtual_shinsei||0).toFixed(2).replace('.',',')}</td>
+      <td style="color:#9fb0d9">R$ ${(item.preco_marketplace||0).toFixed(2).replace('.',',')}</td>
+      <td><span class="tag ${item.status||'pendente'}">${item.status||'pendente'}</span></td>
+      <td>${acoes}</td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr>
+      <th>SKU</th><th>Produto</th><th>Canal</th>
+      <th>Preço Shinsei</th><th>Preço Marketplace</th><th>Dif. Promo</th>
+      <th>Virtual Shinsei</th><th>Preço Marketplace</th>
+      <th>Status</th><th>Ação</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function filtrarPreco(status, btn){
+  filtroPreco = status;
+  document.querySelectorAll('#secao-preco .filtro-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  carregarPrecos();
+}
+
+async function conferirPrecos(){
+  try{
+    const res = await fetch('/auditoria/conferir-precos', {method:'POST'});
+    const data = await res.json();
+    if(data.ok) mostrarNotice(`Preços: ${data.verificados} verificados, ${data.novas_divergencias} novas divergências.`, data.novas_divergencias > 0 ? 'warn' : 'ok');
+    carregarPrecos();
+  }catch(e){ mostrarNotice('Endpoint de conferência de preços não disponível ainda.', 'warn'); }
+}
+
+async function corrigirPreco(id){
+  if(!confirm('Corrigir preço no marketplace com os valores do Shinsei?')) return;
+  try{
+    const res = await fetch('/auditoria/corrigir-preco/' + id, {method:'POST'});
+    const data = await res.json();
+    mostrarNotice(data.ok ? 'Preço corrigido!' : 'Erro: ' + (data.detail||'falha'), data.ok ? 'ok' : 'err');
+    carregarPrecos();
+  }catch(e){ mostrarNotice('Erro de conexão.','err'); }
+}
+
+async function ignorarPreco(id){
+  try{
+    await fetch('/auditoria/ignorar-preco/' + id, {method:'POST'});
+    carregarPrecos();
+  }catch(e){}
+}
+
+// ─── CONFERIR TUDO ───────────────────────────────────────
+async function conferirTudo(){
+  const btn = document.getElementById('btnConferirTudo');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin">⏳</span> Conferindo...';
+  await conferirEstoque();
+  await conferirPrecos();
+  btn.disabled = false;
+  btn.innerHTML = '🔍 Conferir tudo agora';
+}
+
+// ─── LIMPAR ──────────────────────────────────────────────
+async function limparResolvidos(){
+  if(!confirm('Remover todos os itens corrigidos e ignorados das filas?')) return;
+  try{
+    await fetch('/estoque/limpar-resolvidos', {method:'POST'});
+    await fetch('/auditoria/ml-estoque/limpar-resolvidos', {method:'POST'}).catch(()=>{});
+    await fetch('/auditoria/shopify/limpar-resolvidos', {method:'POST'}).catch(()=>{});
+    await fetch('/auditoria/limpar-resolvidos', {method:'POST'}).catch(()=>{});
+    mostrarNotice('Itens resolvidos removidos.','ok');
+    carregarEstoque();
+    carregarEstoqueML();
+    carregarShopify();
+    carregarPrecos();
+  }catch(e){}
+}
+
+// ─── MERCADO PAGO TOKEN ──────────────────────────────────
+async function salvarMPToken(){
+  const token = document.getElementById('mpAccessToken').value.trim();
+  if(!token){ alert('Cole o Access Token do Mercado Pago.'); return; }
+  try{
+    const res = await fetch('/auditoria/mp-token', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({access_token: token})
+    });
+    const data = await res.json();
+    mostrarNotice(data.ok ? 'Token do Mercado Pago salvo!' : 'Erro ao salvar token.', data.ok ? 'ok' : 'err');
+  }catch(e){ mostrarNotice('Erro de conexão.','err'); }
+}
+
+// ─── ESTOQUE ML ──────────────────────────────────────────
+let filtroMLStatus = '';
+let filtroMLTipo = '';
+
+async function carregarEstoqueML(){
+  try{
+    let url = '/auditoria/ml-estoque';
+    const params = [];
+    if(filtroMLStatus) params.push('status='+filtroMLStatus);
+    if(filtroMLTipo) params.push('tipo='+filtroMLTipo);
+    if(params.length) url += '?' + params.join('&');
+    const res = await fetch(url);
+    if(!res.ok){ return; }
+    const data = await res.json();
+    const itens = data.itens || [];
+    const stats = data.stats || {};
+    const pendentes = (stats.pendente||0);
+    const semSku = (stats.sem_sku||0);
+    document.getElementById('statEstoqueML').textContent = pendentes;
+    document.getElementById('statEstoqueML').className = 'value ' + (pendentes > 0 ? 'warn' : 'ok');
+    document.getElementById('badgeEstoqueML').textContent = pendentes;
+    document.getElementById('badgeEstoqueML').className = 'badge-count ' + (pendentes > 0 ? '' : 'zero');
+    renderTabelaEstoqueML(itens);
+  }catch(e){ console.error(e); }
+}
+
+function renderTabelaEstoqueML(itens){
+  const wrap = document.getElementById('tabelaEstoqueML');
+  if(!itens.length){
+    wrap.innerHTML = '<div class="hero-empty"><div class="ico">✅</div><div>Nenhuma divergência de estoque ML.</div></div>';
+    return;
+  }
+  const rows = itens.map(item => {
+    const isSemSku = item.tipo === 'sem_sku';
+    const permalink = item.permalink ? `<a href="${item.permalink}" target="_blank" style="color:var(--accent);font-size:11px">Ver anúncio</a>` : '';
+
+    let acoes = '—';
+    if(item.status === 'pendente'){
+      if(isSemSku){
+        // Monta opções de candidatos Bling (se houver)
+        const candidatos = item.candidatos_bling || [];
+        let selectCandidatos = '';
+        if(candidatos.length > 1){
+          const opts = candidatos.map(c =>
+            `<option value="${c.codigo}">${c.codigo} — ${c.nome.substring(0,40)} (est:${c.estoque})</option>`
+          ).join('');
+          selectCandidatos = `<select id="sku_select_${item.id}"
+            style="padding:5px;border-radius:6px;border:1px solid var(--accent);background:#0d1630;color:#fff;font-size:11px;max-width:220px"
+            onchange="document.getElementById('sku_input_${item.id}').value=this.value">
+            <option value="">— Selecione —</option>${opts}
+          </select>`;
+        }
+        const skuSugerido = item.sku_sugerido || '';
+        const inputBorder = skuSugerido ? 'var(--success,#22c55e)' : 'var(--warn)';
+        acoes = `<div class="actions-row" style="flex-direction:column;align-items:flex-start;gap:4px">
+          ${selectCandidatos}
+          <div style="display:flex;gap:4px;align-items:center">
+            <input type="text" placeholder="SKU Bling" id="sku_input_${item.id}"
+              value="${skuSugerido}"
+              style="padding:6px;border-radius:8px;border:1px solid ${inputBorder};background:#0d1630;color:#fff;width:130px;font-size:12px"/>
+            <button class="btn success sm" onclick="cadastrarSKU('${item.id}')">💾 Salvar SKU</button>
+            <button class="btn secondary sm" onclick="ignorarML('${item.id}')">🚫</button>
+          </div>
+          ${skuSugerido ? `<small style="color:#22c55e;font-size:10px">✨ Sugerido pelo Bling</small>` : (candidatos.length > 0 ? `<small style="color:#f59e0b;font-size:10px">${candidatos.length} candidato(s) encontrado(s)</small>` : '')}
+        </div>`;
+      } else {
+        acoes = `<div class="actions-row">
+          <button class="btn success sm" onclick="corrigirML('${item.id}')">✅ Corrigir</button>
+          <button class="btn secondary sm" onclick="ignorarML('${item.id}')">🚫 Ignorar</button>
+        </div>`;
+      }
+    }
+
+    const estoqueBlinkCell = (isSemSku && !item.estoque_bling && item.estoque_bling !== 0)
+      ? '<td style="color:var(--muted)">—</td>'
+      : `<td style="color:#22c55e;font-weight:700">${item.estoque_bling??'—'}</td>`;
+    const difCell = (isSemSku && item.diferenca === null)
+      ? '<td><span class="tag alerta">Sem SKU</span></td>'
+      : `<td class="${(item.diferenca||0) > 0 ? 'dif-pos' : 'dif-neg'}">${(item.diferenca||0) > 0 ? '+' : ''}${item.diferenca??'—'}</td>`;
+
+    return `<tr>
+      <td><strong>${item.item_id_ml||'—'}</strong><br/>${permalink}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${item.titulo||''}">${item.titulo||'—'}</td>
+      <td>${item.sku||'<span style="color:var(--warn)">AUSENTE</span>'}</td>
+      ${estoqueBlinkCell}
+      <td style="color:#4f8cff;font-weight:700">${item.estoque_ml??'—'}</td>
+      ${difCell}
+      <td><span class="tag ${item.status||'pendente'}">${item.status||'pendente'}</span></td>
+      <td style="font-size:11px;color:var(--muted)">${item.criado_em ? new Date(item.criado_em).toLocaleString('pt-BR') : ''}</td>
+      <td>${acoes}</td>
+    </tr>`;
+  }).join('');
+
+  wrap.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>Item ML</th><th>Título</th><th>SKU</th><th>Bling</th><th>ML</th><th>Diferença</th><th>Status</th><th>Detectado</th><th>Ação</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function filtrarML(status, tipo, btn){
+  filtroMLStatus = status;
+  filtroMLTipo = tipo;
+  document.querySelectorAll('#secao-estoque-ml .filtro-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  carregarEstoqueML();
+}
+
+async function conferirEstoqueML(tipo=''){
+  const btnConf = document.getElementById(tipo==='preco' ? 'btnConferirMLPreco' : 'btnConferirMLEstoque');
+  const btnTudo = document.getElementById('btnConferirTudo');
+  const progWrap = document.getElementById('progressoML');
+  const progTexto = document.getElementById('progressoMLTexto');
+  const progBar = document.getElementById('progressoMLBar');
+
+  if(btnConf) btnConf.disabled = true;
+  if(btnTudo){ btnTudo.disabled = true; btnTudo.innerHTML = '<span class="spin">⏳</span> Conferindo...'; }
+  progWrap.style.display = 'block';
+  progBar.style.width = '0%';
+  progBar.style.background = 'var(--accent)';
+  progTexto.textContent = 'Iniciando conferência de estoque ML...';
+
+  // Simula progresso enquanto aguarda resposta
+  let progSimulado = 0;
+  const intervalo = setInterval(() => {
+    if(progSimulado < 85){
+      progSimulado += Math.random() * 3;
+      progBar.style.width = Math.min(progSimulado, 85) + '%';
+      const pags = Math.floor(progSimulado / 10);
+      progTexto.textContent = `Varrendo anúncios ML... (página ${pags+1}/10 aproximadamente)`;
+    }
+  }, 1500);
+
+  let pollInterval = null;
+
+  const finalizarConferencia = (sucesso, msg) => {
+    clearInterval(intervalo);
+    if(pollInterval) clearInterval(pollInterval);
+    progBar.style.width = '100%';
+    progBar.style.background = sucesso ? (sucesso === 'warn' ? 'var(--warn)' : 'var(--ok)') : 'var(--danger)';
+    progTexto.textContent = msg;
+    if(btnConf) btnConf.disabled = false;
+    if(btnTudo){ btnTudo.disabled = false; btnTudo.innerHTML = '🔍 Conferir tudo agora'; }
+    setTimeout(() => { progWrap.style.display = 'none'; }, 8000);
+    carregarEstoqueML();
+  };
+
+  try{
+    const res = await fetch('/auditoria/ml-estoque/conferir' + (tipo ? '?tipo='+tipo : ''), {method:'POST'});
+    const startData = await res.json();
+
+    if(!startData.ok){
+      finalizarConferencia(false, startData.detail || startData.erro || 'Erro ao iniciar conferência.');
+      mostrarNotice(startData.detail || 'Erro ao iniciar conferência ML.', 'err');
+      return;
+    }
+
+    // Conferência iniciada em background — fazer polling do status
+    pollInterval = setInterval(async () => {
+      try{
+        const statusRes = await fetch('/auditoria/ml-estoque/conferir/status');
+        const status = await statusRes.json();
+
+        // Atualizar barra de progresso com dados reais
+        if(status.max_paginas && status.pagina){
+          const pct = Math.min(Math.round((status.pagina / status.max_paginas) * 95), 95);
+          progSimulado = pct;
+          progBar.style.width = pct + '%';
+          progTexto.textContent = `Varrendo anúncios ML... (página ${status.pagina}/${status.max_paginas})`;
+        }
+
+        if(status.concluido){
+          const r = status.resultado || {};
+          const verificados = r.verificados ?? status.verificados ?? 0;
+          const semSku = r.sem_sku ?? status.sem_sku ?? 0;
+          const divergencias = r.novas_divergencias ?? status.divergencias ?? 0;
+          const erros = r.erros ?? status.erros ?? 0;
+
+          const temProblemas = (semSku + divergencias) > 0;
+          const msg = `Concluído! ${verificados} verificados — ${semSku} sem SKU, ${divergencias} novas divergências, ${erros} erros.`;
+          finalizarConferencia(temProblemas ? 'warn' : true, msg);
+          mostrarNotice(
+            `ML: ${verificados} anúncios verificados — ${semSku} sem SKU, ${divergencias} divergências de estoque.`,
+            temProblemas ? 'warn' : 'ok'
+          );
+        }
+      }catch(e){ /* ignora erro pontual de polling */ }
+    }, 2000);
+
+  }catch(e){
+    finalizarConferencia(false, 'Erro ao conferir estoque ML.');
+    mostrarNotice('Erro ao conferir estoque ML.','err');
+  }
+}
+
+async function corrigirTodosML(tipo='divergencia'){
+  if(!confirm('Corrigir todos os itens com divergência de estoque no ML?')) return;
+
+  const progWrap = document.getElementById('progressoML');
+  const progTexto = document.getElementById('progressoMLTexto');
+  const progBar = document.getElementById('progressoMLBar');
+  const btn = document.getElementById('btnCorrigirTodosML');
+
+  btn.disabled = true;
+  progWrap.style.display = 'block';
+
+  const res = await fetch('/auditoria/ml-estoque?status=pendente&tipo=' + tipo);
+  const data = await res.json();
+  const itens = data.itens || [];
+
+  if(!itens.length){
+    mostrarNotice('Nenhuma divergência pendente para corrigir.', 'ok');
+    progWrap.style.display = 'none';
+    btn.disabled = false;
+    return;
+  }
+
+  let corrigidos = 0, erros = 0;
+  const total = itens.length;
+
+  for(let i = 0; i < itens.length; i++){
+    const item = itens[i];
+    progTexto.textContent = `Corrigindo ${i+1}/${total}: ${item.titulo||item.item_id_ml}... (${corrigidos} OK, ${erros} erros)`;
+    progBar.style.width = Math.round(((i+1)/total)*100) + '%';
+
+    try{
+      const r = await fetch('/auditoria/ml-estoque/corrigir/' + item.id, {method:'POST'});
+      const d = await r.json();
+      if(d.ok) corrigidos++;
+      else erros++;
+    }catch(e){ erros++; }
+
+    // Pequena pausa para não sobrecarregar a API
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  progTexto.textContent = `Concluído! ${corrigidos} corrigidos, ${erros} erros.`;
+  progBar.style.width = '100%';
+  progBar.style.background = erros > 0 ? 'var(--warn)' : 'var(--ok)';
+  mostrarNotice(`Correção em massa: ${corrigidos} anúncios corrigidos no ML, ${erros} erros.`, erros > 0 ? 'warn' : 'ok');
+  btn.disabled = false;
+  setTimeout(() => { progWrap.style.display = 'none'; progBar.style.background = 'var(--accent)'; }, 5000);
+  carregarEstoqueML();
+}
+
+async function corrigirML(id){
+  if(!confirm('Corrigir estoque no ML com o valor do Bling?')) return;
+  try{
+    const res = await fetch('/auditoria/ml-estoque/corrigir/' + id, {method:'POST'});
+    const data = await res.json();
+    mostrarNotice(data.ok ? 'Estoque corrigido no ML!' : 'Erro: '+(data.detail||'falha'), data.ok?'ok':'err');
+    carregarEstoqueML();
+  }catch(e){ mostrarNotice('Erro de conexão.','err'); }
+}
+
+async function cadastrarSKU(id){
+  const input = document.getElementById('sku_input_' + id);
+  const sku = input ? input.value.trim() : '';
+  if(!sku){ alert('Digite o SKU do Bling.'); return; }
+  try{
+    const res = await fetch('/auditoria/ml-estoque/cadastrar-sku/' + id, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({sku})
+    });
+    const data = await res.json();
+    mostrarNotice(data.ok ? `SKU ${sku} cadastrado no ML!` : 'Erro: '+(data.detail||'falha'), data.ok?'ok':'err');
+    carregarEstoqueML();
+  }catch(e){ mostrarNotice('Erro de conexão.','err'); }
+}
+
+async function ignorarML(id){
+  try{
+    await fetch('/auditoria/ml-estoque/ignorar/' + id, {method:'POST'});
+    carregarEstoqueML();
+  }catch(e){}
+}
+
+// ─── SHOPIFY ─────────────────────────────────────────────
+let filtroShopifyStatus = '';
+let filtroShopifyTipo = '';
+
+async function carregarShopify(){
+  try{
+    let url = '/auditoria/shopify';
+    const params = [];
+    if(filtroShopifyStatus) params.push('status='+filtroShopifyStatus);
+    if(filtroShopifyTipo) params.push('tipo='+filtroShopifyTipo);
+    if(params.length) url += '?' + params.join('&');
+    const res = await fetch(url);
+    if(!res.ok) return;
+    const data = await res.json();
+    const itens = data.itens || [];
+    const stats = data.stats || {};
+    const pendentes = stats.pendente || 0;
+    document.getElementById('statShopify').textContent = pendentes;
+    document.getElementById('statShopify').className = 'value ' + (pendentes > 0 ? 'warn' : 'ok');
+    document.getElementById('badgeShopify').textContent = pendentes;
+    document.getElementById('badgeShopify').className = 'badge-count ' + (pendentes > 0 ? '' : 'zero');
+    renderTabelaShopify(itens);
+  }catch(e){}
+}
+
+function renderTabelaShopify(itens){
+  const wrap = document.getElementById('tabelaShopify');
+  if(!itens.length){
+    wrap.innerHTML = '<div class="hero-empty"><div class="ico">✅</div><div>Nenhuma divergência Shopify.</div></div>';
+    return;
+  }
+  const rows = itens.map(item => {
+    const isEstoque = item.tipo === 'estoque';
+    const acoes = item.status === 'pendente' ? `
+      <div class="actions-row">
+        <button class="btn success sm" onclick="corrigirShopify('${item.id}')">✅ Corrigir</button>
+        <button class="btn secondary sm" onclick="ignorarShopify('${item.id}')">🚫 Ignorar</button>
+      </div>` : '—';
+
+    const detalhe = isEstoque
+      ? `<td style="color:#22c55e;font-weight:700">${item.estoque_bling??'—'}</td>
+         <td style="color:#4f8cff;font-weight:700">${item.estoque_shopify??'—'}</td>`
+      : `<td style="color:#22c55e;font-weight:700">R$ ${(item.preco_bling||0).toFixed(2).replace('.',',')}</td>
+         <td style="color:#4f8cff;font-weight:700">R$ ${(item.preco_shopify||0).toFixed(2).replace('.',',')}</td>`;
+
+    const dif = item.diferenca || 0;
+    return `<tr>
+      <td><strong>${item.sku||'—'}</strong></td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.titulo||'—'}</td>
+      <td><span class="tag ${item.tipo==='estoque'?'pendente':'corrigido'}">${item.tipo||'—'}</span></td>
+      ${detalhe}
+      <td class="${dif > 0 ? 'dif-pos' : 'dif-neg'}">${dif > 0 ? '+' : ''}${dif}</td>
+      <td><span class="tag ${item.status||'pendente'}">${item.status||'pendente'}</span></td>
+      <td style="font-size:11px;color:var(--muted)">${item.criado_em ? new Date(item.criado_em).toLocaleString('pt-BR') : ''}</td>
+      <td>${acoes}</td>
+    </tr>`;
+  }).join('');
+
+  wrap.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>SKU</th><th>Produto</th><th>Tipo</th><th>Bling</th><th>Shopify</th><th>Diferença</th><th>Status</th><th>Detectado</th><th>Ação</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function filtrarShopify(status, tipo, btn){
+  filtroShopifyStatus = status;
+  filtroShopifyTipo = tipo;
+  document.querySelectorAll('#secao-shopify .filtro-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  carregarShopify();
+}
+
+async function conferirShopify(tipo=''){
+  const btn = document.getElementById(tipo==='preco' ? 'btnConferirShopifyPreco' : 'btnConferirShopifyEstoque');
+  const btnTudo = document.getElementById('btnConferirTudo');
+  const prog = document.getElementById('progressoShopify');
+  const progTexto = document.getElementById('progressoShopifyTexto');
+  const progBar = document.getElementById('progressoShopifyBar');
+
+  if(btn) btn.disabled = true;
+  if(btnTudo){ btnTudo.disabled = true; btnTudo.innerHTML = '<span class="spin">⏳</span> Conferindo...'; }
+  prog.style.display = 'block';
+  progBar.style.width = '0%';
+  progTexto.textContent = 'Iniciando conferência Shopify...';
+
+  let progSim = 0;
+  const iv = setInterval(() => {
+    if(progSim < 85){ progSim += 2; progBar.style.width = progSim + '%'; }
+    progTexto.textContent = `Varrendo produtos Shopify... (${Math.floor(progSim*5)} aprox.)`;
+  }, 1000);
+
+  try{
+    const res = await fetch('/auditoria/shopify/conferir' + (tipo ? '?tipo='+tipo : ''), {method:'POST'});
+    const data = await res.json();
+    clearInterval(iv);
+    progBar.style.width = '100%';
+    if(data.ok){
+      const tem = (data.divergencias_estoque + data.divergencias_preco) > 0;
+      progBar.style.background = tem ? 'var(--warn)' : 'var(--ok)';
+      progTexto.textContent = `Concluído! ${data.verificados} verificados — ${data.divergencias_estoque} div. estoque, ${data.divergencias_preco} div. preço.`;
+      mostrarNotice(`Shopify: ${data.verificados} verificados — ${data.divergencias_estoque} divergências de estoque, ${data.divergencias_preco} de preço.`, tem ? 'warn' : 'ok');
+    }
+    carregarShopify();
+  }catch(e){
+    clearInterval(iv);
+    mostrarNotice('Erro ao conferir Shopify.','err');
+  }finally{
+    if(btn) btn.disabled = false;
+    if(btnTudo){ btnTudo.disabled = false; btnTudo.innerHTML = '🔍 Conferir tudo agora'; }
+    setTimeout(() => { prog.style.display = 'none'; progBar.style.background = 'var(--accent)'; }, 6000);
+  }
+}
+
+async function corrigirShopify(id){
+  try{
+    const res = await fetch('/auditoria/shopify/corrigir/' + id, {method:'POST'});
+    const data = await res.json();
+    mostrarNotice(data.ok ? 'Corrigido na Shopify!' : 'Erro: '+(data.detail||'falha'), data.ok?'ok':'err');
+    carregarShopify();
+  }catch(e){ mostrarNotice('Erro.','err'); }
+}
+
+async function corrigirTodosShopify(tipo=''){
+  const label = tipo === 'estoque' ? 'estoque' : tipo === 'preco' ? 'preço' : 'todas as divergências';
+  if(!confirm('Corrigir ' + label + ' pendentes na Shopify?')) return;
+  let url = '/auditoria/shopify?status=pendente';
+  if(tipo) url += '&tipo=' + tipo;
+  const res = await fetch(url);
+  const data = await res.json();
+  const itens = data.itens || [];
+  if(!itens.length){ mostrarNotice('Nenhuma divergência pendente.','ok'); return; }
+
+  let ok = 0, err = 0;
+  for(const item of itens){
+    try{
+      const r = await fetch('/auditoria/shopify/corrigir/' + item.id, {method:'POST'});
+      const d = await r.json();
+      if(d.ok) ok++; else err++;
+    }catch(e){ err++; }
+    await new Promise(r => setTimeout(r, 500));
+  }
+  mostrarNotice(`Shopify: ${ok} corrigidos, ${err} erros.`, err > 0 ? 'warn' : 'ok');
+  carregarShopify();
+}
+
+async function ignorarShopify(id){
+  try{ await fetch('/auditoria/shopify/ignorar/' + id, {method:'POST'}); carregarShopify(); }catch(e){}
+}
+
+// ─── INIT ────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  carregarEstoque();
+  carregarEstoqueML();
+  carregarShopify();
+  carregarPrecos();
+});
+
+// ─── ESTOQUE NEGATIVO ─────────────────────────────────────────
+async function carregarNegativo(){
+  const res = await fetch('/auditoria/estoque-negativo').catch(()=>null);
+  if(!res) return;
+  const data = await res.json();
+  const itens = data.itens || [];
+  const pendentes = itens.filter(i=>i.status==='pendente');
+  document.getElementById('badge-negativo').textContent = pendentes.length;
+  const tbody = document.getElementById('tabela-negativo');
+  const empty = document.getElementById('negativo-empty');
+  if(!tbody) return;
+  if(!itens.length){ tbody.innerHTML=''; if(empty) empty.style.display='block'; return; }
+  if(empty) empty.style.display='none';
+  tbody.innerHTML = itens.map(i=>`
+    <tr style="border-bottom:1px solid #1a2540;${i.status==='pendente'?'background:rgba(239,68,68,0.05)':''}">
+      <td style="padding:8px 12px;font-family:monospace;color:#f87171">${i.sku||'-'}</td>
+      <td style="padding:8px 12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${i.nome||''}">${i.nome||'-'}</td>
+      <td style="padding:8px 12px;text-align:center;font-weight:700;color:#ef4444">${i.estoque}</td>
+      <td style="padding:8px 12px;color:#9fb0d9;font-size:11px">${(i.detectado_em||'').replace('T',' ').substring(0,16)}</td>
+      <td style="padding:8px 12px"><span style="background:${i.status==='pendente'?'#ef4444':'#374151'};color:white;border-radius:999px;padding:2px 8px;font-size:11px">${i.status}</span></td>
+      <td style="padding:8px 12px">
+        ${i.status==='pendente'?`<button class="btn success sm" onclick="ignorarNegativo('${i.id}')">✓ Ignorar</button>`:''}
+      </td>
+    </tr>`).join('');
+}
+
+async function ignorarNegativo(id){
+  await fetch('/auditoria/estoque-negativo/ignorar/'+id, {method:'POST'});
+  carregarNegativo();
+}
+
+async function ignorarTodosNegativos(){
+  if(!confirm('Ignorar todos os alertas de estoque negativo pendentes?')) return;
+  const data = await fetch('/auditoria/estoque-negativo').then(r=>r.json());
+  const pendentes = (data.itens||[]).filter(i=>i.status==='pendente');
+  for(const i of pendentes) await fetch('/auditoria/estoque-negativo/ignorar/'+i.id, {method:'POST'});
+  carregarNegativo();
+}
+
+async function limparNegativosResolvidos(){
+  await fetch('/auditoria/estoque-negativo/limpar', {method:'POST'});
+  carregarNegativo();
+}
+
+// Mostra seção negativo quando clicado no card
+function mostrarSecaoNegativo(){
+  document.querySelectorAll('.secao-auditoria').forEach(s=>s.style.display='none');
+  const s = document.getElementById('secao-negativo');
+  if(s){ s.style.display='block'; carregarNegativo(); }
+}
+
+// ─── LIMPAR FILA COMPLETA ─────────────────────────────────────
+async function limparFilaCompleta(tipo){
+  const nomes = {
+    'ml': 'ML', 'shopify': 'Shopify', 
+    'negativo': 'Estoque Negativo', 'preco': 'Fila de Preços'
+  };
+  if(!confirm('Limpar TODA a fila de ' + (nomes[tipo]||tipo) + '? Esta ação não pode ser desfeita.')) return;
+  const urls = {
+    'ml': '/auditoria/ml-estoque/limpar-tudo',
+    'shopify': '/auditoria/shopify/limpar-tudo',
+    'negativo': '/auditoria/estoque-negativo/limpar-tudo',
+    'preco': '/fila/reset-total'
+  };
+  await fetch(urls[tipo], {method:'POST'});
+  mostrarNotice('Fila de ' + (nomes[tipo]||tipo) + ' limpa!', 'ok');
+  if(tipo==='ml') carregarEstoqueML();
+  else if(tipo==='shopify') carregarShopify();
+  else if(tipo==='negativo') carregarNegativo();
+  else location.reload();
+}
+
+// AMAZON
+let _amazonFiltroTipo = '';
+async function carregarAmazon(filtroTipo){
+  if(filtroTipo !== undefined) _amazonFiltroTipo = filtroTipo;
+  const res = await fetch('/auditoria/amazon').catch(()=>null);
+  if(!res) return;
+  const data = await res.json();
+  const n = data.stats?.pendente || 0;
+  const el = document.getElementById('statAmazon');
+  if(el) el.textContent = n || '—';
+  const badge = document.getElementById('badge-amazon');
+  if(badge) badge.textContent = n;
+  const tbody = document.getElementById('tabela-amazon');
+  const empty = document.getElementById('amazon-empty');
+  let itens = data.itens || [];
+  if(_amazonFiltroTipo) itens = itens.filter(i=>i.tipo===_amazonFiltroTipo);
+  if(!tbody) return;
+  if(!itens.length){ tbody.innerHTML=''; if(empty){empty.style.display='block';} return; }
+  if(empty) empty.style.display='none';
+  tbody.innerHTML = itens.map(i=>`<tr style="border-bottom:1px solid #1a2540"><td style="padding:8px 12px;font-family:monospace">${i.sku||'-'}</td><td style="padding:8px 12px">${i.nome||'-'}</td><td style="padding:8px 12px">${i.tipo||'-'}</td><td style="padding:8px 12px;text-align:center">${i.estoque_bling??i.preco_bling??'-'}</td><td style="padding:8px 12px;text-align:center">${i.estoque_amazon??i.preco_amazon??'-'}</td><td style="padding:8px 12px;text-align:center">${i.diferenca??'-'}</td><td style="padding:8px 12px">${i.status}</td><td style="padding:8px 12px">${i.status==='pendente'?`<button class="btn sm secondary" onclick="ignorarAmazon('${i.id}')">Ignorar</button>`:''}</td></tr>`).join('');
+}
+async function conferirAmazon(tipo){
+  const btnMap = {estoque:'btnConferirAmazonEstoque', preco:'btnConferirAmazonPreco', pedidos:'btnConferirAmazonPedidos'};
+  const btnLabel = {estoque:'Conferir estoque', preco:'Conferir preço', pedidos:'Conferir pedidos'};
+  const btn = document.getElementById(btnMap[tipo]||'btnConferirAmazonEstoque');
+  if(btn){btn.disabled=true;btn.textContent='Conferindo...';}
+  const res = await fetch('/auditoria/amazon/conferir'+(tipo?'?tipo='+tipo:''),{method:'POST'}).catch(()=>null);
+  if(res){const d=await res.json();mostrarNotice(d.ok?'Amazon OK: '+d.verificados+' verificados':'Erro: '+(d.erro||'?'),d.ok?'ok':'err');}
+  carregarAmazon(tipo);
+  if(btn){btn.disabled=false;btn.textContent=btnLabel[tipo]||'Conferir';}
+}
+async function ignorarAmazon(id){
+  await fetch('/auditoria/amazon/ignorar/'+id,{method:'POST'});
+  carregarAmazon();
+}
+</script>
+
+      
+      <!-- SEÇÃO AMAZON -->
+      <div id="secao-amazon" class="secao" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+          <h2 style="font-size:18px;font-weight:700">&#x1F6D2; Conferencia Amazon <span id="badge-amazon" style="background:#f59e0b;color:#000;border-radius:999px;padding:2px 10px;font-size:13px">0</span></h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn sm warn" id="btnConferirAmazonEstoque" onclick="conferirAmazon('estoque')">&#x1F4E6; Conferir estoque</button>
+            <button class="btn sm warn" id="btnConferirAmazonPreco" onclick="conferirAmazon('preco')" style="background:#0ea5e9">&#x1F4B0; Conferir preço</button>
+            <button class="btn sm success" id="btnCorrigirAmazonEstoque" onclick="corrigirAmazon('estoque')">&#x2705; Corrigir estoque</button>
+            <button class="btn sm success" id="btnCorrigirAmazonPreco" onclick="corrigirAmazon('preco')" style="background:#10b981">&#x1F4B2; Corrigir preço</button>
+            <button class="btn sm secondary" onclick="limparFilaCompleta('amazon')" style="background:#374151">&#x1F5D1;&#xFE0F; Limpar fila</button>
+          </div>
+        </div>
+        <div id="amazon-empty" style="text-align:center;padding:40px;color:#9fb0d9">
+          <div style="font-size:32px;margin-bottom:8px">&#x2705;</div>
+          Clique em Conferir para iniciar.
+        </div>
+        <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="border-bottom:1px solid #263458;color:#9fb0d9;text-align:left">
+            <th style="padding:8px 12px">SKU</th><th style="padding:8px 12px">Produto</th>
+            <th style="padding:8px 12px">Tipo</th><th style="padding:8px 12px;text-align:center">Bling</th>
+            <th style="padding:8px 12px;text-align:center">Amazon</th><th style="padding:8px 12px;text-align:center">Dif</th>
+            <th style="padding:8px 12px">Status</th><th style="padding:8px 12px">Acao</th>
+          </tr></thead>
+          <tbody id="tabela-amazon"></tbody>
+        </table></div>
+      </div>
+      <!-- SEÇÃO ESTOQUE NEGATIVO -->
+      <div id="secao-negativo" style="display:none;margin-top:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+          <h2 style="font-size:18px;font-weight:700;display:flex;align-items:center;gap:8px">
+            ⚠️ Estoque Negativo Bling
+            <span id="badge-negativo" style="background:#ef4444;color:white;border-radius:999px;padding:2px 10px;font-size:13px">0</span>
+          </h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn sm secondary" onclick="ignorarTodosNegativos()">✓ Ignorar todos</button>
+            <button class="btn sm secondary" onclick="limparNegativosResolvidos()">🧹 Limpar resolvidos</button>
+            <button class="btn sm secondary" onclick="limparFilaCompleta('negativo')" style="background:#374151">🗑️ Limpar fila</button>
+          </div>
+        </div>
+        <div style="font-size:13px;color:#f87171;margin-bottom:12px">
+          ⚡ Produtos com saldo negativo indicam venda sem estoque. Verifique e corrija no Bling.
+        </div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="border-bottom:1px solid #263458;color:#9fb0d9;text-align:left">
+                <th style="padding:8px 12px">SKU</th>
+                <th style="padding:8px 12px">Produto</th>
+                <th style="padding:8px 12px;text-align:center">Estoque</th>
+                <th style="padding:8px 12px">Detectado em</th>
+                <th style="padding:8px 12px">Status</th>
+                <th style="padding:8px 12px">Ação</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-negativo"></tbody>
+          </table>
+        </div>
+        <div id="negativo-empty" style="display:none;text-align:center;padding:40px;color:#9fb0d9">
+          <div style="font-size:32px;margin-bottom:8px">✅</div>
+          Nenhum estoque negativo detectado.
+        </div>
+      </div>
+</body>
+</html>

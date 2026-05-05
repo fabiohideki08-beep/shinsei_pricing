@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Painel de Frete — Shinsei</title>
+  <style>
+    :root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--danger:#ef4444;--ok:#16a34a;--warn:#f5b301}
+    *{box-sizing:border-box} body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text)}
+    .wrap{max-width:1200px;margin:0 auto;padding:22px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 18px}
+    .brand h1{margin:0;font-size:22px} .brand p{margin:4px 0 0;color:var(--muted);font-size:13px}
+    .top-actions{display:flex;gap:10px;flex-shrink:0}
+    .btn{border:none;background:var(--accent);color:#fff;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-size:13px}
+    .btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+    .btn.success{background:#166534} .btn.danger{background:var(--danger)}
+    .btn.sm{padding:7px 10px;font-size:12px;border-radius:9px}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+    .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
+    @media(max-width:900px){.grid2,.grid3{grid-template-columns:1fr}}
+
+    .card{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:20px;padding:20px;margin-bottom:16px}
+    .card-header{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+    .card-icon{font-size:26px}
+    .card-title{font-size:16px;font-weight:700}
+    .card-sub{font-size:12px;color:var(--muted);margin-top:2px}
+
+    .field{margin-bottom:14px}
+    .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+    .field input,.field select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#0d1630;color:#fff;font-size:13px}
+    .field input:focus,.field select:focus{outline:none;border-color:var(--accent)}
+    .field-row{display:flex;gap:10px}
+    .field-row .field{flex:1}
+
+    .notice{padding:12px 14px;border-radius:12px;margin-bottom:14px;font-size:13px}
+    .notice.ok{border:1px solid #166534;background:rgba(22,163,74,.1);color:#bbf7d0}
+    .notice.err{border:1px solid #991b1b;background:rgba(239,68,68,.1);color:#fca5a5}
+    .notice.warn{border:1px solid #92400e;background:rgba(245,158,11,.1);color:#fde68a}
+    .hidden{display:none!important}
+
+    .divider{border:none;border-top:1px solid var(--line);margin:16px 0}
+    .section-title{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.08em;margin-bottom:12px;text-transform:uppercase}
+
+    /* KPI cards */
+    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+    @media(max-width:900px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+    .kpi{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:16px;padding:16px 18px}
+    .kpi-label{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+    .kpi-value{font-size:26px;font-weight:800;line-height:1}
+    .kpi-sub{font-size:11px;color:var(--muted);margin-top:4px}
+    .kpi-value.green{color:#22c55e} .kpi-value.yellow{color:#fbbf24} .kpi-value.blue{color:#60a5fa}
+
+    /* Simulador resultado */
+    .sim-opcoes{margin-top:14px;display:flex;flex-direction:column;gap:8px}
+    .sim-opcao{background:#0d1630;border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px}
+    .sim-opcao.gratis{border-color:#166534;background:rgba(22,163,74,.06)}
+    .sim-opcao-nome{flex:1;font-size:13px;font-weight:600}
+    .sim-opcao-dias{font-size:12px;color:var(--muted);min-width:80px;text-align:center}
+    .sim-opcao-real{font-size:13px;color:var(--muted);min-width:70px;text-align:right;text-decoration:line-through}
+    .sim-opcao-final{font-size:15px;font-weight:800;min-width:80px;text-align:right}
+    .sim-opcao-final.gratis{color:#22c55e}
+    .sim-badge{font-size:11px;padding:3px 8px;border-radius:6px;font-weight:700;background:rgba(22,163,74,.2);color:#22c55e;border:1px solid rgba(22,163,74,.3)}
+    .sim-city{font-size:12px;color:var(--muted);margin-top:8px;display:flex;align-items:center;gap:6px}
+
+    /* Histórico */
+    .table-wrap{overflow-x:auto;border-radius:14px;border:1px solid var(--line)}
+    table{width:100%;border-collapse:collapse;font-size:12px}
+    th{background:#0d1630;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+    td{padding:9px 12px;border-bottom:1px solid rgba(38,52,88,.5);vertical-align:middle}
+    tr:last-child td{border-bottom:none}
+    tr:hover td{background:rgba(79,140,255,.04)}
+    .badge-gratis{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;background:rgba(22,163,74,.2);color:#22c55e;border:1px solid rgba(22,163,74,.3)}
+    .badge-pago{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;background:rgba(96,165,250,.1);color:#60a5fa;border:1px solid rgba(96,165,250,.2)}
+    .badge-rmsp{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;background:rgba(245,179,1,.15);color:#fbbf24;border:1px solid rgba(245,179,1,.3)}
+    .empty-state{text-align:center;color:var(--muted);padding:40px;font-size:14px}
+
+    .hist-controls{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+    .hist-controls input{padding:8px 12px;border-radius:9px;border:1px solid var(--line);background:#0d1630;color:#fff;font-size:12px;width:200px}
+    .hist-controls select{padding:8px 12px;border-radius:9px;border:1px solid var(--line);background:#0d1630;color:#fff;font-size:12px}
+    .hist-controls span{font-size:12px;color:var(--muted);margin-left:auto}
+
+    .subsidy-preview{background:#0d1630;border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:12px}
+    .subsidy-preview-title{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+    .subsidy-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(38,52,88,.4);font-size:12px}
+    .subsidy-row:last-child{border-bottom:none;font-weight:700;font-size:13px;color:#60a5fa}
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="brand">
+      <h1>🚚 Painel de Frete</h1>
+      <p>Configuração de subsídio, simulador e histórico de cálculos</p>
+    </div>
+    <div class="top-actions">
+      <a class="btn secondary" href="/">← Início</a>
+      <button class="btn secondary" onclick="carregarHistorico()">🔄 Atualizar</button>
+    </div>
+  </div>
+
+  <!-- NOTICES -->
+  <div id="notice-global" class="notice hidden"></div>
+
+  <!-- KPIs -->
+  <div class="kpi-grid" id="kpi-grid">
+    <div class="kpi">
+      <div class="kpi-label">Vendas registradas</div>
+      <div class="kpi-value blue" id="kpi-total">—</div>
+      <div class="kpi-sub">últimas 500</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Frete grátis</div>
+      <div class="kpi-value green" id="kpi-gratis">—</div>
+      <div class="kpi-sub" id="kpi-gratis-pct">—</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Subsídio total pago</div>
+      <div class="kpi-value yellow" id="kpi-subsidio">—</div>
+      <div class="kpi-sub">R$ acumulado</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Frete real médio</div>
+      <div class="kpi-value" id="kpi-frete-medio">—</div>
+      <div class="kpi-sub">por pedido</div>
+    </div>
+  </div>
+
+  <div class="grid2">
+
+    <!-- CONFIGURAÇÃO -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">⚙️</div>
+        <div>
+          <div class="card-title">Regras de Subsídio</div>
+          <div class="card-sub">Desconto de frete embutido no preço dos produtos</div>
+        </div>
+      </div>
+
+      <div id="notice-config" class="notice hidden"></div>
+
+      <div class="field-row">
+        <div class="field">
+          <label>1º produto (R$)</label>
+          <input type="number" id="cfg-primeiro" min="0" step="0.5" placeholder="4.00" />
+        </div>
+        <div class="field">
+          <label>2º produto em diante (R$)</label>
+          <input type="number" id="cfg-por-item" min="0" step="0.5" placeholder="8.00" />
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label>Frete real padrão (R$)</label>
+          <input type="number" id="cfg-frete-default" min="0" step="0.5" placeholder="18.00" />
+        </div>
+        <div class="field">
+          <label>CEP de origem</label>
+          <input type="text" id="cfg-cep-origem" maxlength="9" placeholder="06036-003" />
+        </div>
+      </div>
+
+      <!-- Preview da regra -->
+      <div class="subsidy-preview" id="subsidy-preview">
+        <div class="subsidy-preview-title">Preview — subsídio acumulado por quantidade</div>
+        <div id="subsidy-rows"></div>
+      </div>
+
+      <div class="divider"></div>
+      <button class="btn success" style="width:100%" id="btn-salvar" onclick="salvarConfig()">
+        💾 Salvar configuração
+      </button>
+    </div>
+
+    <!-- SIMULADOR -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">🧮</div>
+        <div>
+          <div class="card-title">Simulador de Frete</div>
+          <div class="card-sub">Calcule o frete real e final para um pedido</div>
+        </div>
+      </div>
+
+      <div id="notice-sim" class="notice hidden"></div>
+
+      <div class="field-row">
+        <div class="field">
+          <label>CEP de destino</label>
+          <input type="text" id="sim-cep" maxlength="9" placeholder="01310-100"
+            onkeydown="if(event.key==='Enter') simular()" />
+        </div>
+        <div class="field">
+          <label>Qtd. de itens</label>
+          <input type="number" id="sim-qty" min="1" value="1" />
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Peso total (kg)</label>
+          <input type="number" id="sim-peso" min="0.1" step="0.1" value="0.3" />
+        </div>
+        <div class="field">
+          <label>Valor do pedido (R$)</label>
+          <input type="number" id="sim-valor" min="0" step="1" value="50" />
+        </div>
+      </div>
+
+      <button class="btn" style="width:100%" id="btn-simular" onclick="simular()">
+        🔍 Calcular frete
+      </button>
+
+      <div id="sim-resultado" class="hidden">
+        <div class="divider"></div>
+        <div class="sim-city" id="sim-city"></div>
+        <div class="sim-opcoes" id="sim-opcoes"></div>
+        <div style="margin-top:10px;padding:10px 12px;background:#0d1630;border:1px solid var(--line);border-radius:10px;font-size:12px">
+          <span style="color:var(--muted)">Subsídio aplicado:</span>
+          <strong id="sim-subsidio" style="color:#fbbf24"></strong>
+          &nbsp;·&nbsp;
+          <span style="color:var(--muted)">Itens p/ frete grátis:</span>
+          <strong id="sim-items-free"></strong>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /grid2 -->
+
+  <!-- HISTÓRICO -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon">📋</div>
+      <div>
+        <div class="card-title">Histórico de Fretes</div>
+        <div class="card-sub">Pedidos calculados via Shopify Carrier Service</div>
+      </div>
+    </div>
+
+    <div class="hist-controls">
+      <input type="text" id="hist-search" placeholder="🔍 Filtrar por CEP, cidade ou estado…" oninput="filtrarHistorico()" />
+      <select id="hist-filter-gratis" onchange="filtrarHistorico()">
+        <option value="">Todos</option>
+        <option value="gratis">Apenas grátis</option>
+        <option value="pago">Apenas pagos</option>
+      </select>
+      <select id="hist-limit" onchange="carregarHistorico()">
+        <option value="100">100 registros</option>
+        <option value="200">200 registros</option>
+        <option value="500">500 registros</option>
+      </select>
+      <span id="hist-count"></span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Data / Hora</th>
+            <th>CEP</th>
+            <th>Cidade</th>
+            <th>UF</th>
+            <th>Itens</th>
+            <th>Peso (kg)</th>
+            <th>Valor pedido</th>
+            <th>Frete real</th>
+            <th>Subsídio</th>
+            <th>Frete final</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="hist-tbody">
+          <tr><td colspan="11" class="empty-state">Carregando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /wrap -->
+
+<script>
+// ---------------------------------------------------------------------------
+// Utilidades
+// ---------------------------------------------------------------------------
+function fmt(v){ return 'R$ ' + (v||0).toFixed(2).replace('.', ',') }
+function fmtCep(v){ var d=(v||'').replace(/\D/g,''); return d.length>5?d.slice(0,5)+'-'+d.slice(5):d }
+function showNotice(id, msg, type){
+  var el=document.getElementById(id);
+  el.textContent=msg; el.className='notice '+type; el.classList.remove('hidden');
+  if(type==='ok') setTimeout(function(){ el.classList.add('hidden'); }, 4000);
+}
+function hideNotice(id){ document.getElementById(id).classList.add('hidden'); }
+
+// ---------------------------------------------------------------------------
+// Carregar config
+// ---------------------------------------------------------------------------
+var _historico = [];
+
+function carregarConfig(){
+  fetch('/frete/config')
+    .then(function(r){ return r.json(); })
+    .then(function(cfg){
+      document.getElementById('cfg-primeiro').value       = cfg.subsidio_primeiro_item || 4;
+      document.getElementById('cfg-por-item').value       = cfg.subsidio_por_item      || 8;
+      document.getElementById('cfg-frete-default').value  = cfg.frete_real_default     || 18;
+      document.getElementById('cfg-cep-origem').value     = fmtCep(cfg.cep_origem      || '06036003');
+      atualizarPreview();
+    })
+    .catch(function(){ showNotice('notice-config','Erro ao carregar configuração.','err'); });
+}
+
+// ---------------------------------------------------------------------------
+// Preview de subsídio
+// ---------------------------------------------------------------------------
+function atualizarPreview(){
+  var primeiro  = parseFloat(document.getElementById('cfg-primeiro').value)  || 4;
+  var porItem   = parseFloat(document.getElementById('cfg-por-item').value)   || 8;
+  var freteRef  = parseFloat(document.getElementById('cfg-frete-default').value) || 18;
+  var html = '';
+  var acum = 0;
+  for(var q=1; q<=6; q++){
+    acum = parseFloat((primeiro + Math.max(0, q-1)*porItem).toFixed(2));
+    var final = Math.max(0, parseFloat((freteRef - acum).toFixed(2)));
+    var gratis = final === 0;
+    html += '<div class="subsidy-row">'
+          + '<span>'+q+' item'+(q>1?'s':'')+'</span>'
+          + '<span>subsídio ' + fmt(acum) + '</span>'
+          + '<span style="color:'+(gratis?'#22c55e':'#60a5fa')+'">'
+          + (gratis ? '🎉 GRÁTIS' : 'final ' + fmt(final))
+          + '</span></div>';
+    if(gratis) break;
+  }
+  document.getElementById('subsidy-rows').innerHTML = html;
+}
+
+document.getElementById('cfg-primeiro').addEventListener('input', atualizarPreview);
+document.getElementById('cfg-por-item').addEventListener('input', atualizarPreview);
+document.getElementById('cfg-frete-default').addEventListener('input', atualizarPreview);
+
+// ---------------------------------------------------------------------------
+// Salvar config
+// ---------------------------------------------------------------------------
+function salvarConfig(){
+  var btn = document.getElementById('btn-salvar');
+  btn.disabled = true; btn.textContent = 'Salvando…';
+  hideNotice('notice-config');
+
+  var payload = {
+    subsidio_primeiro_item : parseFloat(document.getElementById('cfg-primeiro').value)      || 4,
+    subsidio_por_item      : parseFloat(document.getElementById('cfg-por-item').value)       || 8,
+    frete_real_default     : parseFloat(document.getElementById('cfg-frete-default').value)  || 18,
+    cep_origem             : (document.getElementById('cfg-cep-origem').value||'').replace(/\D/g,'') || '06036003',
+  };
+
+  fetch('/frete/config', {
+    method:'PUT',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    btn.disabled=false; btn.textContent='💾 Salvar configuração';
+    if(data.ok){
+      showNotice('notice-config','✅ Configuração salva com sucesso!','ok');
+      atualizarPreview();
+    } else {
+      showNotice('notice-config','Erro ao salvar: '+JSON.stringify(data),'err');
+    }
+  })
+  .catch(function(e){
+    btn.disabled=false; btn.textContent='💾 Salvar configuração';
+    showNotice('notice-config','Erro: '+e.message,'err');
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Simulador
+// ---------------------------------------------------------------------------
+function simular(){
+  var cep   = (document.getElementById('sim-cep').value||'').replace(/\D/g,'');
+  var qty   = parseInt(document.getElementById('sim-qty').value)||1;
+  var peso  = parseFloat(document.getElementById('sim-peso').value)||0.3;
+  var valor = parseFloat(document.getElementById('sim-valor').value)||0;
+
+  if(cep.length !== 8){ showNotice('notice-sim','CEP inválido. Informe 8 dígitos.','err'); return; }
+  hideNotice('notice-sim');
+
+  var btn = document.getElementById('btn-simular');
+  btn.disabled=true; btn.textContent='Calculando…';
+  document.getElementById('sim-resultado').classList.add('hidden');
+
+  fetch('/frete/simular?cep='+cep+'&qty='+qty+'&peso='+peso.toFixed(3)+'&valor='+valor.toFixed(2))
+    .then(function(r){
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return r.json();
+    })
+    .then(function(data){
+      btn.disabled=false; btn.textContent='🔍 Calcular frete';
+      renderSimulador(data);
+    })
+    .catch(function(e){
+      btn.disabled=false; btn.textContent='🔍 Calcular frete';
+      showNotice('notice-sim','Erro no cálculo: '+e.message,'err');
+    });
+}
+
+function renderSimulador(data){
+  var city = document.getElementById('sim-city');
+  var opcoes = document.getElementById('sim-opcoes');
+  var rmspBadge = data.rmsp ? ' <span class="badge-rmsp">RMSP</span>' : '';
+  city.innerHTML = '📍 <strong>' + (data.city||'—') + ' — ' + (data.state||'—') + '</strong>' + rmspBadge;
+
+  var html = '';
+  (data.opcoes||[]).forEach(function(opt){
+    var finalStr = opt.gratis
+      ? '<span class="sim-opcao-final gratis">GRÁTIS</span>'
+      : '<span class="sim-opcao-final">' + fmt(opt.final) + '</span>';
+    html += '<div class="sim-opcao' + (opt.gratis?' gratis':'') + '">'
+          + (opt.gratis ? '<span class="sim-badge">FREE</span>' : '')
+          + '<span class="sim-opcao-nome">' + opt.nome + (opt.carrier ? ' <small style="color:var(--muted);font-weight:400">(' + opt.carrier + ')</small>' : '') + '</span>'
+          + '<span class="sim-opcao-dias">' + opt.dias + ' d.u.</span>'
+          + '<span class="sim-opcao-real">' + fmt(opt.real) + '</span>'
+          + finalStr
+          + '</div>';
+  });
+  if(!html) html = '<div style="color:var(--muted);font-size:13px;padding:10px">Nenhuma opção disponível.</div>';
+  opcoes.innerHTML = html;
+
+  document.getElementById('sim-subsidio').textContent   = fmt(data.subsidio_total||0);
+  document.getElementById('sim-items-free').textContent = (data.items_for_free||0) + ' itens';
+
+  document.getElementById('sim-resultado').classList.remove('hidden');
+}
+
+// Máscara de CEP no simulador
+document.getElementById('sim-cep').addEventListener('input', function(){
+  var d = this.value.replace(/\D/g,'').slice(0,8);
+  this.value = d.length>5 ? d.slice(0,5)+'-'+d.slice(5) : d;
+});
+document.getElementById('cfg-cep-origem').addEventListener('input', function(){
+  var d = this.value.replace(/\D/g,'').slice(0,8);
+  this.value = d.length>5 ? d.slice(0,5)+'-'+d.slice(5) : d;
+});
+
+// ---------------------------------------------------------------------------
+// Histórico
+// ---------------------------------------------------------------------------
+function carregarHistorico(){
+  var limit = document.getElementById('hist-limit').value || 100;
+  fetch('/frete/historico?limit='+limit)
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      _historico = data.itens || [];
+      atualizarKPIs(_historico);
+      filtrarHistorico();
+    })
+    .catch(function(){
+      document.getElementById('hist-tbody').innerHTML =
+        '<tr><td colspan="11" class="empty-state">Erro ao carregar histórico.</td></tr>';
+    });
+}
+
+function atualizarKPIs(itens){
+  var total   = itens.length;
+  var gratis  = itens.filter(function(i){ return i.gratis; }).length;
+  var pct     = total>0 ? Math.round(gratis/total*100) : 0;
+  var subTotal = itens.reduce(function(s,i){ return s + (i.subsidio||0); }, 0);
+  var freteMedian = total>0
+    ? itens.reduce(function(s,i){ return s + (i.frete_min_real||0); }, 0) / total
+    : 0;
+
+  document.getElementById('kpi-total').textContent        = total;
+  document.getElementById('kpi-gratis').textContent       = gratis;
+  document.getElementById('kpi-gratis-pct').textContent   = pct + '% dos pedidos';
+  document.getElementById('kpi-subsidio').textContent     = fmt(subTotal);
+  document.getElementById('kpi-frete-medio').textContent  = fmt(freteMedian);
+}
+
+function filtrarHistorico(){
+  var search = (document.getElementById('hist-search').value||'').toLowerCase();
+  var filtro = document.getElementById('hist-filter-gratis').value;
+
+  var lista = _historico.filter(function(i){
+    if(filtro==='gratis' && !i.gratis) return false;
+    if(filtro==='pago'   &&  i.gratis) return false;
+    if(search){
+      var haystack = ((i.dest_cep||'') + ' ' + (i.city||'') + ' ' + (i.state||'')).toLowerCase();
+      if(haystack.indexOf(search)===-1) return false;
+    }
+    return true;
+  });
+
+  document.getElementById('hist-count').textContent = lista.length + ' registro' + (lista.length!==1?'s':'');
+  renderTabela(lista);
+}
+
+function renderTabela(lista){
+  var tbody = document.getElementById('hist-tbody');
+  if(!lista.length){
+    tbody.innerHTML = '<tr><td colspan="11" class="empty-state">Nenhum registro encontrado.</td></tr>';
+    return;
+  }
+  var html = '';
+  lista.forEach(function(i){
+    var ts = i.ts ? new Date(i.ts).toLocaleString('pt-BR', {timeZone:'America/Sao_Paulo'}) : '—';
+    var cepFmt = fmtCep(i.dest_cep||'');
+    var rmsp = i.rmsp ? ' <span class="badge-rmsp" title="Região Metropolitana SP">RMSP</span>' : '';
+    var status = i.gratis
+      ? '<span class="badge-gratis">GRÁTIS</span>'
+      : '<span class="badge-pago">Pago</span>';
+    var opcoesTip = (i.opcoes||[]).map(function(o){
+      return o.nome + ': real=' + fmt(o.real) + ' final=' + fmt(o.final);
+    }).join(' | ');
+    html += '<tr title="' + (opcoesTip||'') + '">'
+          + '<td>' + ts + '</td>'
+          + '<td>' + cepFmt + '</td>'
+          + '<td>' + (i.city||'—') + rmsp + '</td>'
+          + '<td>' + (i.state||'—') + '</td>'
+          + '<td style="text-align:center">' + (i.qty||1) + '</td>'
+          + '<td style="text-align:right">' + (i.peso_kg||0).toFixed(3) + '</td>'
+          + '<td style="text-align:right">' + fmt(i.valor||0) + '</td>'
+          + '<td style="text-align:right;color:var(--muted)">' + fmt(i.frete_min_real||0) + '</td>'
+          + '<td style="text-align:right;color:#fbbf24">' + fmt(i.subsidio||0) + '</td>'
+          + '<td style="text-align:right;font-weight:700">' + fmt(i.frete_min_final||0) + '</td>'
+          + '<td>' + status + '</td>'
+          + '</tr>';
+  });
+  tbody.innerHTML = html;
+}
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+carregarConfig();
+carregarHistorico();
+
+// Auto-refresh a cada 60s
+setInterval(carregarHistorico, 60000);
+</script>
+</body>
+</html>

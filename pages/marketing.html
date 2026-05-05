@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Marketing — Shinsei Pricing</title>
+  <style>
+    :root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--danger:#ef4444;--ok:#16a34a;--warn:#f5b301}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text);min-height:100vh}
+    .wrap{max-width:1400px;margin:0 auto;padding:22px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 18px;position:sticky;top:16px;z-index:10}
+    .brand h1{margin:0;font-size:22px}.brand p{margin:4px 0 0;color:var(--muted);font-size:13px}
+    .btn{border:none;background:var(--accent);color:#fff;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:13px;text-decoration:none}
+    .btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+    .btn.success{background:#166534}.btn.danger{background:var(--danger)}.btn.warn{background:var(--warn);color:#000}
+    .btn.sm{padding:7px 10px;font-size:12px;border-radius:9px}
+    .btn:disabled{opacity:.4;cursor:not-allowed}
+
+    /* CAMPANHAS LIST */
+    .campanhas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-bottom:20px}
+    .campanha-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;cursor:pointer;transition:border-color .2s,background .2s;position:relative}
+    .campanha-card:hover{border-color:var(--accent)}
+    .campanha-card.active{border-color:var(--accent);background:rgba(79,140,255,.08)}
+    .campanha-card .nome{font-size:15px;font-weight:700;margin-bottom:6px}
+    .campanha-card .meta{font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+    .campanha-card .desconto-badge{font-size:24px;font-weight:700;color:var(--warn)}
+    .campanha-card .del-btn{position:absolute;top:10px;right:10px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:4px}
+    .campanha-card .del-btn:hover{color:var(--danger)}
+    .add-card{background:rgba(79,140,255,.05);border:1px dashed var(--line);border-radius:16px;padding:16px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:120px;transition:border-color .2s}
+    .add-card:hover{border-color:var(--accent)}
+
+    /* MODAL */
+    .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center}
+    .modal-bg.show{display:flex}
+    .modal{background:#121a31;border:1px solid var(--line);border-radius:20px;padding:24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto}
+    .modal h2{margin:0 0 18px;font-size:18px}
+    .field{margin-bottom:14px}
+    .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:600}
+    .field input,.field select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#0d1630;color:var(--text);font-size:14px}
+    .field input:focus,.field select:focus{outline:none;border-color:var(--accent)}
+    .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .modal-footer{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+
+    /* ANALISE */
+    .resumo-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+    .resumo-card{border-radius:14px;padding:14px;border:1px solid var(--line);background:var(--card2);text-align:center}
+    .resumo-card .num{font-size:32px;font-weight:700;margin:6px 0 4px}
+    .resumo-card .lbl{font-size:12px;color:var(--muted)}
+    .resumo-card.verde .num{color:#22c55e}.resumo-card.amarelo .num{color:var(--warn)}.resumo-card.vermelho .num{color:var(--danger)}.resumo-card.cinza .num{color:var(--muted)}
+
+    /* SECAO */
+    .secao{border-radius:18px;border:1px solid var(--line);margin-bottom:16px;overflow:hidden;background:rgba(18,26,49,.95)}
+    .secao-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;cursor:pointer;user-select:none}
+    .secao-header:hover{background:rgba(79,140,255,.05)}
+    .secao-titulo{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:700}
+    .secao-actions{display:flex;gap:8px;align-items:center}
+    .badge{border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;min-width:28px;text-align:center}
+    .badge.verde{background:rgba(34,197,94,.2);color:#22c55e}
+    .badge.amarelo{background:rgba(245,179,1,.2);color:var(--warn)}
+    .badge.vermelho{background:rgba(239,68,68,.2);color:var(--danger)}
+    .secao-body{padding:0 0 14px}
+
+    /* TABELA */
+    .table-wrap{overflow-x:auto;margin:0 18px}
+    table{width:100%;border-collapse:collapse;font-size:13px;min-width:900px}
+    th{padding:10px 12px;background:#10182f;color:var(--muted);font-size:11px;font-weight:600;text-align:left;border-bottom:1px solid var(--line)}
+    td{padding:9px 12px;border-bottom:1px solid rgba(38,52,88,.5)}
+    tr:last-child td{border-bottom:none}
+    tr:hover td{background:rgba(79,140,255,.04)}
+    input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--accent)}
+    .preco{font-family:monospace;font-weight:700}
+    .margem-pos{color:#22c55e;font-weight:700}.margem-neg{color:var(--danger);font-weight:700}.margem-warn{color:var(--warn);font-weight:700}
+    .var-neg{color:var(--danger)}.var-pos{color:#22c55e}
+    .pill{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
+    .pill.pro{background:rgba(79,140,255,.15);color:#93c5fd}.pill.cls{background:rgba(245,179,1,.1);color:var(--warn)}
+    .footer-actions{display:flex;align-items:center;gap:12px;padding:12px 18px 4px;border-top:1px solid var(--line);margin-top:8px;flex-wrap:wrap}
+    .sel-count{font-size:12px;color:var(--muted)}
+
+    /* BANNER CAMPANHA ATIVA */
+    .banner-campanha{background:rgba(79,140,255,.1);border:1px solid rgba(79,140,255,.3);border-radius:14px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+    .banner-campanha .nome{font-weight:700;font-size:16px}
+    .banner-campanha .info{font-size:12px;color:var(--muted)}
+    .banner-campanha .desc-big{font-size:28px;font-weight:700;color:var(--warn)}
+
+    /* SUGESTOES ML */
+    .sug-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px}
+    .sug-resumo{display:flex;gap:10px;flex-wrap:wrap}
+    .sug-chip{border-radius:999px;padding:4px 14px;font-size:12px;font-weight:700;border:1px solid transparent}
+    .sug-chip.verde{background:rgba(34,197,94,.15);color:#22c55e;border-color:rgba(34,197,94,.3)}
+    .sug-chip.amarelo{background:rgba(245,179,1,.15);color:var(--warn);border-color:rgba(245,179,1,.3)}
+    .sug-chip.vermelho{background:rgba(239,68,68,.15);color:var(--danger);border-color:rgba(239,68,68,.3)}
+    .sug-chip.cinza{background:rgba(159,176,217,.1);color:var(--muted);border-color:rgba(159,176,217,.2)}
+    .sug-empty{color:var(--muted);font-size:13px;padding:14px 0;text-align:center}
+    .sug-note{font-size:11px;color:var(--muted);margin-top:6px}
+    .bench-badge{display:inline-block;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700}
+    .bench-ok{background:rgba(34,197,94,.15);color:#22c55e}
+    .bench-no{background:rgba(159,176,217,.1);color:var(--muted)}
+
+    /* TOAST */
+    #toast{position:fixed;bottom:28px;right:28px;z-index:9999;padding:14px 20px;border-radius:14px;font-size:14px;font-weight:600;max-width:380px;box-shadow:0 4px 24px rgba(0,0,0,.5);opacity:0;transform:translateY(16px);transition:opacity .25s,transform .25s;pointer-events:none}
+    #toast.show{opacity:1;transform:translateY(0)}
+    #toast.ok{background:#166534;color:#bbf7d0;border:1px solid #15803d}
+    #toast.err{background:#7f1d1d;color:#fca5a5;border:1px solid #991b1b}
+    #toast.warn{background:#78350f;color:#fde68a;border:1px solid #92400e}
+
+    .spin{animation:spin 1s linear infinite;display:inline-block}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .hero-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:120px;color:var(--muted);gap:8px;font-size:13px;padding:20px;text-align:center}
+    .progress-bar{height:6px;background:var(--line);border-radius:4px;margin-top:10px;overflow:hidden}
+    .progress-fill{height:6px;background:var(--accent);border-radius:4px;transition:width .4s}
+    @media(max-width:900px){.resumo-grid{grid-template-columns:1fr 1fr}.topbar{flex-direction:column;align-items:flex-start}}
+  </style>
+</head>
+<body>
+<div id="toast"></div>
+
+<!-- MODAL NOVA CAMPANHA -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h2>📣 Nova Campanha</h2>
+    <div class="field">
+      <label>Nome da campanha</label>
+      <input type="text" id="fNome" placeholder="Ex: Promoção Geral Abr/26"/>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Desconto (%)</label>
+        <input type="number" id="fDesconto" value="10" min="1" max="80" step="1"/>
+      </div>
+      <div class="field">
+        <label>Margem alvo (%)</label>
+        <input type="number" id="fMargemAlvo" value="20" min="0" max="100" step="1"/>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Início da vigência</label>
+        <input type="date" id="fInicio"/>
+      </div>
+      <div class="field">
+        <label>Fim da vigência</label>
+        <input type="date" id="fFim"/>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Canal</label>
+        <select id="fCanal">
+          <option value="ambos">Premium + Clássico</option>
+          <option value="gold_pro">Somente Premium</option>
+          <option value="gold_special">Somente Clássico</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Imposto padrão (%)</label>
+        <input type="number" id="fImposto" value="12" min="0" max="100" step="0.1"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn secondary" onclick="fecharModal()">Cancelar</button>
+      <button class="btn" onclick="salvarCampanha()">💾 Salvar campanha</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1>📣 Marketing</h1>
+      <p>Análise de viabilidade para campanhas e promoções do Mercado Livre</p>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <a class="btn secondary" href="/">Início</a>
+      <a class="btn secondary" href="/auditoria-automatica">Auditoria</a>
+      <a class="btn secondary" href="/seo-health">SEO Health</a>
+    </div>
+  </div>
+
+  <!-- SUGESTÕES ML (price_suggestion webhooks) -->
+  <div style="background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:20px">
+    <div class="sug-header">
+      <div>
+        <div style="font-size:15px;font-weight:700">🔔 Sugestões de preço do ML <span style="font-size:12px;color:var(--muted);font-weight:400">(via webhook em tempo real)</span></div>
+        <div class="sug-note">O Mercado Livre envia notificações quando sugere alterações de preço nos seus anúncios. O sistema analisa automaticamente a viabilidade.</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn sm secondary" onclick="carregarSugestoes()">🔄 Atualizar</button>
+        <button class="btn sm warn" onclick="reprocessarSugestoes()">⚙️ Recalcular margens</button>
+        <button class="btn sm danger" onclick="limparSugestoes()">🗑 Limpar</button>
+      </div>
+    </div>
+    <div class="sug-resumo" id="sugResumo" style="margin-bottom:12px"></div>
+    <div id="sugWrap">
+      <div class="sug-empty">Aguardando sugestões do ML... O sistema processa automaticamente quando o Mercado Livre envia notificações de preço.</div>
+    </div>
+  </div>
+
+  <!-- CAMPANHAS CADASTRADAS -->
+  <div style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
+    <h2 style="margin:0;font-size:16px;font-weight:700">🛒 Campanhas Mercado Livre</h2>
+    <span style="font-size:12px;color:var(--muted)">Cadastre as campanhas que aparecem no painel ML para analisar viabilidade</span>
+  </div>
+  <div class="campanhas-grid" id="campanhasGrid">
+    <div class="add-card" onclick="abrirModal()">
+      <span style="font-size:28px">➕</span>
+      <span style="font-size:13px;color:var(--muted)">Nova campanha</span>
+    </div>
+  </div>
+
+  <!-- PROGRESSO ANALISE -->
+  <div id="progressoWrap" style="display:none;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px">
+    <div style="font-size:13px;color:var(--muted)" id="progressoTxt">Analisando...</div>
+    <div class="progress-bar"><div class="progress-fill" id="progressoBar" style="width:0%"></div></div>
+  </div>
+
+  <!-- BANNER CAMPANHA ATIVA -->
+  <div class="banner-campanha" id="bannerCampanha" style="display:none">
+    <div style="flex:1;min-width:0">
+      <div class="nome" id="bannerNome">—</div>
+      <div class="info" id="bannerInfo">—</div>
+    </div>
+    <!-- Desconto ajustável -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;min-width:160px">
+      <div style="font-size:11px;color:var(--muted);font-weight:600">DESCONTO A TESTAR</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button onclick="ajustarDesconto(-1)" style="background:rgba(255,255,255,.1);border:1px solid var(--line);color:var(--text);border-radius:8px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">−</button>
+        <div style="text-align:center">
+          <input type="number" id="descontoTeste" min="1" max="80" step="1" value="10"
+            style="width:60px;text-align:center;font-size:22px;font-weight:700;color:var(--warn);background:transparent;border:none;border-bottom:2px solid var(--warn);outline:none;padding:0"
+            onchange="sincronizarDesconto()"/>
+          <div style="font-size:11px;color:var(--muted)">%</div>
+        </div>
+        <button onclick="ajustarDesconto(+1)" style="background:rgba(255,255,255,.1);border:1px solid var(--line);color:var(--text);border-radius:8px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">+</button>
+      </div>
+      <input type="range" id="descontoSlider" min="1" max="60" step="1" value="10"
+        style="width:140px;accent-color:var(--warn)" oninput="sincronizarSlider(this.value)"/>
+      <div style="font-size:10px;color:var(--muted)" id="descontoOrigLabel">Original da campanha: —</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <button class="btn sm warn" id="btnAnalisar" onclick="analisarCampanhaAtiva()">🔍 Analisar</button>
+      <button class="btn sm secondary" onclick="restaurarDescontoOriginal()" id="btnRestaurar" style="display:none">↩ Restaurar original</button>
+    </div>
+  </div>
+
+  <!-- RESUMO -->
+  <div id="resumoWrap" style="display:none">
+    <div class="resumo-grid">
+      <div class="resumo-card verde"><div class="lbl">✅ Dentro da margem alvo</div><div class="num" id="numDentro">0</div><div class="lbl">anúncios</div></div>
+      <div class="resumo-card amarelo"><div class="lbl">⚠️ Lucro reduzido</div><div class="num" id="numReduzido">0</div><div class="lbl">anúncios</div></div>
+      <div class="resumo-card vermelho"><div class="lbl">❌ Prejuízo</div><div class="num" id="numPrejuizo">0</div><div class="lbl">anúncios</div></div>
+      <div class="resumo-card cinza"><div class="lbl">⚪ Sem dados no Bling</div><div class="num" id="numSemDados">0</div><div class="lbl">anúncios</div></div>
+    </div>
+
+    <!-- DENTRO DA MARGEM -->
+    <div class="secao">
+      <div class="secao-header" onclick="toggleSecao('bodyDentro')">
+        <div class="secao-titulo">✅ Dentro da margem alvo <span class="badge verde" id="badgeDentro">0</span></div>
+        <div class="secao-actions" onclick="event.stopPropagation()">
+          <button class="btn sm" onclick="selecionarTodos('tbodyDentro')">Selecionar todos</button>
+          <button class="btn sm secondary" onclick="desselecionar('tbodyDentro')">Limpar</button>
+          <button class="btn sm success" onclick="participar('dentro_margem','tbodyDentro')">🚀 Participar com selecionados</button>
+        </div>
+      </div>
+      <div id="bodyDentro" class="secao-body">
+        <div class="table-wrap"><table>
+          <thead><tr>
+            <th style="width:36px"><input type="checkbox" onchange="toggleAll('tbodyDentro',this)"/></th>
+            <th>SKU</th><th>Produto</th><th>Canal</th>
+            <th>Preço atual</th><th>Preço campanha</th>
+            <th>Margem atual</th><th>Margem campanha</th><th>Variação</th><th>Lucro R$</th>
+          </tr></thead>
+          <tbody id="tbodyDentro"></tbody>
+        </table></div>
+        <div class="footer-actions"><span class="sel-count" id="contDentro">0 selecionados</span></div>
+      </div>
+    </div>
+
+    <!-- LUCRO REDUZIDO -->
+    <div class="secao">
+      <div class="secao-header" onclick="toggleSecao('bodyReduzido')">
+        <div class="secao-titulo">⚠️ Lucro reduzido — abaixo da meta <span class="badge amarelo" id="badgeReduzido">0</span></div>
+        <div class="secao-actions" onclick="event.stopPropagation()">
+          <button class="btn sm warn" onclick="selecionarTodos('tbodyReduzido')">Selecionar todos</button>
+          <button class="btn sm secondary" onclick="desselecionar('tbodyReduzido')">Limpar</button>
+          <button class="btn sm success" onclick="participar('lucro_reduzido','tbodyReduzido')">🚀 Participar com selecionados</button>
+        </div>
+      </div>
+      <div id="bodyReduzido" class="secao-body" style="display:none">
+        <div class="table-wrap"><table>
+          <thead><tr>
+            <th style="width:36px"><input type="checkbox" onchange="toggleAll('tbodyReduzido',this)"/></th>
+            <th>SKU</th><th>Produto</th><th>Canal</th>
+            <th>Preço atual</th><th>Preço campanha</th>
+            <th>Margem atual</th><th>Margem campanha</th><th>Variação</th><th>Lucro R$</th>
+          </tr></thead>
+          <tbody id="tbodyReduzido"></tbody>
+        </table></div>
+        <div class="footer-actions"><span class="sel-count" id="contReduzido">0 selecionados</span></div>
+      </div>
+    </div>
+
+    <!-- PREJUÍZO -->
+    <div class="secao">
+      <div class="secao-header" onclick="toggleSecao('bodyPrejuizo')">
+        <div class="secao-titulo">❌ Prejuízo com o desconto <span class="badge vermelho" id="badgePrejuizo">0</span></div>
+        <div class="secao-actions" onclick="event.stopPropagation()">
+          <span style="font-size:12px;color:var(--muted)">Não recomendado</span>
+        </div>
+      </div>
+      <div id="bodyPrejuizo" class="secao-body" style="display:none">
+        <div class="table-wrap"><table>
+          <thead><tr>
+            <th style="width:36px"></th>
+            <th>SKU</th><th>Produto</th><th>Canal</th>
+            <th>Preço atual</th><th>Preço campanha</th>
+            <th>Margem atual</th><th>Margem campanha</th><th>Variação</th><th>Prejuízo R$</th>
+          </tr></thead>
+          <tbody id="tbodyPrejuizo"></tbody>
+        </table></div>
+      </div>
+    </div>
+  </div><!-- /resumoWrap -->
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- SEÇÃO AMAZON                                                -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <div style="margin:32px 0 8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+    <div>
+      <h2 style="margin:0;font-size:18px;font-weight:700">📦 Amazon — Cobertura da Buy Box</h2>
+      <p style="margin:4px 0 0;font-size:12px;color:var(--muted)">Analisa se cobrir o melhor preço da Buy Box é viável dado o custo do produto no Bling</p>
+    </div>
+  </div>
+
+  <!-- CONFIG ANÁLISE AMAZON -->
+  <div style="background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:16px">
+    <div id="amzCacheInfo" style="display:none;font-size:11px;color:var(--muted);margin-bottom:10px;padding:8px 12px;background:rgba(79,140,255,.07);border-radius:8px;border:1px solid rgba(79,140,255,.15)">
+      📦 Exibindo análise em cache — <span id="amzCacheTs"></span> · <button onclick="analisarAmazon()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:11px;padding:0;text-decoration:underline">Atualizar agora</button>
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
+      <div class="field" style="margin:0;flex:1;min-width:140px">
+        <label>Margem alvo (%)</label>
+        <input type="number" id="amzMargemAlvo" value="20" min="0" max="100" step="1" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#0d1630;color:var(--text);font-size:14px"/>
+      </div>
+      <div class="field" style="margin:0;flex:1;min-width:140px">
+        <label>Imposto padrão (%)</label>
+        <input type="number" id="amzImposto" value="12" min="0" max="100" step="0.1" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#0d1630;color:var(--text);font-size:14px"/>
+      </div>
+      <div class="field" style="margin:0;flex:1;min-width:140px">
+        <label>Máx. itens</label>
+        <input type="number" id="amzMaxItens" value="500" min="10" max="1000" step="10" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#0d1630;color:var(--text);font-size:14px"/>
+      </div>
+      <button class="btn" id="btnAnalisarAmz" onclick="analisarAmazon()" style="height:42px;white-space:nowrap">
+        🔍 Analisar Buy Box
+      </button>
+    </div>
+    <div id="amzProgressoWrap" style="display:none;margin-top:14px">
+      <div style="font-size:13px;color:var(--muted)" id="amzProgressoTxt">Buscando inventário FBA...</div>
+      <div class="progress-bar"><div class="progress-fill" id="amzProgressoBar" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <!-- RESUMO AMAZON -->
+  <div id="amzResumoWrap" style="display:none">
+    <div id="amzTotalInfo" style="font-size:12px;color:var(--muted);margin-bottom:10px"></div>
+    <div class="resumo-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:20px">
+      <div class="resumo-card verde"><div class="lbl">✅ Dentro da margem alvo</div><div class="num" id="amzNumDentro">0</div><div class="lbl">produtos</div></div>
+      <div class="resumo-card amarelo"><div class="lbl">⚠️ Lucro reduzido</div><div class="num" id="amzNumReduzido">0</div><div class="lbl">produtos</div></div>
+      <div class="resumo-card vermelho"><div class="lbl">❌ Prejuízo</div><div class="num" id="amzNumPrejuizo">0</div><div class="lbl">produtos</div></div>
+      <div class="resumo-card cinza"><div class="lbl">⚪ Sem Buy Box</div><div class="num" id="amzNumSemDados">0</div><div class="lbl">produtos</div></div>
+      <div class="resumo-card" style="border-color:rgba(239,68,68,.3)"><div class="lbl" style="color:var(--danger)">🚫 Não encontrado na Amazon</div><div class="num" id="amzNumNaoEncontrado" style="color:var(--danger)">0</div><div class="lbl">SKUs do Bling</div></div>
+    </div>
+
+    <!-- DENTRO DA MARGEM -->
+    <div class="secao">
+      <div class="secao-header" onclick="toggleSecao('amzBodyDentro')">
+        <div class="secao-titulo">✅ Dentro da margem alvo <span class="badge verde" id="amzBadgeDentro">0</span></div>
+        <div class="secao-actions" onclick="event.stopPropagation()">
+          <button class="btn sm" onclick="amzSelecionarTodos('amzTbodyDentro')">Selecionar todos</button>
+          <button class="btn sm secondary" onclick="amzDesselecionar('amzTbodyDentro')">Limpar</button>
+          <button class="btn sm success" onclick="amzParticipar('dentro_margem','amzTbodyDentro')">🚀 Cobrir Buy Box com selecionados</button>
+        </div>
+      </div>
+      <div id="amzBodyDentro" class="secao-body">
+        <div class="table-wrap"><table>
+          <thead><tr>
+            <th style="width:36px"><input type="checkbox" onchange="amzToggleAll('amzTbodyDentro',this)"/></th>
+            <th>SKU</th><th>ASIN</th><th>Produto</th>
+            <th>Buy Box</th><th>Sua BB?</th><th>Margem BB</th><th>Lucro BB</th>
+            <th>Menor Preço</th><th>Margem MP</th><th>Lucro MP</th>
+            <th>Custo</th>
+          </tr></thead>
+          <tbody id="amzTbodyDentro"></tbody>
+        </table></div>
+        <div class="footer-actions"><span class="sel-count" id="amzContDentro">0 selecionados</span></div>
+      </div>
+    </div>
+
+    <!-- LUCRO REDUZIDO -->
+    <div class="secao">
+      <div class="secao-header" onclick="toggleSecao('amzBodyReduzido')">
+        <div class="secao-titulo">⚠️ Lucro reduzido — abaixo da meta <span class="badge amarelo" id="amzBadgeReduzido">0</span></div>
+        <div class="secao-actions" onclick="event.stopPropagation()">
+          <button class="btn sm warn" onclick="amzSelecionarTodos('amzTbodyReduzido')">Selecionar todos</button>
+          <button class="btn sm secondary" onclick="amzDesselecionar('amzTbodyReduzido')">Limpar</button>
+          <button class="btn sm success" onclick="amzParticipar('lucro_reduzido','amzTbodyReduzido')">🚀 Cobrir Buy Box com selecionados</button>
+        </div>
+      </div>
+      <div id="amzBodyReduzido" class="secao-body" style="display:none">
+        <div class="table-wrap"><table>
+          <thead><tr>
+            <th style="width:36px"><input type="checkbox" onchange="amzToggleAll('amzTbodyReduzido',this)"/></th>
+            <th>SKU</th><th>ASIN</th><th>Produto</th>
+            <th>Buy Box</th><th>Sua BB?</th><th>Margem BB</th><th>Lucro BB</th>
+            <th>Menor Preço</th><th>Margem MP</th><th>Lucro MP</th>
+            <th>Custo</th>
+          </tr></thead>
+          <tbody id="amzTbodyReduzido"></tbody>
+        </table></div>
+        <div class="footer-actions"><span class="sel-count" id="amzContReduzido">0 selecionados</span></div>
+      </div>
+    </div>
+
+    <!-- PREJUÍZO -->
+    <div class="secao">
+      <div class="secao-header" onclick="toggleSecao('amzBodyPrejuizo')">
+        <div class="secao-titulo">❌ Prejuízo ao cobrir a Buy Box <span class="badge vermelho" id="amzBadgePrejuizo">0</span></div>
+        <div class="secao-actions" onclick="event.stopPropagation()">
+          <span style="font-size:12px;color:var(--muted)">Não recomendado</span>
+        </div>
+      </div>
+      <div id="amzBodyPrejuizo" class="secao-body" style="display:none">
+        <div class="table-wrap"><table>
+          <thead><tr>
+            <th style="width:36px"></th>
+            <th>SKU</th><th>ASIN</th><th>Produto</th>
+            <th>Buy Box</th><th>Sua BB?</th><th>Margem BB</th><th>Prejuízo BB</th>
+            <th>Menor Preço</th><th>Margem MP</th><th>Prejuízo MP</th>
+            <th>Custo</th>
+          </tr></thead>
+          <tbody id="amzTbodyPrejuizo"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- SEM DADOS -->
+    <div class="secao">
+      <div class="secao-header" onclick="toggleSecao('amzBodySemDados')">
+        <div class="secao-titulo">⚪ Encontrado na Amazon, sem Buy Box <span class="badge" id="amzBadgeSemDados" style="background:rgba(159,176,217,.15);color:var(--muted)">0</span></div>
+      </div>
+      <div id="amzBodySemDados" class="secao-body" style="display:none">
+        <div class="table-wrap"><table>
+          <thead><tr>
+            <th>SKU</th><th>ASIN</th><th>Produto</th><th>Buy Box</th><th>Menor Preço</th><th>Motivo</th>
+          </tr></thead>
+          <tbody id="amzTbodySemDados"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- NÃO ENCONTRADO NA AMAZON -->
+    <div class="secao">
+      <div class="secao-header" onclick="toggleSecao('amzBodyNaoEncontrado')">
+        <div class="secao-titulo">🚫 SKUs do Bling não encontrados na Amazon <span class="badge vermelho" id="amzBadgeNaoEncontrado">0</span></div>
+      </div>
+      <div id="amzBodyNaoEncontrado" class="secao-body" style="display:none">
+        <p style="font-size:12px;color:var(--muted);padding:0 18px">Estes SKUs existem no Bling mas não possuem anúncio vinculado na Amazon. Verifique se o SKU do produto no Bling é igual ao SKU do anúncio na Amazon.</p>
+        <div class="table-wrap"><table>
+          <thead><tr>
+            <th>SKU (Bling)</th><th>Produto</th>
+          </tr></thead>
+          <tbody id="amzTbodyNaoEncontrado"></tbody>
+        </table></div>
+      </div>
+    </div>
+  </div><!-- /amzResumoWrap -->
+
+</div>
+
+<script>
+// ─── CAMPANHAS (localStorage) ───────────────────────────────
+const STORAGE_KEY = 'shinsei_campanhas_ml';
+let campanhas = [];
+let campanhaAtiva = null;
+let _dados = null;
+let _toastTimer;
+
+function toast(msg, tipo='ok'){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + tipo;
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.className = '', tipo==='err' ? 6000 : 4000);
+}
+
+function carregarCampanhas(){
+  try { campanhas = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch(e){ campanhas = []; }
+  renderCampanhas();
+}
+
+function salvarNoStorage(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(campanhas));
+}
+
+function renderCampanhas(){
+  const grid = document.getElementById('campanhasGrid');
+  const hoje = new Date().toISOString().split('T')[0];
+  let html = `<div class="add-card" onclick="abrirModal()"><span style="font-size:28px">➕</span><span style="font-size:13px;color:var(--muted)">Nova campanha</span></div>`;
+  campanhas.forEach((c, i) => {
+    const ativa = campanhaAtiva && campanhaAtiva.id === c.id;
+    const vencida = c.fim && c.fim < hoje;
+    const vigencia = c.inicio && c.fim ? `${fmt(c.inicio)} → ${fmt(c.fim)}` : c.inicio ? `A partir de ${fmt(c.inicio)}` : 'Sem vigência definida';
+    html += `<div class="campanha-card ${ativa ? 'active' : ''}" onclick="selecionarCampanha(${i})">
+      <button class="del-btn" onclick="event.stopPropagation();deletarCampanha(${i})">🗑</button>
+      <div class="nome">${c.nome}</div>
+      <div class="desconto-badge">${c.desconto}% off</div>
+      <div class="meta">
+        <span>📅 ${vigencia}</span>
+        <span>🎯 Margem alvo: ${c.margemAlvo}%</span>
+        <span style="color:${vencida ? 'var(--danger)' : '#22c55e'}">${vencida ? '⛔ Encerrada' : '✅ Ativa'}</span>
+      </div>
+      <button class="btn sm" style="width:100%" onclick="event.stopPropagation();selecionarEAnalisar(${i})">🔍 Analisar</button>
+    </div>`;
+  });
+  grid.innerHTML = html;
+}
+
+function fmt(d){ if(!d) return ''; const [y,m,dia] = d.split('-'); return `${dia}/${m}/${y}`; }
+
+function abrirModal(){
+  const hoje = new Date().toISOString().split('T')[0];
+  document.getElementById('fInicio').value = hoje;
+  document.getElementById('fNome').value = '';
+  document.getElementById('modalBg').classList.add('show');
+  setTimeout(() => document.getElementById('fNome').focus(), 100);
+}
+
+function fecharModal(){ document.getElementById('modalBg').classList.remove('show'); }
+
+function salvarCampanha(){
+  const nome = document.getElementById('fNome').value.trim();
+  if(!nome){ toast('Informe o nome da campanha.','warn'); return; }
+  const nova = {
+    id: Date.now(),
+    nome,
+    desconto: parseFloat(document.getElementById('fDesconto').value) || 10,
+    margemAlvo: parseFloat(document.getElementById('fMargemAlvo').value) || 20,
+    inicio: document.getElementById('fInicio').value,
+    fim: document.getElementById('fFim').value,
+    canal: document.getElementById('fCanal').value,
+    imposto: parseFloat(document.getElementById('fImposto').value) || 12,
+  };
+  campanhas.push(nova);
+  salvarNoStorage();
+  renderCampanhas();
+  fecharModal();
+  toast('Campanha salva!', 'ok');
+}
+
+function deletarCampanha(i){
+  if(!confirm(`Remover "${campanhas[i].nome}"?`)) return;
+  if(campanhaAtiva && campanhaAtiva.id === campanhas[i].id){
+    campanhaAtiva = null;
+    document.getElementById('bannerCampanha').style.display = 'none';
+    document.getElementById('resumoWrap').style.display = 'none';
+  }
+  campanhas.splice(i, 1);
+  salvarNoStorage();
+  renderCampanhas();
+}
+
+function selecionarCampanha(i){
+  campanhaAtiva = campanhas[i];
+  renderCampanhas();
+  const c = campanhaAtiva;
+  const vigencia = c.inicio && c.fim ? `${fmt(c.inicio)} até ${fmt(c.fim)}` : c.inicio ? `A partir de ${fmt(c.inicio)}` : 'Vigência não definida';
+  document.getElementById('bannerNome').textContent = c.nome;
+  document.getElementById('bannerInfo').textContent = `📅 ${vigencia}  |  🎯 Margem alvo: ${c.margemAlvo}%  |  Canal: ${c.canal === 'ambos' ? 'Premium + Clássico' : c.canal === 'gold_pro' ? 'Premium' : 'Clássico'}`;
+  // Inicializa desconto com o valor da campanha
+  document.getElementById('descontoTeste').value = c.desconto;
+  document.getElementById('descontoSlider').value = c.desconto;
+  document.getElementById('descontoOrigLabel').textContent = `Original da campanha: ${c.desconto}%`;
+  document.getElementById('btnRestaurar').style.display = 'none';
+  document.getElementById('bannerCampanha').style.display = 'flex';
+  document.getElementById('resumoWrap').style.display = 'none';
+}
+
+function ajustarDesconto(delta){
+  const inp = document.getElementById('descontoTeste');
+  const novoVal = Math.min(80, Math.max(1, (parseFloat(inp.value)||10) + delta));
+  inp.value = novoVal;
+  document.getElementById('descontoSlider').value = novoVal;
+  _verificarBotaoRestaurar(novoVal);
+}
+
+function sincronizarSlider(val){
+  document.getElementById('descontoTeste').value = val;
+  _verificarBotaoRestaurar(parseFloat(val));
+}
+
+function sincronizarDesconto(){
+  const val = parseFloat(document.getElementById('descontoTeste').value) || 10;
+  document.getElementById('descontoSlider').value = Math.min(60, val);
+  _verificarBotaoRestaurar(val);
+}
+
+function _verificarBotaoRestaurar(val){
+  const original = campanhaAtiva ? campanhaAtiva.desconto : null;
+  document.getElementById('btnRestaurar').style.display =
+    (original && val !== original) ? 'block' : 'none';
+}
+
+function restaurarDescontoOriginal(){
+  if(!campanhaAtiva) return;
+  document.getElementById('descontoTeste').value = campanhaAtiva.desconto;
+  document.getElementById('descontoSlider').value = campanhaAtiva.desconto;
+  document.getElementById('btnRestaurar').style.display = 'none';
+}
+
+function _descontoAtual(){
+  return parseFloat(document.getElementById('descontoTeste').value) || (campanhaAtiva ? campanhaAtiva.desconto : 10);
+}
+
+function selecionarEAnalisar(i){
+  selecionarCampanha(i);
+  analisarCampanhaAtiva();
+}
+
+// ─── ANÁLISE ───────────────────────────────────────────────
+async function analisarCampanhaAtiva(){
+  if(!campanhaAtiva){ toast('Selecione uma campanha primeiro.','warn'); return; }
+  const btn = document.getElementById('btnAnalisar');
+  btn.disabled = true; btn.innerHTML = '<span class="spin">⏳</span> Analisando...';
+  document.getElementById('progressoWrap').style.display = 'block';
+  document.getElementById('progressoTxt').textContent = 'Buscando anúncios do ML e cruzando com Bling...';
+  document.getElementById('progressoBar').style.width = '8%';
+  document.getElementById('resumoWrap').style.display = 'none';
+
+  let prog = 8;
+  const iv = setInterval(() => {
+    prog = Math.min(prog + 1.5, 90);
+    document.getElementById('progressoBar').style.width = prog + '%';
+    if(prog > 40) document.getElementById('progressoTxt').textContent = 'Calculando margens para cada produto...';
+    if(prog > 75) document.getElementById('progressoTxt').textContent = 'Classificando resultados...';
+  }, 600);
+
+  const descontoUsado = _descontoAtual();
+  try {
+    const res = await fetch('/marketing/ml/analisar', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'ngrok-skip-browser-warning': '1'},
+      body: JSON.stringify({
+        desconto_pct: descontoUsado,
+        margem_alvo: campanhaAtiva.margemAlvo,
+        imposto_padrao: campanhaAtiva.imposto,
+        max_itens: 500,
+      }),
+    });
+    clearInterval(iv);
+    document.getElementById('progressoBar').style.width = '100%';
+    const data = await res.json();
+    if(!res.ok){ toast(data.detail || 'Erro na análise','err'); return; }
+    _dados = data;
+    renderResultados(data);
+    const orig = campanhaAtiva.desconto;
+    const sufixo = descontoUsado !== orig ? ` (desconto ajustado: ${descontoUsado}% vs original ${orig}%)` : '';
+    toast(`✅ ${data.total_analisados} anúncios analisados com ${descontoUsado}% de desconto${sufixo}`, 'ok');
+  } catch(e){
+    clearInterval(iv);
+    toast('Erro de conexão: ' + e.message,'err');
+  } finally {
+    btn.disabled = false; btn.innerHTML = '🔍 Analisar';
+    document.getElementById('progressoWrap').style.display = 'none';
+  }
+}
+
+function renderResultados(data){
+  const r = data.resumo || {};
+  document.getElementById('numDentro').textContent   = r.dentro_margem || 0;
+  document.getElementById('numReduzido').textContent = r.lucro_reduzido || 0;
+  document.getElementById('numPrejuizo').textContent = r.prejuizo || 0;
+  document.getElementById('numSemDados').textContent = r.sem_dados || 0;
+  document.getElementById('badgeDentro').textContent   = r.dentro_margem || 0;
+  document.getElementById('badgeReduzido').textContent = r.lucro_reduzido || 0;
+  document.getElementById('badgePrejuizo').textContent = r.prejuizo || 0;
+  const ma = campanhaAtiva ? campanhaAtiva.margemAlvo : 20;
+  renderTabela('tbodyDentro',   data.dentro_margem  || [], ma, false);
+  renderTabela('tbodyReduzido', data.lucro_reduzido || [], ma, false);
+  renderTabela('tbodyPrejuizo', data.prejuizo       || [], ma, true);
+  document.getElementById('resumoWrap').style.display = 'block';
+  atualizarConts();
+}
+
+function renderTabela(tbodyId, itens, margemAlvo, soLeitura){
+  const tbody = document.getElementById(tbodyId);
+  if(!itens.length){
+    tbody.innerHTML = `<tr><td colspan="10"><div class="hero-empty"><span>—</span>Nenhum anúncio nesta categoria.</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = itens.map((i, idx) => {
+    const mAtual = i.margem_atual != null ? i.margem_atual.toFixed(1)+'%' : '—';
+    const mCamp  = i.margem_campanha.toFixed(1)+'%';
+    const mClass = i.margem_campanha < 0 ? 'margem-neg' : i.margem_campanha < margemAlvo ? 'margem-warn' : 'margem-pos';
+    const varSinal = i.variacao_margem >= 0 ? '+' : '';
+    const varClass = i.variacao_margem >= 0 ? 'var-pos' : 'var-neg';
+    const lucroFmt = (i.lucro_campanha >= 0 ? 'R$ ' : '-R$ ') + Math.abs(i.lucro_campanha).toFixed(2);
+    const canalPill = i.listing_type === 'gold_pro'
+      ? '<span class="pill pro">Premium</span>'
+      : '<span class="pill cls">Clássico</span>';
+    const checkCell = soLeitura ? '<td></td>'
+      : `<td style="text-align:center"><input type="checkbox" data-idx="${idx}" onchange="atualizarConts()"/></td>`;
+    return `<tr>
+      ${checkCell}
+      <td style="font-family:monospace;font-size:12px">${i.sku}</td>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${i.titulo}">${i.titulo}</td>
+      <td>${canalPill}</td>
+      <td class="preco">R$ ${i.preco_atual.toFixed(2)}</td>
+      <td class="preco" style="color:var(--accent)">R$ ${i.preco_campanha.toFixed(2)}</td>
+      <td>${mAtual}</td>
+      <td class="${mClass}">${mCamp}</td>
+      <td class="${varClass}">${varSinal}${i.variacao_margem.toFixed(1)}pp</td>
+      <td class="${i.lucro_campanha >= 0 ? 'margem-pos' : 'margem-neg'}">${lucroFmt}</td>
+    </tr>`;
+  }).join('');
+}
+
+function toggleSecao(bodyId){
+  const b = document.getElementById(bodyId);
+  b.style.display = b.style.display === 'none' ? '' : 'none';
+}
+function toggleAll(tbodyId, master){
+  document.querySelectorAll(`#${tbodyId} input[type=checkbox]`).forEach(cb => cb.checked = master.checked);
+  atualizarConts();
+}
+function selecionarTodos(tbodyId){
+  document.querySelectorAll(`#${tbodyId} input[type=checkbox]`).forEach(cb => cb.checked = true);
+  atualizarConts();
+}
+function desselecionar(tbodyId){
+  document.querySelectorAll(`#${tbodyId} input[type=checkbox]`).forEach(cb => cb.checked = false);
+  atualizarConts();
+}
+function atualizarConts(){
+  ['Dentro','Reduzido'].forEach(g => {
+    const n = document.querySelectorAll(`#tbody${g} input[type=checkbox]:checked`).length;
+    document.getElementById(`cont${g}`).textContent = `${n} selecionado${n===1?'':'s'}`;
+  });
+}
+
+async function participar(grupo, tbodyId){
+  if(!_dados){ toast('Execute a análise primeiro.','warn'); return; }
+  const checks = [...document.querySelectorAll(`#${tbodyId} input[type=checkbox]:checked`)];
+  if(!checks.length){ toast('Selecione ao menos um anúncio.','warn'); return; }
+  const lista = _dados[grupo] || [];
+  const itens = checks.map(cb => lista[parseInt(cb.dataset.idx)]).filter(Boolean)
+    .map(i => ({item_id: i.item_id, preco_campanha: i.preco_campanha, sku: i.sku}));
+  const desc = campanhaAtiva ? campanhaAtiva.desconto : '?';
+  if(!confirm(`Atualizar preço de ${itens.length} anúncio(s) no ML com ${desc}% de desconto?\n\nIsso altera o preço real no Mercado Livre.`)) return;
+  const grp = tbodyId.includes('Dentro') ? 'Dentro' : 'Reduzido';
+  const btn = document.querySelector(`#secao${grp} .btn.success`) || document.querySelector('.btn.success');
+  try {
+    const res = await fetch('/marketing/ml/participar',{method:'POST',headers:_H,body:JSON.stringify({itens})});
+    const data = await res.json();
+    toast(data.ok ? `✅ ${data.atualizados} atualizado(s)${data.erros>0?' | '+data.erros+' erro(s)':''}` : 'Erro: '+(data.detail||'falha'), data.erros>0?'warn':'ok');
+  } catch(e){ toast('Erro de conexão: '+e.message,'err'); }
+}
+
+// ─── SUGESTÕES ML (price_suggestion webhooks) ──────────────
+const _H = {'Content-Type':'application/json','ngrok-skip-browser-warning':'1'};
+
+async function carregarSugestoes(){
+  try {
+    const res = await fetch('/marketing/ml/sugestoes', {headers:{'ngrok-skip-browser-warning':'1'}});
+    const data = await res.json();
+    if(!res.ok) return;
+    renderSugResumo(data.resumo || {});
+    renderSugestoes(data.sugestoes || []);
+  } catch(e){ console.warn('sugestoes erro', e); }
+}
+
+function renderSugResumo(r){
+  const el = document.getElementById('sugResumo');
+  el.innerHTML = `
+    <span class="sug-chip verde">✅ ${r.dentro_margem||0} dentro da margem</span>
+    <span class="sug-chip amarelo">⚠️ ${r.lucro_reduzido||0} lucro reduzido</span>
+    <span class="sug-chip vermelho">❌ ${r.prejuizo||0} prejuízo</span>
+    <span class="sug-chip cinza">⚪ ${(r.sem_benchmark||0)+(r.sem_dados||0)} sem dados</span>
+    <span style="font-size:11px;color:var(--muted);margin-left:4px">${r.total||0} total</span>
+  `;
+}
+
+function renderSugestoes(lista){
+  const wrap = document.getElementById('sugWrap');
+  if(!lista.length){
+    wrap.innerHTML = '<div class="sug-empty">Aguardando sugestões do ML... O sistema processa automaticamente quando o Mercado Livre envia notificações de preço.</div>';
+    return;
+  }
+  const CLASSE = {
+    dentro_margem: 'margem-pos',
+    lucro_reduzido: 'margem-warn',
+    prejuizo: 'margem-neg',
+    sem_benchmark: '',
+    sem_dados: '',
+  };
+  const LABEL = {
+    dentro_margem: '✅ Dentro da margem',
+    lucro_reduzido: '⚠️ Lucro reduzido',
+    prejuizo: '❌ Prejuízo',
+    sem_benchmark: '⚪ Benchmark indisponível',
+    sem_dados: '⚪ Sem dados Bling',
+  };
+  wrap.innerHTML = `
+    <div class="table-wrap" style="margin:0">
+    <table style="min-width:800px">
+      <thead><tr>
+        <th>Anúncio</th><th>SKU</th><th>Canal</th>
+        <th>Preço atual</th><th>Preço sugerido</th><th>Desconto</th>
+        <th>Margem atual</th><th>Lucro atual</th><th>Margem sugerida</th><th>Viabilidade</th>
+        <th>Benchmark</th><th>Recebido</th>
+      </tr></thead>
+      <tbody>${lista.map(s => {
+        const a = s.analise || {};
+        const mAtual = a.margem_atual != null ? a.margem_atual.toFixed(1)+'%' : '—';
+        const lucroAtual = a.lucro_atual != null ? 'R$ '+a.lucro_atual.toFixed(2) : '—';
+        const mSug   = a.margem_sugerida != null ? a.margem_sugerida.toFixed(1)+'%' : (s.preco_sugerido ? '—' : '<span style="color:var(--muted);font-size:11px">aguard. ML</span>');
+        const mClass = a.margem_sugerida != null ? (CLASSE[s.classificacao]||'') : (a.margem_atual != null ? (CLASSE[s.classificacao]||'') : '');
+        const mAtualClass = a.margem_atual != null ? (a.margem_atual >= 20 ? 'margem-pos' : a.margem_atual > 0 ? 'margem-warn' : 'margem-neg') : '';
+        const classifLabel = LABEL[s.classificacao] || s.classificacao;
+        const descPct = s.desconto_sugerido != null ? s.desconto_sugerido.toFixed(1)+'%' : '<span style="color:var(--muted);font-size:11px">—</span>';
+        const precoSug = s.preco_sugerido != null ? 'R$ '+s.preco_sugerido.toFixed(2) : '<span style="color:var(--muted);font-size:11px">aguard. ML</span>';
+        const benchBadge = s.benchmark_disponivel
+          ? '<span class="bench-badge bench-ok">✓ OK</span>'
+          : '<span class="bench-badge bench-no">sem acesso</span>';
+        const dt = s.recebido_em ? new Date(s.recebido_em+'Z').toLocaleString('pt-BR') : '—';
+        const canalPill = s.listing_type === 'gold_pro'
+          ? '<span class="pill pro">Premium</span>'
+          : '<span class="pill cls">Clássico</span>';
+        return `<tr>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.titulo}">${s.titulo}</td>
+          <td style="font-family:monospace;font-size:12px">${s.sku}</td>
+          <td>${canalPill}</td>
+          <td class="preco">R$ ${(s.preco_atual||0).toFixed(2)}</td>
+          <td class="preco" style="color:var(--accent)">${precoSug}</td>
+          <td style="font-weight:700">${descPct}</td>
+          <td class="${mAtualClass}">${mAtual}</td>
+          <td style="font-size:11px;color:var(--muted)">${lucroAtual}</td>
+          <td class="${mClass}">${mSug}</td>
+          <td class="${mClass}" style="font-size:12px">${classifLabel}</td>
+          <td>${benchBadge}</td>
+          <td style="font-size:11px;color:var(--muted)">${dt}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>
+    <p style="font-size:11px;color:var(--muted);margin:10px 18px 0">
+      💡 Benchmark "403" = ML não liberou acesso à API de benchmark para esta conta. Os preços sugeridos não estarão disponíveis até que o ML conceda a permissão. A análise de margem funcionará assim que o preço estiver acessível.
+    </p>
+  `;
+}
+
+async function reprocessarSugestoes(){
+  toast('⚙️ Recalculando margens em background...', 'warn');
+  await fetch('/marketing/ml/sugestoes/reprocessar', {method:'POST', headers:_H});
+  setTimeout(carregarSugestoes, 8000); // Aguarda 8s e atualiza
+}
+
+async function limparSugestoes(){
+  if(!confirm('Limpar todas as sugestões salvas?')) return;
+  try {
+    // Tenta DELETE, fallback para POST com action=limpar
+    const res = await fetch('/marketing/ml/sugestoes', {method:'DELETE', headers:_H});
+    if(!res.ok) throw new Error('DELETE falhou');
+  } catch(e) {
+    await fetch('/marketing/ml/sugestoes/limpar', {method:'POST', headers:_H});
+  }
+  setTimeout(carregarSugestoes, 500);
+  toast('Sugestões removidas', 'ok');
+}
+
+// Atualiza sugestoes a cada 60s automaticamente
+setInterval(carregarSugestoes, 60000);
+
+// ─── AMAZON BUY BOX ────────────────────────────────────────
+let _dadosAmz = null;
+let _amzToastTimer;
+
+async function analisarAmazon(){
+  const btn = document.getElementById('btnAnalisarAmz');
+  btn.disabled = true; btn.innerHTML = '<span class="spin">⏳</span> Analisando...';
+  document.getElementById('amzProgressoWrap').style.display = 'block';
+  document.getElementById('amzProgressoTxt').textContent = 'Buscando inventário FBA e preços da Buy Box...';
+  document.getElementById('amzProgressoBar').style.width = '8%';
+  document.getElementById('amzResumoWrap').style.display = 'none';
+
+  let prog = 8;
+  const iv = setInterval(() => {
+    prog = Math.min(prog + 1.2, 90);
+    document.getElementById('amzProgressoBar').style.width = prog + '%';
+    if(prog > 30) document.getElementById('amzProgressoTxt').textContent = 'Buscando preços da Buy Box por ASIN...';
+    if(prog > 60) document.getElementById('amzProgressoTxt').textContent = 'Calculando margens no Bling...';
+    if(prog > 82) document.getElementById('amzProgressoTxt').textContent = 'Classificando resultados...';
+  }, 800);
+
+  try {
+    const res = await fetch('/marketing/amazon/analisar', {
+      method: 'POST',
+      headers: _H,
+      body: JSON.stringify({
+        margem_alvo: parseFloat(document.getElementById('amzMargemAlvo').value) || 20,
+        imposto_padrao: parseFloat(document.getElementById('amzImposto').value) || 12,
+        max_itens: parseInt(document.getElementById('amzMaxItens').value) || 500,
+      }),
+    });
+    clearInterval(iv);
+    document.getElementById('amzProgressoBar').style.width = '100%';
+    const data = await res.json();
+    if(!res.ok || data.ok === false){
+      toast(data.detail || data.erro || 'Erro na análise Amazon', 'err');
+      return;
+    }
+    _dadosAmz = data;
+    renderResultadosAmz(data);
+    const naoEnc = (data.resumo||{}).nao_encontrado_amazon || 0;
+    const sufixo = naoEnc > 0 ? ` | ${naoEnc} SKUs não encontrados na Amazon` : '';
+    toast(`✅ Amazon: ${data.total_analisados} produtos analisados${sufixo}`, naoEnc > 0 ? 'warn' : 'ok');
+  } catch(e){
+    clearInterval(iv);
+    toast('Erro: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false; btn.innerHTML = '🔍 Analisar Buy Box';
+    document.getElementById('amzProgressoWrap').style.display = 'none';
+  }
+}
+
+function renderResultadosAmz(data){
+  const r = data.resumo || {};
+  const ma = parseFloat(document.getElementById('amzMargemAlvo').value) || 20;
+  const naoEnc = r.nao_encontrado_amazon || 0;
+  document.getElementById('amzNumDentro').textContent      = r.dentro_margem || 0;
+  document.getElementById('amzNumReduzido').textContent    = r.lucro_reduzido || 0;
+  document.getElementById('amzNumPrejuizo').textContent    = r.prejuizo || 0;
+  document.getElementById('amzNumSemDados').textContent    = r.sem_dados || 0;
+  document.getElementById('amzNumNaoEncontrado').textContent = naoEnc;
+  document.getElementById('amzBadgeDentro').textContent    = r.dentro_margem || 0;
+  document.getElementById('amzBadgeReduzido').textContent  = r.lucro_reduzido || 0;
+  document.getElementById('amzBadgePrejuizo').textContent  = r.prejuizo || 0;
+  document.getElementById('amzBadgeSemDados').textContent  = r.sem_dados || 0;
+  document.getElementById('amzBadgeNaoEncontrado').textContent = naoEnc;
+  const totalBling = data.total_bling || 0;
+  const comAsin = totalBling - naoEnc;
+  document.getElementById('amzTotalInfo').textContent =
+    `${totalBling} SKUs buscados no Bling — ${comAsin} vinculados à Amazon — ${naoEnc} não encontrados na Amazon`;
+  renderTabelaAmz('amzTbodyDentro',   data.dentro_margem  || [], ma, false);
+  renderTabelaAmz('amzTbodyReduzido', data.lucro_reduzido || [], ma, false);
+  renderTabelaAmz('amzTbodyPrejuizo', data.prejuizo       || [], ma, true);
+  renderTabelaAmzSemDados('amzTbodySemDados', data.sem_dados || []);
+  renderTabelaAmzNaoEncontrado('amzTbodyNaoEncontrado', data.nao_encontrado_amazon || []);
+  document.getElementById('amzResumoWrap').style.display = 'block';
+  amzAtualizarConts();
+}
+
+function renderTabelaAmzNaoEncontrado(tbodyId, itens){
+  const tbody = document.getElementById(tbodyId);
+  if(!itens.length){
+    tbody.innerHTML = `<tr><td colspan="2"><div class="hero-empty">— Todos os SKUs do Bling foram encontrados na Amazon.</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = itens.map(i => `<tr>
+    <td style="font-family:monospace;font-size:12px">${i.sku}</td>
+    <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${i.titulo||'—'}</td>
+  </tr>`).join('');
+}
+
+function renderTabelaAmz(tbodyId, itens, margemAlvo, soLeitura){
+  const tbody = document.getElementById(tbodyId);
+  if(!itens.length){
+    tbody.innerHTML = `<tr><td colspan="12"><div class="hero-empty">—  Nenhum produto nesta categoria.</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = itens.map((i, idx) => {
+    const fmtPreco = v => v != null ? `R$ ${v.toFixed(2)}` : '—';
+    const fmtMargem = (v, alvo) => v == null ? '—'
+      : `<span class="${v < 0 ? 'margem-neg' : v < alvo ? 'margem-warn' : 'margem-pos'}">${v.toFixed(1)}%</span>`;
+    const fmtLucro = v => v == null ? '—'
+      : `<span class="${v >= 0 ? 'margem-pos' : 'margem-neg'}">${(v >= 0 ? 'R$ ' : '-R$ ')}${Math.abs(v).toFixed(2)}</span>`;
+    const checkCell = soLeitura ? '<td></td>'
+      : `<td style="text-align:center"><input type="checkbox" data-idx="${idx}" onchange="amzAtualizarConts()"/></td>`;
+    const bbSuaBadge = i.buy_box_sua === true
+      ? '<span style="background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3);border-radius:6px;padding:2px 7px;font-size:10px;font-weight:700">✓ Sua</span>'
+      : i.buy_box_sua === false
+        ? '<span style="background:rgba(239,68,68,.1);color:var(--danger);border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:2px 7px;font-size:10px;font-weight:700">✗ Outro</span>'
+        : '<span style="color:var(--muted);font-size:10px">—</span>';
+    return `<tr>
+      ${checkCell}
+      <td style="font-family:monospace;font-size:12px">${i.sku}</td>
+      <td style="font-family:monospace;font-size:11px;color:var(--muted)">${i.asin||'—'}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${i.titulo}">${i.titulo}</td>
+      <td class="preco" style="color:var(--accent)">${fmtPreco(i.preco_buy_box)}</td>
+      <td style="text-align:center">${bbSuaBadge}</td>
+      <td>${fmtMargem(i.margem, margemAlvo)}</td>
+      <td>${fmtLucro(i.lucro)}</td>
+      <td class="preco" style="color:#a78bfa">${fmtPreco(i.menor_preco)}</td>
+      <td>${fmtMargem(i.margem_menor, margemAlvo)}</td>
+      <td>${fmtLucro(i.lucro_menor)}</td>
+      <td class="preco" style="color:var(--muted)">R$ ${(i.custo||0).toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderTabelaAmzSemDados(tbodyId, itens){
+  const tbody = document.getElementById(tbodyId);
+  if(!itens.length){
+    tbody.innerHTML = `<tr><td colspan="6"><div class="hero-empty">—  Nenhum produto sem dados.</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = itens.map(i => `<tr>
+    <td style="font-family:monospace;font-size:12px">${i.sku}</td>
+    <td style="font-family:monospace;font-size:11px;color:var(--muted)">${i.asin||'—'}</td>
+    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${i.titulo||'—'}</td>
+    <td>${i.preco_buy_box ? 'R$ '+i.preco_buy_box.toFixed(2) : '—'}</td>
+    <td>${i.menor_preco ? 'R$ '+i.menor_preco.toFixed(2) : '—'}</td>
+    <td style="font-size:11px;color:var(--muted)">${i.motivo||'—'}</td>
+  </tr>`).join('');
+}
+
+function amzToggleAll(tbodyId, master){
+  document.querySelectorAll(`#${tbodyId} input[type=checkbox]`).forEach(cb => cb.checked = master.checked);
+  amzAtualizarConts();
+}
+function amzSelecionarTodos(tbodyId){
+  document.querySelectorAll(`#${tbodyId} input[type=checkbox]`).forEach(cb => cb.checked = true);
+  amzAtualizarConts();
+}
+function amzDesselecionar(tbodyId){
+  document.querySelectorAll(`#${tbodyId} input[type=checkbox]`).forEach(cb => cb.checked = false);
+  amzAtualizarConts();
+}
+function amzAtualizarConts(){
+  ['Dentro','Reduzido'].forEach(g => {
+    const n = document.querySelectorAll(`#amzTbody${g} input[type=checkbox]:checked`).length;
+    document.getElementById(`amzCont${g}`).textContent = `${n} selecionado${n===1?'':'s'}`;
+  });
+}
+
+async function amzParticipar(grupo, tbodyId){
+  if(!_dadosAmz){ toast('Execute a análise primeiro.','warn'); return; }
+  const checks = [...document.querySelectorAll(`#${tbodyId} input[type=checkbox]:checked`)];
+  if(!checks.length){ toast('Selecione ao menos um produto.','warn'); return; }
+  const lista = _dadosAmz[grupo] || [];
+  const itens = checks.map(cb => lista[parseInt(cb.dataset.idx)]).filter(Boolean)
+    .map(i => ({sku: i.sku, preco_buy_box: i.preco_buy_box}));
+  if(!confirm(`Atualizar preço de ${itens.length} produto(s) na Amazon para cobrir a Buy Box?\n\nIsso altera o preço real na Amazon.`)) return;
+  try {
+    const res = await fetch('/marketing/amazon/participar', {method:'POST', headers:_H, body:JSON.stringify({itens})});
+    const data = await res.json();
+    toast(data.ok ? `✅ ${data.atualizados} atualizado(s)${data.erros>0?' | '+data.erros+' erro(s)':''}` : 'Erro: '+(data.detail||'falha'), data.erros>0?'warn':'ok');
+  } catch(e){ toast('Erro: '+e.message,'err'); }
+}
+
+// ─── CACHE AMAZON ──────────────────────────────────────────
+async function carregarCacheAmazon(){
+  try {
+    const res = await fetch('/marketing/amazon/cache', {headers:{'ngrok-skip-browser-warning':'1'}});
+    if(!res.ok) return;
+    const data = await res.json();
+    if(!data.ok) return;
+    _dadosAmz = data;
+    renderResultadosAmz(data);
+    const ts = data.cached_at ? new Date(data.cached_at+'Z').toLocaleString('pt-BR') : '—';
+    document.getElementById('amzCacheTs').textContent = ts;
+    document.getElementById('amzCacheInfo').style.display = 'block';
+  } catch(e){ /* cache indisponível — silencioso */ }
+}
+
+// ─── INIT ──────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  carregarCampanhas();
+  carregarSugestoes();
+  carregarCacheAmazon();
+});
+document.getElementById('modalBg').addEventListener('click', e => { if(e.target===e.currentTarget) fecharModal(); });
+</script>
+</body>
+</html>

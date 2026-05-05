@@ -1,0 +1,26 @@
+[
+  {
+    "id": "neg_MLB6170618974_20260409031840",
+    "sku": "MLB6170618974",
+    "nome": "Kit Eico Mandioca shampo e condicionador 450ml/400ml",
+    "estoque": -2,
+    "detectado_em": "2026-04-09T03:18:40.936677",
+    "status": "pendente"
+  },
+  {
+    "id": "neg_7898632473254_20260409031850",
+    "sku": "7898632473254",
+    "nome": "Hidratante Labotrat Corpo e Rosto Pêssego 190ml",
+    "estoque": -1,
+    "detectado_em": "2026-04-09T03:18:50.579055",
+    "status": "pendente"
+  },
+  {
+    "id": "neg_MLB4484966991_20260409031959",
+    "sku": "MLB4484966991",
+    "nome": "Kit Skala Creme 01 Kg Uva + Shampoo + Condicionador",
+    "estoque": -1,
+    "detectado_em": "2026-04-09T03:19:59.624374",
+    "status": "pendente"
+  }
+]
