@@ -43,6 +43,7 @@ COPY --from=builder /install /usr/local
 
 # Copia o código-fonte
 # (arquivos sensíveis são excluídos pelo .dockerignore)
+# cache-bust: 2026-05-08
 COPY --chown=shinsei:shinsei . .
 
 # Copia o entrypoint e garante permissão de execução (ainda como root)
