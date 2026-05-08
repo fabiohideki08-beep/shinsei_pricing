@@ -98,6 +98,14 @@ PUBLIC_PATHS = {
     "/conferencia-estoque",
     "/integracao-comercial",
     "/config/integracao-comercial",
+    "/seo-health",
+    "/seo-health/dados",
+    "/gmc",
+    "/gmc/status",
+    "/marketing",
+    "/oee",
+    "/sie",
+    "/frete/painel",
 }
 
 # Prefixos pÃºblicos (qualquer rota que comece com esses valores)
@@ -114,6 +122,9 @@ PUBLIC_PREFIXES = (
     "/amazon/auth",   # Amazon SP-API OAuth (sem API key)
     "/amazon/callback",
     "/shopee/",       # Shopee OAuth e endpoints (sem API key)
+    "/gmc/",          # GMC scan, status, blacklist
+    "/seo-health/",   # SEO Health análise e pagespeed
+    "/marketing/",    # Marketing endpoints
 )
 
 
