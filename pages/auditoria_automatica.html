@@ -945,6 +945,22 @@ document.addEventListener('DOMContentLoaded', () => {
   carregarEstoqueML();
   carregarShopify();
   carregarPrecos();
+
+  // Navegação por hash — ex: /auditoria-automatica#sem-sku
+  const hash = window.location.hash;
+  if (hash === '#sem-sku') {
+    const statEl = document.querySelector('.stat[onclick*="estoque-ml"]');
+    mostrarSecao('estoque-ml', statEl);
+    setTimeout(() => {
+      const btn = document.querySelector('#secao-estoque-ml .filtro-btn[onclick*="sem_sku"]');
+      if (btn) filtrarML('', 'sem_sku', btn);
+    }, 800);
+  } else if (hash === '#estoque-ml') {
+    const statEl = document.querySelector('.stat[onclick*="estoque-ml"]');
+    mostrarSecao('estoque-ml', statEl);
+  } else if (hash === '#negativo') {
+    mostrarSecaoNegativo();
+  }
 });
 
 // ─── ESTOQUE NEGATIVO ─────────────────────────────────────────
