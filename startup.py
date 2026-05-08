@@ -225,16 +225,30 @@ if shopee_access_token and shopee_refresh_token and shopee_shop_id:
 elif not shopee_tokens_path.exists():
     pr("INFO: SHOPEE_ACCESS_TOKEN não definido — shopee_tokens.json não criado (OAuth necessário)")
 
-# ── GMC Blacklist (copia do código para o volume na primeira vez) ─────────────
+# ── GMC Blacklist (merge do default com o volume a cada deploy) ───────────────
 _bl_src  = Path(__file__).parent / "gmc_blacklist_default.json"
 _bl_dest = DATA_DIR / "gmc_blacklist.json"
-if _bl_src.exists() and not _bl_dest.exists():
+if _bl_src.exists():
     try:
-        import shutil as _shutil
-        _shutil.copy2(str(_bl_src), str(_bl_dest))
-        pr("gmc_blacklist.json copiado para o volume")
+        _default = json.loads(_bl_src.read_text(encoding="utf-8"))
+        _existing = {}
+        if _bl_dest.exists():
+            try:
+                _existing = json.loads(_bl_dest.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        # Merge: categorias e IDs do default são adicionados ao existente (sem remover customizações)
+        _merged_cats = list(dict.fromkeys(
+            _existing.get("categories", []) + _default.get("categories", [])
+        ))
+        _merged_ids  = list(dict.fromkeys(
+            _existing.get("product_ids", []) + _default.get("product_ids", [])
+        ))
+        _merged = {"categories": _merged_cats, "product_ids": _merged_ids}
+        _bl_dest.write_text(json.dumps(_merged, indent=2, ensure_ascii=False), encoding="utf-8")
+        pr(f"gmc_blacklist.json atualizado ({len(_merged_cats)} categorias, {len(_merged_ids)} IDs)")
     except Exception as _e:
-        pr(f"AVISO: falha ao copiar gmc_blacklist.json ({_e})")
+        pr(f"AVISO: falha ao atualizar gmc_blacklist.json ({_e})")
 
 # ── Google Service Account (GMC — Content API) ───────────────────────────────
 gsa_b64 = os.getenv("GOOGLE_SA_JSON", "")
