@@ -148,3 +148,9 @@ def _instalar_gtag_conversion(token: str):
     tag = resp.json().get("script_tag", {})
     logger.info("Script tag instalada: ID=%s scope=%s src=%s",
                 tag.get("id"), tag.get("display_scope"), tag.get("src", "")[:60])
+    return {
+        "asset_url": public_url,
+        "script_tag_id": tag.get("id"),
+        "display_scope": tag.get("display_scope"),
+        "src": tag.get("src", ""),
+    }

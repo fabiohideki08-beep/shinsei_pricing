@@ -1465,10 +1465,49 @@ def shopify_install_gtag():
         raise HTTPException(status_code=403, detail=f"Token sem write_script_tags. Escopos: {scope}")
     try:
         from shopify_oauth import _instalar_gtag_conversion
-        _instalar_gtag_conversion(token)
-        return {"ok": True, "mensagem": "Script tag de conversão instalada com sucesso."}
+        info = _instalar_gtag_conversion(token)
+        return {"ok": True, "mensagem": "Script tag de conversão instalada com sucesso.", **(info or {})}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/shopify/gtag-status")
+def shopify_gtag_status():
+    """Lista as script tags instaladas na loja Shopify para verificar a conversão."""
+    import json, requests as req
+    cfg = DATA_DIR / "shopify_config.json"
+    if not cfg.exists():
+        raise HTTPException(status_code=400, detail="Shopify não conectado.")
+    data = json.loads(cfg.read_text(encoding="utf-8"))
+    token = data.get("access_token", "")
+    if not token:
+        raise HTTPException(status_code=400, detail="Token Shopify ausente.")
+    from shopify_oauth import SHOPIFY_STORE
+    TEMA_ID = 185169445169
+    base    = f"https://{SHOPIFY_STORE}.myshopify.com/admin/api/2024-01"
+    headers = {"X-Shopify-Access-Token": token}
+    # Script tags
+    r = req.get(f"{base}/script_tags.json?limit=50", headers=headers, timeout=15)
+    if r.status_code != 200:
+        raise HTTPException(status_code=r.status_code, detail=r.text[:300])
+    tags = r.json().get("script_tags", [])
+    # Asset no tema
+    asset_r = req.get(
+        f"https://{SHOPIFY_STORE}.myshopify.com/admin/api/2024-01/themes/{TEMA_ID}/assets.json"
+        "?asset[key]=assets/shinsei-ads-conversion.js",
+        headers=headers, timeout=15
+    )
+    asset_info = asset_r.json().get("asset", {}) if asset_r.status_code == 200 else {"erro": asset_r.status_code}
+    return {
+        "script_tags": tags,
+        "total": len(tags),
+        "shinsei_tags": [t for t in tags if "shinsei" in t.get("src","").lower() or "AW-" in t.get("src","")],
+        "asset": {
+            "key": asset_info.get("key"),
+            "public_url": asset_info.get("public_url"),
+            "updated_at": asset_info.get("updated_at"),
+            "size": asset_info.get("size"),
+        }
+    }
 
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
