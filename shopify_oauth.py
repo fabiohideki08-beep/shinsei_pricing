@@ -137,7 +137,7 @@ def _instalar_gtag_conversion(token: str):
         "script_tag": {
             "event": "onload",
             "src": public_url,
-            "display_scope": "order_status",
+            "display_scope": "all",
             "cache": False
         }
     }
