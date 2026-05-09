@@ -1449,6 +1449,27 @@ def shopify_status():
     token = data.get("access_token", "")
     return {"connected": bool(token) and token != ".", "scope": data.get("scope", ""), "salvo_em": data.get("salvo_em")}
 
+@app.post("/shopify/install-gtag")
+def shopify_install_gtag():
+    """Instala o pixel de conversão do Google Ads na página de confirmação de pedido."""
+    import json
+    cfg = DATA_DIR / "shopify_config.json"
+    if not cfg.exists():
+        raise HTTPException(status_code=400, detail="Shopify não conectado.")
+    data = json.loads(cfg.read_text(encoding="utf-8"))
+    token = data.get("access_token", "")
+    scope = data.get("scope", "")
+    if not token:
+        raise HTTPException(status_code=400, detail="Token Shopify ausente.")
+    if "write_script_tags" not in scope:
+        raise HTTPException(status_code=403, detail=f"Token sem write_script_tags. Escopos: {scope}")
+    try:
+        from shopify_oauth import _instalar_gtag_conversion
+        _instalar_gtag_conversion(token)
+        return {"ok": True, "mensagem": "Script tag de conversão instalada com sucesso."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INTEGRACAO_CFG_PATH = DATA_DIR / "integracao_comercial.json"

@@ -65,6 +65,7 @@ PUBLIC_PATHS = {
     "/shopify/status",
     "/shopify/callback",
     "/shopify/auth",
+    "/shopify/install-gtag",
     "/auditoria/shopify",
     "/auditoria/mp-status",
     "/ml/status",
