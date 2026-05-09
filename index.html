@@ -5,74 +5,94 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Shinsei Pricing</title>
   <style>
-    :root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--danger:#ef4444;--ok:#22c55e;--warn:#f5b301}
+    :root{--bg:#0b1020;--card:#121a31;--line:#263458;--text:#eef2ff;--muted:#9fb0d9;--accent:#4f8cff;--ok:#22c55e;--warn:#f5b301;--danger:#ef4444}
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#080e1e,#0d1630 60%,#0a1228);color:var(--text);min-height:100vh}
+    body{font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#080e1e,#0d1630 60%,#0a1228);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
     a{text-decoration:none;color:inherit}
 
     /* ── HEADER ── */
-    .header{padding:28px 24px 0;max-width:1300px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+    .header{padding:24px 24px 0;max-width:1300px;margin:0 auto;width:100%;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
     .logo{display:flex;align-items:center;gap:12px}
-    .logo-icon{font-size:32px}
-    .logo h1{font-size:22px;font-weight:800;letter-spacing:-.5px}
-    .logo p{font-size:12px;color:var(--muted);margin-top:2px}
-    .badge-version{background:rgba(79,140,255,.15);border:1px solid rgba(79,140,255,.3);color:var(--accent);padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700}
+    .logo-icon{font-size:30px}
+    .logo h1{font-size:20px;font-weight:800;letter-spacing:-.5px}
+    .logo p{font-size:11px;color:var(--muted);margin-top:2px}
+    .badge-ver{background:rgba(79,140,255,.15);border:1px solid rgba(79,140,255,.3);color:var(--accent);padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700}
 
     /* ── STATUS BAR ── */
-    .statusbar{max-width:1300px;margin:16px auto 0;padding:0 24px}
-    .statusbar-inner{background:rgba(18,26,49,.8);border:1px solid var(--line);border-radius:12px;padding:10px 18px;display:flex;gap:18px;flex-wrap:wrap;align-items:center}
-    .status-item{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+    .statusbar{max-width:1300px;margin:14px auto 0;padding:0 24px;width:100%}
+    .sb-inner{background:rgba(18,26,49,.8);border:1px solid var(--line);border-radius:12px;padding:9px 16px;display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+    .si{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+    .si b{color:var(--text);font-weight:600}
     .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-    .dot.green{background:#22c55e;box-shadow:0 0 6px #22c55e80}
-    .dot.red{background:#ef4444}
+    .dot.green{background:var(--ok);box-shadow:0 0 5px #22c55e70}
+    .dot.red{background:var(--danger)}
     .dot.gray{background:#4a5568}
     .dot.pulse{animation:pulse 2s infinite}
-    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-    .status-val{color:var(--text);font-weight:600}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 
     /* ── MAIN ── */
-    .main{max-width:1300px;margin:24px auto;padding:0 24px 48px}
+    .main{max-width:1300px;margin:20px auto 0;padding:0 24px 24px;width:100%;flex:1}
 
-    /* ── CARD GRID ── */
-    .card-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px}
-    @media(max-width:1024px){.card-grid{grid-template-columns:1fr 1fr}}
-    @media(max-width:560px){.card-grid{grid-template-columns:1fr}}
+    /* ── GRIDS ── */
+    .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px}
+    .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+    @media(max-width:1024px){.g4{grid-template-columns:1fr 1fr}}
+    @media(max-width:600px){.g4,.g2{grid-template-columns:1fr}}
 
-    /* ── CHANNEL CARD ── */
-    .ch-card{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:18px;transition:all .2s;cursor:default;display:flex;flex-direction:column;gap:14px}
-    .ch-card:hover{border-color:rgba(79,140,255,.4);box-shadow:0 6px 28px rgba(79,140,255,.1)}
-    .ch-head{display:flex;align-items:center;justify-content:space-between}
-    .ch-title{display:flex;align-items:center;gap:10px}
-    .ch-icon{font-size:26px;line-height:1}
-    .ch-name{font-size:15px;font-weight:700}
-    .ch-sub{font-size:11px;color:var(--muted);margin-top:1px}
-    .ch-conn{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);flex-shrink:0}
+    /* ── CARD BASE ── */
+    .card{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:14px;transition:border-color .2s,box-shadow .2s}
+    .card:hover{border-color:rgba(79,140,255,.35);box-shadow:0 4px 24px rgba(79,140,255,.09)}
 
-    /* ── STATS DENTRO DO CARD ── */
-    .ch-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
-    .ch-stat{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:9px 11px}
-    .ch-stat-val{font-size:22px;font-weight:800;line-height:1}
-    .ch-stat-val.ok{color:var(--ok)}
-    .ch-stat-val.warn{color:var(--warn)}
-    .ch-stat-val.danger{color:var(--danger)}
-    .ch-stat-val.blue{color:var(--accent)}
-    .ch-stat-lbl{font-size:10px;color:var(--muted);margin-top:3px;line-height:1.3}
+    /* ── CARD HEADER ── */
+    .card-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .card-title{display:flex;align-items:center;gap:10px}
+    .card-ico{font-size:24px;line-height:1}
+    .card-name{font-size:14px;font-weight:700}
+    .card-desc{font-size:10px;color:var(--muted);margin-top:2px}
+    .card-conn{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);flex-shrink:0}
+
+    /* ── CONFERÊNCIA STATS (3 colunas fixas) ── */
+    .conf-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .conf-cell{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:10px 10px 8px;display:flex;flex-direction:column;gap:3px}
+    .conf-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+    .conf-val{font-size:21px;font-weight:800;line-height:1}
+    .conf-val.ok{color:var(--ok)}
+    .conf-val.warn{color:var(--warn)}
+    .conf-val.danger{color:var(--danger)}
+    .conf-val.na{color:#4a5568;font-size:16px}
+    .conf-sub{font-size:10px;color:var(--muted)}
 
     /* ── LINKS ── */
-    .ch-links{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto}
-    .ch-link{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:8px;font-size:11px;font-weight:600;background:rgba(79,140,255,.1);border:1px solid rgba(79,140,255,.2);color:var(--accent);transition:all .15s;cursor:pointer;text-decoration:none}
-    .ch-link:hover{background:rgba(79,140,255,.2);border-color:rgba(79,140,255,.4)}
-    .ch-link.danger{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.25);color:#f87171}
-    .ch-link.danger:hover{background:rgba(239,68,68,.2)}
-    .ch-link.muted{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.08);color:var(--muted)}
-    .ch-link.muted:hover{background:rgba(255,255,255,.08);color:var(--text)}
+    .lnks{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto}
+    .lnk{padding:5px 10px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid;transition:all .15s;cursor:pointer}
+    .lnk.primary{background:rgba(79,140,255,.1);border-color:rgba(79,140,255,.25);color:var(--accent)}
+    .lnk.primary:hover{background:rgba(79,140,255,.22)}
+    .lnk.warn{background:rgba(245,179,1,.08);border-color:rgba(245,179,1,.25);color:var(--warn)}
+    .lnk.warn:hover{background:rgba(245,179,1,.16)}
+    .lnk.danger{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.25);color:#f87171}
+    .lnk.danger:hover{background:rgba(239,68,68,.18)}
+    .lnk.muted{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.09);color:var(--muted)}
+    .lnk.muted:hover{background:rgba(255,255,255,.09);color:var(--text)}
+
+    /* ── FILAS: stats 5 colunas ── */
+    .fila-row{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+
+    /* ── TAB NAV ── */
+    .tabnav{max-width:1300px;margin:0 auto 24px;padding:0 24px;width:100%}
+    .tabnav-inner{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:14px;display:flex;overflow:hidden}
+    .tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:14px 8px;color:var(--muted);font-size:11px;font-weight:600;text-decoration:none;transition:all .15s;border-right:1px solid var(--line)}
+    .tab:last-child{border-right:none}
+    .tab:hover{background:rgba(79,140,255,.07);color:var(--text)}
+    .tab .tab-ico{font-size:20px;line-height:1}
+    @media(max-width:600px){.tab .tab-ico{font-size:17px}.tab{font-size:10px;padding:10px 4px}}
 
     /* ── FOOTER ── */
-    .footer{text-align:center;padding:20px;color:var(--muted);font-size:11px;border-top:1px solid var(--line);max-width:1300px;margin:0 auto}
+    .footer{text-align:center;padding:16px;color:var(--muted);font-size:11px;border-top:1px solid var(--line);max-width:1300px;margin:0 auto;width:100%}
   </style>
 </head>
 <body>
 
+<!-- HEADER -->
 <div class="header">
   <div class="logo">
     <div class="logo-icon">🧮</div>
@@ -81,357 +101,368 @@
       <p>Sistema de precificação multicanal automatizado</p>
     </div>
   </div>
-  <span class="badge-version">v3.4.0</span>
+  <span class="badge-ver">v3.4.0</span>
 </div>
 
 <!-- STATUS BAR -->
 <div class="statusbar">
-  <div class="statusbar-inner">
-    <div class="status-item"><div class="dot green pulse"></div><span>Servidor</span><span class="status-val">Online</span></div>
-    <div class="status-item"><div class="dot gray" id="dot-bling"></div><span>Bling</span><span class="status-val" id="val-bling">—</span></div>
-    <div class="status-item"><div class="dot gray" id="dot-ml"></div><span>ML</span><span class="status-val" id="val-ml">—</span></div>
-    <div class="status-item"><div class="dot gray" id="dot-mp"></div><span>MP</span><span class="status-val" id="val-mp">—</span></div>
-    <div class="status-item"><div class="dot gray" id="dot-shopify"></div><span>Shopify</span><span class="status-val" id="val-shopify">—</span></div>
-    <div class="status-item"><div class="dot gray" id="dot-shopee"></div><span>Shopee</span><span class="status-val" id="val-shopee">—</span></div>
-    <div class="status-item" style="margin-left:auto"><div class="dot green"></div><span>Scheduler 300s</span></div>
+  <div class="sb-inner">
+    <div class="si"><div class="dot green pulse"></div><span>Servidor</span><b>Online</b></div>
+    <div class="si"><div class="dot gray" id="dot-bling"></div><span>Bling</span><b id="val-bling">—</b></div>
+    <div class="si"><div class="dot gray" id="dot-ml"></div><span>ML</span><b id="val-ml">—</b></div>
+    <div class="si"><div class="dot gray" id="dot-mp"></div><span>MP</span><b id="val-mp">—</b></div>
+    <div class="si"><div class="dot gray" id="dot-shopify"></div><span>Shopify</span><b id="val-shopify">—</b></div>
+    <div class="si"><div class="dot gray" id="dot-shopee"></div><span>Shopee</span><b id="val-shopee">—</b></div>
+    <div class="si" style="margin-left:auto"><div class="dot green"></div><span>Scheduler 300s</span></div>
   </div>
 </div>
 
 <div class="main">
 
-  <!-- ── CANAIS DE VENDA ── -->
-  <div class="card-grid" style="margin-top:20px">
+  <!-- ══ LINHA 1: CANAIS ══ -->
+  <div class="g4">
 
     <!-- MERCADO LIVRE -->
-    <div class="ch-card">
-      <div class="ch-head">
-        <div class="ch-title">
-          <span class="ch-icon">🛍️</span>
-          <div><div class="ch-name">Mercado Livre</div><div class="ch-sub">Marketplace principal</div></div>
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">
+          <span class="card-ico">🛍️</span>
+          <div><div class="card-name">Mercado Livre</div><div class="card-desc">Marketplace principal</div></div>
         </div>
-        <div class="ch-conn"><div class="dot gray" id="dot-ml-card"></div><span id="val-ml-card">—</span></div>
+        <div class="card-conn"><div class="dot gray" id="dot-ml2"></div><span id="val-ml2">—</span></div>
       </div>
-      <div class="ch-stats">
-        <div class="ch-stat">
-          <div class="ch-stat-val warn" id="cs-ml-sku">—</div>
-          <div class="ch-stat-lbl">Sem SKU vinculado</div>
+      <div class="conf-row">
+        <div class="conf-cell">
+          <div class="conf-label">Estoque</div>
+          <div class="conf-val warn" id="ml-est">—</div>
+          <div class="conf-sub">divergências</div>
         </div>
-        <div class="ch-stat">
-          <div class="ch-stat-val warn" id="cs-ml-div">—</div>
-          <div class="ch-stat-lbl">Divergências estoque</div>
+        <div class="conf-cell">
+          <div class="conf-label">Preços</div>
+          <div class="conf-val na" id="ml-preco">—</div>
+          <div class="conf-sub">não auditado</div>
+        </div>
+        <div class="conf-cell">
+          <div class="conf-label">SKUs</div>
+          <div class="conf-val warn" id="ml-sku">—</div>
+          <div class="conf-sub">sem vínculo</div>
         </div>
       </div>
-      <div class="ch-links">
-        <a href="/mercado-livre" class="ch-link">📋 Anúncios</a>
-        <a href="/conferencia-estoque" class="ch-link">🔄 Conferência</a>
-        <a href="/auditoria-automatica#sem-sku" class="ch-link danger">⚠️ Sem SKU</a>
-        <a href="/marketing" class="ch-link muted">📢 Marketing</a>
-        <a href="/ml/login" class="ch-link muted">🔑 Reconectar</a>
+      <div class="lnks">
+        <a href="/auditoria-automatica#estoque-ml" class="lnk warn">📦 Estoque</a>
+        <a href="/auditoria-automatica#sem-sku" class="lnk danger">⚠️ SKUs</a>
+        <a href="/conferencia-estoque" class="lnk primary">🔄 Conferência</a>
+        <a href="/mercado-livre" class="lnk muted">📋 Anúncios</a>
       </div>
     </div>
 
     <!-- SHOPIFY -->
-    <div class="ch-card">
-      <div class="ch-head">
-        <div class="ch-title">
-          <span class="ch-icon">🟢</span>
-          <div><div class="ch-name">Shopify</div><div class="ch-sub">Loja online</div></div>
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">
+          <span class="card-ico">🟢</span>
+          <div><div class="card-name">Shopify</div><div class="card-desc">Loja online</div></div>
         </div>
-        <div class="ch-conn"><div class="dot gray" id="dot-shopify-card"></div><span id="val-shopify-card">—</span></div>
+        <div class="card-conn"><div class="dot gray" id="dot-shopify2"></div><span id="val-shopify2">—</span></div>
       </div>
-      <div class="ch-stats">
-        <div class="ch-stat">
-          <div class="ch-stat-val warn" id="cs-shopify-div">—</div>
-          <div class="ch-stat-lbl">Divergências estoque</div>
+      <div class="conf-row">
+        <div class="conf-cell">
+          <div class="conf-label">Estoque</div>
+          <div class="conf-val warn" id="sh-est">—</div>
+          <div class="conf-sub">divergências</div>
         </div>
-        <div class="ch-stat">
-          <div class="ch-stat-val warn" id="cs-shopify-preco">—</div>
-          <div class="ch-stat-lbl">Divergências preço</div>
+        <div class="conf-cell">
+          <div class="conf-label">Preços</div>
+          <div class="conf-val warn" id="sh-preco">—</div>
+          <div class="conf-sub">divergências</div>
+        </div>
+        <div class="conf-cell">
+          <div class="conf-label">SKUs</div>
+          <div class="conf-val na">—</div>
+          <div class="conf-sub">n/a</div>
         </div>
       </div>
-      <div class="ch-links">
-        <a href="/shopify" class="ch-link">🛍️ Produtos</a>
-        <a href="/auditoria-automatica" class="ch-link">📊 Auditoria</a>
-        <a href="/frete/painel" class="ch-link muted">🚚 Fretes</a>
-        <a href="/integracoes" class="ch-link muted">🔌 Integração</a>
+      <div class="lnks">
+        <a href="/auditoria-automatica" class="lnk warn">📦 Estoque</a>
+        <a href="/auditoria-automatica" class="lnk warn">💰 Preços</a>
+        <a href="/shopify" class="lnk muted">🛍️ Produtos</a>
       </div>
     </div>
 
     <!-- AMAZON -->
-    <div class="ch-card">
-      <div class="ch-head">
-        <div class="ch-title">
-          <span class="ch-icon">📦</span>
-          <div><div class="ch-name">Amazon</div><div class="ch-sub">Marketplace</div></div>
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">
+          <span class="card-ico">📦</span>
+          <div><div class="card-name">Amazon</div><div class="card-desc">Marketplace FBM</div></div>
         </div>
-        <div class="ch-conn"><div class="dot gray"></div><span id="val-amazon-card">FBM</span></div>
+        <div class="card-conn"><div class="dot gray"></div><span>FBM</span></div>
       </div>
-      <div class="ch-stats">
-        <div class="ch-stat">
-          <div class="ch-stat-val warn" id="cs-amazon-div">—</div>
-          <div class="ch-stat-lbl">Divergências estoque</div>
+      <div class="conf-row">
+        <div class="conf-cell">
+          <div class="conf-label">Estoque</div>
+          <div class="conf-val warn" id="amz-est">—</div>
+          <div class="conf-sub">divergências</div>
         </div>
-        <div class="ch-stat">
-          <div class="ch-stat-val blue">FBM</div>
-          <div class="ch-stat-lbl">Modelo de envio</div>
+        <div class="conf-cell">
+          <div class="conf-label">Preços</div>
+          <div class="conf-val warn" id="amz-preco">—</div>
+          <div class="conf-sub">divergências</div>
+        </div>
+        <div class="conf-cell">
+          <div class="conf-label">SKUs</div>
+          <div class="conf-val na">—</div>
+          <div class="conf-sub">n/a</div>
         </div>
       </div>
-      <div class="ch-links">
-        <a href="/amazon" class="ch-link">📦 Catálogo</a>
-        <a href="/auditoria-automatica" class="ch-link muted">📊 Auditoria</a>
+      <div class="lnks">
+        <a href="/auditoria-automatica" class="lnk warn">📦 Estoque</a>
+        <a href="/auditoria-automatica" class="lnk warn">💰 Preços</a>
+        <a href="/amazon" class="lnk muted">📦 Catálogo</a>
       </div>
     </div>
 
     <!-- SHOPEE -->
-    <div class="ch-card">
-      <div class="ch-head">
-        <div class="ch-title">
-          <span class="ch-icon">🟠</span>
-          <div><div class="ch-name">Shopee</div><div class="ch-sub">Marketplace</div></div>
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">
+          <span class="card-ico">🟠</span>
+          <div><div class="card-name">Shopee</div><div class="card-desc">Marketplace</div></div>
         </div>
-        <div class="ch-conn"><div class="dot gray" id="dot-shopee-card"></div><span id="val-shopee-card">—</span></div>
+        <div class="card-conn"><div class="dot gray" id="dot-shopee2"></div><span id="val-shopee2">—</span></div>
       </div>
-      <div class="ch-stats">
-        <div class="ch-stat">
-          <div class="ch-stat-val blue" id="cs-shopee-status">—</div>
-          <div class="ch-stat-lbl">Status conexão</div>
+      <div class="conf-row">
+        <div class="conf-cell">
+          <div class="conf-label">Estoque</div>
+          <div class="conf-val na">—</div>
+          <div class="conf-sub">n/a</div>
         </div>
-        <div class="ch-stat">
-          <div class="ch-stat-val blue">API</div>
-          <div class="ch-stat-lbl">Modo integração</div>
+        <div class="conf-cell">
+          <div class="conf-label">Preços</div>
+          <div class="conf-val na">—</div>
+          <div class="conf-sub">n/a</div>
+        </div>
+        <div class="conf-cell">
+          <div class="conf-label">SKUs</div>
+          <div class="conf-val na">—</div>
+          <div class="conf-sub">n/a</div>
         </div>
       </div>
-      <div class="ch-links">
-        <a href="/shopee" class="ch-link">🟠 Produtos</a>
-        <a href="/integracoes" class="ch-link muted">🔌 Reconectar</a>
+      <div class="lnks">
+        <a href="/shopee" class="lnk primary">🟠 Produtos</a>
+        <a href="/integracoes" class="lnk muted">🔌 Reconectar</a>
       </div>
     </div>
 
-  </div><!-- /card-grid canais -->
+  </div><!-- /g4 canais -->
 
-  <!-- ── FUNÇÕES ── -->
-  <div class="card-grid">
+  <!-- ══ LINHA 2: FILAS + SEO/GMC ══ -->
+  <div class="g2">
 
-    <!-- FILAS -->
-    <div class="ch-card">
-      <div class="ch-head">
-        <div class="ch-title">
-          <span class="ch-icon">📋</span>
-          <div><div class="ch-name">Filas de Aprovação</div><div class="ch-sub">Preços · Estoque · Divergências</div></div>
+    <!-- FILAS DE APROVAÇÃO -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">
+          <span class="card-ico">📋</span>
+          <div><div class="card-name">Filas de Aprovação</div><div class="card-desc">Resumo de todas as filas pendentes</div></div>
         </div>
       </div>
-      <div class="ch-stats" style="grid-template-columns:repeat(3,1fr)">
-        <div class="ch-stat">
-          <div class="ch-stat-val warn" id="cs-fila-preco">—</div>
-          <div class="ch-stat-lbl">Preços pendentes</div>
+      <div class="fila-row">
+        <div class="conf-cell">
+          <div class="conf-label">Preços</div>
+          <div class="conf-val warn" id="fila-preco">—</div>
+          <div class="conf-sub">pendentes</div>
         </div>
-        <div class="ch-stat">
-          <div class="ch-stat-val warn" id="cs-negativo">—</div>
-          <div class="ch-stat-lbl">Estoque negativo</div>
+        <div class="conf-cell">
+          <div class="conf-label">Est. ML</div>
+          <div class="conf-val warn" id="fila-ml">—</div>
+          <div class="conf-sub">divergências</div>
         </div>
-        <div class="ch-stat">
-          <div class="ch-stat-val green" id="cs-ciclo">—</div>
-          <div class="ch-stat-lbl">Último ciclo</div>
+        <div class="conf-cell">
+          <div class="conf-label">Est. Shopify</div>
+          <div class="conf-val warn" id="fila-shopify">—</div>
+          <div class="conf-sub">divergências</div>
+        </div>
+        <div class="conf-cell">
+          <div class="conf-label">Est. Amazon</div>
+          <div class="conf-val warn" id="fila-amazon">—</div>
+          <div class="conf-sub">divergências</div>
+        </div>
+        <div class="conf-cell">
+          <div class="conf-label">Neg. Bling</div>
+          <div class="conf-val danger" id="fila-negativo">—</div>
+          <div class="conf-sub">saldo negativo</div>
         </div>
       </div>
-      <div class="ch-links">
-        <a href="/fila" class="ch-link">✅ Fila de preços</a>
-        <a href="/auditoria-automatica#negativo" class="ch-link danger">⚠️ Est. negativo</a>
-        <a href="/auditoria-automatica" class="ch-link muted">🔍 Auditoria</a>
-        <a href="/simulador" class="ch-link muted">🔢 Simulador</a>
-        <a href="/regras" class="ch-link muted">📊 Regras</a>
-        <a href="/integracao-comercial" class="ch-link muted">⚙️ Config</a>
+      <div class="lnks">
+        <a href="/fila" class="lnk primary">✅ Fila de preços</a>
+        <a href="/auditoria-automatica" class="lnk warn">📊 Auditoria</a>
+        <a href="/auditoria-automatica#negativo" class="lnk danger">⚠️ Est. negativo</a>
       </div>
     </div>
 
     <!-- SEO + GMC -->
-    <div class="ch-card">
-      <div class="ch-head">
-        <div class="ch-title">
-          <span class="ch-icon">🔍</span>
-          <div><div class="ch-name">SEO &amp; Google Merchant</div><div class="ch-sub">Visibilidade e qualidade de feed</div></div>
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">
+          <span class="card-ico">🔍</span>
+          <div><div class="card-name">SEO &amp; Google Merchant</div><div class="card-desc">Visibilidade e qualidade do feed de produtos</div></div>
         </div>
       </div>
-      <div class="ch-stats" style="grid-template-columns:repeat(3,1fr)">
-        <div class="ch-stat">
-          <div class="ch-stat-val warn" id="cs-gmc-repr">—</div>
-          <div class="ch-stat-lbl">GMC reprovados</div>
+      <div class="conf-row">
+        <div class="conf-cell">
+          <div class="conf-label">GMC Reprovados</div>
+          <div class="conf-val danger" id="gmc-repr">—</div>
+          <div class="conf-sub">produtos</div>
         </div>
-        <div class="ch-stat">
-          <div class="ch-stat-val warn" id="cs-gmc-lim">—</div>
-          <div class="ch-stat-lbl">GMC limitados</div>
+        <div class="conf-cell">
+          <div class="conf-label">GMC Limitados</div>
+          <div class="conf-val warn" id="gmc-lim">—</div>
+          <div class="conf-sub">produtos</div>
         </div>
-        <div class="ch-stat">
-          <div class="ch-stat-val blue" id="cs-seo-score">—</div>
-          <div class="ch-stat-lbl">SEO score</div>
-        </div>
-      </div>
-      <div class="ch-links">
-        <a href="/gmc" class="ch-link">🛒 Merchant Center</a>
-        <a href="/seo-health" class="ch-link muted">📈 SEO Health</a>
-      </div>
-    </div>
-
-    <!-- FRETES -->
-    <div class="ch-card">
-      <div class="ch-head">
-        <div class="ch-title">
-          <span class="ch-icon">🚚</span>
-          <div><div class="ch-name">Fretes</div><div class="ch-sub">Subsídio · Cotação · Shopify</div></div>
+        <div class="conf-cell">
+          <div class="conf-label">SEO Score</div>
+          <div class="conf-val na" id="seo-score">—</div>
+          <div class="conf-sub">qualidade</div>
         </div>
       </div>
-      <div class="ch-stats">
-        <div class="ch-stat">
-          <div class="ch-stat-val blue">R$ 8</div>
-          <div class="ch-stat-lbl">Subsídio por item</div>
-        </div>
-        <div class="ch-stat">
-          <div class="ch-stat-val green">Ativo</div>
-          <div class="ch-stat-lbl">Melhor Envio</div>
-        </div>
-      </div>
-      <div class="ch-links">
-        <a href="/frete/painel" class="ch-link">🚚 Painel de frete</a>
+      <div class="lnks">
+        <a href="/gmc" class="lnk primary">🛒 Merchant Center</a>
+        <a href="/seo-health" class="lnk muted">📈 SEO Health</a>
       </div>
     </div>
 
-    <!-- FERRAMENTAS -->
-    <div class="ch-card">
-      <div class="ch-head">
-        <div class="ch-title">
-          <span class="ch-icon">⚙️</span>
-          <div><div class="ch-name">Ferramentas</div><div class="ch-sub">Sistema e integrações</div></div>
-        </div>
-      </div>
-      <div class="ch-stats">
-        <div class="ch-stat">
-          <div class="ch-stat-val blue" id="cs-regras">495</div>
-          <div class="ch-stat-lbl">Regras ativas</div>
-        </div>
-        <div class="ch-stat">
-          <div class="ch-stat-val green">OK</div>
-          <div class="ch-stat-lbl">Bling ERP</div>
-        </div>
-      </div>
-      <div class="ch-links">
-        <a href="/integracoes" class="ch-link">🔌 Integrações</a>
-        <a href="/oee" class="ch-link muted">⚙️ OEE</a>
-        <a href="/sie" class="ch-link muted">📈 SIE</a>
-        <a href="/docs" class="ch-link muted" target="_blank">📖 API</a>
-        <a href="/bling/status" class="ch-link muted">📦 Bling</a>
-      </div>
-    </div>
-
-  </div><!-- /card-grid funções -->
+  </div><!-- /g2 filas+seo -->
 
 </div><!-- /main -->
+
+<!-- ══ ABAS DE NAVEGAÇÃO ══ -->
+<div class="tabnav">
+  <div class="tabnav-inner">
+    <a href="/simulador" class="tab">
+      <span class="tab-ico">🔢</span>
+      <span>Simulador</span>
+    </a>
+    <a href="/regras" class="tab">
+      <span class="tab-ico">📊</span>
+      <span>Regras</span>
+    </a>
+    <a href="/integracoes" class="tab">
+      <span class="tab-ico">🔌</span>
+      <span>Integrações</span>
+    </a>
+    <a href="/frete/painel" class="tab">
+      <span class="tab-ico">🚚</span>
+      <span>Frete</span>
+    </a>
+    <a href="/marketing" class="tab">
+      <span class="tab-ico">📢</span>
+      <span>Marketing</span>
+    </a>
+  </div>
+</div>
 
 <div class="footer">
   Shinsei Pricing v3.4.0 — Motor de precificação multicanal para Shinsei Market
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
 
-  // ── Status Bling ────────────────────────────────────────────
+  /* ── utilitários ── */
+  const $  = id => document.getElementById(id);
+  const sv = (id, val, cls) => { const e=$(id); if(!e) return; e.textContent=val; if(cls) e.className='conf-val '+cls; };
+  const sd = (id, cls)      => { const e=$(id); if(e) e.className='dot '+cls; };
+  const st = (id, txt)      => { const e=$(id); if(e) e.textContent=txt; };
+
+  /* ── STATUS BLING ── */
   fetch('/bling/status').then(r=>r.json()).then(d=>{
-    const ok = d.conectado||d.connected||d.ok;
-    set('dot-bling','dot '+(ok?'green':'red'));
-    setText('val-bling', ok?'Conectado':'Desconectado');
-  }).catch(()=>setText('val-bling','Erro'));
+    const ok=d.conectado||d.connected||d.ok;
+    sd('dot-bling', ok?'green':'red'); st('val-bling', ok?'Conectado':'Desconectado');
+  }).catch(()=>st('val-bling','Erro'));
 
-  // ── Status ML ───────────────────────────────────────────────
+  /* ── STATUS ML ── */
   fetch('/ml/status').then(r=>r.json()).then(d=>{
-    const ok = d.connected||d.conectado||d.configurado;
-    ['dot-ml','dot-ml-card'].forEach(id=>set(id,'dot '+(ok?'green':'red')));
-    ['val-ml','val-ml-card'].forEach(id=>setText(id, ok?'Conectado':'Desconectado'));
+    const ok=d.connected||d.conectado||d.configurado;
+    ['dot-ml','dot-ml2'].forEach(id=>sd(id,ok?'green':'red'));
+    ['val-ml','val-ml2'].forEach(id=>st(id,ok?'Conectado':'Desconectado'));
   }).catch(()=>{});
 
-  // ── Status MP ───────────────────────────────────────────────
+  /* ── STATUS MP ── */
   fetch('/auditoria/mp-status').then(r=>r.json()).then(d=>{
-    set('dot-mp','dot '+(d.configurado?'green':'gray'));
-    setText('val-mp', d.configurado?'Configurado':'—');
+    sd('dot-mp',d.configurado?'green':'gray'); st('val-mp',d.configurado?'Config.':'—');
   }).catch(()=>{});
 
-  // ── Status Shopify ──────────────────────────────────────────
+  /* ── STATUS SHOPIFY ── */
   fetch('/shopify/status').then(r=>r.json()).then(d=>{
-    const ok = d.connected;
-    ['dot-shopify','dot-shopify-card'].forEach(id=>set(id,'dot '+(ok?'green':'red')));
-    ['val-shopify','val-shopify-card'].forEach(id=>setText(id, ok?'Conectado':'Desconectado'));
+    const ok=d.connected;
+    ['dot-shopify','dot-shopify2'].forEach(id=>sd(id,ok?'green':'red'));
+    ['val-shopify','val-shopify2'].forEach(id=>st(id,ok?'Conectado':'Desconectado'));
   }).catch(()=>{});
 
-  // ── Status Shopee ───────────────────────────────────────────
+  /* ── STATUS SHOPEE ── */
   fetch('/shopee/status').then(r=>r.json()).then(d=>{
-    const ok = d.connected;
-    const nc = d.status==='not_configured';
-    ['dot-shopee','dot-shopee-card'].forEach(id=>set(id,'dot '+(ok?'green':nc?'gray':'red')));
-    const lbl = ok?'Conectado':nc?'Não config.':'Desconectado';
-    ['val-shopee','val-shopee-card'].forEach(id=>setText(id,lbl));
-    setVal('cs-shopee-status', ok?'Online':nc?'—':'Offline', ok?'ok':nc?'blue':'danger');
+    const ok=d.connected, nc=d.status==='not_configured';
+    ['dot-shopee','dot-shopee2'].forEach(id=>sd(id,ok?'green':nc?'gray':'red'));
+    ['val-shopee','val-shopee2'].forEach(id=>st(id,ok?'Conectado':nc?'Não config.':'Desconectado'));
   }).catch(()=>{});
 
-  // ── Fila de aprovação ───────────────────────────────────────
-  fetch('/fila/lista').then(r=>r.json()).then(d=>{
-    const n = (d.itens||[]).filter(i=>i.status==='pendente').length;
-    setVal('cs-fila-preco', n, n>0?'warn':'ok');
-  }).catch(()=>{});
-
-  // ── Estoque negativo ────────────────────────────────────────
-  fetch('/auditoria/estoque-negativo?status=pendente').then(r=>r.json()).then(d=>{
-    const n = d.stats?.pendente||0;
-    setVal('cs-negativo', n, n>0?'danger':'ok');
-  }).catch(()=>{});
-
-  // ── ML: sem SKU + divergências ──────────────────────────────
-  fetch('/auditoria/ml-sem-sku').then(r=>r.json()).then(d=>{
-    const n = d.stats?.sem_sku||0;
-    setVal('cs-ml-sku', n, n>0?'warn':'ok');
-  }).catch(()=>{});
-
+  /* ── ML: ESTOQUE + SKU ── */
   fetch('/auditoria/ml-estoque').then(r=>r.json()).then(d=>{
-    const n = d.stats?.pendente||0;
-    setVal('cs-ml-div', n, n>0?'warn':'ok');
+    const n=d.stats?.pendente||0;
+    sv('ml-est',  n, n>0?'warn':'ok');
+    sv('fila-ml', n, n>0?'warn':'ok');
   }).catch(()=>{});
 
-  // ── Shopify: divergências estoque + preço ───────────────────
+  fetch('/auditoria/ml-sem-sku').then(r=>r.json()).then(d=>{
+    const n=d.stats?.sem_sku||0;
+    sv('ml-sku', n, n>0?'warn':'ok');
+  }).catch(()=>{});
+
+  /* ── SHOPIFY: ESTOQUE + PREÇO ── */
   fetch('/auditoria/shopify').then(r=>r.json()).then(d=>{
-    const itens = d.itens||[];
-    const est  = itens.filter(i=>i.tipo==='estoque'&&i.status==='pendente').length;
-    const preco = itens.filter(i=>i.tipo==='preco'&&i.status==='pendente').length;
-    setVal('cs-shopify-div',  est,  est>0?'warn':'ok');
-    setVal('cs-shopify-preco',preco,preco>0?'warn':'ok');
+    const itens=d.itens||[];
+    const est  =itens.filter(i=>i.tipo==='estoque'&&i.status==='pendente').length;
+    const preco=itens.filter(i=>i.tipo==='preco'  &&i.status==='pendente').length;
+    sv('sh-est',     est,   est>0?'warn':'ok');
+    sv('fila-shopify',est,   est>0?'warn':'ok');
+    sv('sh-preco',   preco, preco>0?'warn':'ok');
   }).catch(()=>{});
 
-  // ── Amazon: divergências ────────────────────────────────────
+  /* ── AMAZON: ESTOQUE + PREÇO ── */
   fetch('/auditoria/amazon').then(r=>r.json()).then(d=>{
-    const n = (d.itens||[]).filter(i=>i.tipo==='estoque'&&i.status==='pendente').length;
-    setVal('cs-amazon-div', n, n>0?'warn':'ok');
+    const est=(d.itens||[]).filter(i=>i.tipo==='estoque'&&i.status==='pendente').length;
+    sv('amz-est',    est, est>0?'warn':'ok');
+    sv('fila-amazon',est, est>0?'warn':'ok');
   }).catch(()=>{});
 
-  // ── GMC status ──────────────────────────────────────────────
+  fetch('/auditoria/precos').then(r=>r.json()).then(d=>{
+    const itens=d.itens||[];
+    const amz =itens.filter(i=>i.canal==='Amazon' &&i.status==='pendente').length;
+    sv('amz-preco', amz, amz>0?'warn':'ok');
+  }).catch(()=>{});
+
+  /* ── FILA DE PREÇOS ── */
+  fetch('/fila/lista').then(r=>r.json()).then(d=>{
+    const n=(d.itens||[]).filter(i=>i.status==='pendente').length;
+    sv('fila-preco', n, n>0?'warn':'ok');
+  }).catch(()=>{});
+
+  /* ── ESTOQUE NEGATIVO ── */
+  fetch('/auditoria/estoque-negativo?status=pendente').then(r=>r.json()).then(d=>{
+    const n=d.stats?.pendente||0;
+    sv('fila-negativo', n, n>0?'danger':'ok');
+  }).catch(()=>{});
+
+  /* ── GMC ── */
   fetch('/gmc/status').then(r=>r.json()).then(d=>{
-    const r2 = d.resumo?.total_reprovados||0;
-    const l  = d.resumo?.total_limitados||0;
-    setVal('cs-gmc-repr', r2, r2>0?'danger':'ok');
-    setVal('cs-gmc-lim',  l,  l>0?'warn':'ok');
-  }).catch(()=>{});
-
-  // ── Health / ciclo / regras ─────────────────────────────────
-  fetch('/health').then(r=>r.json()).then(d=>{
-    if(d.ultimo_ciclo) setVal('cs-ciclo', d.ultimo_ciclo.calculados||'—','blue');
-    if(d.componentes?.banco?.regras!=null) setVal('cs-regras', d.componentes.banco.regras,'blue');
+    const rep=d.resumo?.total_reprovados||0;
+    const lim=d.resumo?.total_limitados||0;
+    sv('gmc-repr', rep, rep>0?'danger':'ok');
+    sv('gmc-lim',  lim, lim>0?'warn':'ok');
   }).catch(()=>{});
 
 });
-
-function set(id,cls){const e=document.getElementById(id);if(e)e.className=cls;}
-function setText(id,txt){const e=document.getElementById(id);if(e)e.textContent=txt;}
-function setVal(id,val,cls){
-  const e=document.getElementById(id);
-  if(!e)return;
-  e.textContent=val;
-  if(cls)e.className='ch-stat-val '+cls;
-}
 </script>
 </body>
 </html>
