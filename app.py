@@ -1015,6 +1015,13 @@ def conferencia_estoque_page():
         return HTMLResponse(html_file.read_text(encoding="utf-8"))
     raise HTTPException(status_code=404, detail="conferencia_estoque.html não encontrado.")
 
+@app.get("/auditoria/bling-sem-shopify", response_class=HTMLResponse)
+def bling_sem_shopify_page():
+    html_file = PAGES_DIR / "bling_sem_shopify.html"
+    if html_file.exists():
+        return HTMLResponse(html_file.read_text(encoding="utf-8"))
+    raise HTTPException(status_code=404, detail="bling_sem_shopify.html não encontrado.")
+
 @app.get("/amazon", response_class=HTMLResponse)
 def amazon_page():
     html_file = PAGES_DIR / "amazon.html"

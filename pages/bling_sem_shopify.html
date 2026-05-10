@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Bling → Shopify — Produtos Ausentes</title>
+  <style>
+    :root{--bg:#0b1020;--card:#121a31;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--danger:#ef4444;--ok:#16a34a;--warn:#f5b301}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text);min-height:100vh}
+    .wrap{max-width:1200px;margin:0 auto;padding:22px}
+
+    /* topbar */
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 20px}
+    .brand h1{margin:0;font-size:22px}.brand p{margin:4px 0 0;color:var(--muted);font-size:13px}
+    .top-actions{display:flex;gap:10px;flex-wrap:wrap}
+
+    /* buttons */
+    .btn{border:none;background:var(--accent);color:#fff;padding:10px 16px;border-radius:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:7px;font-size:13px;text-decoration:none;transition:opacity .15s}
+    .btn:hover{opacity:.85}.btn:disabled{opacity:.45;cursor:not-allowed}
+    .btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+    .btn.success{background:#166534}.btn.warn{background:#92400e}.btn.danger{background:var(--danger)}
+    .btn.sm{padding:6px 11px;font-size:12px;border-radius:9px}
+
+    /* stat cards */
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:20px}
+    .stat{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:16px;padding:16px 18px}
+    .stat-label{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+    .stat-value{font-size:26px;font-weight:800;letter-spacing:-.5px}
+    .stat-sub{font-size:11px;color:var(--muted);margin-top:4px}
+    .stat.danger .stat-value{color:#f87171}
+    .stat.ok    .stat-value{color:#4ade80}
+    .stat.warn  .stat-value{color:#fbbf24}
+    .stat.blue  .stat-value{color:#60a5fa}
+
+    /* toolbar */
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+    .search-box{flex:1;min-width:200px;position:relative}
+    .search-box input{width:100%;padding:10px 14px 10px 38px;border-radius:12px;border:1px solid var(--line);background:#0d1630;color:#fff;font-size:13px}
+    .search-box input:focus{outline:none;border-color:var(--accent)}
+    .search-box .icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:15px}
+    select{padding:9px 12px;border-radius:12px;border:1px solid var(--line);background:#0d1630;color:#fff;font-size:13px;cursor:pointer}
+    select:focus{outline:none;border-color:var(--accent)}
+
+    /* table */
+    .table-wrap{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+    .table-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+    .table-title{font-size:14px;font-weight:700}
+    .table-count{font-size:12px;color:var(--muted)}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    thead th{padding:11px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer;user-select:none}
+    thead th:hover{color:var(--text)}
+    thead th .sort-icon{margin-left:4px;opacity:.4;font-size:10px}
+    thead th.sorted .sort-icon{opacity:1;color:var(--accent)}
+    tbody tr{border-bottom:1px solid rgba(38,52,88,.5);transition:background .1s}
+    tbody tr:last-child{border-bottom:none}
+    tbody tr:hover{background:rgba(79,140,255,.06)}
+    td{padding:10px 14px;vertical-align:middle}
+    .sku-cell{font-family:monospace;font-size:12px;color:#a5b4fc;font-weight:600}
+    .nome-cell{max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .estoque-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:8px;font-weight:700;font-size:12px}
+    .estoque-badge.alto {background:rgba(22,163,74,.15);color:#4ade80;border:1px solid rgba(22,163,74,.3)}
+    .estoque-badge.medio{background:rgba(245,179,1,.15);color:#fbbf24;border:1px solid rgba(245,179,1,.3)}
+    .estoque-badge.zero {background:rgba(100,100,120,.12);color:#9fb0d9;border:1px solid rgba(100,100,120,.3)}
+    .preco-cell{font-weight:700;color:#34d399}
+    .actions-cell{white-space:nowrap}
+    .no-results{text-align:center;padding:48px 20px;color:var(--muted)}
+    .no-results .icon{font-size:40px;margin-bottom:12px}
+
+    /* loading overlay */
+    .loading-overlay{display:none;position:fixed;inset:0;background:rgba(11,16,32,.85);z-index:100;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+    .loading-overlay.active{display:flex}
+    .spinner{width:48px;height:48px;border:4px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .loading-msg{font-size:15px;color:var(--muted)}
+    .loading-sub{font-size:12px;color:var(--muted);opacity:.7}
+
+    /* notice */
+    .notice{padding:12px 16px;border-radius:12px;margin-bottom:16px;font-size:13px;display:none}
+    .notice.ok {border:1px solid #166534;background:rgba(22,163,74,.1);color:#bbf7d0;display:flex;align-items:center;gap:8px}
+    .notice.err{border:1px solid #991b1b;background:rgba(239,68,68,.1);color:#fca5a5;display:flex;align-items:center;gap:8px}
+
+    /* pagination */
+    .pagination{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+    .page-btns{display:flex;gap:6px}
+    .page-btn{padding:5px 11px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--text);cursor:pointer;font-size:12px}
+    .page-btn:hover{border-color:var(--accent);color:var(--accent)}
+    .page-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+    .page-btn:disabled{opacity:.35;cursor:not-allowed}
+
+    /* timestamp */
+    .ts{font-size:11px;color:var(--muted);text-align:right;margin-bottom:10px}
+
+    @media(max-width:700px){
+      .topbar{flex-direction:column;align-items:flex-start}
+      .stats{grid-template-columns:1fr 1fr}
+      .toolbar{flex-direction:column}
+      .search-box{min-width:100%}
+      td,th{font-size:11px;padding:8px 10px}
+      .nome-cell{max-width:160px}
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="brand">
+      <h1>🔍 Bling → Shopify</h1>
+      <p>Produtos cadastrados no Bling que <strong>não existem</strong> na Shopify</p>
+    </div>
+    <div class="top-actions">
+      <a href="/" class="btn secondary sm">← Home</a>
+      <button class="btn success" id="btnConferir" onclick="rodarConferencia()">▶ Rodar Conferência</button>
+      <button class="btn secondary" id="btnExportar" onclick="exportarExcel()" disabled>⬇ Exportar Excel</button>
+    </div>
+  </div>
+
+  <!-- Notices -->
+  <div id="notice" class="notice"></div>
+
+  <!-- Stats -->
+  <div class="stats" id="statsArea" style="display:none">
+    <div class="stat blue">
+      <div class="stat-label">Total Bling</div>
+      <div class="stat-value" id="sTotalBling">—</div>
+      <div class="stat-sub">produtos ativos</div>
+    </div>
+    <div class="stat blue">
+      <div class="stat-label">SKUs Shopify</div>
+      <div class="stat-value" id="sTotalShopify">—</div>
+      <div class="stat-sub">variantes cadastradas</div>
+    </div>
+    <div class="stat ok">
+      <div class="stat-label">Presentes</div>
+      <div class="stat-value" id="sPresentes">—</div>
+      <div class="stat-sub">em ambos os sistemas</div>
+    </div>
+    <div class="stat danger">
+      <div class="stat-label">Ausentes na Shopify</div>
+      <div class="stat-value" id="sAusentes">—</div>
+      <div class="stat-sub">precisam ser cadastrados</div>
+    </div>
+    <div class="stat warn">
+      <div class="stat-label">Sem SKU (Bling)</div>
+      <div class="stat-value" id="sSemSku">—</div>
+      <div class="stat-sub">não comparáveis</div>
+    </div>
+  </div>
+
+  <!-- Timestamp -->
+  <div class="ts" id="tsArea" style="display:none">
+    Última conferência: <span id="tsVal">—</span>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar" id="toolbarArea" style="display:none">
+    <div class="search-box">
+      <span class="icon">🔎</span>
+      <input type="text" id="searchInput" placeholder="Buscar por SKU ou nome do produto..." oninput="filtrar()">
+    </div>
+    <select id="filtroEstoque" onchange="filtrar()">
+      <option value="">Todos os estoques</option>
+      <option value="positivo">Com estoque (> 0)</option>
+      <option value="zero">Sem estoque (= 0)</option>
+    </select>
+    <select id="filtroOrdem" onchange="filtrar()">
+      <option value="estoque_desc">Estoque ↓</option>
+      <option value="estoque_asc">Estoque ↑</option>
+      <option value="preco_desc">Preço ↓</option>
+      <option value="preco_asc">Preço ↑</option>
+      <option value="nome_asc">Nome A–Z</option>
+      <option value="sku_asc">SKU A–Z</option>
+    </select>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap" id="tableWrap" style="display:none">
+    <div class="table-header">
+      <div>
+        <div class="table-title">Produtos ausentes na Shopify</div>
+        <div class="table-count" id="countLabel">—</div>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortBy('sku')">SKU <span class="sort-icon" id="sort_sku">⇅</span></th>
+            <th onclick="sortBy('nome')">Nome do produto <span class="sort-icon" id="sort_nome">⇅</span></th>
+            <th onclick="sortBy('estoque_bling')" style="text-align:center">Estoque Bling <span class="sort-icon" id="sort_estoque_bling">⇅</span></th>
+            <th onclick="sortBy('preco_bling')" style="text-align:right">Preço Bling <span class="sort-icon" id="sort_preco_bling">⇅</span></th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="paginationArea">
+      <div id="paginfoText">—</div>
+      <div class="page-btns" id="pageBtns"></div>
+    </div>
+  </div>
+
+  <div class="no-results" id="emptyState" style="display:none">
+    <div class="icon">✅</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:8px;color:var(--text)">Nenhum produto ausente!</div>
+    <div>Todos os produtos ativos do Bling com SKU estão cadastrados na Shopify.</div>
+  </div>
+
+</div>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-msg" id="loadingMsg">Varrendo catálogo Bling e Shopify...</div>
+  <div class="loading-sub" id="loadingSub">Isso pode levar 2–5 minutos dependendo do tamanho do catálogo</div>
+</div>
+
+<script>
+  const API = '';
+  let todosItens = [];
+  let itensFiltrados = [];
+  let sortCol = 'estoque_bling';
+  let sortDir = -1; // -1 desc, 1 asc
+  const PER_PAGE = 50;
+  let currentPage = 1;
+
+  // ── Inicialização ────────────────────────────────────────────────────────
+  window.onload = () => carregarUltimo();
+
+  async function carregarUltimo() {
+    try {
+      const r = await fetch(`${API}/auditoria/shopify/bling-sem-shopify`);
+      const d = await r.json();
+      if (d.ok && d.itens) {
+        renderizar(d);
+      }
+    } catch(e) {}
+  }
+
+  // ── Rodar conferência ─────────────────────────────────────────────────────
+  async function rodarConferencia() {
+    const btn = document.getElementById('btnConferir');
+    btn.disabled = true;
+    document.getElementById('loadingMsg').textContent = 'Varrendo catálogo Bling e Shopify...';
+    document.getElementById('loadingSub').textContent = 'Isso pode levar 2–5 minutos dependendo do tamanho do catálogo';
+    document.getElementById('loadingOverlay').classList.add('active');
+    mostrarNotice('', '');
+    try {
+      const r = await fetch(`${API}/auditoria/shopify/bling-sem-shopify`, {method:'POST'});
+      const d = await r.json();
+      if (d.ok) {
+        renderizar(d);
+        mostrarNotice('ok', `✅ Conferência concluída! ${d.ausentes_shopify} produtos ausentes encontrados.`);
+      } else {
+        mostrarNotice('err', `❌ Erro: ${d.erro || 'Falha desconhecida'}`);
+      }
+    } catch(e) {
+      mostrarNotice('err', `❌ Erro de conexão: ${e.message}`);
+    } finally {
+      btn.disabled = false;
+      document.getElementById('loadingOverlay').classList.remove('active');
+    }
+  }
+
+  // ── Renderizar resultado ──────────────────────────────────────────────────
+  function renderizar(d) {
+    todosItens = d.itens || [];
+
+    // stats
+    document.getElementById('sTotalBling').textContent   = (d.total_bling || 0).toLocaleString('pt-BR');
+    document.getElementById('sTotalShopify').textContent = (d.total_shopify_skus || 0).toLocaleString('pt-BR');
+    document.getElementById('sPresentes').textContent    = (d.presentes_shopify || 0).toLocaleString('pt-BR');
+    document.getElementById('sAusentes').textContent     = (d.ausentes_shopify || 0).toLocaleString('pt-BR');
+    document.getElementById('sSemSku').textContent       = (d.sem_sku_bling || 0).toLocaleString('pt-BR');
+    document.getElementById('statsArea').style.display   = 'grid';
+
+    // timestamp
+    if (d.executado_em) {
+      const dt = new Date(d.executado_em + 'Z');
+      document.getElementById('tsVal').textContent = dt.toLocaleString('pt-BR', {timeZone:'America/Sao_Paulo'});
+      document.getElementById('tsArea').style.display = 'block';
+    }
+
+    // toolbar + tabela
+    document.getElementById('toolbarArea').style.display = todosItens.length ? 'flex' : 'none';
+    document.getElementById('tableWrap').style.display   = todosItens.length ? 'block' : 'none';
+    document.getElementById('emptyState').style.display  = todosItens.length ? 'none' : 'block';
+    document.getElementById('btnExportar').disabled      = !todosItens.length;
+
+    filtrar();
+  }
+
+  // ── Filtrar + Ordenar ─────────────────────────────────────────────────────
+  function filtrar() {
+    const q     = document.getElementById('searchInput').value.toLowerCase().trim();
+    const fEst  = document.getElementById('filtroEstoque').value;
+    const ordem = document.getElementById('filtroOrdem').value;
+
+    itensFiltrados = todosItens.filter(it => {
+      if (q && !it.sku.toLowerCase().includes(q) && !it.nome.toLowerCase().includes(q)) return false;
+      if (fEst === 'positivo' && it.estoque_bling <= 0) return false;
+      if (fEst === 'zero'     && it.estoque_bling > 0)  return false;
+      return true;
+    });
+
+    // Ordenar
+    const [col, dir] = ordem.includes('_') ? [ordem.slice(0,-5), ordem.endsWith('asc')?1:-1] : [sortCol, sortDir];
+    itensFiltrados.sort((a,b) => {
+      const va = a[col] ?? '', vb = b[col] ?? '';
+      if (typeof va === 'number') return dir*(va-vb);
+      return dir*String(va).localeCompare(String(vb), 'pt-BR');
+    });
+
+    currentPage = 1;
+    renderTabela();
+  }
+
+  function sortBy(col) {
+    if (sortCol === col) sortDir *= -1; else { sortCol = col; sortDir = -1; }
+    document.getElementById('filtroOrdem').value = `${col}_${sortDir===-1?'desc':'asc'}`;
+    // Atualizar ícones
+    ['sku','nome','estoque_bling','preco_bling'].forEach(c => {
+      const el = document.getElementById(`sort_${c}`);
+      if (el) { el.textContent = c===col ? (sortDir===-1?'↓':'↑') : '⇅'; }
+    });
+    filtrar();
+  }
+
+  // ── Renderizar tabela com paginação ───────────────────────────────────────
+  function renderTabela() {
+    const total = itensFiltrados.length;
+    const pages = Math.ceil(total / PER_PAGE) || 1;
+    currentPage = Math.min(currentPage, pages);
+    const start = (currentPage-1)*PER_PAGE;
+    const slice = itensFiltrados.slice(start, start+PER_PAGE);
+
+    document.getElementById('countLabel').textContent =
+      `${total.toLocaleString('pt-BR')} produto${total!==1?'s':''} encontrado${total!==1?'s':''}`;
+
+    const body = document.getElementById('tableBody');
+    body.innerHTML = slice.map(it => {
+      const est = it.estoque_bling;
+      const estClass = est > 10 ? 'alto' : est > 0 ? 'medio' : 'zero';
+      const estLabel = est > 0 ? est.toLocaleString('pt-BR') : '0';
+      const preco = it.preco_bling > 0 ? `R$ ${it.preco_bling.toFixed(2).replace('.',',')}` : '—';
+      const urlBling = it.id_bling ? `https://app.bling.com.br/produtos/cadastro/${it.id_bling}/` : '#';
+      return `<tr>
+        <td class="sku-cell">${esc(it.sku)}</td>
+        <td class="nome-cell" title="${esc(it.nome)}">${esc(it.nome)}</td>
+        <td style="text-align:center"><span class="estoque-badge ${estClass}">${estLabel}</span></td>
+        <td style="text-align:right" class="preco-cell">${preco}</td>
+        <td class="actions-cell">
+          ${it.id_bling ? `<a href="${urlBling}" target="_blank" class="btn secondary sm">Bling ↗</a>` : ''}
+        </td>
+      </tr>`;
+    }).join('');
+
+    // paginação
+    document.getElementById('paginfoText').textContent =
+      `Página ${currentPage} de ${pages} · ${total.toLocaleString('pt-BR')} itens`;
+    renderPaginas(pages);
+  }
+
+  function renderPaginas(total) {
+    const btns = document.getElementById('pageBtns');
+    const pages = [];
+    if (total <= 7) {
+      for (let i=1;i<=total;i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 3) pages.push('…');
+      for (let i=Math.max(2,currentPage-1);i<=Math.min(total-1,currentPage+1);i++) pages.push(i);
+      if (currentPage < total-2) pages.push('…');
+      pages.push(total);
+    }
+    btns.innerHTML = `
+      <button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}>‹</button>
+      ${pages.map(p=>p==='…'
+        ? `<span style="color:var(--muted);padding:5px 4px">…</span>`
+        : `<button class="page-btn ${p===currentPage?'active':''}" onclick="goPage(${p})">${p}</button>`
+      ).join('')}
+      <button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage===total?'disabled':''}>›</button>
+    `;
+  }
+
+  function goPage(p) {
+    const pages = Math.ceil(itensFiltrados.length/PER_PAGE)||1;
+    currentPage = Math.max(1,Math.min(p,pages));
+    renderTabela();
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+
+  // ── Exportar Excel (CSV com separador ;) ──────────────────────────────────
+  function exportarExcel() {
+    if (!itensFiltrados.length) return;
+    const header = ['SKU','Nome','Estoque Bling','Preço Bling','ID Bling'];
+    const rows = itensFiltrados.map(it => [
+      `"${it.sku}"`,
+      `"${(it.nome||'').replace(/"/g,'""')}"`,
+      it.estoque_bling,
+      it.preco_bling.toFixed(2).replace('.',','),
+      `"${it.id_bling||''}"`
+    ].join(';'));
+    const csv = '﻿' + [header.join(';'), ...rows].join('\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const ts = new Date().toISOString().slice(0,10);
+    a.download = `bling_sem_shopify_${ts}.csv`;
+    a.click();
+    mostrarNotice('ok', `✅ ${itensFiltrados.length} produtos exportados para CSV (abrir no Excel).`);
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function mostrarNotice(tipo, msg) {
+    const el = document.getElementById('notice');
+    el.className = 'notice' + (tipo ? ` ${tipo}` : '');
+    el.textContent = msg;
+    el.style.display = msg ? '' : 'none';
+  }
+</script>
+</body>
+</html>
