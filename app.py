@@ -1870,6 +1870,28 @@ def auditoria_shopify_limpar_tudo():
     salvar_fila_shopify([])
     return {"ok": True}
 
+@app.post("/auditoria/shopify/bling-sem-shopify")
+def auditoria_bling_sem_shopify_conferir():
+    """Varre o Bling e encontra produtos que NÃO existem na Shopify."""
+    from shopify_conferencia import conferir_bling_sem_shopify
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="Bling não disponível.")
+    try:
+        bling = BlingClient()
+        resultado = conferir_bling_sem_shopify(bling)
+        return resultado
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/auditoria/shopify/bling-sem-shopify")
+def auditoria_bling_sem_shopify_lista():
+    """Retorna o último resultado da conferência Bling→Shopify."""
+    from shopify_conferencia import carregar_bling_sem_shopify
+    dados = carregar_bling_sem_shopify()
+    if not dados:
+        return {"ok": False, "erro": "Nenhuma conferência executada ainda. Use POST para iniciar."}
+    return dados
+
 @app.post("/auditoria/estoque-negativo/limpar-tudo")
 def auditoria_negativo_limpar_tudo():
     DATA_DIR.mkdir(exist_ok=True)

@@ -314,3 +314,137 @@ def ignorar_shopify(item_id_fila: str) -> dict:
 def salvar_shopify_token(token: str) -> None:
     _save_json(SHOPIFY_CONFIG_PATH, {"access_token": token, "salvo_em": datetime.utcnow().isoformat()})
 
+
+# ──────────────────────────────────────────────────────────────────────────
+# CONFERÊNCIA INVERSA: Bling → Shopify
+# Produtos que EXISTEM no Bling mas NÃO têm SKU correspondente na Shopify
+# ──────────────────────────────────────────────────────────────────────────
+
+BLING_SEM_SHOPIFY_PATH = DATA_DIR / "bling_sem_shopify.json"
+
+def carregar_bling_sem_shopify() -> list[dict]:
+    dados = _load_json(BLING_SEM_SHOPIFY_PATH, {})
+    return dados if isinstance(dados, dict) else {}
+
+def salvar_bling_sem_shopify(dados: dict) -> None:
+    _save_json(BLING_SEM_SHOPIFY_PATH, dados)
+
+
+def _shopify_listar_todos_skus(token: str) -> set[str]:
+    """Coleta TODOS os SKUs cadastrados na Shopify (todas as variantes)."""
+    skus: set[str] = set()
+    page_info = None
+    paginas = 0
+    while paginas < 100:
+        produtos, next_page = _shopify_listar_produtos(token, limit=250, page_info=page_info)
+        if not produtos:
+            break
+        for produto in produtos:
+            for variant in produto.get("variants", []):
+                sku = (variant.get("sku") or "").strip()
+                if sku:
+                    skus.add(sku)
+        paginas += 1
+        if not next_page:
+            break
+        page_info = next_page
+    logger.info("Shopify: %d SKUs coletados em %d páginas", len(skus), paginas)
+    return skus
+
+
+def conferir_bling_sem_shopify(bling_client, max_paginas: int = 200) -> dict:
+    """
+    Varre TODOS os produtos do Bling e identifica quais NÃO existem na Shopify.
+    Retorna lista de {sku, nome, estoque, preco} ausentes na Shopify.
+    """
+    token = _shopify_get_token()
+    if not token:
+        return {"ok": False, "erro": "Token da Shopify não configurado."}
+
+    # 1. Coletar todos os SKUs da Shopify
+    logger.info("Coletando SKUs da Shopify...")
+    skus_shopify = _shopify_listar_todos_skus(token)
+
+    # 2. Varrer todos os produtos do Bling
+    logger.info("Varrendo produtos do Bling...")
+    ausentes: list[dict] = []
+    presentes = 0
+    sem_sku = 0
+    erros = 0
+    total_bling = 0
+
+    for pagina in range(1, max_paginas + 1):
+        try:
+            payload = bling_client.list_products(page=pagina, limit=100)
+        except Exception as e:
+            logger.warning("Erro ao listar Bling página %d: %s", pagina, e)
+            erros += 1
+            break
+
+        data = payload.get("data", [])
+        if not data:
+            break  # sem mais páginas
+
+        for item in data:
+            total_bling += 1
+            # Normalizar produto
+            try:
+                from bling_client import BlingClient as _BC
+                prod = _BC._normalize_product(None, item) if hasattr(_BC, '_normalize_product') else item
+            except Exception:
+                prod = item
+
+            sku = str(prod.get("codigo") or prod.get("sku") or "").strip()
+            nome = str(prod.get("descricao") or prod.get("nome") or prod.get("name") or "").strip()
+            situacao = str(prod.get("situacao") or "").upper()
+
+            # Pular produtos inativos/arquivados
+            if situacao in ("I", "INATIVO", "E", "EXCLUIDO"):
+                continue
+
+            if not sku:
+                sem_sku += 1
+                continue
+
+            if sku in skus_shopify:
+                presentes += 1
+            else:
+                estoque = 0
+                preco = 0.0
+                try:
+                    estoque_info = prod.get("estoque") or {}
+                    estoque = int(estoque_info.get("saldoVirtualTotal") or
+                                  estoque_info.get("saldo_fisico_total") or 0)
+                    preco = float(prod.get("preco") or 0)
+                except Exception:
+                    pass
+
+                ausentes.append({
+                    "sku": sku,
+                    "nome": nome,
+                    "estoque_bling": estoque,
+                    "preco_bling": preco,
+                    "situacao": situacao,
+                    "id_bling": str(prod.get("id") or ""),
+                })
+
+        time.sleep(0.2)  # respeitar rate limit Bling
+
+    # Ordenar: primeiro com estoque > 0, depois por nome
+    ausentes.sort(key=lambda x: (-x["estoque_bling"], x["nome"].lower()))
+
+    resultado = {
+        "ok": True,
+        "executado_em": datetime.utcnow().isoformat(),
+        "total_bling": total_bling,
+        "total_shopify_skus": len(skus_shopify),
+        "presentes_shopify": presentes,
+        "sem_sku_bling": sem_sku,
+        "ausentes_shopify": len(ausentes),
+        "erros": erros,
+        "itens": ausentes,
+    }
+    salvar_bling_sem_shopify(resultado)
+    logger.info("Bling sem Shopify: %d ausentes de %d produtos Bling", len(ausentes), total_bling)
+    return resultado
+
