@@ -1686,8 +1686,11 @@ def bling_atualizar_imagem_variacao(payload: ImagemVariacaoPayload):
         raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
     try:
         client = BlingClient()
-        produto = client.get_product(payload.produto_id)
-        variacoes = produto.get("variacoes", [])
+        # Busca produto completo para não apagar outros campos no PUT
+        existing = client.get_product(payload.produto_id)
+        patch = _prepare_product_patch(existing)
+        patch["id"] = payload.produto_id
+        variacoes = patch.get("variacoes", [])
         variacao_encontrada = False
         for v in variacoes:
             if int(v.get("id", 0)) == payload.variacao_id:
@@ -1696,10 +1699,7 @@ def bling_atualizar_imagem_variacao(payload: ImagemVariacaoPayload):
                 break
         if not variacao_encontrada:
             raise HTTPException(status_code=404, detail=f"Variação {payload.variacao_id} não encontrada no produto {payload.produto_id}.")
-        patch = {
-            "id": payload.produto_id,
-            "variacoes": variacoes,
-        }
+        patch["variacoes"] = variacoes
         result = client.update_product(payload.produto_id, patch)
         return {"ok": True, "produto_id": payload.produto_id, "variacao_id": payload.variacao_id, "image_url": payload.image_url, "raw": result}
     except HTTPException:
