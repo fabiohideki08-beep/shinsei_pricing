@@ -146,7 +146,7 @@ def health():
         "status": status,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "uptime": uptime_str,
-        "versao": "fase4",
+        "versao": "fase4-img",
         "python": sys.version.split()[0],
         "componentes": {
             "banco": db,
