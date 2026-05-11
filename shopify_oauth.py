@@ -87,27 +87,74 @@ def _instalar_gtag_conversion(token: str):
     AW_ID    = "AW-2097362078"
     CONV_ID  = "7604222139"
 
-    conversion_js = f"""// Google Ads Conversion — Shinsei Market (auto-instalado via OAuth)
+    # IMPORTANTE: A página de obrigado do checkout NÃO carrega o theme.liquid,
+    # então o gtag.js do tema não está disponível. O script precisa ser auto-suficiente.
+    # ATENÇÃO: Não usar "function gtag()" localmente — o minificador da Shopify renomeia
+    # e quebra o check "typeof gtag". Usar window.gtag e window.dataLayer diretamente.
+    conversion_js = f"""// Google Ads Conversion Tracking — Shinsei Market
+// Auto-suficiente: carrega gtag.js se nao disponivel no checkout thank_you page.
+// NÃO usa function gtag() local (conflito com minificador Shopify).
 (function() {{
   if (typeof Shopify === 'undefined' || !Shopify.Checkout) return;
   if (Shopify.Checkout.step !== 'thank_you') return;
   if (window._gadsConvFired) return;
   window._gadsConvFired = true;
-  function fire() {{
-    if (typeof gtag === 'undefined') {{ setTimeout(fire, 300); return; }}
+
+  var AW = '{AW_ID}';
+  var CID = '{CONV_ID}';
+
+  function disparar() {{
     var val = (Shopify.checkout && Shopify.checkout.total_price)
-                ? (Shopify.checkout.total_price / 100).toFixed(2) : 0;
+                ? (Shopify.checkout.total_price / 100).toFixed(2) : '0.00';
     var tid = (Shopify.checkout && Shopify.checkout.order_id)
                 ? String(Shopify.checkout.order_id) : '';
-    gtag('event', 'conversion', {{
-      'send_to': '{AW_ID}/{CONV_ID}',
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push('event', 'conversion', {{
+      'send_to': AW + '/' + CID,
       'value': parseFloat(val),
       'currency': 'BRL',
       'transaction_id': tid
     }});
+    // Disparo via window.gtag (pode ter sido inicializado antes ou agora)
+    if (typeof window.gtag === 'function') {{
+      window.gtag('event', 'conversion', {{
+        'send_to': AW + '/' + CID,
+        'value': parseFloat(val),
+        'currency': 'BRL',
+        'transaction_id': tid
+      }});
+    }}
     console.log('[Shinsei] Google Ads conversion fired', val, tid);
   }}
-  fire();
+
+  function carregar() {{
+    // Ja tem gtag disponivel (tema ou GA4 carregou)?
+    if (typeof window.gtag === 'function') {{
+      disparar();
+      return;
+    }}
+    // Inicializar dataLayer e window.gtag como funcao wrapper
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function() {{ window.dataLayer.push(arguments); }};
+    window.gtag('js', new Date());
+    window.gtag('config', AW);
+    // Carregar gtag.js e disparar conversao ao terminar
+    var s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://www.googletagmanager.com/gtag/js?id=' + AW;
+    s.onload = disparar;
+    s.onerror = function() {{
+      console.warn('[Shinsei] gtag.js nao carregou, disparando via dataLayer');
+      disparar();
+    }};
+    document.head.appendChild(s);
+  }}
+
+  if (document.readyState === 'loading') {{
+    document.addEventListener('DOMContentLoaded', carregar);
+  }} else {{
+    carregar();
+  }}
 }})();
 """
 
