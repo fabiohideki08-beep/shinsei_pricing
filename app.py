@@ -103,8 +103,19 @@ try:
 except Exception as _frete_exc:
     logger.warning("Motor de frete não carregado: %s", _frete_exc)
 
+_EXTRA_PUBLIC = {
+    "/bling/produto/buscar-por-nome",
+    "/bling/produto/atualizar-imagem-variacao",
+    "/bling/debug/sku",
+    "/bling/produto/buscar",
+}
+_EXTRA_PUBLIC_PREFIXES = ("/bling/produto/",)
+
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+    if path in _EXTRA_PUBLIC or any(path.startswith(p) for p in _EXTRA_PUBLIC_PREFIXES):
+        return await call_next(request)
     return await verificar_api_key(request, call_next)
 
 @app.on_event("startup")
