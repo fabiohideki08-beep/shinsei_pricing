@@ -1,6 +1,6 @@
 # Shinsei Pricing — dependências de produção
 # Instale com: pip install -r requirements.txt
-# cache-bust: 2026-05-08
+# cache-bust: 2026-05-11
 
 # ── Core ──────────────────────────────────────────────────────
 fastapi>=0.111.0
