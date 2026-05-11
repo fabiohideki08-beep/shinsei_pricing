@@ -1641,6 +1641,84 @@ def auditoria_mp_status():
     data = _json.loads(mp.read_text(encoding="utf-8")) if mp.exists() else {}
     token = data.get("access_token", "")
     return {"configurado": bool(token) and token != ".", "salvo_em": data.get("salvo_em")}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Bling — Variações e Imagens
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ImagemVariacaoPayload(BaseModel):
+    produto_id: int
+    variacao_id: int
+    image_url: str
+
+class BuscaProdutoPayload(BaseModel):
+    nome: str
+    limite: int = 10
+
+@app.get("/bling/produto/{produto_id}/variacoes")
+def bling_produto_variacoes(produto_id: int):
+    """Retorna o produto com todas as variações (IDs e opções)."""
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
+    try:
+        client = BlingClient()
+        produto = client.get_product(produto_id)
+        variacoes = produto.get("variacoes", [])
+        result = []
+        for v in variacoes:
+            result.append({
+                "id": v.get("id"),
+                "nome": v.get("nome"),
+                "codigo": v.get("codigo"),
+                "preco": v.get("preco"),
+                "imagens": v.get("imagens", []),
+                "variacao": v.get("variacao", {}),
+            })
+        return {"produto_id": produto_id, "nome": produto.get("nome"), "total": len(result), "variacoes": result}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+@app.post("/bling/produto/atualizar-imagem-variacao")
+def bling_atualizar_imagem_variacao(payload: ImagemVariacaoPayload):
+    """Atualiza a imagem principal de uma variação no Bling."""
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
+    try:
+        client = BlingClient()
+        produto = client.get_product(payload.produto_id)
+        variacoes = produto.get("variacoes", [])
+        variacao_encontrada = False
+        for v in variacoes:
+            if int(v.get("id", 0)) == payload.variacao_id:
+                variacao_encontrada = True
+                v["imagens"] = [{"link": payload.image_url}]
+                break
+        if not variacao_encontrada:
+            raise HTTPException(status_code=404, detail=f"Variação {payload.variacao_id} não encontrada no produto {payload.produto_id}.")
+        patch = {
+            "id": payload.produto_id,
+            "variacoes": variacoes,
+        }
+        result = client.update_product(payload.produto_id, patch)
+        return {"ok": True, "produto_id": payload.produto_id, "variacao_id": payload.variacao_id, "image_url": payload.image_url, "raw": result}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+@app.post("/bling/produto/buscar-por-nome")
+def bling_buscar_por_nome(payload: BuscaProdutoPayload):
+    """Busca produtos no Bling pelo nome/descrição."""
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
+    try:
+        client = BlingClient()
+        results = client.search_by_name(payload.nome, limit=payload.limite)
+        return {"total": len(results), "produtos": results}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
 if not FILA_PATH.exists(): _save_json(FILA_PATH, [])
 if not CFG_PATH.exists(): _save_json(CFG_PATH, DEFAULT_CFG)
 
