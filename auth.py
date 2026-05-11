@@ -93,6 +93,10 @@ PUBLIC_PATHS = {
     "/fila/rejeitar",
     "/bling/produto/atualizar-peso",
     "/bling/produto/atualizar-preco",
+    "/bling/produto/buscar-por-nome",
+    "/bling/produto/atualizar-imagem-variacao",
+    "/bling/debug/sku",
+    "/bling/produto/buscar",
     "/shopify-flow/pricing-suggestion",
     "/estoque/fila",
     "/conferencia-estoque",
@@ -104,6 +108,7 @@ PUBLIC_PATHS = {
 PUBLIC_PREFIXES = (
     "/fila/aprovar/",
     "/fila/rejeitar/",
+    "/bling/produto/",
     "/fila/completar/",
     "/fila/links/",
     "/auditoria/shopify/",
