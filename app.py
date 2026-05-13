@@ -306,6 +306,15 @@ class AtualizacaoCampoBlingPayload(BaseModel):
     produto_id: int
     valor: float
 
+class ImagemVariacaoPayload(BaseModel):
+    produto_id: int
+    variacao_id: int
+    image_url: str
+
+class BuscaProdutoPayload(BaseModel):
+    nome: str
+    limite: int = 10
+
 FALLBACK_HTML = "<!DOCTYPE html><html lang='pt-BR'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>Shinsei Pricing</title></head><body><h1>Shinsei Pricing</h1></body></html>"
 
 def _prepare_product_patch(existing: dict) -> dict:
@@ -509,6 +518,331 @@ def bling_produto_atualizar_preco(payload: AtualizacaoCampoBlingPayload):
             return {"ok": True, "message": f"Custo R${valor:.2f} salvo localmente. Recalcule para ver o resultado.", "local_only": True}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Falha ao atualizar custo: {exc}")
+
+
+@app.get("/bling/debug/produto-raw/{produto_id}")
+def bling_debug_produto_raw(produto_id: int):
+    """Retorna a resposta RAW do Bling para um produto. Sem auth."""
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
+    client = BlingClient()
+    raw = client._get(f"/produtos/{int(produto_id)}")
+    return {"produto_id": produto_id, "raw": raw}
+
+
+@app.get("/bling/produto/{produto_id}/variacoes")
+def bling_produto_variacoes(produto_id: int):
+    """Retorna o produto com todas as variações (IDs e opções). Sem auth."""
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
+    client = BlingClient()
+    # Tenta o endpoint /variacoes do Bling v3 primeiro
+    try:
+        raw_var = client._get(f"/produtos/{int(produto_id)}/variacoes")
+        variacoes_data = raw_var.get("data", [])
+        if isinstance(variacoes_data, list) and variacoes_data:
+            result = []
+            for v in variacoes_data:
+                result.append({
+                    "id": v.get("id"),
+                    "nome": v.get("nome"),
+                    "codigo": v.get("codigo"),
+                    "preco": v.get("preco"),
+                    "imagens": v.get("imagens", []),
+                    "variacao": v.get("variacao", {}),
+                })
+            # Get product name
+            produto_name = None
+            try:
+                produto = client.get_product(produto_id)
+                produto_name = produto.get("nome")
+            except Exception:
+                pass
+            return {"produto_id": produto_id, "nome": produto_name, "total": len(result), "variacoes": result, "source": "variacoes_endpoint"}
+    except Exception:
+        pass
+    # Fallback: GET /produtos/{id} inline variacoes
+    produto = client.get_product(produto_id)
+    if isinstance(produto, dict) and "data" in produto:
+        produto = produto["data"]
+    variacoes = produto.get("variacoes", [])
+    result = []
+    for v in variacoes:
+        result.append({
+            "id": v.get("id"),
+            "nome": v.get("nome"),
+            "codigo": v.get("codigo"),
+            "preco": v.get("preco"),
+            "imagens": v.get("imagens", []),
+            "variacao": v.get("variacao", {}),
+        })
+    return {"produto_id": produto_id, "nome": produto.get("nome"), "total": len(result), "variacoes": result, "source": "inline"}
+
+
+@app.post("/bling/produto/atualizar-imagem-variacao")
+def bling_atualizar_imagem_variacao(payload: ImagemVariacaoPayload):
+    """Atualiza a imagem principal de uma variação no Bling. Sem auth."""
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
+    client = BlingClient()
+    existing = client.get_product(payload.produto_id)
+    patch = _prepare_product_patch(existing)
+    patch["id"] = payload.produto_id
+    variacoes = patch.get("variacoes", [])
+    variacao_encontrada = False
+    for v in variacoes:
+        if int(v.get("id", 0)) == payload.variacao_id:
+            variacao_encontrada = True
+            v["imagens"] = [{"link": payload.image_url}]
+            break
+    if not variacao_encontrada:
+        raise HTTPException(status_code=404, detail=f"Variação {payload.variacao_id} não encontrada.")
+    patch["variacoes"] = variacoes
+    result = client.update_product(payload.produto_id, patch)
+    return {"ok": True, "produto_id": payload.produto_id, "variacao_id": payload.variacao_id, "image_url": payload.image_url, "raw": result}
+
+
+@app.post("/bling/produto/buscar-por-nome")
+def bling_buscar_por_nome(payload: BuscaProdutoPayload):
+    """Busca produtos no Bling pelo nome. Sem auth."""
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
+    client = BlingClient()
+    results = client.search_by_name(payload.nome, limit=payload.limite)
+    return {"total": len(results), "produtos": results}
+
+
+class ImagemSimplesBlingPayload(BaseModel):
+    produto_id: int
+    image_url: str
+
+class BuscaSkuPayload(BaseModel):
+    sku: str
+
+
+@app.post("/bling/produto/atualizar-imagem-simples")
+def bling_atualizar_imagem_simples(payload: ImagemSimplesBlingPayload):
+    """Atualiza a imagem de um produto simples/composto (tipo=P) no Bling.
+    Sem auth. Exclui camposCustomizados para evitar erro de permissão."""
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
+    client = BlingClient()
+    # Busca produto existente (raw para ter todos os campos)
+    raw_resp = client._get(f"/produtos/{int(payload.produto_id)}")
+    existing = raw_resp.get("data", {})
+    if not isinstance(existing, dict):
+        existing = {}
+    # Campos a EXCLUIR (causam erros de permissão ou não devem ser enviados)
+    EXCLUIR = {
+        "camposCustomizados",  # permissão negada
+        "variacoes",           # não aplicável para tipo=P
+        "variacao",            # não aplicável para tipo=P
+        "estoque",             # gerenciado separadamente
+        "actionEstoque",       # apenas para consulta
+    }
+    patch = {k: v for k, v in existing.items() if k not in EXCLUIR}
+    patch["id"] = payload.produto_id
+    # NOTA: Bling API v3 NÃO salva imagens via externas (testado exaustivamente).
+    # Preserva internas existentes para não apagar imagens já hospedadas na Bling S3.
+    existing_midia = existing.get("midia", {}) or {}
+    existing_imagens = existing_midia.get("imagens", {}) or {}
+    existing_internas = existing_imagens.get("internas", []) or []
+    patch["midia"] = {
+        "video": existing_midia.get("video", {"url": ""}),
+        "imagens": {
+            "externas": [{"link": payload.image_url}],
+            "internas": existing_internas,  # Preserva imagens já hospedadas na Bling
+            "imagensURL": [],
+        }
+    }
+    result = client.update_product(payload.produto_id, patch)
+    return {"ok": True, "produto_id": payload.produto_id, "image_url": payload.image_url,
+            "nota": "Bling API v3 não salva URLs externas — imagem deve ser inserida pela interface web do Bling",
+            "raw": result}
+
+
+@app.post("/bling/debug/testar-imagem")
+def bling_debug_testar_imagem(payload: ImagemSimplesBlingPayload):
+    """Debug: testa diferentes abordagens para salvar imagem no Bling.
+    Retorna estado antes, payload enviado, resposta e estado depois."""
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
+    import requests as _req
+    client = BlingClient()
+    produto_id = int(payload.produto_id)
+    image_url = payload.image_url
+
+    # Estado ANTES
+    raw_antes = client._get(f"/produtos/{produto_id}")
+    data_antes = raw_antes.get("data", {})
+    externas_antes = data_antes.get("midia", {}).get("imagens", {}).get("externas", [])
+
+    headers = client._get_headers()
+    results = []
+
+    # Abordagem A: PUT com todos os campos exceto camposCustomizados/variacoes/estoque
+    EXCLUIR_A = {"camposCustomizados", "variacoes", "variacao", "estoque", "actionEstoque"}
+    patch_a = {k: v for k, v in data_antes.items() if k not in EXCLUIR_A}
+    patch_a["id"] = produto_id
+    patch_a["midia"] = {
+        "video": {"url": ""},
+        "imagens": {"externas": [{"link": image_url}], "internas": [], "imagensURL": []}
+    }
+    resp_a = _req.put(f"{client.base_url}/produtos/{produto_id}", headers=headers, json=patch_a, timeout=30)
+
+    import time as _time; _time.sleep(2)
+    after_a = client._get(f"/produtos/{produto_id}").get("data", {}).get("midia", {}).get("imagens", {}).get("externas", [])
+    results.append({"abordagem": "A_full_minus_custom", "status": resp_a.status_code, "response": resp_a.text[:300], "externas_depois": after_a})
+
+    # Abordagem B: PUT sem estrutura (só campos básicos + midia)
+    EXCLUIR_B = EXCLUIR_A | {"estrutura", "artigoPerigoso", "descricaoEmbalagemDiscreta", "linhaProduto",
+                              "tributacao", "dimensoes", "fornecedor", "categoria", "descricaoComplementar",
+                              "linkExterno", "observacoes", "gtinEmbalagem", "itensPorCaixa", "volumes", "dataValidade"}
+    patch_b = {k: v for k, v in data_antes.items() if k not in EXCLUIR_B}
+    patch_b["id"] = produto_id
+    patch_b["midia"] = {
+        "video": {"url": ""},
+        "imagens": {"externas": [{"link": image_url}], "internas": [], "imagensURL": []}
+    }
+    resp_b = _req.put(f"{client.base_url}/produtos/{produto_id}", headers=headers, json=patch_b, timeout=30)
+    _time.sleep(2)
+    after_b = client._get(f"/produtos/{produto_id}").get("data", {}).get("midia", {}).get("imagens", {}).get("externas", [])
+    results.append({"abordagem": "B_sem_estrutura", "status": resp_b.status_code, "response": resp_b.text[:300], "externas_depois": after_b})
+
+    # Abordagem C: PATCH (se suportado) com só midia
+    resp_c = _req.patch(
+        f"{client.base_url}/produtos/{produto_id}",
+        headers=headers,
+        json={"midia": {"video": {"url": ""}, "imagens": {"externas": [{"link": image_url}], "internas": [], "imagensURL": []}}},
+        timeout=30
+    )
+    _time.sleep(2)
+    after_c = client._get(f"/produtos/{produto_id}").get("data", {}).get("midia", {}).get("imagens", {}).get("externas", [])
+    results.append({"abordagem": "C_patch_midia_only", "status": resp_c.status_code, "response": resp_c.text[:300], "externas_depois": after_c})
+
+    # Abordagem D: PUT com imagensURL (campo diferente)
+    EXCLUIR_A2 = {"camposCustomizados", "variacoes", "variacao", "estoque", "actionEstoque"}
+    patch_d = {k: v for k, v in data_antes.items() if k not in EXCLUIR_A2}
+    patch_d["id"] = produto_id
+    patch_d["midia"] = {
+        "video": {"url": ""},
+        "imagens": {"externas": [], "internas": [], "imagensURL": [image_url]}
+    }
+    resp_d = _req.put(f"{client.base_url}/produtos/{produto_id}", headers=headers, json=patch_d, timeout=30)
+    _time.sleep(2)
+    after_d = client._get(f"/produtos/{produto_id}").get("data", {}).get("midia", {})
+    results.append({"abordagem": "D_imagensURL", "status": resp_d.status_code, "response": resp_d.text[:300], "midia_depois": after_d})
+
+    # Abordagem E: PUT com internas = [{"link": url}] (mesma estrutura que externas mas em internas)
+    patch_e = {k: v for k, v in data_antes.items() if k not in EXCLUIR_A2}
+    patch_e["id"] = produto_id
+    patch_e["midia"] = {
+        "video": {"url": ""},
+        "imagens": {"externas": [], "internas": [{"link": image_url}], "imagensURL": []}
+    }
+    resp_e = _req.put(f"{client.base_url}/produtos/{produto_id}", headers=headers, json=patch_e, timeout=30)
+    _time.sleep(2)
+    after_e = client._get(f"/produtos/{produto_id}").get("data", {}).get("midia", {})
+    results.append({"abordagem": "E_internas_url", "status": resp_e.status_code, "response": resp_e.text[:300], "midia_depois": after_e})
+
+    # Abordagem F: download image + multipart upload
+    import io as _io
+    img_resp = _req.get(image_url, timeout=20)
+    if img_resp.status_code == 200:
+        files = {"imagem": ("kit_6.4.jpg", _io.BytesIO(img_resp.content), "image/jpeg")}
+        headers_f = {k: v for k, v in headers.items() if k.lower() != "content-type"}
+        headers_f = {k: v for k, v in headers.items() if k.lower() != "content-type"}
+        # F1: POST /produtos/{id}/imagens multipart
+        resp_f = _req.post(f"{client.base_url}/produtos/{produto_id}/imagens",
+                           headers=headers_f, files=files, timeout=30)
+        results.append({"abordagem": "F1_multipart_post_imagens", "status": resp_f.status_code, "response": resp_f.text[:500]})
+        # F2: POST /produtos/{id}/fotos multipart
+        img_resp2 = _req.get(image_url, timeout=20)
+        files2 = {"imagem": ("kit_6.4.jpg", _io.BytesIO(img_resp2.content), "image/jpeg")}
+        resp_f2 = _req.post(f"{client.base_url}/produtos/{produto_id}/fotos",
+                            headers=headers_f, files=files2, timeout=30)
+        results.append({"abordagem": "F2_multipart_post_fotos", "status": resp_f2.status_code, "response": resp_f2.text[:500]})
+        # F3: POST /imagens (root-level)
+        img_resp3 = _req.get(image_url, timeout=20)
+        files3 = {"imagem": ("kit_6.4.jpg", _io.BytesIO(img_resp3.content), "image/jpeg")}
+        resp_f3 = _req.post(f"{client.base_url}/imagens", headers=headers_f, files=files3, timeout=30)
+        results.append({"abordagem": "F3_root_imagens_multipart", "status": resp_f3.status_code, "response": resp_f3.text[:500]})
+        # F4: POST /produtos/{id}/imagens with JSON {url: ...}
+        resp_f4 = _req.post(f"{client.base_url}/produtos/{produto_id}/imagens",
+                            headers=headers, json={"url": image_url}, timeout=30)
+        results.append({"abordagem": "F4_json_url_post_imagens", "status": resp_f4.status_code, "response": resp_f4.text[:500]})
+        # F5: PATCH /produtos/{id} with json = {midia...}
+        resp_f5 = _req.patch(f"{client.base_url}/produtos/{produto_id}",
+                             headers=headers,
+                             json={"midia": {"imagens": {"externas": [{"link": image_url}]}}},
+                             timeout=30)
+        results.append({"abordagem": "F5_patch_midia_nested", "status": resp_f5.status_code, "response": resp_f5.text[:500]})
+    else:
+        results.append({"abordagem": "F_multipart_upload", "status": "download_failed", "response": str(img_resp.status_code)})
+
+    # Abordagem G: POST /uploads com multipart (padrão de upload antes de associar)
+    if img_resp.status_code == 200:
+        import io as _io2
+        headers_g = {k: v for k, v in headers.items() if k.lower() != "content-type"}
+        files_g = {"file": ("image.jpg", _io2.BytesIO(img_resp.content), "image/jpeg")}
+        resp_g = _req.post(f"{client.base_url}/uploads", headers=headers_g, files=files_g, timeout=30)
+        results.append({"abordagem": "G1_post_uploads_file", "status": resp_g.status_code, "response": resp_g.text[:500]})
+
+        # G2: base64 no internas
+        import base64 as _b64
+        img_data = _b64.b64encode(img_resp.content).decode("utf-8")
+        EXCLUIR_G = {"camposCustomizados", "variacoes", "variacao", "estoque", "actionEstoque"}
+        patch_g = {k: v for k, v in data_antes.items() if k not in EXCLUIR_G}
+        patch_g["id"] = produto_id
+        patch_g["midia"] = {
+            "video": {"url": ""},
+            "imagens": {
+                "externas": [],
+                "internas": [{"imagem": img_data, "tipo": "jpg"}],
+                "imagensURL": []
+            }
+        }
+        resp_g2 = _req.put(f"{client.base_url}/produtos/{produto_id}", headers=headers, json=patch_g, timeout=60)
+        _time.sleep(2)
+        after_g2 = client._get(f"/produtos/{produto_id}").get("data", {}).get("midia", {})
+        results.append({"abordagem": "G2_base64_internas", "status": resp_g2.status_code,
+                        "response": resp_g2.text[:500], "midia_depois": after_g2})
+
+        # G3: POST /imagens com JSON {link: url}
+        resp_g3 = _req.post(f"{client.base_url}/imagens", headers=headers,
+                            json={"link": image_url}, timeout=30)
+        results.append({"abordagem": "G3_post_imagens_json_link", "status": resp_g3.status_code, "response": resp_g3.text[:500]})
+
+    return {
+        "produto_id": produto_id,
+        "image_url": image_url,
+        "externas_antes": externas_antes,
+        "resultados": results,
+    }
+
+
+@app.post("/bling/produto/buscar-por-sku")
+def bling_buscar_por_sku(payload: BuscaSkuPayload):
+    """Busca um produto no Bling pelo SKU/código. Sem auth."""
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
+    client = BlingClient()
+    try:
+        raw_resp = client._get("/produtos", params={"codigo": payload.sku.strip(), "limite": 5})
+        items = raw_resp.get("data", [])
+        results = []
+        for item in items:
+            p = item if isinstance(item, dict) else {}
+            results.append({
+                "id": p.get("id"),
+                "codigo": p.get("codigo"),
+                "nome": p.get("nome"),
+                "tipo": p.get("tipo"),
+                "imagens": p.get("imagens", []),
+            })
+        return {"sku": payload.sku, "total": len(results), "produtos": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/integracao/preview")
@@ -849,6 +1183,202 @@ class IntegracaoPayload(BaseModel):
     preco_manual: float = 0
     arredondamento: str = "90"
     preco_compra_anterior_bling: float = 0
+
+@app.post("/shopify/kits/limpar-barcodes")
+def shopify_kits_limpar_barcodes(dry_run: bool = False):
+    """
+    Remove o barcode (GTIN/EAN) de todos os produtos Kit/Combo/Duo no Shopify.
+
+    O GMC cruza GTINs com bases externas e pode reprovar kits se o barcode
+    de um componente coincidir com produto de categoria restrita (ex: tabaco).
+    Kits não possuem um único EAN — é seguro remover o barcode deles.
+
+    Query params:
+        dry_run=true   → apenas lista o que seria alterado, sem modificar nada
+        dry_run=false  → executa a limpeza (padrão)
+    """
+    try:
+        from limpar_barcodes_kits import limpar_barcodes_kits
+        result = limpar_barcodes_kits(dry_run=dry_run)
+        return result
+    except Exception as e:
+        logger.exception("Erro em /shopify/kits/limpar-barcodes")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Webhook Shopify — limpeza de barcode em tempo real para kits
+# ─────────────────────────────────────────────────────────────────────────────
+
+import base64 as _base64
+
+def _verificar_assinatura_shopify(body_bytes: bytes, hmac_header: str) -> bool:
+    """Valida X-Shopify-Hmac-Sha256 (base64 de HMAC-SHA256 com SHOPIFY_WEBHOOK_SECRET)."""
+    secret = os.getenv("SHOPIFY_WEBHOOK_SECRET", "")
+    if not secret:
+        return True  # Sem segredo configurado: aceita tudo (dev/testing)
+    if not hmac_header:
+        return False
+    try:
+        computed = _base64.b64encode(
+            _hmac.new(secret.encode("utf-8"), body_bytes, hashlib.sha256).digest()
+        ).decode()
+        return _hmac.compare_digest(computed, hmac_header)
+    except Exception:
+        return False
+
+
+@app.post("/webhooks/shopify/produto")
+async def webhook_shopify_produto(request: Request, background_tasks: BackgroundTasks):
+    """
+    Recebe events products/create e products/update do Shopify.
+
+    Se o produto for kit/combo (título contém keywords), limpa automaticamente
+    os barcodes das variantes em background — evitando violações de política
+    de tabaco no Google Merchant Center.
+
+    Registro do webhook via: POST /shopify/webhooks/setup
+    """
+    raw = await request.body()
+
+    # ── Verificação de assinatura ──────────────────────────────────────
+    hmac_header = request.headers.get("X-Shopify-Hmac-Sha256", "")
+    if not _verificar_assinatura_shopify(raw, hmac_header):
+        logger.warning("[WEBHOOK-SHOPIFY] Assinatura inválida — rejeitando")
+        raise HTTPException(status_code=401, detail="assinatura inválida")
+
+    try:
+        product = json.loads(raw)
+    except Exception:
+        return {"ok": True}  # Payload inválido: responde 200 para Shopify não reenviar
+
+    topic = request.headers.get("X-Shopify-Topic", "")
+    title = product.get("title", "")
+
+    # ── Verifica se é kit ──────────────────────────────────────────────
+    try:
+        from limpar_barcodes_kits import is_kit, clear_variant_barcode
+    except ImportError:
+        logger.error("[WEBHOOK-SHOPIFY] Não foi possível importar limpar_barcodes_kits")
+        return {"ok": True}
+
+    if not is_kit(product):
+        return {"ok": True, "kit": False}
+
+    # ── Filtra variantes que têm barcode ──────────────────────────────
+    variants_com_barcode = [
+        v for v in product.get("variants", [])
+        if v.get("barcode")
+    ]
+
+    if not variants_com_barcode:
+        return {"ok": True, "kit": True, "barcodes": 0}
+
+    prod_id = product.get("id")
+    logger.info(
+        "[WEBHOOK-SHOPIFY] Kit detectado: '%s' (id=%s, topic=%s) — %d variante(s) com barcode",
+        title[:60], prod_id, topic, len(variants_com_barcode),
+    )
+
+    # ── Limpa barcodes em background (Shopify exige resposta <5 s) ────
+    def _limpar_bg():
+        import time
+        cleared = erros = 0
+        for v in variants_com_barcode:
+            time.sleep(0.15)
+            if clear_variant_barcode(v["id"]):
+                cleared += 1
+                logger.info(
+                    "[WEBHOOK-SHOPIFY] Barcode removido: variant %s ('%s') produto '%s'",
+                    v["id"], v.get("barcode", ""), title[:50],
+                )
+            else:
+                erros += 1
+                logger.warning("[WEBHOOK-SHOPIFY] Falha ao limpar variant %s", v["id"])
+        logger.info(
+            "[WEBHOOK-SHOPIFY] Concluído produto '%s': %d limpos, %d erros",
+            title[:50], cleared, erros,
+        )
+
+    background_tasks.add_task(_limpar_bg)
+
+    return {
+        "ok": True,
+        "kit": True,
+        "produto": title[:80],
+        "barcodes_a_limpar": len(variants_com_barcode),
+    }
+
+
+@app.post("/shopify/webhooks/setup")
+def shopify_webhooks_setup():
+    """
+    Registra (ou confirma) os webhooks necessários no Shopify:
+      - products/create
+      - products/update
+
+    Requer SHOPIFY_WEBHOOK_SECRET no .env / Railway para validação HMAC.
+    O webhook aponta para {APP_URL}/webhooks/shopify/produto.
+
+    Execute uma vez após o deploy: POST /shopify/webhooks/setup
+    """
+    import requests as _req
+
+    cfg = json.loads((DATA_DIR / "shopify_config.json").read_text(encoding="utf-8"))
+    token = cfg["access_token"]
+    base  = "https://pknw4n-eg.myshopify.com/admin/api/2024-01"
+    headers = {"X-Shopify-Access-Token": token, "Content-Type": "application/json"}
+
+    app_url = os.getenv("APP_URL", "").rstrip("/")
+    if not app_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Variável de ambiente APP_URL não definida. "
+                   "Defina APP_URL=https://seu-dominio.railway.app no Railway.",
+        )
+
+    endpoint = f"{app_url}/webhooks/shopify/produto"
+    topics   = ["products/create", "products/update"]
+    results  = []
+
+    # Lista webhooks existentes para evitar duplicatas
+    existing = _req.get(f"{base}/webhooks.json", headers=headers, timeout=15).json()
+    existing_addresses = {w["address"]: w for w in existing.get("webhooks", [])}
+
+    for topic in topics:
+        if endpoint in existing_addresses:
+            wh = existing_addresses[endpoint]
+            results.append({"topic": topic, "status": "já_existe", "id": wh["id"], "address": endpoint})
+            logger.info("[WEBHOOK-SETUP] Já existe: %s → %s", topic, endpoint)
+            continue
+
+        payload = {"webhook": {"topic": topic, "address": endpoint, "format": "json"}}
+        r = _req.post(f"{base}/webhooks.json", headers=headers, json=payload, timeout=15)
+        if r.status_code == 201:
+            wh = r.json().get("webhook", {})
+            results.append({"topic": topic, "status": "criado", "id": wh.get("id"), "address": endpoint})
+            logger.info("[WEBHOOK-SETUP] Criado: %s → %s (id=%s)", topic, endpoint, wh.get("id"))
+        else:
+            results.append({"topic": topic, "status": "erro", "code": r.status_code, "detail": r.text[:200]})
+            logger.error("[WEBHOOK-SETUP] Erro ao criar %s: %s %s", topic, r.status_code, r.text[:200])
+
+    return {"ok": True, "endpoint": endpoint, "webhooks": results}
+
+
+@app.get("/shopify/webhooks/listar")
+def shopify_webhooks_listar():
+    """Lista todos os webhooks registrados no Shopify."""
+    import requests as _req
+    cfg = json.loads((DATA_DIR / "shopify_config.json").read_text(encoding="utf-8"))
+    token = cfg["access_token"]
+    r = _req.get(
+        "https://pknw4n-eg.myshopify.com/admin/api/2024-01/webhooks.json",
+        headers={"X-Shopify-Access-Token": token},
+        timeout=15,
+    )
+    r.raise_for_status()
+    return r.json()
+
 
 @app.post("/webhooks/bling")
 async def webhook_bling(request: Request):

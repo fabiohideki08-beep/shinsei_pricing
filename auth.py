@@ -97,6 +97,12 @@ PUBLIC_PATHS = {
     "/fila/rejeitar",
     "/bling/produto/atualizar-peso",
     "/bling/produto/atualizar-preco",
+    "/bling/produto/buscar-por-nome",
+    "/bling/produto/atualizar-imagem-variacao",
+    "/bling/produto/atualizar-imagem-simples",
+    "/bling/produto/buscar-por-sku",
+    "/bling/debug/sku",
+    "/bling/produto/buscar",
     "/shopify-flow/pricing-suggestion",
     "/estoque/fila",
     "/conferencia-estoque",
@@ -126,6 +132,8 @@ PUBLIC_PREFIXES = (
     "/amazon/auth",   # Amazon SP-API OAuth (sem API key)
     "/amazon/callback",
     "/shopee/",       # Shopee OAuth e endpoints (sem API key)
+    "/bling/produto/",  # Endpoints de produto Bling (imagens, variações)
+    "/bling/debug/",    # Debug endpoints (sem auth)
     "/gmc/",          # GMC scan, status, blacklist
     "/seo-health/",   # SEO Health análise e pagespeed
     "/marketing/",    # Marketing endpoints

@@ -600,7 +600,39 @@ _scheduler_thread: Optional[threading.Thread] = None
 
 _stop_event = threading.Event()
 
+# Intervalo mínimo entre limpezas de barcode de kits (padrão: 7 dias)
+# NOTA: A defesa principal é o webhook /webhooks/shopify/produto (tempo real).
+# Este ciclo é um fallback para cobrir: CSV bulk imports, downtime do app,
+# produtos criados antes do registro do webhook.
+_INTERVALO_LIMPEZA_KITS = int(os.getenv("INTERVALO_LIMPEZA_KITS", str(7 * 24 * 3600)))
+_ultima_limpeza_kits: Optional[float] = None
 
+
+def _ciclo_limpeza_kits() -> None:
+    """
+    Fallback semanal: remove barcodes de Kit/Combo que o webhook possa ter perdido.
+    Defesa principal = webhook Shopify products/create+update em tempo real.
+    """
+    global _ultima_limpeza_kits
+
+    agora = time.time()
+    if _ultima_limpeza_kits and (agora - _ultima_limpeza_kits) < _INTERVALO_LIMPEZA_KITS:
+        return  # Ainda não é hora
+
+    logger.info("[KIT-BARCODE] Iniciando limpeza semanal de barcodes de kits...")
+    try:
+        from limpar_barcodes_kits import limpar_barcodes_kits
+        result = limpar_barcodes_kits(dry_run=False)
+        logger.info(
+            "[KIT-BARCODE] Concluído — %d variantes limpas em %d kits. Erros: %d",
+            result.get("variantes_limpas", 0),
+            result.get("kits_com_barcode", 0),
+            result.get("erros", 0),
+        )
+        _ultima_limpeza_kits = agora
+    except Exception as e:
+        logger.exception("[KIT-BARCODE] Erro na limpeza de barcodes: %s", e)
+        _ultima_limpeza_kits = agora - _INTERVALO_LIMPEZA_KITS + 3600
 
 
 
@@ -618,7 +650,11 @@ def _loop():
 
             logger.exception("Erro inesperado no ciclo do scheduler: %s", e)
 
-
+        # Limpeza semanal de barcodes de kits (anti-tobacco GMC)
+        try:
+            _ciclo_limpeza_kits()
+        except Exception as e:
+            logger.exception("Erro no ciclo de limpeza de kits: %s", e)
 
         # Aguarda o intervalo em fatias de 5s para poder parar rapidamente
 
