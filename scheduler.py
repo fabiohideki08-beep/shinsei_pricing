@@ -429,7 +429,7 @@ def _ciclo_atualizacao() -> dict:
 
                 tipo_alvo=cfg_raw.get("tipo_alvo", "percentual"),
 
-                valor_alvo=cfg_raw.get("valor_alvo_padrao", 30.0),
+                valor_alvo=float(cfg_raw.get("valor_alvo") or cfg_raw.get("valor_alvo_padrao") or 30.0),
 
                 peso_override=0,
 
@@ -438,6 +438,8 @@ def _ciclo_atualizacao() -> dict:
                 modo_aprovacao=modo_aprovacao,
 
                 regra_estoque=cfg_raw.get("regra_estoque"),
+
+                produto_prefetchado=produto,
 
             )
 

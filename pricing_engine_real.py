@@ -519,7 +519,7 @@ def _selecionar_produto_bling_por_sku(client, sku: str) -> dict:
         "sku_informado": sku,
     }
 
-def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto, quantidade, objetivo, tipo_alvo, valor_alvo, peso_override=0, intelligence_config=None, historical_data=None, modo_aprovacao="manual", preco_compra_anterior_bling=0, modo_preco_virtual="percentual_acima", acrescimo_percentual=20, acrescimo_nominal=0, preco_manual=0, arredondamento="sem", regra_estoque=None):
+def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto, quantidade, objetivo, tipo_alvo, valor_alvo, peso_override=0, intelligence_config=None, historical_data=None, modo_aprovacao="manual", preco_compra_anterior_bling=0, modo_preco_virtual="percentual_acima", acrescimo_percentual=20, acrescimo_nominal=0, preco_manual=0, arredondamento="sem", regra_estoque=None, produto_prefetchado=None):
     from bling_client import BlingClient
     criterio = (criterio or "sku").strip().lower()
     if criterio != "sku":
@@ -529,11 +529,16 @@ def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto,
         }
 
     client = BlingClient()
-    busca = _selecionar_produto_bling_por_sku(client, valor_busca)
-    if not busca.get("encontrado"):
-        return busca
 
-    produto = busca.get("produto", {})
+    if produto_prefetchado is not None:
+        # Dados já buscados na paginação — evita chamada extra à API do Bling
+        produto = produto_prefetchado
+        busca = {"encontrado": True, "produto": produto, "quantidade": 1, "criterio_usado": "sku"}
+    else:
+        busca = _selecionar_produto_bling_por_sku(client, valor_busca)
+        if not busca.get("encontrado"):
+            return busca
+        produto = busca.get("produto", {})
     custo_resolvido = resolver_custo_produto_ou_composicao(client, produto)
     preco_custo = float(custo_resolvido["custo_total"] or 0)
 
