@@ -468,7 +468,7 @@ def _ciclo_atualizacao() -> dict:
                             "custo_ausente": erro_codigo in ("custo_ausente", "composicao_sem_custo"),
                             "composicao": erro_codigo == "composicao_sem_custo",
                             "erro": resultado.get("erro"),
-                            "componentes_sem_custo": _buscar_componentes_sem_custo(produto) if erro_codigo == "composicao_sem_custo" else [],
+                            "componentes_sem_custo": resultado.get("custo_extraido", {}).get("componentes", []) if erro_codigo == "composicao_sem_custo" else [],
                         }
                     }
                     if not db_mod.ja_existe_pendente(sku) and not _ja_existe_incompleto(db_mod, sku):
@@ -563,7 +563,7 @@ def _enfileirar_resultado(db_mod, resultado: dict, sku: str, modo: str) -> None:
 
         "sku": sku,
 
-        "nome": produto.get("nome", "") or resultado.get("produto_bling", {}).get("nome", ""),
+        "nome": resultado.get("produto_bling", {}).get("nome", "") or resultado.get("acao", sku),
 
         "criado_em": agora,
 

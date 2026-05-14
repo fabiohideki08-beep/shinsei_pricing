@@ -547,7 +547,7 @@ def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto,
             _peso_override_path = _Path(__file__).parent / "data" / "peso_override.json"
             if _peso_override_path.exists():
                 _peso_overrides = __import__('json').loads(_peso_override_path.read_text(encoding='utf-8'))
-                _sku_key = str(sku or valor_busca or "")
+                _sku_key = str(valor_busca or "")
                 if _sku_key in _peso_overrides:
                     peso_usado = float(_peso_overrides[_sku_key])
         except Exception:
