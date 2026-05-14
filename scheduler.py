@@ -272,22 +272,25 @@ def _ciclo_atualizacao() -> dict:
 
 
 
-    # Busca produtos com estoque
-
+    # Busca TODOS os produtos do Bling com paginação completa
     try:
-
-        produtos_response = client.list_products(page=1, limit=100)
-
-        produtos = produtos_response.get("data", []) if isinstance(produtos_response, dict) else produtos_response
-
+        produtos = []
+        page = 1
+        limit = 100
+        while True:
+            resp = client.list_products(page=page, limit=limit)
+            data = resp.get("data", []) if isinstance(resp, dict) else resp
+            if not data:
+                break
+            produtos.extend(data)
+            logger.debug("Scheduler: página %d — %d produtos acumulados", page, len(produtos))
+            if len(data) < limit:
+                break
+            page += 1
         resumo["produtos_buscados"] = len(produtos)
-
-        logger.info("Scheduler: %d produtos buscados do Bling", len(produtos))
-
+        logger.info("Scheduler: %d produtos buscados do Bling (%d páginas)", len(produtos), page)
     except Exception as e:
-
         logger.error("Erro ao buscar produtos do Bling: %s", e)
-
         return resumo
 
 

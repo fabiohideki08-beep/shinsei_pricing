@@ -1380,6 +1380,54 @@ def shopify_webhooks_listar():
     return r.json()
 
 
+@app.post("/scheduler/ciclo", tags=["Scheduler"])
+def scheduler_ciclo_manual():
+    """
+    Dispara manualmente um ciclo completo do scheduler.
+    Útil após entrada de nota fiscal ou reajuste de custos no Bling.
+    """
+    try:
+        from scheduler import _ciclo_atualizacao
+        import threading
+
+        resultado = {}
+        erro = {}
+
+        def _rodar():
+            try:
+                resultado.update(_ciclo_atualizacao())
+            except Exception as e:
+                erro["msg"] = str(e)
+
+        t = threading.Thread(target=_rodar, daemon=True)
+        t.start()
+        t.join(timeout=60)  # aguarda até 60s
+
+        if erro:
+            return {"ok": False, "erro": erro["msg"]}
+        return {"ok": True, "resultado": resultado}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/scheduler/status", tags=["Scheduler"])
+def scheduler_status():
+    """Retorna estado atual do scheduler e fila de aprovação."""
+    try:
+        from scheduler import _scheduler_thread
+        ativo = _scheduler_thread is not None and _scheduler_thread.is_alive()
+    except Exception:
+        ativo = False
+
+    from database import stats_fila
+    stats = stats_fila()
+    return {
+        "scheduler_ativo": ativo,
+        "intervalo_segundos": int(os.getenv("SCHEDULER_INTERVALO", "300")),
+        "fila": stats,
+    }
+
+
 @app.post("/webhooks/bling")
 async def webhook_bling(request: Request):
     raw = await request.body()
