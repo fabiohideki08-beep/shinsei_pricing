@@ -65,6 +65,10 @@ def salvar_config_frete(cfg: dict) -> None:
         json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
+# Valor mínimo do pedido para qualificar frete grátis
+# (mesma regra do widget JS — aplicada aqui para cobrir o shopify-callback)
+FRETE_GRATIS_MINIMO: float = float(os.getenv("FRETE_GRATIS_MINIMO", "19.0"))
+
 MELHOR_ENVIO_TOKEN: str = os.getenv("MELHOR_ENVIO_TOKEN", "")
 MELHOR_ENVIO_SANDBOX: bool = os.getenv("MELHOR_ENVIO_SANDBOX", "true").lower() in ("1", "true", "yes")
 
@@ -73,7 +77,7 @@ _ME_BASE_SANDBOX = "https://sandbox.melhorenvio.com.br/api/v2"
 MELHOR_ENVIO_BASE_URL = _ME_BASE_SANDBOX if MELHOR_ENVIO_SANDBOX else _ME_BASE_PROD
 
 # Serviços que queremos da API do Melhor Envio
-MELHOR_ENVIO_SERVICE_IDS = [1, 2, 3, 4]  # SEDEX, PAC, Jadlog Package, Jadlog .com
+MELHOR_ENVIO_SERVICE_IDS = [1, 2, 3, 4, 31, 34]  # PAC, SEDEX, Jadlog .Package, Jadlog .Com, Loggi Express, Loggi Ponto
 
 # Tabela fallback (frete_real em R$) por estado/região quando sem token
 _FALLBACK_STATES: dict[str, float] = {
@@ -254,6 +258,7 @@ async def get_real_freight(
     destination_cep: str,
     weight_kg: float,
     declared_value: float,
+    dims: dict | None = None,
 ) -> list[FreightOption]:
     """
     Calcula frete real via Melhor Envio API.
@@ -275,15 +280,16 @@ async def get_real_freight(
     weight_g = max(weight_kg * 1000, 100)  # mínimo 100g
     weight_real_kg = weight_g / 1000
 
+    _d = dims or {}
     body = {
         "from": {"postal_code": normalize_cep(origin_cep)},
         "to": {"postal_code": normalize_cep(destination_cep)},
         "products": [
             {
                 "weight": weight_real_kg,
-                "width": 12,
-                "height": 10,
-                "length": 15,
+                "width":  float(_d.get("largura")      or 12),
+                "height": float(_d.get("altura")        or 10),
+                "length": float(_d.get("profundidade")  or 15),
                 "quantity": 1,
                 "insurance_value": max(declared_value, 1.0),
             }
@@ -335,7 +341,7 @@ async def get_real_freight(
         logger.warning("Melhor Envio retornou zero opções válidas — usando fallback.")
         return await _fallback_freight(destination_cep, weight_kg)
 
-    return options
+    return sorted(options, key=lambda o: o.price_real)
 
 
 async def _fallback_freight(destination_cep: str, weight_kg: float) -> list[FreightOption]:
@@ -403,6 +409,7 @@ async def calculate_freight(
     qty_items: int,
     total_weight_kg: float,
     order_value: float,
+    product_id: str | None = None,
 ) -> FreightResult:
     """
     Calcula o frete final aplicando a regra de subsídio cumulativo.
@@ -418,9 +425,20 @@ async def calculate_freight(
     total_weight_kg = max(0.1, float(total_weight_kg))
     order_value = max(0.0, float(order_value))
 
+    # Carrega dimensões do cache Shopify quando product_id fornecido
+    dims: dict | None = None
+    if product_id:
+        try:
+            from services.bling_dimensions import get_dims_for_product
+            dims = get_dims_for_product(product_id)
+            if dims and dims.get("peso_kg"):
+                total_weight_kg = dims["peso_kg"]
+        except Exception as exc:
+            logger.debug("Falha ao carregar dims para product_id=%s: %s", product_id, exc)
+
     logger.info(
-        "calculate_freight: cep=%s qty=%d peso=%.3fkg valor=R$%.2f",
-        dest_cep, qty_items, total_weight_kg, order_value,
+        "calculate_freight: cep=%s qty=%d peso=%.3fkg valor=R$%.2f product_id=%s",
+        dest_cep, qty_items, total_weight_kg, order_value, product_id or "-",
     )
 
     # Dados do CEP de destino
@@ -457,7 +475,7 @@ async def calculate_freight(
         cheapest_final = 0.0
         is_free_cart = True
     else:
-        raw_options = await get_real_freight(origin_cep_cfg, dest_cep, total_weight_kg, order_value)
+        raw_options = await get_real_freight(origin_cep_cfg, dest_cep, total_weight_kg, order_value, dims=dims)
 
         # Aplica subsídio a cada opção
         final_options: list[FreightOption] = []
@@ -503,6 +521,41 @@ async def calculate_freight(
         cheapest_final=cheapest_final if not rmsp else 0.0,
         is_free=is_free_cart,
     )
+
+    # ── Regra de mínimo: pedidos abaixo de FRETE_GRATIS_MINIMO não têm frete grátis ──
+    # Aplica-se quando order_value é conhecido (> 0), ou seja, vem do shopify-callback.
+    # Para chamadas do widget sem valor (order_value=0) a regra é aplicada client-side.
+    if order_value > 0.0 and order_value < FRETE_GRATIS_MINIMO and result.is_free:
+        logger.info(
+            "calculate_freight: valor=R$%.2f < mínimo=R$%.2f — removendo frete grátis.",
+            order_value, FRETE_GRATIS_MINIMO,
+        )
+        opts_corrigidas = []
+        for opt in result.options:
+            if opt.is_free and opt.price_real > 0:
+                opts_corrigidas.append(FreightOption(
+                    name=opt.name,
+                    carrier=opt.carrier,
+                    price_real=opt.price_real,
+                    price_final=opt.price_real,  # sem subsídio
+                    subsidy=0.0,
+                    delivery_days=opt.delivery_days,
+                    is_free=False,
+                ))
+            else:
+                opts_corrigidas.append(opt)
+        result = FreightResult(
+            destination_cep=result.destination_cep,
+            city=result.city,
+            state=result.state,
+            is_rmsp=result.is_rmsp,
+            qty_items=result.qty_items,
+            subsidy_total=result.subsidy_total,
+            options=opts_corrigidas,
+            items_for_free_shipping=result.items_for_free_shipping,
+            cheapest_final=min((o.price_final for o in opts_corrigidas), default=0.0),
+            is_free=False,
+        )
 
     logger.info(
         "calculate_freight result: city=%s state=%s rmsp=%s subsidy=R$%.2f cheapest_final=R$%.2f free=%s",
