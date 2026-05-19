@@ -137,6 +137,11 @@ PUBLIC_PATHS = {
     "/rateio/visoes",
     "/config/automacao",
     "/config/regras-precificacao",
+    # SIE endpoints
+    "/sie/simular",
+    "/sie/anti-colapso",
+    "/sie/health-dashboard",
+    "/sie/score-config",
 }
 
 # Prefixos pÃºblicos (qualquer rota que comece com esses valores)

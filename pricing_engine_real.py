@@ -176,6 +176,44 @@ def calcular_canais(regras, preco_compra, embalagem, peso, imposto, quantidade, 
     custo_base = (_safe_float(preco_compra, 0) * _safe_int(quantidade, 1)) + _safe_float(embalagem, 0)
     peso_usado = _safe_float(peso, 0)
     imposto = _pct_excel(imposto)
+
+    # ── SIE: ajuste dinâmico de margem/markup por score estratégico ───────────
+    # score_config = {
+    #   "ajuste_ativo": True,
+    #   "sie": 0.65,               # score 0–1 calculado pelo product_intelligence
+    #   "ajuste_estrela":  0,      # ≥0.80 → +0 pp  (produto saudável, manter)
+    #   "ajuste_saudavel": 0,      # ≥0.60 → +0 pp
+    #   "ajuste_atencao":  8,      # ≥0.40 → +8 pp  (proteção moderada)
+    #   "ajuste_problema": 18,     # <0.40 → +18 pp (anti-colapso)
+    # }
+    sie_ajuste = None
+    valor_alvo_efetivo = _safe_float(valor_alvo, 0)
+
+    if score_config and score_config.get("ajuste_ativo", False):
+        sie = _safe_float(score_config.get("sie", 1.0), 1.0)
+
+        if sie >= 0.80:
+            cls = "estrela"
+            ajuste_pp = _safe_float(score_config.get("ajuste_estrela", 0), 0)
+        elif sie >= 0.60:
+            cls = "saudavel"
+            ajuste_pp = _safe_float(score_config.get("ajuste_saudavel", 0), 0)
+        elif sie >= 0.40:
+            cls = "atencao"
+            ajuste_pp = _safe_float(score_config.get("ajuste_atencao", 8), 8)
+        else:
+            cls = "problema"
+            ajuste_pp = _safe_float(score_config.get("ajuste_problema", 18), 18)
+
+        valor_alvo_efetivo = valor_alvo_efetivo + ajuste_pp
+        sie_ajuste = {
+            "sie": round(sie, 4),
+            "classificacao": cls,
+            "ajuste_pp": ajuste_pp,
+            "valor_alvo_original": _safe_float(valor_alvo, 0),
+            "valor_alvo_ajustado": valor_alvo_efetivo,
+        }
+
     canais = []
     nomes = []
     for r in regras or []:
@@ -186,17 +224,112 @@ def calcular_canais(regras, preco_compra, embalagem, peso, imposto, quantidade, 
     resultados = []
     for canal in canais:
         try:
-            resultados.append(_calcular_um_canal(regras, canal, custo_base, peso_usado, imposto, objetivo, tipo_alvo, valor_alvo, embalagem=_safe_float(embalagem, 0)))
+            resultados.append(_calcular_um_canal(regras, canal, custo_base, peso_usado, imposto, objetivo, tipo_alvo, valor_alvo_efetivo, embalagem=_safe_float(embalagem, 0)))
         except Exception:
             continue
     resultados_ordenados = sorted(resultados, key=lambda x: (x.get("indice_final", 0), x.get("lucro_liquido", 0)), reverse=True)
-    return {
+    resultado = {
         "custo_total": _round2(custo_base),
         "peso_total": round(peso_usado, 3),
         "melhor_canal": resultados_ordenados[0]["canal"] if resultados_ordenados else "",
         "pior_canal": resultados_ordenados[-1]["canal"] if resultados_ordenados else "",
         "canais": resultados_ordenados,
         "formula_version": FORMULA_VERSION,
+    }
+    if sie_ajuste:
+        resultado["sie_ajuste"] = sie_ajuste
+    return resultado
+
+
+# ── Motor Anti-Colapso ────────────────────────────────────────────────────────
+# Detecta padrões destrutivos de pricing e retorna proteção automática.
+# Pode ser usado standalone (ex: webhook de estoque) ou embutido no fluxo
+# de aprovação para bloquear preços que destroem margem sistematicamente.
+
+def motor_anti_colapso(
+    preco_final: float,
+    custo_base: float,
+    estoque: int = 0,
+    sie_score: float = 1.0,
+    icg: float = 1.0,
+    velocidade_venda: float = 50.0,
+    regra_colapso: dict = None,
+) -> dict:
+    """
+    Analisa sinais de risco e retorna nível + preço protegido.
+
+    Sinais avaliados:
+      • SIE crítico   → produto estrategicamente fraco
+      • ICG < 1       → pagando fornecedor antes de vender (estresse de caixa)
+      • Margem negativa + estoque baixo → queima sem recuperação
+      • Velocidade alta + margem comprimida → crescimento destrutivo
+
+    Retorna dict com nivel_risco, preco_protegido e sinais ativos.
+    """
+    margem = ((preco_final - custo_base) / preco_final * 100) if preco_final > 0 else 0.0
+
+    sinais: list[dict] = []
+    nivel_risco = 0  # 0=ok  1=alerta  2=protecao  3=colapso_iminente
+
+    # Sinal 1: SIE
+    if sie_score < 0.40:
+        sinais.append({"codigo": "sie_problema", "descricao": f"SIE crítico ({sie_score:.2f}) — produto com baixo desempenho estratégico", "peso": 3})
+        nivel_risco = max(nivel_risco, 2)
+    elif sie_score < 0.60:
+        sinais.append({"codigo": "sie_atencao", "descricao": f"SIE em atenção ({sie_score:.2f})", "peso": 1})
+        nivel_risco = max(nivel_risco, 1)
+
+    # Sinal 2: ICG — velocidade financeira
+    if icg < 0.5:
+        sinais.append({"codigo": "icg_critico", "descricao": f"ICG baixo ({icg:.2f}) — pagando fornecedor muito antes de vender", "peso": 2})
+        nivel_risco = max(nivel_risco, 2)
+    elif icg < 1.0:
+        sinais.append({"codigo": "icg_alerta", "descricao": f"ICG abaixo do ideal ({icg:.2f}) — prazo de pagamento curto em relação ao giro", "peso": 1})
+        nivel_risco = max(nivel_risco, 1)
+
+    # Sinal 3: Margem negativa + estoque crítico
+    if margem < 0 and estoque <= 5:
+        sinais.append({"codigo": "colapso_margem_estoque", "descricao": f"Margem negativa ({margem:.1f}%) com estoque crítico ({estoque} un) — queima sem recuperação", "peso": 4})
+        nivel_risco = 3
+    elif margem < 0:
+        sinais.append({"codigo": "margem_negativa", "descricao": f"Margem negativa ({margem:.1f}%)", "peso": 3})
+        nivel_risco = max(nivel_risco, 2)
+    elif margem < 5:
+        sinais.append({"codigo": "margem_comprimida", "descricao": f"Margem muito comprimida ({margem:.1f}%)", "peso": 2})
+        nivel_risco = max(nivel_risco, 1)
+
+    # Sinal 4: Crescimento destrutivo (vende rápido, mas ganha pouco)
+    if velocidade_venda > 80 and margem < 8:
+        sinais.append({"codigo": "crescimento_destrutivo", "descricao": f"Alta velocidade ({velocidade_venda:.0f}/mês) com margem baixa ({margem:.1f}%) — escala prejudicial", "peso": 3})
+        nivel_risco = max(nivel_risco, 2)
+
+    ACOES = {
+        0: {"nivel": "ok",                "label": "Saudável",          "cor": "#22c55e", "ajuste_pp": 0},
+        1: {"nivel": "alerta",            "label": "Alerta",            "cor": "#eab308", "ajuste_pp": 5},
+        2: {"nivel": "protecao",          "label": "Proteção ativa",    "cor": "#f97316", "ajuste_pp": 12},
+        3: {"nivel": "colapso_iminente",  "label": "Colapso iminente",  "cor": "#ef4444", "ajuste_pp": 20},
+    }
+    acao = dict(ACOES[nivel_risco])
+
+    # Regra customizada sobrescreve ajuste padrão
+    if regra_colapso and regra_colapso.get("ativo"):
+        acao["ajuste_pp"] = _safe_float(regra_colapso.get("ajuste_pp", acao["ajuste_pp"]), acao["ajuste_pp"])
+
+    preco_protegido = _round2(preco_final * (1 + acao["ajuste_pp"] / 100.0))
+
+    return {
+        "nivel_risco": acao["nivel"],
+        "label": acao["label"],
+        "cor": acao["cor"],
+        "sinais": sinais,
+        "margem_atual": round(margem, 2),
+        "preco_original": _round2(preco_final),
+        "ajuste_pp": acao["ajuste_pp"],
+        "preco_protegido": preco_protegido,
+        "sie": round(sie_score, 4),
+        "icg": round(icg, 4),
+        "estoque": estoque,
+        "velocidade_venda": velocidade_venda,
     }
 
 def _arredondar_preco(valor, modo):
@@ -519,7 +652,7 @@ def _selecionar_produto_bling_por_sku(client, sku: str) -> dict:
         "sku_informado": sku,
     }
 
-def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto, quantidade, objetivo, tipo_alvo, valor_alvo, peso_override=0, intelligence_config=None, historical_data=None, modo_aprovacao="manual", preco_compra_anterior_bling=0, modo_preco_virtual="percentual_acima", acrescimo_percentual=20, acrescimo_nominal=0, preco_manual=0, arredondamento="sem", regra_estoque=None, produto_prefetchado=None):
+def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto, quantidade, objetivo, tipo_alvo, valor_alvo, peso_override=0, intelligence_config=None, historical_data=None, score_config=None, modo_aprovacao="manual", preco_compra_anterior_bling=0, modo_preco_virtual="percentual_acima", acrescimo_percentual=20, acrescimo_nominal=0, preco_manual=0, arredondamento="sem", regra_estoque=None, produto_prefetchado=None):
     from bling_client import BlingClient
     criterio = (criterio or "sku").strip().lower()
     if criterio != "sku":
@@ -573,7 +706,19 @@ def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto,
         }
 
     sku = produto.get("codigo") or valor_busca
-    calculo = calcular_canais(regras, preco_custo, embalagem, peso_usado, imposto, quantidade, objetivo, tipo_alvo, valor_alvo, intelligence_config=intelligence_config, historical_data=historical_data, sku=sku)
+
+    # Carrega score_config salvo se não veio no parâmetro
+    _score_cfg = score_config or intelligence_config or {}
+    if not _score_cfg:
+        try:
+            import json as _json
+            _sie_cfg_path = _Path(__file__).parent / "data" / "modules" / "sie_score_config.json"
+            if _sie_cfg_path.exists():
+                _score_cfg = _json.loads(_sie_cfg_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    calculo = calcular_canais(regras, preco_custo, embalagem, peso_usado, imposto, quantidade, objetivo, tipo_alvo, valor_alvo, intelligence_config=intelligence_config, historical_data=historical_data, sku=sku, score_config=_score_cfg if _score_cfg.get("ajuste_ativo") else None)
     integracao = gerar_integracao(calculo["canais"], modo_preco_virtual, acrescimo_percentual, acrescimo_nominal, preco_manual, arredondamento, modo_aprovacao=modo_aprovacao, preco_custo_bling=preco_custo, preco_compra_anterior_bling=preco_compra_anterior_bling, estoque=estoque, regra_estoque=regra_estoque)
     melhor_item = integracao["itens"][0] if integracao["itens"] else None
     auditoria = {
@@ -589,7 +734,7 @@ def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto,
         "warning_peso": peso_extraido.get("warning"),
         "criterio_usado": "sku",
     }
-    return {
+    resultado = {
         "criterio": "sku",
         "criterio_usado": "sku",
         "valor_busca": valor_busca,
@@ -608,3 +753,7 @@ def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto,
         "observacao": integracao["observacao"],
         "auditoria": auditoria,
     }
+    # Anexa info de ajuste SIE se o motor usou score_config
+    if calculo.get("sie_ajuste"):
+        resultado["sie_ajuste"] = calculo["sie_ajuste"]
+    return resultado

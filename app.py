@@ -137,6 +137,12 @@ if pricing_module is None:
 montar_precificacao_bling: Optional[Callable[..., dict]] = getattr(pricing_module, "montar_precificacao_bling", None)
 if montar_precificacao_bling is None:
     raise RuntimeError("Seu motor atual não expõe montar_precificacao_bling().")
+_motor_anti_colapso_fn = getattr(pricing_module, "motor_anti_colapso", None)
+_calcular_canais_fn = getattr(pricing_module, "calcular_canais", None)
+
+product_intelligence_mod = _optional_import("product_intelligence")
+_calculate_sie_fn = getattr(product_intelligence_mod, "calculate_sie", None) if product_intelligence_mod else None
+_classify_sie_fn = getattr(product_intelligence_mod, "classify_sie", None) if product_intelligence_mod else None
 
 bling_mod = _optional_import("bling_client")
 BlingClient = getattr(bling_mod, "BlingClient", None) if bling_mod else None
@@ -913,10 +919,14 @@ def integracao_preview(payload: IntegracaoPayload):
     if (payload.criterio or "sku").strip().lower() != "sku":
         raise HTTPException(status_code=400, detail="A precificação integrada aceita apenas busca por SKU. Use criterio='sku'.")
     try:
+        # Carrega score_config SIE salvo (ajuste automático de margem por score)
+        _sie_score_cfg = _load_json(_MOD_DIR / "sie_score_config.json", {})
+        _score_config_efetivo = payload.score_config or (_sie_score_cfg if _sie_score_cfg.get("ajuste_ativo") else None)
         resultado = montar_precificacao_bling(
             regras=regras, criterio="sku", valor_busca=payload.valor_busca, embalagem=payload.embalagem, imposto=payload.imposto,
             quantidade=payload.quantidade, objetivo=payload.objetivo, tipo_alvo=payload.tipo_alvo, valor_alvo=payload.valor_alvo,
-            peso_override=payload.peso_override, intelligence_config=payload.score_config or {}, modo_aprovacao=payload.modo_aprovacao,
+            peso_override=payload.peso_override, intelligence_config=payload.score_config or {}, score_config=_score_config_efetivo,
+            modo_aprovacao=payload.modo_aprovacao,
             preco_compra_anterior_bling=payload.preco_compra_anterior_bling, modo_preco_virtual=payload.modo_preco_virtual,
             acrescimo_percentual=payload.acrescimo_percentual, acrescimo_nominal=payload.acrescimo_nominal, preco_manual=payload.preco_manual,
             arredondamento=payload.arredondamento, regra_estoque=carregar_cfg().get("regra_estoque"),
@@ -1764,6 +1774,7 @@ async def shopify_flow_pricing(request: Request):
     try:
         regras = carregar_regras(apenas_ativas=True)
 
+        _sie_cfg_sf = _load_json(_MOD_DIR / "sie_score_config.json", {})
         resultado = montar_precificacao_bling(
             regras=regras,
             criterio="sku",
@@ -1777,6 +1788,7 @@ async def shopify_flow_pricing(request: Request):
             peso_override=float(body.get("peso_override", 0)),
             arredondamento=arredondamento,
             regra_estoque=cfg.get("regra_estoque"),
+            score_config=_sie_cfg_sf if _sie_cfg_sf.get("ajuste_ativo") else None,
         )
     except Exception as exc:
         logger.warning("Shopify Flow: erro no motor para SKU=%s: %s", sku, exc)
@@ -3329,3 +3341,150 @@ def ativar_perfil_precificacao(perfil_id: str):
         p["ativo"] = (str(p.get("id")) == perfil_id)
     _save_json(_MOD_DIR / "regras_precificacao.json", data)
     return {"ok": True, "ativo": perfil_id}
+
+
+# ── SIE: Simulação + Motor Anti-Colapso + Health Dashboard ───────────────────
+
+@app.post("/sie/simular")
+async def sie_simular(request: Request):
+    """
+    Calcula o SIE completo + Motor Anti-Colapso para um produto.
+    Body: { velocidade_venda, share_faturamento, margem_real,
+            prazo_entrega_fornecedor, prazo_pagamento_fornecedor,
+            tempo_para_vender, devolucao_defeito, devolucao_transporte,
+            preco_final?, custo_base?, estoque?, nome_sku? }
+    """
+    body = await request.json()
+
+    if _calculate_sie_fn is None:
+        return {"erro": "product_intelligence.py não disponível"}
+
+    sie_result = _calculate_sie_fn(body)
+
+    anti_colapso = None
+    if _motor_anti_colapso_fn:
+        preco_final = float(body.get("preco_final", 0) or 0)
+        custo_base  = float(body.get("custo_base", 0) or 0)
+        if preco_final > 0 and custo_base > 0:
+            anti_colapso = _motor_anti_colapso_fn(
+                preco_final=preco_final,
+                custo_base=custo_base,
+                estoque=int(body.get("estoque", 0) or 0),
+                sie_score=sie_result["sie"],
+                icg=sie_result["icg"],
+                velocidade_venda=float(body.get("velocidade_venda", 50) or 50),
+            )
+
+    # Persiste dados no sie_module.json para histórico
+    sie_store = _load_json(_MOD_DIR / "sie_module.json", {})
+    sku = str(body.get("nome_sku", "ultimo_simulado")).strip() or "ultimo_simulado"
+    sie_store[sku] = {**body, "sie_result": sie_result, "anti_colapso": anti_colapso}
+    _save_json(_MOD_DIR / "sie_module.json", sie_store)
+
+    return {
+        "sie": sie_result,
+        "anti_colapso": anti_colapso,
+        "sku": sku,
+    }
+
+
+@app.post("/sie/anti-colapso")
+async def sie_anti_colapso(request: Request):
+    """
+    Roda apenas o Motor Anti-Colapso isolado.
+    Body: { preco_final, custo_base, estoque, sie_score, icg,
+            velocidade_venda, regra_colapso? }
+    """
+    if _motor_anti_colapso_fn is None:
+        return {"erro": "motor_anti_colapso não disponível"}
+    body = await request.json()
+    result = _motor_anti_colapso_fn(
+        preco_final=float(body.get("preco_final", 0)),
+        custo_base=float(body.get("custo_base", 0)),
+        estoque=int(body.get("estoque", 0)),
+        sie_score=float(body.get("sie_score", 1.0)),
+        icg=float(body.get("icg", 1.0)),
+        velocidade_venda=float(body.get("velocidade_venda", 50)),
+        regra_colapso=body.get("regra_colapso"),
+    )
+    return result
+
+
+@app.get("/sie/health-dashboard")
+def sie_health_dashboard():
+    """
+    Retorna snapshot de saúde de todos os SKUs salvos no sie_module.json.
+    Combina: SIE score + classificação + ICG + sinais anti-colapso.
+    """
+    sie_store = _load_json(_MOD_DIR / "sie_module.json", {})
+    skus = []
+
+    for sku, dados in sie_store.items():
+        if not isinstance(dados, dict):
+            continue
+        sie_result = dados.get("sie_result") or {}
+        anti_colapso = dados.get("anti_colapso") or {}
+
+        # Recalcula SIE se não tiver resultado salvo
+        if not sie_result and _calculate_sie_fn:
+            try:
+                sie_result = _calculate_sie_fn(dados)
+            except Exception:
+                sie_result = {}
+
+        skus.append({
+            "sku": sku,
+            "sie": sie_result.get("sie", 0),
+            "classificacao": sie_result.get("classificacao", "?"),
+            "icg": sie_result.get("icg", 0),
+            "scores": sie_result.get("scores", {}),
+            "nivel_risco": anti_colapso.get("nivel_risco", "ok"),
+            "label_risco": anti_colapso.get("label", "Saudável"),
+            "cor_risco": anti_colapso.get("cor", "#22c55e"),
+            "sinais": anti_colapso.get("sinais", []),
+            "margem_atual": anti_colapso.get("margem_atual"),
+            "preco_original": anti_colapso.get("preco_original"),
+            "preco_protegido": anti_colapso.get("preco_protegido"),
+            "ajuste_pp": anti_colapso.get("ajuste_pp", 0),
+            "entradas": sie_result.get("entradas", {}),
+        })
+
+    # Ordena: piores primeiro (maior risco = menor SIE)
+    skus.sort(key=lambda x: x.get("sie", 1))
+
+    resumo = {
+        "total": len(skus),
+        "estrela":  sum(1 for s in skus if s["classificacao"] == "estrela"),
+        "saudavel": sum(1 for s in skus if s["classificacao"] == "saudavel"),
+        "atencao":  sum(1 for s in skus if s["classificacao"] == "atencao"),
+        "problema": sum(1 for s in skus if s["classificacao"] == "problema"),
+        "em_colapso": sum(1 for s in skus if s["nivel_risco"] == "colapso_iminente"),
+        "em_protecao": sum(1 for s in skus if s["nivel_risco"] == "protecao"),
+    }
+
+    return {"skus": skus, "resumo": resumo}
+
+
+@app.post("/sie/score-config")
+async def sie_score_config(request: Request):
+    """
+    Salva a configuração de ajuste de margem por SIE (usada pelo motor de precificação).
+    Body: { ajuste_ativo, ajuste_estrela, ajuste_saudavel, ajuste_atencao, ajuste_problema }
+    """
+    body = await request.json()
+    cfg = _load_json(_MOD_DIR / "sie_score_config.json", {})
+    cfg.update(body)
+    _save_json(_MOD_DIR / "sie_score_config.json", cfg)
+    return {"ok": True, "config": cfg}
+
+
+@app.get("/sie/score-config")
+def get_sie_score_config():
+    """Retorna a configuração atual de ajuste SIE → margem."""
+    return _load_json(_MOD_DIR / "sie_score_config.json", {
+        "ajuste_ativo": False,
+        "ajuste_estrela": 0,
+        "ajuste_saudavel": 0,
+        "ajuste_atencao": 8,
+        "ajuste_problema": 18,
+    })

@@ -3,76 +3,545 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SIE</title>
+  <title>SIE — Shinsei Pricing</title>
   <style>
     :root {
-      --bg:#0b1020; --panel:#11182d; --line:rgba(255,255,255,.08); --text:#eef2ff; --muted:#aeb8d6; --green:#22c55e; --red:#ef4444; --blue:#60a5fa; --radius:18px;
+      --bg:#0b1020; --panel:#11182d; --line:rgba(255,255,255,.08); --text:#eef2ff;
+      --muted:#aeb8d6; --green:#22c55e; --yellow:#eab308; --orange:#f97316;
+      --red:#ef4444; --blue:#60a5fa; --purple:#a78bfa; --radius:18px;
     }
-    *{box-sizing:border-box} body{margin:0;font-family:Inter,Arial,sans-serif;background:linear-gradient(180deg,#0b1020 0%,#0f172a 100%);color:var(--text)}
-    .wrap{max-width:1320px;margin:0 auto;padding:24px}
-    .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:24px}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Inter,Arial,sans-serif;background:linear-gradient(180deg,#0b1020 0%,#0f172a 100%);color:var(--text);min-height:100vh}
+    .wrap{max-width:1400px;margin:0 auto;padding:24px}
+    .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:28px;flex-wrap:wrap}
     .brand{display:flex;align-items:flex-start;gap:18px}
-    .logo{width:72px;height:72px;border-radius:20px;background:rgba(255,255,255,.04);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;letter-spacing:.08em}
-    .title h1{margin:0;font-size:32px} .title p{margin:8px 0 0;color:var(--muted)}
-    .nav{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
-    .btn,button,input,select,textarea{background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--text);border-radius:14px;padding:12px 14px;text-decoration:none;outline:none}
-    textarea{min-height:110px;width:100%} input,select{width:100%}
-    button,.btn{cursor:pointer} .btn{display:inline-block}
-    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:16px}
-    .card{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
-    .meta{color:var(--muted);font-size:13px} .table-wrap{overflow:auto}
-    table{width:100%;border-collapse:collapse} th,td{border-bottom:1px solid var(--line);padding:10px;text-align:left;font-size:14px}
-    .row{display:grid;grid-template-columns:repeat(2,1fr);gap:12px} .actions{display:flex;gap:10px;flex-wrap:wrap}
-    pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.2);padding:12px;border-radius:12px;border:1px solid var(--line)}
-    @media (max-width:1000px){.grid,.row{grid-template-columns:1fr} .topbar{flex-direction:column}}
+    .logo{width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,#4f46e5,#7c3aed);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;letter-spacing:.05em;flex-shrink:0}
+    .title h1{font-size:28px;font-weight:800} .title p{margin-top:6px;color:var(--muted);font-size:14px}
+    .nav{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+    .btn{background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--text);border-radius:12px;padding:10px 16px;text-decoration:none;font-size:14px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:background .15s}
+    .btn:hover{background:rgba(255,255,255,.12)} .btn-primary{background:rgba(99,102,241,.3);border-color:#6366f1}
+    .btn-primary:hover{background:rgba(99,102,241,.5)}
+    .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:24px}
+    .tab{padding:12px 20px;cursor:pointer;border-bottom:2px solid transparent;font-weight:500;font-size:14px;color:var(--muted);transition:all .15s;border-radius:8px 8px 0 0}
+    .tab.active{color:var(--text);border-bottom-color:#6366f1;background:rgba(99,102,241,.1)}
+    .tab:hover{color:var(--text)}
+    .tab-content{display:none} .tab-content.active{display:block}
+    .grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+    .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+    .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+    .card{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
+    .card h3{font-size:16px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+    .field{margin-bottom:14px}
+    .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:500;letter-spacing:.03em;text-transform:uppercase}
+    .field input,.field select{width:100%;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px 12px;font-size:14px;outline:none}
+    .field input:focus,.field select:focus{border-color:#6366f1}
+    .section-title{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:20px 0 12px}
+    .stat-card{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center}
+    .stat-card .value{font-size:32px;font-weight:800;line-height:1}
+    .stat-card .label{font-size:12px;color:var(--muted);margin-top:6px}
+    .score-bar-wrap{margin:8px 0}
+    .score-bar-bg{height:8px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden}
+    .score-bar{height:100%;border-radius:4px;transition:width .4s ease}
+    .score-label{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:4px}
+    .badge{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700}
+    .badge-estrela{background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3)}
+    .badge-saudavel{background:rgba(96,165,250,.15);color:#60a5fa;border:1px solid rgba(96,165,250,.3)}
+    .badge-atencao{background:rgba(234,179,8,.15);color:#eab308;border:1px solid rgba(234,179,8,.3)}
+    .badge-problema{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
+    .risco-ok{color:#22c55e} .risco-alerta{color:#eab308} .risco-protecao{color:#f97316} .risco-colapso{color:#ef4444}
+    .sinal{display:flex;align-items:flex-start;gap:8px;padding:8px 12px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:10px;margin-top:8px;font-size:13px}
+    .sinal .ico{flex-shrink:0;margin-top:1px}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+    pre.result{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.25);padding:14px;border-radius:12px;border:1px solid var(--line);font-size:13px;line-height:1.6;max-height:400px;overflow:auto}
+    .toggle{display:flex;align-items:center;gap:10px;cursor:pointer}
+    .toggle input[type=checkbox]{width:38px;height:20px;cursor:pointer;accent-color:#6366f1}
+    table{width:100%;border-collapse:collapse}
+    th{background:rgba(255,255,255,.04);padding:10px 12px;text-align:left;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-bottom:1px solid var(--line)}
+    td{padding:12px 12px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.04)}
+    tr:hover td{background:rgba(255,255,255,.02)}
+    .resumo-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-bottom:20px}
+    .r-card{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:12px;padding:12px;text-align:center}
+    .r-card .num{font-size:24px;font-weight:800} .r-card .lbl{font-size:11px;color:var(--muted);margin-top:4px}
+    .config-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}
+    .config-row:last-child{border-bottom:none}
+    .config-row label{font-size:14px}
+    .config-row input[type=number]{width:100px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 10px;font-size:14px;text-align:center}
+    @media (max-width:900px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr} .resumo-grid{grid-template-columns:repeat(3,1fr)} .topbar{flex-direction:column}}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="topbar">
-      <div class="brand">
-        <div class="logo">神</div>
-        <div class="title">
-          <h1>SIE</h1>
-          <p>Módulo do Shinsei Pricing</p>
-        </div>
-      </div>
-      <div class="nav">
-        <a class="btn" href="/">Dashboard</a>
-        <a class="btn" href="/simulador">Simulador</a>
-        <a class="btn" href="/regras-calculo">Regras</a>
-        <a class="btn" href="/perfis">Perfis</a>
-        <a class="btn" href="/fila-aprovacao">Fila</a>
-        <a class="btn" href="/cost-engine">Cost Engine</a>
-        <a class="btn" href="/cost-allocation">Cost Allocation</a>
-        <a class="btn" href="/sie">SIE</a>
-        <a class="btn" href="/oee">OEE</a>
-        <a class="btn" href="/integracoes">Integrações</a>
+<div class="wrap">
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">神</div>
+      <div class="title">
+        <h1>SIE — Strategic Intelligence Engine</h1>
+        <p>Score estratégico · Motor Anti-Colapso · Dashboard de saúde por SKU</p>
       </div>
     </div>
-    
-<div class="card">
-  <h3>Dados do SIE</h3>
-  <div class="row">
-    <div><label>Velocidade de venda</label><input id="velocidade_venda" type="number" step="0.01"></div>
-    <div><label>Share faturamento</label><input id="share_faturamento" type="number" step="0.01"></div>
-    <div><label>Margem real</label><input id="margem_real" type="number" step="0.01"></div>
-    <div><label>Prazo entrega fornecedor</label><input id="prazo_entrega_fornecedor" type="number" step="0.01"></div>
-    <div><label>Prazo pagamento</label><input id="prazo_pagamento_fornecedor" type="number" step="0.01"></div>
-    <div><label>Tempo para vender</label><input id="tempo_para_vender" type="number" step="0.01"></div>
-    <div><label>Devolução defeito</label><input id="devolucao_defeito" type="number" step="0.01"></div>
-    <div><label>Devolução transporte</label><input id="devolucao_transporte" type="number" step="0.01"></div>
+    <div class="nav">
+      <a class="btn" href="/hub">🏠 Hub</a>
+      <a class="btn" href="/simulador">Simulador</a>
+      <a class="btn" href="/cost-engine">Cost Engine</a>
+      <a class="btn" href="/oee">OEE</a>
+      <a class="btn" href="/regras-calculo">Regras</a>
+    </div>
   </div>
-  <div class="actions" style="margin-top:12px"><button onclick="salvar()">Salvar</button><button onclick="simular()">Simular SIE</button></div>
-  <pre id="result" style="margin-top:12px">Sem simulação.</pre>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('simulador')">🧮 Simulador SIE</div>
+    <div class="tab" onclick="switchTab('anti-colapso')">🛡️ Motor Anti-Colapso</div>
+    <div class="tab" onclick="switchTab('dashboard')">📊 Health Dashboard</div>
+    <div class="tab" onclick="switchTab('config')">⚙️ Configuração</div>
+  </div>
+
+  <!-- ──────────────────────────── TAB: SIMULADOR ─────────────────────────── -->
+  <div id="tab-simulador" class="tab-content active">
+    <div class="grid-2" style="gap:20px">
+      <!-- Formulário -->
+      <div>
+        <div class="card">
+          <h3>📦 Dados do Produto</h3>
+          <div class="grid-2">
+            <div class="field"><label>Nome / SKU</label><input id="s_sku" placeholder="Ex: ALFA-001" /></div>
+            <div class="field"><label>Velocidade de venda (un/mês)</label><input id="s_velocidade" type="number" step="0.1" value="30" /></div>
+            <div class="field"><label>Share de faturamento (0–1)</label><input id="s_share" type="number" step="0.01" value="0.05" /></div>
+            <div class="field"><label>Margem real atual (%)</label><input id="s_margem" type="number" step="0.1" value="22" /></div>
+            <div class="field"><label>Prazo entrega fornecedor (dias)</label><input id="s_prazo_entrega" type="number" value="15" /></div>
+            <div class="field"><label>Prazo pagamento fornecedor (dias)</label><input id="s_prazo_pgto" type="number" value="30" /></div>
+            <div class="field"><label>Tempo médio para vender (dias)</label><input id="s_tempo_vender" type="number" value="20" /></div>
+            <div class="field"><label>Taxa de defeito (0–1)</label><input id="s_defeito" type="number" step="0.01" value="0.02" /></div>
+            <div class="field"><label>Taxa devolução transporte (0–1)</label><input id="s_transporte" type="number" step="0.01" value="0.01" /></div>
+          </div>
+          <div class="section-title">Motor Anti-Colapso (opcional)</div>
+          <div class="grid-2">
+            <div class="field"><label>Preço final de venda (R$)</label><input id="s_preco" type="number" step="0.01" value="" placeholder="Ex: 89.90" /></div>
+            <div class="field"><label>Custo base (R$)</label><input id="s_custo" type="number" step="0.01" value="" placeholder="Ex: 45.00" /></div>
+            <div class="field"><label>Estoque atual (un)</label><input id="s_estoque" type="number" value="20" /></div>
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" onclick="simularSIE()">▶ Calcular SIE</button>
+            <button class="btn" onclick="salvarSIE()">💾 Salvar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resultado -->
+      <div id="sie-resultado" style="display:none">
+        <div class="card" style="margin-bottom:16px">
+          <h3>Score Estratégico</h3>
+          <div class="grid-2" style="align-items:center;gap:20px">
+            <div style="text-align:center">
+              <div id="sie-score-big" style="font-size:64px;font-weight:900;line-height:1"></div>
+              <div id="sie-badge" style="margin-top:8px"></div>
+              <div id="sie-icg" style="margin-top:10px;font-size:13px;color:var(--muted)"></div>
+            </div>
+            <div>
+              <div class="score-bar-wrap">
+                <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Comercial</div>
+                <div class="score-bar-bg"><div id="bar-comercial" class="score-bar" style="background:#60a5fa"></div></div>
+                <div class="score-label"><span id="lbl-comercial">0%</span></div>
+              </div>
+              <div class="score-bar-wrap">
+                <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Operacional</div>
+                <div class="score-bar-bg"><div id="bar-operacional" class="score-bar" style="background:#a78bfa"></div></div>
+                <div class="score-label"><span id="lbl-operacional">0%</span></div>
+              </div>
+              <div class="score-bar-wrap">
+                <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Risco</div>
+                <div class="score-bar-bg"><div id="bar-risco" class="score-bar" style="background:#34d399"></div></div>
+                <div class="score-label"><span id="lbl-risco">0%</span></div>
+              </div>
+              <div class="score-bar-wrap">
+                <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Financeiro (ICG)</div>
+                <div class="score-bar-bg"><div id="bar-financeiro" class="score-bar" style="background:#fbbf24"></div></div>
+                <div class="score-label"><span id="lbl-financeiro">0%</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Anti-colapso -->
+        <div id="anti-colapso-card" class="card" style="display:none">
+          <h3>🛡️ Motor Anti-Colapso</h3>
+          <div class="grid-2">
+            <div class="stat-card">
+              <div id="ac-nivel" class="value" style="font-size:18px;font-weight:700"></div>
+              <div class="label">Nível de risco</div>
+            </div>
+            <div class="stat-card">
+              <div id="ac-ajuste" class="value"></div>
+              <div class="label">Ajuste proteção</div>
+            </div>
+            <div class="stat-card">
+              <div id="ac-preco-orig" class="value" style="font-size:20px"></div>
+              <div class="label">Preço atual</div>
+            </div>
+            <div class="stat-card">
+              <div id="ac-preco-prot" class="value" style="font-size:20px;color:var(--green)"></div>
+              <div class="label">Preço protegido</div>
+            </div>
+          </div>
+          <div id="ac-sinais"></div>
+        </div>
+      </div>
+
+      <!-- Placeholder quando sem resultado -->
+      <div id="sie-placeholder" class="card" style="display:flex;align-items:center;justify-content:center;min-height:200px;color:var(--muted)">
+        <div style="text-align:center">
+          <div style="font-size:40px;margin-bottom:12px">🧬</div>
+          <div>Preencha os dados e clique em <strong>Calcular SIE</strong></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ──────────────────────────── TAB: ANTI-COLAPSO ──────────────────────── -->
+  <div id="tab-anti-colapso" class="tab-content">
+    <div class="grid-2" style="gap:20px">
+      <div class="card">
+        <h3>🛡️ Análise Anti-Colapso Isolada</h3>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
+          Analise qualquer cenário de risco sem precisar calcular o SIE completo.
+        </p>
+        <div class="grid-2">
+          <div class="field"><label>Preço final (R$)</label><input id="ac_preco" type="number" step="0.01" value="89.90"/></div>
+          <div class="field"><label>Custo base (R$)</label><input id="ac_custo" type="number" step="0.01" value="45.00"/></div>
+          <div class="field"><label>Estoque atual (un)</label><input id="ac_estoque" type="number" value="20"/></div>
+          <div class="field"><label>SIE score (0–1)</label><input id="ac_sie" type="number" step="0.01" value="0.65"/></div>
+          <div class="field"><label>ICG (prazo_pgto / tempo_vender)</label><input id="ac_icg" type="number" step="0.01" value="1.5"/></div>
+          <div class="field"><label>Velocidade de venda (un/mês)</label><input id="ac_vel" type="number" step="1" value="30"/></div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" onclick="analisarColapso()">🔍 Analisar</button>
+        </div>
+      </div>
+
+      <div id="ac-resultado-iso" class="card" style="display:none">
+        <h3>Resultado</h3>
+        <div id="ac-iso-content"></div>
+      </div>
+      <div id="ac-placeholder" class="card" style="display:flex;align-items:center;justify-content:center;min-height:200px;color:var(--muted)">
+        <div style="text-align:center"><div style="font-size:40px;margin-bottom:10px">🛡️</div><div>Preencha e clique em Analisar</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ──────────────────────────── TAB: DASHBOARD ─────────────────────────── -->
+  <div id="tab-dashboard" class="tab-content">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-size:14px;color:var(--muted)">Saúde estratégica de todos os SKUs monitorados</div>
+      <button class="btn btn-primary" onclick="carregarDashboard()">🔄 Atualizar</button>
+    </div>
+
+    <!-- Resumo -->
+    <div class="resumo-grid" id="dash-resumo">
+      <div class="r-card"><div class="num" id="d-total">–</div><div class="lbl">Total SKUs</div></div>
+      <div class="r-card"><div class="num" id="d-estrela" style="color:#22c55e">–</div><div class="lbl">⭐ Estrela</div></div>
+      <div class="r-card"><div class="num" id="d-saudavel" style="color:#60a5fa">–</div><div class="lbl">💙 Saudável</div></div>
+      <div class="r-card"><div class="num" id="d-atencao" style="color:#eab308">–</div><div class="lbl">⚠️ Atenção</div></div>
+      <div class="r-card"><div class="num" id="d-problema" style="color:#ef4444">–</div><div class="lbl">🔴 Problema</div></div>
+      <div class="r-card"><div class="num" id="d-protecao" style="color:#f97316">–</div><div class="lbl">🛡️ Proteção</div></div>
+      <div class="r-card"><div class="num" id="d-colapso" style="color:#ef4444">–</div><div class="lbl">💥 Colapso</div></div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <table id="dash-table">
+        <thead>
+          <tr>
+            <th>SKU</th>
+            <th>SIE</th>
+            <th>Classificação</th>
+            <th>ICG</th>
+            <th>Risco</th>
+            <th>Margem</th>
+            <th>Preço Atual</th>
+            <th>Preço Protegido</th>
+            <th>Sinais</th>
+          </tr>
+        </thead>
+        <tbody id="dash-tbody">
+          <tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">Clique em Atualizar para carregar dados</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ──────────────────────────── TAB: CONFIGURAÇÃO ──────────────────────── -->
+  <div id="tab-config" class="tab-content">
+    <div class="grid-2" style="gap:20px">
+      <div class="card">
+        <h3>⚙️ Ajuste de Margem por SIE</h3>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
+          Quando ativo, o motor de precificação aumenta automaticamente a margem/markup alvo
+          de acordo com o score SIE do produto. Produtos com score baixo recebem proteção maior.
+        </p>
+        <div class="config-row">
+          <label style="font-weight:600">Ativar ajuste SIE → margem</label>
+          <label class="toggle"><input type="checkbox" id="cfg-ativo" /><span>Habilitado</span></label>
+        </div>
+        <div class="config-row">
+          <label>⭐ Estrela (SIE ≥ 0.80) — ajuste</label>
+          <input id="cfg-estrela" type="number" value="0" min="0" max="50" step="1" /> <span style="font-size:13px;color:var(--muted);margin-left:4px">pp</span>
+        </div>
+        <div class="config-row">
+          <label>💙 Saudável (SIE ≥ 0.60) — ajuste</label>
+          <input id="cfg-saudavel" type="number" value="0" min="0" max="50" step="1" /> <span style="font-size:13px;color:var(--muted);margin-left:4px">pp</span>
+        </div>
+        <div class="config-row">
+          <label>⚠️ Atenção (SIE ≥ 0.40) — ajuste</label>
+          <input id="cfg-atencao" type="number" value="8" min="0" max="50" step="1" /> <span style="font-size:13px;color:var(--muted);margin-left:4px">pp</span>
+        </div>
+        <div class="config-row">
+          <label>🔴 Problema (SIE &lt; 0.40) — ajuste</label>
+          <input id="cfg-problema" type="number" value="18" min="0" max="50" step="1" /> <span style="font-size:13px;color:var(--muted);margin-left:4px">pp</span>
+        </div>
+        <div class="actions" style="margin-top:20px">
+          <button class="btn btn-primary" onclick="salvarConfig()">💾 Salvar configuração</button>
+        </div>
+        <div id="cfg-msg" style="margin-top:12px;font-size:13px;display:none"></div>
+      </div>
+
+      <div class="card">
+        <h3>📖 Como funciona</h3>
+        <p style="font-size:14px;color:var(--muted);line-height:1.7;margin-bottom:12px">
+          O <strong>SIE (Strategic Intelligence Engine)</strong> avalia cada produto em 4 dimensões:
+        </p>
+        <div style="font-size:13px;line-height:1.8">
+          <div style="margin-bottom:8px">
+            <span style="color:#60a5fa;font-weight:700">Comercial (40%)</span> — velocidade de venda, share de faturamento, margem real
+          </div>
+          <div style="margin-bottom:8px">
+            <span style="color:#a78bfa;font-weight:700">Operacional (15%)</span> — prazo de entrega do fornecedor, prazo de pagamento
+          </div>
+          <div style="margin-bottom:8px">
+            <span style="color:#34d399;font-weight:700">Risco (25%)</span> — taxa de defeito e devolução por transporte
+          </div>
+          <div style="margin-bottom:16px">
+            <span style="color:#fbbf24;font-weight:700">Financeiro — ICG (20%)</span> — Índice de Ciclo de Caixa: prazo_pgto ÷ tempo_vender
+          </div>
+          <div style="padding:12px;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:10px;margin-bottom:12px">
+            <strong>ICG &gt; 1</strong> → você vende antes de pagar o fornecedor (ideal)<br/>
+            <strong>ICG &lt; 1</strong> → você paga antes de vender (estresse de caixa)
+          </div>
+          <div>
+            O <strong>Motor Anti-Colapso</strong> detecta quando um produto está em trajetória destrutiva
+            (margem negativa + estoque crítico, crescimento que destrói caixa) e sugere um preço protegido
+            automaticamente.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
-  </div>
-  <script>
-async function carregar(){const res=await fetch('/modulos/sie'); const d=await res.json(); Object.keys(d).forEach(k=>{const el=document.getElementById(k); if(el) el.value=d[k];});}
-async function salvar(){const payload={}; ['velocidade_venda','share_faturamento','margem_real','prazo_entrega_fornecedor','prazo_pagamento_fornecedor','tempo_para_vender','devolucao_defeito','devolucao_transporte'].forEach(k=>payload[k]=Number(document.getElementById(k).value||0)); await fetch('/modulos/sie',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); alert('SIE salvo');}
-async function simular(){const payload={}; ['velocidade_venda','share_faturamento','margem_real','prazo_entrega_fornecedor','prazo_pagamento_fornecedor','tempo_para_vender','devolucao_defeito','devolucao_transporte'].forEach(k=>payload[k]=Number(document.getElementById(k).value||0)); await salvar(); document.getElementById('result').textContent=JSON.stringify(payload,null,2);}
-document.addEventListener('DOMContentLoaded', carregar);
+<script>
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const ids = ['simulador','anti-colapso','dashboard','config'];
+    t.classList.toggle('active', ids[i] === id);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  if (id === 'dashboard') carregarDashboard();
+  if (id === 'config') carregarConfig();
+}
+
+// ── Simulador SIE ─────────────────────────────────────────────────────────────
+async function simularSIE() {
+  const payload = {
+    nome_sku:              document.getElementById('s_sku').value || 'simulado',
+    velocidade_venda:      parseFloat(document.getElementById('s_velocidade').value) || 0,
+    share_faturamento:     parseFloat(document.getElementById('s_share').value) || 0,
+    margem_real:           parseFloat(document.getElementById('s_margem').value) || 0,
+    prazo_entrega_fornecedor: parseFloat(document.getElementById('s_prazo_entrega').value) || 30,
+    prazo_pagamento_fornecedor: parseFloat(document.getElementById('s_prazo_pgto').value) || 0,
+    tempo_para_vender:     parseFloat(document.getElementById('s_tempo_vender').value) || 30,
+    devolucao_defeito:     parseFloat(document.getElementById('s_defeito').value) || 0,
+    devolucao_transporte:  parseFloat(document.getElementById('s_transporte').value) || 0,
+    preco_final:           parseFloat(document.getElementById('s_preco').value) || 0,
+    custo_base:            parseFloat(document.getElementById('s_custo').value) || 0,
+    estoque:               parseInt(document.getElementById('s_estoque').value) || 0,
+  };
+  try {
+    const res = await fetch('/sie/simular', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    const data = await res.json();
+    renderSIE(data);
+  } catch(e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+function salvarSIE() { simularSIE(); }
+
+function renderSIE(data) {
+  const sie = data.sie || {};
+  const ac  = data.anti_colapso;
+
+  document.getElementById('sie-placeholder').style.display = 'none';
+  document.getElementById('sie-resultado').style.display = 'block';
+
+  const score = sie.sie || 0;
+  const cls   = sie.classificacao || '?';
+  const clsColors = {estrela:'#22c55e', saudavel:'#60a5fa', atencao:'#eab308', problema:'#ef4444'};
+  const clsLabels = {estrela:'⭐ Estrela', saudavel:'💙 Saudável', atencao:'⚠️ Atenção', problema:'🔴 Problema'};
+
+  document.getElementById('sie-score-big').textContent = (score * 100).toFixed(0);
+  document.getElementById('sie-score-big').style.color = clsColors[cls] || '#aaa';
+  document.getElementById('sie-badge').innerHTML = `<span class="badge badge-${cls}">${clsLabels[cls] || cls}</span>`;
+  document.getElementById('sie-icg').textContent = `ICG: ${(sie.icg||0).toFixed(2)} · ${sie.icg >= 1 ? '✅ vende antes de pagar' : '⚠️ paga antes de vender'}`;
+
+  const scores = sie.scores || {};
+  const bars = {comercial: scores.comercial||0, operacional: scores.operacional||0, risco: scores.risco||0, financeiro: scores.financeiro||0};
+  Object.entries(bars).forEach(([k,v]) => {
+    document.getElementById('bar-'+k).style.width = (v*100).toFixed(0)+'%';
+    document.getElementById('lbl-'+k).textContent = (v*100).toFixed(1)+'%';
+  });
+
+  // Anti-colapso
+  const acCard = document.getElementById('anti-colapso-card');
+  if (ac) {
+    acCard.style.display = 'block';
+    const nivelMap = {ok:'risco-ok', alerta:'risco-alerta', protecao:'risco-protecao', colapso_iminente:'risco-colapso'};
+    document.getElementById('ac-nivel').innerHTML = `<span class="${nivelMap[ac.nivel_risco]||''}">${ac.label||ac.nivel_risco}</span>`;
+    document.getElementById('ac-ajuste').textContent = '+' + (ac.ajuste_pp||0) + ' pp';
+    document.getElementById('ac-preco-orig').textContent = 'R$ ' + (ac.preco_original||0).toFixed(2);
+    document.getElementById('ac-preco-prot').textContent = 'R$ ' + (ac.preco_protegido||0).toFixed(2);
+    const sinaisEl = document.getElementById('ac-sinais');
+    sinaisEl.innerHTML = (ac.sinais||[]).map(s =>
+      `<div class="sinal"><span class="ico">⚠️</span><span>${s.descricao}</span></div>`
+    ).join('') || '<div style="color:var(--green);margin-top:8px">✅ Nenhum sinal de risco detectado</div>';
+  } else {
+    acCard.style.display = 'none';
+  }
+}
+
+// ── Motor Anti-Colapso Isolado ────────────────────────────────────────────────
+async function analisarColapso() {
+  const payload = {
+    preco_final:     parseFloat(document.getElementById('ac_preco').value) || 0,
+    custo_base:      parseFloat(document.getElementById('ac_custo').value) || 0,
+    estoque:         parseInt(document.getElementById('ac_estoque').value) || 0,
+    sie_score:       parseFloat(document.getElementById('ac_sie').value) || 1,
+    icg:             parseFloat(document.getElementById('ac_icg').value) || 1,
+    velocidade_venda: parseFloat(document.getElementById('ac_vel').value) || 30,
+  };
+  try {
+    const res = await fetch('/sie/anti-colapso', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    const data = await res.json();
+    renderColapsoIso(data);
+  } catch(e) { alert('Erro: '+e.message); }
+}
+
+function renderColapsoIso(ac) {
+  document.getElementById('ac-placeholder').style.display = 'none';
+  document.getElementById('ac-resultado-iso').style.display = 'block';
+  const nivelMap = {ok:'#22c55e', alerta:'#eab308', protecao:'#f97316', colapso_iminente:'#ef4444'};
+  const cor = nivelMap[ac.nivel_risco] || '#aaa';
+  document.getElementById('ac-iso-content').innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <div style="font-size:36px;font-weight:800;color:${cor}">${(ac.ajuste_pp||0)}%</div>
+      <div>
+        <div style="font-weight:700;color:${cor}">${ac.label}</div>
+        <div style="font-size:13px;color:var(--muted)">Ajuste de proteção recomendado</div>
+      </div>
+    </div>
+    <div class="grid-2" style="gap:10px;margin-bottom:14px">
+      <div class="stat-card"><div class="value" style="font-size:18px">${(ac.margem_atual||0).toFixed(1)}%</div><div class="label">Margem atual</div></div>
+      <div class="stat-card"><div class="value" style="font-size:18px;color:${cor}">R$ ${(ac.preco_protegido||0).toFixed(2)}</div><div class="label">Preço protegido</div></div>
+    </div>
+    <div>${(ac.sinais||[]).map(s=>`<div class="sinal"><span class="ico">⚠️</span><span>${s.descricao}</span></div>`).join('') || '<div style="color:var(--green)">✅ Nenhum sinal de risco</div>'}</div>
+  `;
+}
+
+// ── Health Dashboard ──────────────────────────────────────────────────────────
+async function carregarDashboard() {
+  try {
+    const res = await fetch('/sie/health-dashboard');
+    const data = await res.json();
+    renderDashboard(data);
+  } catch(e) { console.error(e); }
+}
+
+function renderDashboard(data) {
+  const r = data.resumo || {};
+  document.getElementById('d-total').textContent = r.total ?? '–';
+  document.getElementById('d-estrela').textContent = r.estrela ?? '–';
+  document.getElementById('d-saudavel').textContent = r.saudavel ?? '–';
+  document.getElementById('d-atencao').textContent = r.atencao ?? '–';
+  document.getElementById('d-problema').textContent = r.problema ?? '–';
+  document.getElementById('d-protecao').textContent = r.em_protecao ?? '–';
+  document.getElementById('d-colapso').textContent = r.em_colapso ?? '–';
+
+  const clsColors = {estrela:'#22c55e', saudavel:'#60a5fa', atencao:'#eab308', problema:'#ef4444'};
+  const clsIcons  = {estrela:'⭐', saudavel:'💙', atencao:'⚠️', problema:'🔴'};
+  const nivelColors = {ok:'#22c55e', alerta:'#eab308', protecao:'#f97316', colapso_iminente:'#ef4444'};
+
+  const tbody = document.getElementById('dash-tbody');
+  if (!data.skus || data.skus.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">Nenhum SKU monitorado ainda. Simule um produto na aba Simulador.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = data.skus.map(s => {
+    const cls = s.classificacao || '?';
+    const cor = clsColors[cls] || '#aaa';
+    const ico = clsIcons[cls] || '';
+    const rCor = nivelColors[s.nivel_risco] || '#aaa';
+    const sinaisCount = (s.sinais||[]).length;
+    return `<tr>
+      <td style="font-weight:600">${s.sku}</td>
+      <td style="font-size:18px;font-weight:800;color:${cor}">${((s.sie||0)*100).toFixed(0)}</td>
+      <td><span class="badge badge-${cls}">${ico} ${cls}</span></td>
+      <td>${(s.icg||0).toFixed(2)} ${s.icg>=1?'✅':'⚠️'}</td>
+      <td style="color:${rCor};font-weight:600">${s.label_risco||s.nivel_risco}</td>
+      <td>${s.margem_atual!=null ? s.margem_atual.toFixed(1)+'%' : '–'}</td>
+      <td>${s.preco_original!=null ? 'R$ '+s.preco_original.toFixed(2) : '–'}</td>
+      <td style="color:${rCor}">${s.preco_protegido!=null ? 'R$ '+s.preco_protegido.toFixed(2) : '–'}</td>
+      <td>${sinaisCount > 0 ? `<span style="color:var(--orange)">${sinaisCount} sinal${sinaisCount>1?'is':''}</span>` : '<span style="color:var(--green)">OK</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Configuração ──────────────────────────────────────────────────────────────
+async function carregarConfig() {
+  try {
+    const res = await fetch('/sie/score-config');
+    const cfg = await res.json();
+    document.getElementById('cfg-ativo').checked = !!cfg.ajuste_ativo;
+    document.getElementById('cfg-estrela').value = cfg.ajuste_estrela ?? 0;
+    document.getElementById('cfg-saudavel').value = cfg.ajuste_saudavel ?? 0;
+    document.getElementById('cfg-atencao').value = cfg.ajuste_atencao ?? 8;
+    document.getElementById('cfg-problema').value = cfg.ajuste_problema ?? 18;
+  } catch(e) {}
+}
+
+async function salvarConfig() {
+  const payload = {
+    ajuste_ativo:    document.getElementById('cfg-ativo').checked,
+    ajuste_estrela:  parseFloat(document.getElementById('cfg-estrela').value) || 0,
+    ajuste_saudavel: parseFloat(document.getElementById('cfg-saudavel').value) || 0,
+    ajuste_atencao:  parseFloat(document.getElementById('cfg-atencao').value) || 8,
+    ajuste_problema: parseFloat(document.getElementById('cfg-problema').value) || 18,
+  };
+  try {
+    const res = await fetch('/sie/score-config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    const data = await res.json();
+    const msg = document.getElementById('cfg-msg');
+    msg.style.display = 'block';
+    msg.style.color = '#22c55e';
+    msg.textContent = '✅ Configuração salva! O motor de precificação usará esses ajustes.';
+    setTimeout(() => { msg.style.display = 'none'; }, 3000);
+  } catch(e) { alert('Erro: '+e.message); }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  carregarConfig();
+});
 </script>
 
 <!-- Botão Início -->
