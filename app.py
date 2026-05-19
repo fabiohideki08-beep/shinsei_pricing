@@ -1169,6 +1169,94 @@ def fila_rejeitar(item_id: str, payload: dict = Body(default={})):
     logger.info("Item rejeitado: id=%s sku=%s motivo=%s", item_id, item.get("sku"), motivo)
     return {"ok":True,"message":"Item marcado como rejeitado.","stats":stats_fila()}
 
+
+@app.get("/fila/stats-detalhados")
+def fila_stats_detalhados():
+    """
+    Retorna stats analíticos da fila sem carregar todos os itens.
+    Inclui distribuição por canal, faixa de margem, e piores/melhores casos.
+    """
+    itens = carregar_fila()
+    pendentes = [i for i in itens if i.get("status") in ("pendente", "incompleto")]
+
+    canais: dict = {}
+    margens: list = []
+    for i in pendentes:
+        mp = i.get("marketplaces") or {}
+        for canal_key, dados in mp.items():
+            if not isinstance(dados, dict): continue
+            label = dados.get("label") or canal_key
+            canais[label] = canais.get(label, 0) + 1
+            m = float(dados.get("margem") or 0)
+            if m != 0:
+                margens.append(m)
+
+    dist_margem = {
+        "negativa": sum(1 for m in margens if m < 0),
+        "0_a_10":   sum(1 for m in margens if 0 <= m < 10),
+        "10_a_20":  sum(1 for m in margens if 10 <= m < 20),
+        "acima_20": sum(1 for m in margens if m >= 20),
+    }
+    avg_margem = round(sum(margens) / len(margens), 2) if margens else 0
+
+    # 10 mais antigos na fila (maior risco de desatualização)
+    mais_antigos = sorted(
+        [i for i in pendentes if i.get("criado_em")],
+        key=lambda x: str(x.get("criado_em", "")),
+    )[:10]
+
+    return {
+        "total_pendentes": len(pendentes),
+        "canais": dict(sorted(canais.items(), key=lambda x: -x[1])),
+        "dist_margem": dist_margem,
+        "avg_margem": avg_margem,
+        "mais_antigos": [{"id": i.get("id"), "sku": i.get("sku"), "nome": str(i.get("nome",""))[:50], "criado_em": i.get("criado_em")} for i in mais_antigos],
+    }
+
+
+@app.post("/fila/aprovar-lote")
+async def fila_aprovar_lote(request: Request):
+    """
+    Aprova um lote de itens por IDs.
+    Body: {"ids": ["id1", "id2", ...]}
+    Processa até 50 por chamada. Retorna {ok, aprovados, erros, [detalhes]}.
+    """
+    if not BlingClient or not aplicar_precos_multicanal:
+        raise HTTPException(status_code=500, detail="Integração Bling indisponível.")
+    body = await request.json()
+    ids = body.get("ids", [])[:50]  # máx 50 por vez
+    aprovados = 0
+    erros = []
+    for item_id in ids:
+        try:
+            item = buscar_item_fila(item_id)
+            if not item or item.get("status") != "pendente":
+                continue
+            item_com_gordura = _aplicar_gordura_no_item(item)
+            client = BlingClient()
+            resultado = aplicar_precos_multicanal(client, item_com_gordura)
+            atualizar_status_fila(item_id, "aprovado", resultado=resultado)
+            _append_jsonl(LOG_PATH, {"evento": "fila_aprovado_lote", "item_id": item_id, "quando": datetime.utcnow().isoformat()})
+            aprovados += 1
+        except Exception as exc:
+            erros.append({"id": item_id, "erro": str(exc)})
+    return {"ok": True, "aprovados": aprovados, "erros": len(erros), "detalhes_erros": erros, "stats": stats_fila()}
+
+
+@app.post("/fila/rejeitar-lote")
+async def fila_rejeitar_lote(request: Request):
+    """Rejeita um lote de itens. Body: {"ids": [...], "motivo": "..."}"""
+    body = await request.json()
+    ids = body.get("ids", [])
+    motivo = body.get("motivo") or "Rejeitado em lote."
+    count = 0
+    for item_id in ids:
+        item = buscar_item_fila(item_id)
+        if item and item.get("status") == "pendente":
+            atualizar_status_fila(item_id, "rejeitado", resultado={"motivo": motivo})
+            count += 1
+    return {"ok": True, "rejeitados": count, "stats": stats_fila()}
+
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # FASE 5 â€” Integração Comercial
 # Cole este bloco no app.py logo antes de:

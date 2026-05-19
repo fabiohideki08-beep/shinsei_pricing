@@ -1,4 +1,4 @@
-﻿"""
+"""
 auth.py â€” Shinsei Pricing
 AutenticaÃ§Ã£o por API key via header X-API-Key.
 
@@ -95,6 +95,9 @@ PUBLIC_PATHS = {
     "/fila/adicionar",
     "/fila/aprovar",
     "/fila/rejeitar",
+    "/fila/stats-detalhados",
+    "/fila/aprovar-lote",
+    "/fila/rejeitar-lote",
     "/bling/produto/atualizar-peso",
     "/bling/produto/atualizar-preco",
     "/bling/produto/buscar-por-nome",
@@ -147,8 +150,6 @@ PUBLIC_PATHS = {
     "/auditoria/estoque-negativo/ignorar-leves",
 }
 
-# Prefixo dinâmico para ignorar-severidade (leve/moderado/grave/critico)
-# já coberto por PUBLIC_PREFIXES abaixo
 
 # Prefixos pÃºblicos (qualquer rota que comece com esses valores)
 PUBLIC_PREFIXES = (
