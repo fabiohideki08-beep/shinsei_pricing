@@ -116,6 +116,27 @@ PUBLIC_PATHS = {
     "/oee",
     "/sie",
     "/frete/painel",
+    # Hub e páginas de sistema
+    "/hub",
+    "/sistema/bling",
+    "/sistema/ml",
+    "/sistema/shopify",
+    "/sistema/amazon",
+    "/sistema/shopee",
+    "/sistema/google",
+    # Módulos avançados
+    "/cost-engine",
+    "/cost-allocation",
+    "/perfis",
+    "/regras-calculo",
+    # APIs dos módulos avançados
+    "/modulos/cost-engine",
+    "/modulos/cost-allocation",
+    "/modulos/sie",
+    "/modulos/regras-calculo",
+    "/rateio/visoes",
+    "/config/automacao",
+    "/config/regras-precificacao",
 }
 
 # Prefixos pÃºblicos (qualquer rota que comece com esses valores)
@@ -134,6 +155,9 @@ PUBLIC_PREFIXES = (
     "/shopee/",       # Shopee OAuth e endpoints (sem API key)
     "/bling/produto/",  # Endpoints de produto Bling (imagens, variações)
     "/bling/debug/",    # Debug endpoints (sem auth)
+    "/sistema/",        # Páginas de sistema (sem auth)
+    "/modulos/",        # APIs dos módulos avançados (sem auth)
+    "/config/regras-precificacao/",  # Ativar perfil
     "/gmc/",          # GMC scan, status, blacklist
     "/seo-health/",   # SEO Health análise e pagespeed
     "/marketing/",    # Marketing endpoints
