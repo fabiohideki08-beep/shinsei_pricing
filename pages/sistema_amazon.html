@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Amazon — Shinsei Pricing</title>
+<style>
+:root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--ok:#16a34a;--danger:#ef4444;--warn:#f59e0b}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text)}
+.wrap{max-width:1400px;margin:0 auto;padding:22px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 18px;position:sticky;top:16px;z-index:10}
+.brand h1{margin:0;font-size:22px;display:flex;align-items:center;gap:10px}
+.amz-badge{background:linear-gradient(135deg,#ff9900,#e47911);color:#111;padding:3px 10px;border-radius:8px;font-size:14px;font-weight:800}
+.brand p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.top-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.btn{border:none;background:var(--accent);color:#fff;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:7px;font-size:13px}
+.btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+.btn.success{background:var(--ok)} .btn.danger{background:var(--danger)}
+.btn.sm{padding:7px 10px;font-size:12px;border-radius:9px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.stat-card{background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:22px;display:inline-flex;align-items:center;gap:20px}
+.stat-card .label{color:var(--muted);font-size:12px;font-weight:600}
+.stat-card .value{font-size:28px;font-weight:800;margin-top:4px}
+.stat-card .value.warn{color:var(--warn)} .stat-card .value.ok{color:#22c55e}
+.secao{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:20px;padding:20px;margin-bottom:18px}
+.secao-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px}
+.secao-titulo{font-size:17px;font-weight:700;display:flex;align-items:center;gap:10px}
+.secao-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.filtro-btn{padding:6px 12px;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-size:12px;font-weight:600}
+.filtro-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.busca-wrap{position:relative;display:flex;align-items:center;margin-bottom:12px}
+.busca-wrap svg{position:absolute;left:12px;color:var(--muted);pointer-events:none}
+.busca{background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--text);padding:9px 14px 9px 36px;border-radius:11px;font-size:13px;width:300px;outline:none;transition:border-color .2s}
+.busca::placeholder{color:var(--muted)}.busca:focus{border-color:var(--accent)}
+.busca-count{font-size:11px;color:var(--muted);white-space:nowrap;margin-left:8px}
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:14px}
+table{width:100%;border-collapse:collapse;min-width:750px}
+th,td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;text-align:left}
+th{background:#10182f;color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.04em}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(79,140,255,.04)}
+.tag{display:inline-block;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700}
+.tag.pendente{background:rgba(245,158,11,.15);color:var(--warn)}
+.tag.corrigido{background:rgba(34,197,94,.15);color:#22c55e}
+.tag.ignorado{background:rgba(150,150,150,.15);color:var(--muted)}
+.dif-pos{color:#ef4444;font-weight:700} .dif-neg{color:#22c55e;font-weight:700}
+.actions-row{display:flex;gap:6px}
+.empty{text-align:center;padding:40px;color:var(--muted);border:1px dashed var(--line);border-radius:14px}
+.notice{padding:12px 14px;border-radius:12px;border:1px solid var(--line);font-size:13px;margin-bottom:14px;display:none}
+.notice.ok{border-color:#166534;background:rgba(22,163,74,.1);color:#bbf7d0;display:block}
+.notice.err{border-color:#991b1b;background:rgba(239,68,68,.1);color:#fca5a5;display:block}
+.notice.warn{border-color:#92400e;background:rgba(245,158,11,.1);color:#fde68a;display:block}
+@media(max-width:600px){.topbar{flex-direction:column;align-items:flex-start}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1><span class="amz-badge">AMAZON</span> Auditoria de Estoque e Preços</h1>
+      <p>Conferência de divergências de estoque e preço na plataforma Amazon</p>
+    </div>
+    <div class="top-actions">
+      <a class="btn secondary" href="/hub">&#8592; Hub</a>
+      <button class="btn secondary" onclick="carregarAmazon()">Atualizar</button>
+    </div>
+  </div>
+
+  <div id="notice" class="notice"></div>
+
+  <div class="stat-card">
+    <div><div class="label">Pendentes</div><div class="value warn" id="stat-pendente">—</div></div>
+  </div>
+
+  <div class="secao">
+    <div class="secao-header">
+      <div class="secao-titulo">
+        Conferência Amazon
+        <span id="badge-amazon" style="background:var(--warn);color:#000;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:700">0</span>
+      </div>
+      <div class="secao-actions">
+        <button class="btn sm warn" id="btnConferirAmazonEstoque" onclick="conferirAmazon('estoque')">Conferir estoque</button>
+        <button class="btn sm" id="btnConferirAmazonPreco" onclick="conferirAmazon('preco')" style="background:#0ea5e9">Conferir preço</button>
+        <button class="btn sm success" id="btnCorrigirAmazonEstoque" onclick="corrigirAmazon('estoque')">Corrigir estoque</button>
+        <button class="btn sm success" id="btnCorrigirAmazonPreco" onclick="corrigirAmazon('preco')" style="background:#10b981">Corrigir preço</button>
+        <button class="btn sm secondary" onclick="limparFila()">Limpar fila</button>
+      </div>
+    </div>
+
+    <div class="filtros">
+      <button class="filtro-btn active" onclick="filtrarAmazon('',this)">Todos</button>
+      <button class="filtro-btn" onclick="filtrarAmazon('estoque',this)">Estoque</button>
+      <button class="filtro-btn" onclick="filtrarAmazon('preco',this)">Preço</button>
+    </div>
+
+    <div class="busca-wrap">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="busca-amazon" class="busca" type="search" placeholder="Buscar por produto ou SKU..." oninput="buscarAmazon()">
+      <span id="busca-amazon-count" class="busca-count"></span>
+    </div>
+
+    <div id="amazon-empty" class="empty" style="display:none">
+      <div style="font-size:32px;margin-bottom:8px">&#x2705;</div>
+      Clique em Conferir para iniciar.
+    </div>
+
+    <div id="tabela-amazon-wrap"><div class="empty">Clique em "Conferir estoque" ou "Conferir preço" para iniciar.</div></div>
+  </div>
+</div>
+<script>
+let _dadosAmazon = [];
+let _amazonFiltroTipo = '';
+
+function mostrarNotice(msg, tipo){
+  const el=document.getElementById('notice');
+  el.className='notice '+tipo;
+  el.textContent=msg;
+  if(tipo==='ok') setTimeout(()=>{el.className='notice'},4000);
+}
+
+function _filtrar(itens, termo, campos){
+  if(!termo) return itens;
+  const t=termo.toLowerCase();
+  return itens.filter(i=>campos.some(c=>(i[c]||'').toString().toLowerCase().includes(t)));
+}
+
+function buscarAmazon(){
+  const t=document.getElementById('busca-amazon')?.value||'';
+  const f=_filtrar(_dadosAmazon,t,['nome','sku','ean','gtin']);
+  const countEl=document.getElementById('busca-amazon-count');
+  if(countEl) countEl.textContent=t?`${f.length} de ${_dadosAmazon.length}`:'';
+  renderAmazon(f, true);
+}
+
+function filtrarAmazon(tipo, btn){
+  _amazonFiltroTipo=tipo;
+  document.querySelectorAll('.filtro-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const f=tipo?_dadosAmazon.filter(i=>i.tipo===tipo):_dadosAmazon;
+  renderAmazon(f, true);
+}
+
+async function carregarAmazon(){
+  try{
+    const res=await fetch('/auditoria/amazon');
+    if(!res.ok) return;
+    const data=await res.json();
+    const n=data.stats?.pendente||0;
+    document.getElementById('stat-pendente').textContent=n;
+    document.getElementById('badge-amazon').textContent=n;
+    let itens=data.itens||[];
+    if(_amazonFiltroTipo) itens=itens.filter(i=>i.tipo===_amazonFiltroTipo);
+    _dadosAmazon=itens;
+    buscarAmazon();
+  }catch(e){ console.error(e); }
+}
+
+function renderAmazon(itens, fromSearch=false){
+  if(!fromSearch) _dadosAmazon=itens;
+  const wrap=document.getElementById('tabela-amazon-wrap');
+  const empty=document.getElementById('amazon-empty');
+  if(!itens.length){
+    wrap.innerHTML='';
+    if(empty) empty.style.display='block';
+    return;
+  }
+  if(empty) empty.style.display='none';
+  const rows=itens.map(i=>`<tr><td style="font-family:monospace"><strong>${i.sku||'—'}</strong></td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${i.nome||'—'}</td><td><span class="tag ${i.tipo==='estoque'?'pendente':'corrigido'}">${i.tipo||'—'}</span></td><td style="text-align:center;color:#22c55e;font-weight:700">${i.estoque_bling??i.preco_bling??'—'}</td><td style="text-align:center;color:#4f8cff;font-weight:700">${i.estoque_amazon??i.preco_amazon??'—'}</td><td style="text-align:center" class="${(i.diferenca||0)>0?'dif-pos':'dif-neg'}">${i.diferenca!=null?((i.diferenca>0?'+':'')+i.diferenca):'—'}</td><td><span class="tag ${i.status||'pendente'}">${i.status||'pendente'}</span></td><td>${i.status==='pendente'?`<div class="actions-row"><button class="btn sm secondary" onclick="ignorarAmazon('${i.id}')">Ignorar</button></div>`:''}</td></tr>`).join('');
+  wrap.innerHTML=`<div class="table-wrap"><table><thead><tr><th>SKU</th><th>Produto</th><th>Tipo</th><th>Bling</th><th>Amazon</th><th>Diferença</th><th>Status</th><th>Ação</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+async function conferirAmazon(tipo){
+  const idMap={estoque:'btnConferirAmazonEstoque',preco:'btnConferirAmazonPreco'};
+  const labelMap={estoque:'Conferir estoque',preco:'Conferir preço'};
+  const btn=document.getElementById(idMap[tipo]);
+  if(btn){btn.disabled=true;btn.textContent='Conferindo...';}
+  try{
+    const res=await fetch('/auditoria/amazon/conferir'+(tipo?'?tipo='+tipo:''),{method:'POST'});
+    const d=await res.json();
+    mostrarNotice(d.ok?`Amazon OK: ${d.verificados} verificados`:'Erro: '+(d.erro||'?'),d.ok?'ok':'err');
+    carregarAmazon();
+  }catch(e){mostrarNotice('Erro ao conferir Amazon.','err');}
+  finally{if(btn){btn.disabled=false;btn.textContent=labelMap[tipo]||'Conferir';}}
+}
+
+async function corrigirAmazon(tipo){
+  if(!confirm('Corrigir todas as divergências de '+tipo+' pendentes na Amazon?')) return;
+  const idMap={estoque:'btnCorrigirAmazonEstoque',preco:'btnCorrigirAmazonPreco'};
+  const btn=document.getElementById(idMap[tipo]);
+  if(btn) btn.disabled=true;
+  const res=await fetch('/auditoria/amazon?status=pendente'+(tipo?'&tipo='+tipo:''));
+  const data=await res.json();
+  const itens=data.itens||[];
+  if(!itens.length){mostrarNotice('Nenhuma divergência pendente.','ok');if(btn) btn.disabled=false;return;}
+  let ok=0,err=0;
+  for(const item of itens){
+    try{const r=await fetch('/auditoria/amazon/corrigir/'+item.id,{method:'POST'});const d=await r.json();if(d.ok) ok++;else err++;}catch(e){err++;}
+    await new Promise(r=>setTimeout(r,400));
+  }
+  mostrarNotice(`Amazon: ${ok} corrigidos, ${err} erros.`,err>0?'warn':'ok');
+  if(btn) btn.disabled=false;
+  carregarAmazon();
+}
+
+async function ignorarAmazon(id){
+  await fetch('/auditoria/amazon/ignorar/'+id,{method:'POST'});
+  carregarAmazon();
+}
+
+async function limparFila(){
+  if(!confirm('Limpar TODA a fila Amazon? Esta ação não pode ser desfeita.')) return;
+  await fetch('/auditoria/amazon/limpar-tudo',{method:'POST'}).catch(()=>{});
+  mostrarNotice('Fila Amazon limpa!','ok');
+  carregarAmazon();
+}
+
+carregarAmazon();
+</script>
+</body>
+</html>

@@ -71,6 +71,11 @@
     .filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
     .filtro-btn{padding:6px 12px;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-size:12px;font-weight:600}
     .filtro-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .busca-secao-wrap{display:flex;align-items:center;gap:10px;margin-bottom:12px;position:relative}
+    .busca-secao-wrap svg{position:absolute;left:12px;color:var(--muted);pointer-events:none}
+    .busca-secao{background:rgba(255,255,255,0.05);border:1px solid var(--line);color:var(--text);padding:8px 14px 8px 36px;border-radius:10px;font-size:13px;width:300px;outline:none;transition:border-color .2s}
+    .busca-secao::placeholder{color:var(--muted)}.busca-secao:focus{border-color:var(--accent)}
+    .busca-count{font-size:11px;color:var(--muted);white-space:nowrap}
 
     @media(max-width:900px){.stats-grid{grid-template-columns:1fr 1fr}.topbar{flex-direction:column;align-items:flex-start}}
     @media(max-width:600px){.stats-grid{grid-template-columns:1fr}}
@@ -155,6 +160,7 @@
         <button class="btn sm warn" onclick="conferirEstoque()">🔄 Conferir estoque</button>
       </div>
     </div>
+    <div class="busca-secao-wrap"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="busca-estoque" class="busca-secao" type="search" placeholder="Buscar por título ou SKU..." oninput="buscarEstoque()"><span id="busca-estoque-count" class="busca-count"></span></div>
     <div id="tabelaEstoque">
       <div class="hero-empty"><div class="ico">📦</div><div>Nenhuma divergência de estoque.</div></div>
     </div>
@@ -188,6 +194,7 @@
         <div id="progressoMLBar" style="height:6px;background:var(--accent);border-radius:4px;width:0%;transition:width .3s"></div>
       </div>
     </div>
+    <div class="busca-secao-wrap"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="busca-ml" class="busca-secao" type="search" placeholder="Buscar por título, SKU ou EAN..." oninput="buscarML()"><span id="busca-ml-count" class="busca-count"></span></div>
     <div id="tabelaEstoqueML">
       <div class="hero-empty"><div class="ico">🛒</div><div>Clique em "Conferir ML" para iniciar.</div></div>
     </div>
@@ -221,6 +228,7 @@
         <div id="progressoShopifyBar" style="height:6px;background:var(--accent);border-radius:4px;width:0%;transition:width .3s"></div>
       </div>
     </div>
+    <div class="busca-secao-wrap"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="busca-shopify" class="busca-secao" type="search" placeholder="Buscar por título, SKU ou EAN..." oninput="buscarShopify()"><span id="busca-shopify-count" class="busca-count"></span></div>
     <div id="tabelaShopify">
       <div class="hero-empty"><div class="ico">🛍️</div><div>Clique em "Conferir Shopify" para iniciar.</div></div>
     </div>
@@ -243,6 +251,7 @@
         <button class="btn sm warn" onclick="conferirPrecos()">🔄 Conferir preços</button>
       </div>
     </div>
+    <div class="busca-secao-wrap"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="busca-preco" class="busca-secao" type="search" placeholder="Buscar por título ou SKU..." oninput="buscarPreco()"><span id="busca-preco-count" class="busca-count"></span></div>
     <div id="tabelaPreco">
       <div class="hero-empty"><div class="ico">💰</div><div>Nenhuma divergência de preço.</div></div>
     </div>
@@ -283,6 +292,41 @@
 const secoes = ['estoque','estoque-ml','shopify','preco','comissao','frete','amazon'];
 let filtroEstoque = '';
 let filtroPreco = '';
+let _dadosEstoque = [], _dadosML = [], _dadosShopify = [], _dadosPreco = [];
+
+function _filtrarPorBusca(itens, termo, campos){
+  if(!termo) return itens;
+  const t = termo.toLowerCase();
+  return itens.filter(i => campos.some(c => (i[c]||'').toString().toLowerCase().includes(t)));
+}
+function _atualizarCount(idCount, filtrados, total, termo){
+  const el = document.getElementById(idCount);
+  if(el) el.textContent = termo ? `${filtrados.length} de ${total}` : '';
+}
+function buscarEstoque(){
+  const t = document.getElementById('busca-estoque')?.value||'';
+  const f = _filtrarPorBusca(_dadosEstoque, t, ['titulo','sku','ean','gtin']);
+  _atualizarCount('busca-estoque-count', f, _dadosEstoque.length, t);
+  renderTabelaEstoque(f, true);
+}
+function buscarML(){
+  const t = document.getElementById('busca-ml')?.value||'';
+  const f = _filtrarPorBusca(_dadosML, t, ['titulo','sku','ean','gtin']);
+  _atualizarCount('busca-ml-count', f, _dadosML.length, t);
+  renderTabelaEstoqueML(f, true);
+}
+function buscarShopify(){
+  const t = document.getElementById('busca-shopify')?.value||'';
+  const f = _filtrarPorBusca(_dadosShopify, t, ['titulo','sku','ean','gtin']);
+  _atualizarCount('busca-shopify-count', f, _dadosShopify.length, t);
+  renderTabelaShopify(f, true);
+}
+function buscarPreco(){
+  const t = document.getElementById('busca-preco')?.value||'';
+  const f = _filtrarPorBusca(_dadosPreco, t, ['titulo','sku','ean','gtin']);
+  _atualizarCount('busca-preco-count', f, _dadosPreco.length, t);
+  renderTabelaPreco(f, true);
+}
 
 function mostrarSecao(nome, statEl) {
   secoes.forEach(s => {
@@ -317,7 +361,8 @@ async function carregarEstoque(){
   }catch(e){ console.error(e); }
 }
 
-function renderTabelaEstoque(itens){
+function renderTabelaEstoque(itens, fromSearch=false){
+  if(!fromSearch) _dadosEstoque = itens;
   const wrap = document.getElementById('tabelaEstoque');
   if(!itens.length){
     wrap.innerHTML = '<div class="hero-empty"><div class="ico">✅</div><div>Nenhuma divergência de estoque.</div></div>';
@@ -400,7 +445,8 @@ async function carregarPrecos(){
   }catch(e){ renderTabelaPreco([]); }
 }
 
-function renderTabelaPreco(itens){
+function renderTabelaPreco(itens, fromSearch=false){
+  if(!fromSearch) _dadosPreco = itens;
   const wrap = document.getElementById('tabelaPreco');
   if(!itens.length){
     wrap.innerHTML = '<div class="hero-empty"><div class="ico">✅</div><div>Nenhuma divergência de preço.</div></div>';
@@ -539,7 +585,8 @@ async function carregarEstoqueML(){
   }catch(e){ console.error(e); }
 }
 
-function renderTabelaEstoqueML(itens){
+function renderTabelaEstoqueML(itens, fromSearch=false){
+  if(!fromSearch) _dadosML = itens;
   const wrap = document.getElementById('tabelaEstoqueML');
   if(!itens.length){
     wrap.innerHTML = '<div class="hero-empty"><div class="ico">✅</div><div>Nenhuma divergência de estoque ML.</div></div>';
@@ -815,7 +862,8 @@ async function carregarShopify(){
   }catch(e){}
 }
 
-function renderTabelaShopify(itens){
+function renderTabelaShopify(itens, fromSearch=false){
+  if(!fromSearch) _dadosShopify = itens;
   const wrap = document.getElementById('tabelaShopify');
   if(!itens.length){
     wrap.innerHTML = '<div class="hero-empty"><div class="ico">✅</div><div>Nenhuma divergência Shopify.</div></div>';
@@ -1037,6 +1085,24 @@ async function limparFilaCompleta(tipo){
 
 // AMAZON
 let _amazonFiltroTipo = '';
+let _dadosAmazon = [];
+
+function _renderAmazonItens(itens){
+  const tbody = document.getElementById('tabela-amazon');
+  const empty = document.getElementById('amazon-empty');
+  if(!tbody) return;
+  if(!itens.length){ tbody.innerHTML=''; if(empty) empty.style.display='block'; return; }
+  if(empty) empty.style.display='none';
+  tbody.innerHTML = itens.map(i=>`<tr style="border-bottom:1px solid #1a2540"><td style="padding:8px 12px;font-family:monospace">${i.sku||'-'}</td><td style="padding:8px 12px">${i.nome||'-'}</td><td style="padding:8px 12px">${i.tipo||'-'}</td><td style="padding:8px 12px;text-align:center">${i.estoque_bling??i.preco_bling??'-'}</td><td style="padding:8px 12px;text-align:center">${i.estoque_amazon??i.preco_amazon??'-'}</td><td style="padding:8px 12px;text-align:center">${i.diferenca??'-'}</td><td style="padding:8px 12px">${i.status}</td><td style="padding:8px 12px">${i.status==='pendente'?`<button class="btn sm secondary" onclick="ignorarAmazon('${i.id}')">Ignorar</button>`:''}</td></tr>`).join('');
+}
+
+function buscarAmazon(){
+  const t = (document.getElementById('busca-amazon')?.value||'').toLowerCase().trim();
+  const f = _filtrarPorBusca(_dadosAmazon, t, ['nome','sku','ean','gtin']);
+  _atualizarCount('busca-amazon-count', f, _dadosAmazon.length, t);
+  _renderAmazonItens(f);
+}
+
 async function carregarAmazon(filtroTipo){
   if(filtroTipo !== undefined) _amazonFiltroTipo = filtroTipo;
   const res = await fetch('/auditoria/amazon').catch(()=>null);
@@ -1047,14 +1113,10 @@ async function carregarAmazon(filtroTipo){
   if(el) el.textContent = n || '—';
   const badge = document.getElementById('badge-amazon');
   if(badge) badge.textContent = n;
-  const tbody = document.getElementById('tabela-amazon');
-  const empty = document.getElementById('amazon-empty');
   let itens = data.itens || [];
   if(_amazonFiltroTipo) itens = itens.filter(i=>i.tipo===_amazonFiltroTipo);
-  if(!tbody) return;
-  if(!itens.length){ tbody.innerHTML=''; if(empty){empty.style.display='block';} return; }
-  if(empty) empty.style.display='none';
-  tbody.innerHTML = itens.map(i=>`<tr style="border-bottom:1px solid #1a2540"><td style="padding:8px 12px;font-family:monospace">${i.sku||'-'}</td><td style="padding:8px 12px">${i.nome||'-'}</td><td style="padding:8px 12px">${i.tipo||'-'}</td><td style="padding:8px 12px;text-align:center">${i.estoque_bling??i.preco_bling??'-'}</td><td style="padding:8px 12px;text-align:center">${i.estoque_amazon??i.preco_amazon??'-'}</td><td style="padding:8px 12px;text-align:center">${i.diferenca??'-'}</td><td style="padding:8px 12px">${i.status}</td><td style="padding:8px 12px">${i.status==='pendente'?`<button class="btn sm secondary" onclick="ignorarAmazon('${i.id}')">Ignorar</button>`:''}</td></tr>`).join('');
+  _dadosAmazon = itens;
+  buscarAmazon();
 }
 async function conferirAmazon(tipo){
   const btnMap = {estoque:'btnConferirAmazonEstoque', preco:'btnConferirAmazonPreco', pedidos:'btnConferirAmazonPedidos'};
@@ -1085,6 +1147,7 @@ async function ignorarAmazon(id){
             <button class="btn sm secondary" onclick="limparFilaCompleta('amazon')" style="background:#374151">&#x1F5D1;&#xFE0F; Limpar fila</button>
           </div>
         </div>
+        <div class="busca-secao-wrap"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="busca-amazon" class="busca-secao" type="search" placeholder="Buscar por produto ou SKU..." oninput="buscarAmazon()"><span id="busca-amazon-count" class="busca-count"></span></div>
         <div id="amazon-empty" style="text-align:center;padding:40px;color:#9fb0d9">
           <div style="font-size:32px;margin-bottom:8px">&#x2705;</div>
           Clique em Conferir para iniciar.

@@ -103,6 +103,13 @@ try:
 except Exception as _frete_exc:
     logger.warning("Motor de frete não carregado: %s", _frete_exc)
 
+try:
+    from dashboard_blueprint import router as dashboard_router
+    app.include_router(dashboard_router)
+    logger.info("Dashboard blueprint registrado em /dashboard")
+except Exception as _dash_exc:
+    logger.warning("Dashboard blueprint não carregado: %s", _dash_exc)
+
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     return await verificar_api_key(request, call_next)
@@ -406,6 +413,59 @@ def fila_page():
     if html_file.exists():
         return HTMLResponse(html_file.read_text(encoding="utf-8"))
     raise HTTPException(status_code=404, detail="pages/fila.html não encontrado.")
+
+@app.get("/hub", response_class=HTMLResponse)
+def hub_page():
+    html_file = PAGES_DIR / "hub.html"
+    return HTMLResponse(html_file.read_text(encoding="utf-8")) if html_file.exists() else HTMLResponse(FALLBACK_HTML)
+
+@app.get("/sistema/bling", response_class=HTMLResponse)
+def sistema_bling():
+    return HTMLResponse((PAGES_DIR / "sistema_bling.html").read_text(encoding="utf-8"))
+
+@app.get("/sistema/ml", response_class=HTMLResponse)
+def sistema_ml():
+    return HTMLResponse((PAGES_DIR / "sistema_ml.html").read_text(encoding="utf-8"))
+
+@app.get("/sistema/shopify", response_class=HTMLResponse)
+def sistema_shopify_page():
+    return HTMLResponse((PAGES_DIR / "sistema_shopify.html").read_text(encoding="utf-8"))
+
+@app.get("/sistema/amazon", response_class=HTMLResponse)
+def sistema_amazon():
+    return HTMLResponse((PAGES_DIR / "sistema_amazon.html").read_text(encoding="utf-8"))
+
+@app.get("/sistema/shopee", response_class=HTMLResponse)
+def sistema_shopee():
+    return HTMLResponse((PAGES_DIR / "sistema_shopee.html").read_text(encoding="utf-8"))
+
+@app.get("/sistema/google", response_class=HTMLResponse)
+def sistema_google():
+    return HTMLResponse((PAGES_DIR / "sistema_google.html").read_text(encoding="utf-8"))
+
+@app.get("/cost-engine", response_class=HTMLResponse)
+def cost_engine_page():
+    return HTMLResponse((PAGES_DIR / "cost_engine.html").read_text(encoding="utf-8"))
+
+@app.get("/cost-allocation", response_class=HTMLResponse)
+def cost_allocation_page():
+    return HTMLResponse((PAGES_DIR / "cost_allocation.html").read_text(encoding="utf-8"))
+
+@app.get("/oee", response_class=HTMLResponse)
+def oee_page():
+    return HTMLResponse((PAGES_DIR / "oee.html").read_text(encoding="utf-8"))
+
+@app.get("/perfis", response_class=HTMLResponse)
+def perfis_page():
+    return HTMLResponse((PAGES_DIR / "perfis.html").read_text(encoding="utf-8"))
+
+@app.get("/regras-calculo", response_class=HTMLResponse)
+def regras_calculo_page():
+    return HTMLResponse((PAGES_DIR / "regras_calculo.html").read_text(encoding="utf-8"))
+
+@app.get("/sie", response_class=HTMLResponse)
+def sie_page():
+    return HTMLResponse((PAGES_DIR / "sie.html").read_text(encoding="utf-8"))
 
 @app.get("/health")
 def health():
@@ -1534,13 +1594,6 @@ def marketing_ml_sugestoes_limpar_post():
     from services.ml_price_suggestions import limpar_sugestoes
     limpar_sugestoes()
     return {"ok": True}
-
-@app.get("/fila", response_class=HTMLResponse)
-def fila_page():
-    html_file = PAGES_DIR / "fila.html"
-    if html_file.exists():
-        return HTMLResponse(html_file.read_text(encoding="utf-8"))
-    raise HTTPException(status_code=404, detail="pages/fila.html não encontrado.")
 
 @app.post("/marketing/ml/sugestoes/reprocessar")
 async def marketing_ml_sugestoes_reprocessar(background_tasks: BackgroundTasks):
@@ -3196,3 +3249,83 @@ async def scbot_executar_endpoint(urls_extras: list[str] = None):
     cache["scbot"] = scbot_status()
     _save_json(SEO_CACHE_PATH, cache)
     return {"ok": True, "resultado": resultado}
+
+
+# ── Módulos Avançados — Endpoints de API ─────────────────────────────────────
+
+_MOD_DIR = DATA_DIR
+
+@app.get("/modulos/cost-engine")
+def get_cost_engine():
+    return _load_json(_MOD_DIR / "cost_engine.json", {})
+
+@app.post("/modulos/cost-engine")
+async def post_cost_engine(request: Request):
+    body = await request.json()
+    _save_json(_MOD_DIR / "cost_engine.json", body)
+    return {"ok": True}
+
+@app.get("/modulos/cost-allocation")
+def get_cost_allocation():
+    return _load_json(_MOD_DIR / "cost_allocation_module.json", {})
+
+@app.post("/modulos/cost-allocation")
+async def post_cost_allocation(request: Request):
+    body = await request.json()
+    _save_json(_MOD_DIR / "cost_allocation_module.json", body)
+    return {"ok": True}
+
+@app.get("/rateio/visoes")
+def get_rateio_visoes():
+    data = _load_json(_MOD_DIR / "cost_allocation_module.json", {})
+    return {"visoes": data.get("visoes", [])}
+
+@app.get("/config/automacao")
+def get_automacao():
+    oee = _load_json(_MOD_DIR / "oee_module.json", {})
+    return {"oee": oee}
+
+@app.post("/config/automacao")
+async def post_automacao(request: Request):
+    body = await request.json()
+    oee_data = body.get("oee", body)
+    _save_json(_MOD_DIR / "oee_module.json", oee_data)
+    return {"ok": True}
+
+@app.get("/modulos/sie")
+def get_sie():
+    return _load_json(_MOD_DIR / "sie_module.json", {})
+
+@app.post("/modulos/sie")
+async def post_sie(request: Request):
+    body = await request.json()
+    _save_json(_MOD_DIR / "sie_module.json", body)
+    return {"ok": True}
+
+@app.get("/modulos/regras-calculo")
+def get_regras_calculo():
+    return _load_json(_MOD_DIR / "regras_calculo.json", {})
+
+@app.post("/modulos/regras-calculo")
+async def post_regras_calculo(request: Request):
+    body = await request.json()
+    _save_json(_MOD_DIR / "regras_calculo.json", body)
+    return {"ok": True}
+
+@app.get("/config/regras-precificacao")
+def get_regras_precificacao():
+    return _load_json(_MOD_DIR / "regras_precificacao.json", {})
+
+@app.post("/config/regras-precificacao")
+async def post_regras_precificacao(request: Request):
+    body = await request.json()
+    _save_json(_MOD_DIR / "regras_precificacao.json", body)
+    return {"ok": True}
+
+@app.post("/config/regras-precificacao/ativar/{perfil_id}")
+def ativar_perfil_precificacao(perfil_id: str):
+    data = _load_json(_MOD_DIR / "regras_precificacao.json", {"perfis": []})
+    for p in data.get("perfis", []):
+        p["ativo"] = (str(p.get("id")) == perfil_id)
+    _save_json(_MOD_DIR / "regras_precificacao.json", data)
+    return {"ok": True, "ativo": perfil_id}

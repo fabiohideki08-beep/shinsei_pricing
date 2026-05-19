@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Shopify — Shinsei Pricing</title>
+<style>
+:root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--ok:#16a34a;--danger:#ef4444;--warn:#f59e0b}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text)}
+.wrap{max-width:1400px;margin:0 auto;padding:22px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 18px;position:sticky;top:16px;z-index:10}
+.brand h1{margin:0;font-size:22px;display:flex;align-items:center;gap:10px}
+.brand h1 .dot{display:inline-block;width:12px;height:12px;border-radius:50%;background:#22c55e}
+.brand p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.top-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.btn{border:none;background:var(--accent);color:#fff;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:7px;font-size:13px}
+.btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+.btn.success{background:var(--ok)} .btn.danger{background:var(--danger)}
+.btn.sm{padding:7px 10px;font-size:12px;border-radius:9px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
+.stat{background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:16px}
+.stat .label{color:var(--muted);font-size:12px;font-weight:600}
+.stat .value{font-size:28px;font-weight:800;margin-top:8px}
+.stat .value.warn{color:var(--warn)} .stat .value.ok{color:#22c55e}
+.secao{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:20px;padding:20px;margin-bottom:18px}
+.secao-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px}
+.secao-titulo{font-size:17px;font-weight:700;display:flex;align-items:center;gap:10px}
+.secao-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.filtro-btn{padding:6px 12px;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-size:12px;font-weight:600}
+.filtro-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.busca-wrap{position:relative;display:flex;align-items:center;margin-bottom:12px}
+.busca-wrap svg{position:absolute;left:12px;color:var(--muted);pointer-events:none}
+.busca{background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--text);padding:9px 14px 9px 36px;border-radius:11px;font-size:13px;width:300px;outline:none;transition:border-color .2s}
+.busca::placeholder{color:var(--muted)}.busca:focus{border-color:var(--accent)}
+.busca-count{font-size:11px;color:var(--muted);white-space:nowrap;margin-left:8px}
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:14px}
+table{width:100%;border-collapse:collapse;min-width:800px}
+th,td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;text-align:left}
+th{background:#10182f;color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.04em}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(79,140,255,.04)}
+.tag{display:inline-block;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700}
+.tag.pendente{background:rgba(245,158,11,.15);color:var(--warn)}
+.tag.corrigido{background:rgba(34,197,94,.15);color:#22c55e}
+.tag.ignorado{background:rgba(150,150,150,.15);color:var(--muted)}
+.tag.estoque{background:rgba(79,140,255,.15);color:#4f8cff}
+.tag.preco{background:rgba(124,58,237,.15);color:#a78bfa}
+.dif-pos{color:#ef4444;font-weight:700}
+.dif-neg{color:#22c55e;font-weight:700}
+.actions-row{display:flex;gap:6px}
+.empty{text-align:center;padding:40px;color:var(--muted);border:1px dashed var(--line);border-radius:14px}
+.notice{padding:12px 14px;border-radius:12px;border:1px solid var(--line);font-size:13px;margin-bottom:14px;display:none}
+.notice.ok{border-color:#166534;background:rgba(22,163,74,.1);color:#bbf7d0;display:block}
+.notice.err{border-color:#991b1b;background:rgba(239,68,68,.1);color:#fca5a5;display:block}
+.notice.warn{border-color:#92400e;background:rgba(245,158,11,.1);color:#fde68a;display:block}
+.progress-wrap{display:none;padding:10px;background:rgba(79,140,255,.08);border-radius:12px;margin-bottom:12px;font-size:13px;color:var(--muted)}
+.progress-bar-bg{height:6px;background:var(--line);border-radius:4px;margin-top:8px}
+.progress-bar{height:6px;background:var(--accent);border-radius:4px;width:0%;transition:width .3s}
+@media(max-width:900px){.stats-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.stats-grid{grid-template-columns:1fr}.topbar{flex-direction:column;align-items:flex-start}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1><span class="dot"></span> Shopify &middot; Auditoria de Estoque e Preços</h1>
+      <p>Conferência de produtos, divergências de estoque e preço</p>
+    </div>
+    <div class="top-actions">
+      <a class="btn secondary" href="/hub">&#8592; Hub</a>
+      <button class="btn secondary" onclick="carregarShopify()">Atualizar</button>
+    </div>
+  </div>
+
+  <div id="notice" class="notice"></div>
+
+  <div class="stats-grid">
+    <div class="stat"><div class="label">Pendentes</div><div class="value warn" id="stat-pendente">—</div></div>
+    <div class="stat"><div class="label">Divergências de estoque</div><div class="value warn" id="stat-estoque">—</div></div>
+    <div class="stat"><div class="label">Divergências de preço</div><div class="value warn" id="stat-preco">—</div></div>
+  </div>
+
+  <div class="secao">
+    <div class="secao-header">
+      <div class="secao-titulo">
+        Conferência Shopify
+        <span id="badge-shopify" style="background:var(--warn);color:#000;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:700">0</span>
+      </div>
+      <div class="secao-actions">
+        <button class="btn sm warn" id="btnConferirShopifyEstoque" onclick="conferirShopify('estoque')">Conferir estoque</button>
+        <button class="btn sm" id="btnConferirShopifyPreco" onclick="conferirShopify('preco')" style="background:#7c3aed">Conferir preços</button>
+        <button class="btn sm success" onclick="corrigirTodosShopify('estoque')">Corrigir estoque</button>
+        <button class="btn sm success" onclick="corrigirTodosShopify('preco')" style="background:#7c3aed">Corrigir preços</button>
+        <button class="btn sm secondary" onclick="limparFila()">Limpar fila</button>
+      </div>
+    </div>
+
+    <div class="filtros">
+      <button class="filtro-btn active" onclick="filtrarShopify('','',this)">Todos</button>
+      <button class="filtro-btn" onclick="filtrarShopify('pendente','',this)">Pendentes</button>
+      <button class="filtro-btn" onclick="filtrarShopify('','estoque',this)">Estoque</button>
+      <button class="filtro-btn" onclick="filtrarShopify('','preco',this)">Preço</button>
+      <button class="filtro-btn" onclick="filtrarShopify('corrigido','',this)">Corrigidos</button>
+    </div>
+
+    <div class="busca-wrap">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="busca-shopify" class="busca" type="search" placeholder="Buscar por título, SKU ou EAN..." oninput="buscarShopify()">
+      <span id="busca-shopify-count" class="busca-count"></span>
+    </div>
+
+    <div id="progresso-shopify" class="progress-wrap">
+      <div id="progresso-shopify-texto">Aguardando...</div>
+      <div class="progress-bar-bg"><div id="progresso-shopify-bar" class="progress-bar"></div></div>
+    </div>
+
+    <div id="tabela-shopify"><div class="empty">Clique em "Conferir estoque" ou "Conferir preços" para iniciar.</div></div>
+  </div>
+</div>
+<script>
+let _dadosShopify = [];
+let filtroShopifyStatus = '';
+let filtroShopifyTipo = '';
+
+function mostrarNotice(msg, tipo){
+  const el=document.getElementById('notice');
+  el.className='notice '+tipo;
+  el.textContent=msg;
+  if(tipo==='ok') setTimeout(()=>{el.className='notice'},4000);
+}
+
+function _filtrar(itens, termo, campos){
+  if(!termo) return itens;
+  const t=termo.toLowerCase();
+  return itens.filter(i=>campos.some(c=>(i[c]||'').toString().toLowerCase().includes(t)));
+}
+
+function buscarShopify(){
+  const t=document.getElementById('busca-shopify')?.value||'';
+  const f=_filtrar(_dadosShopify,t,['titulo','sku','ean','gtin']);
+  const countEl=document.getElementById('busca-shopify-count');
+  if(countEl) countEl.textContent=t?`${f.length} de ${_dadosShopify.length}`:'';
+  renderTabelaShopify(f, true);
+}
+
+async function carregarShopify(){
+  try{
+    let url='/auditoria/shopify';
+    const params=[];
+    if(filtroShopifyStatus) params.push('status='+filtroShopifyStatus);
+    if(filtroShopifyTipo) params.push('tipo='+filtroShopifyTipo);
+    if(params.length) url+='?'+params.join('&');
+    const res=await fetch(url);
+    if(!res.ok) return;
+    const data=await res.json();
+    const itens=data.itens||[];
+    const stats=data.stats||{};
+    const pendentes=stats.pendente||0;
+    document.getElementById('stat-pendente').textContent=pendentes;
+    document.getElementById('stat-estoque').textContent=itens.filter(i=>i.tipo==='estoque'&&i.status==='pendente').length;
+    document.getElementById('stat-preco').textContent=itens.filter(i=>i.tipo==='preco'&&i.status==='pendente').length;
+    document.getElementById('badge-shopify').textContent=pendentes;
+    renderTabelaShopify(itens);
+  }catch(e){ console.error(e); }
+}
+
+function renderTabelaShopify(itens, fromSearch=false){
+  if(!fromSearch) _dadosShopify=itens;
+  const wrap=document.getElementById('tabela-shopify');
+  if(!itens.length){
+    wrap.innerHTML='<div class="empty">Nenhuma divergência Shopify.</div>';
+    return;
+  }
+  const rows=itens.map(item=>{
+    const isEstoque=item.tipo==='estoque';
+    const acoes=item.status==='pendente'?`<div class="actions-row"><button class="btn success sm" onclick="corrigirShopify('${item.id}')">Corrigir</button><button class="btn secondary sm" onclick="ignorarShopify('${item.id}')">Ignorar</button></div>`:'—';
+    const detalhe=isEstoque
+      ?`<td style="color:#22c55e;font-weight:700">${item.estoque_bling??'—'}</td><td style="color:#4f8cff;font-weight:700">${item.estoque_shopify??'—'}</td>`
+      :`<td style="color:#22c55e;font-weight:700">R$ ${(item.preco_bling||0).toFixed(2).replace('.',',')}</td><td style="color:#4f8cff;font-weight:700">R$ ${(item.preco_shopify||0).toFixed(2).replace('.',',')}</td>`;
+    const dif=item.diferenca||0;
+    return `<tr><td><strong>${item.sku||'—'}</strong></td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.titulo||'—'}</td><td><span class="tag ${item.tipo||'pendente'}">${item.tipo||'—'}</span></td>${detalhe}<td class="${dif>0?'dif-pos':'dif-neg'}">${dif>0?'+':''}${dif}</td><td><span class="tag ${item.status||'pendente'}">${item.status||'pendente'}</span></td><td style="font-size:11px;color:var(--muted)">${item.criado_em?new Date(item.criado_em).toLocaleString('pt-BR'):''}</td><td>${acoes}</td></tr>`;
+  }).join('');
+  wrap.innerHTML=`<div class="table-wrap"><table><thead><tr><th>SKU</th><th>Produto</th><th>Tipo</th><th>Bling</th><th>Shopify</th><th>Diferença</th><th>Status</th><th>Detectado</th><th>Ação</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function filtrarShopify(status, tipo, btn){
+  filtroShopifyStatus=status;
+  filtroShopifyTipo=tipo;
+  document.querySelectorAll('.filtro-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  carregarShopify();
+}
+
+async function conferirShopify(tipo=''){
+  const btn=document.getElementById(tipo==='preco'?'btnConferirShopifyPreco':'btnConferirShopifyEstoque');
+  const prog=document.getElementById('progresso-shopify');
+  const progTexto=document.getElementById('progresso-shopify-texto');
+  const progBar=document.getElementById('progresso-shopify-bar');
+  if(btn) btn.disabled=true;
+  prog.style.display='block';
+  progBar.style.width='0%';
+  progTexto.textContent='Iniciando conferência Shopify...';
+  let progSim=0;
+  const iv=setInterval(()=>{
+    if(progSim<85){progSim+=2;progBar.style.width=progSim+'%';}
+    progTexto.textContent=`Varrendo produtos Shopify... (${Math.floor(progSim*5)} aprox.)`;
+  },1000);
+  try{
+    const res=await fetch('/auditoria/shopify/conferir'+(tipo?'?tipo='+tipo:''),{method:'POST'});
+    const data=await res.json();
+    clearInterval(iv);
+    progBar.style.width='100%';
+    if(data.ok){
+      const tem=(data.divergencias_estoque+data.divergencias_preco)>0;
+      progBar.style.background=tem?'var(--warn)':'var(--ok)';
+      progTexto.textContent=`Concluído! ${data.verificados} verificados — ${data.divergencias_estoque} div. estoque, ${data.divergencias_preco} div. preço.`;
+      mostrarNotice(`Shopify: ${data.verificados} verificados — ${data.divergencias_estoque} divergências de estoque, ${data.divergencias_preco} de preço.`,tem?'warn':'ok');
+    }
+    carregarShopify();
+  }catch(e){
+    clearInterval(iv);
+    mostrarNotice('Erro ao conferir Shopify.','err');
+  }finally{
+    if(btn) btn.disabled=false;
+    setTimeout(()=>{prog.style.display='none';progBar.style.background='var(--accent)';},6000);
+  }
+}
+
+async function corrigirShopify(id){
+  try{
+    const res=await fetch('/auditoria/shopify/corrigir/'+id,{method:'POST'});
+    const data=await res.json();
+    mostrarNotice(data.ok?'Corrigido na Shopify!':'Erro: '+(data.detail||'falha'),data.ok?'ok':'err');
+    carregarShopify();
+  }catch(e){mostrarNotice('Erro de conexão.','err');}
+}
+
+async function corrigirTodosShopify(tipo=''){
+  const label=tipo==='estoque'?'estoque':tipo==='preco'?'preço':'todas as divergências';
+  if(!confirm('Corrigir '+label+' pendentes na Shopify?')) return;
+  let url='/auditoria/shopify?status=pendente';
+  if(tipo) url+='&tipo='+tipo;
+  const res=await fetch(url);
+  const data=await res.json();
+  const itens=data.itens||[];
+  if(!itens.length){mostrarNotice('Nenhuma divergência pendente.','ok');return;}
+  let ok=0,err=0;
+  for(const item of itens){
+    try{const r=await fetch('/auditoria/shopify/corrigir/'+item.id,{method:'POST'});const d=await r.json();if(d.ok) ok++;else err++;}catch(e){err++;}
+    await new Promise(r=>setTimeout(r,500));
+  }
+  mostrarNotice(`Shopify: ${ok} corrigidos, ${err} erros.`,err>0?'warn':'ok');
+  carregarShopify();
+}
+
+async function ignorarShopify(id){
+  try{await fetch('/auditoria/shopify/ignorar/'+id,{method:'POST'});carregarShopify();}catch(e){}
+}
+
+async function limparFila(){
+  if(!confirm('Limpar TODA a fila Shopify? Esta ação não pode ser desfeita.')) return;
+  await fetch('/auditoria/shopify/limpar-tudo',{method:'POST'});
+  mostrarNotice('Fila Shopify limpa!','ok');
+  carregarShopify();
+}
+
+carregarShopify();
+</script>
+</body>
+</html>

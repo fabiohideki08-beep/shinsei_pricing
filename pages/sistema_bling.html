@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Bling — Shinsei Pricing</title>
+<style>
+:root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--ok:#16a34a;--danger:#ef4444;--warn:#f59e0b}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text)}
+.wrap{max-width:1400px;margin:0 auto;padding:22px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 18px;position:sticky;top:16px;z-index:10}
+.brand h1{margin:0;font-size:22px;display:flex;align-items:center;gap:10px}
+.brand h1 span{display:inline-block;width:12px;height:12px;border-radius:50%;background:#f97316;vertical-align:middle}
+.brand p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.top-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.btn{border:none;background:var(--accent);color:#fff;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:7px;font-size:13px}
+.btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+.btn.success{background:var(--ok)} .btn.danger{background:var(--danger)} .btn.sm{padding:7px 10px;font-size:12px;border-radius:9px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
+.stat{background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:16px}
+.stat .label{color:var(--muted);font-size:12px;font-weight:600}
+.stat .value{font-size:28px;font-weight:800;margin-top:8px}
+.stat .value.warn{color:var(--warn)} .stat .value.ok{color:#22c55e} .stat .value.danger{color:var(--danger)}
+.secao{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:20px;padding:20px;margin-bottom:18px}
+.secao-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
+.secao-titulo{font-size:17px;font-weight:700;display:flex;align-items:center;gap:10px}
+.secao-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.busca-wrap{position:relative;display:flex;align-items:center}
+.busca-wrap svg{position:absolute;left:12px;color:var(--muted);pointer-events:none}
+.busca{background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--text);padding:9px 14px 9px 36px;border-radius:11px;font-size:13px;width:280px;outline:none;transition:border-color .2s}
+.busca::placeholder{color:var(--muted)}.busca:focus{border-color:var(--accent)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid var(--line);background:var(--card2)}
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:14px}
+table{width:100%;border-collapse:collapse;min-width:900px}
+th,td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;text-align:left;vertical-align:top}
+th{background:#10182f;color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.04em}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(79,140,255,.04)}
+.tag{display:inline-block;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700}
+.tag.pendente{background:rgba(245,158,11,.15);color:var(--warn)}
+.tag.aprovado{background:rgba(34,197,94,.15);color:#22c55e}
+.tag.rejeitado{background:rgba(239,68,68,.15);color:#ef4444}
+.tag.incompleto{background:rgba(124,58,237,.2);color:#a78bfa}
+.empty{text-align:center;padding:40px;color:var(--muted);border:1px dashed var(--line);border-radius:14px}
+.item{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:20px;padding:18px;margin-bottom:12px}
+.item-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.item-title{font-size:18px;font-weight:700;margin:0 0 6px}
+.meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.summary{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:14px}
+.metric{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:12px}
+.metric .label{color:var(--muted);font-size:11px}
+.metric .value{font-size:18px;font-weight:700;margin-top:6px}
+.neg{color:#fca5a5;font-weight:700}
+.mini{font-size:12px;color:var(--muted)}
+.notice{padding:12px 14px;border-radius:12px;border:1px solid var(--line);font-size:13px;margin-bottom:14px;display:none}
+.notice.ok{border-color:#166534;background:rgba(22,163,74,.1);color:#bbf7d0;display:block}
+.notice.err{border-color:#991b1b;background:rgba(239,68,68,.1);color:#fca5a5;display:block}
+.notice.warn{border-color:#92400e;background:rgba(245,158,11,.1);color:#fde68a;display:block}
+details{margin-top:12px}
+details>summary{cursor:pointer;color:#c9d7ff;font-weight:700}
+.skel{display:inline-block;background:rgba(255,255,255,.08);border-radius:4px;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+@media(max-width:900px){.stats-grid{grid-template-columns:1fr 1fr}.summary{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.stats-grid{grid-template-columns:1fr}.topbar{flex-direction:column;align-items:flex-start}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1><span></span> Bling &middot; Gestão de Custos e Precificação</h1>
+      <p>Fila de aprovação, itens incompletos e estoque negativo</p>
+    </div>
+    <div class="top-actions">
+      <a class="btn secondary" href="/hub">&#8592; Hub</a>
+      <a class="btn secondary" href="/simulador">Simulador</a>
+      <button class="btn secondary" onclick="carregarTudo()">Atualizar</button>
+    </div>
+  </div>
+
+  <div id="notice" class="notice"></div>
+
+  <div class="stats-grid">
+    <div class="stat"><div class="label">Pendentes na fila</div><div class="value warn" id="stat-pendente">—</div></div>
+    <div class="stat"><div class="label">Incompletos</div><div class="value warn" id="stat-incompleto">—</div></div>
+    <div class="stat"><div class="label">Estoque negativo</div><div class="value danger" id="stat-negativo">—</div></div>
+  </div>
+
+  <div class="secao">
+    <div class="secao-header">
+      <div class="secao-titulo">Fila de Aprovação</div>
+      <div class="secao-actions">
+        <div class="busca-wrap">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="busca-fila" class="busca" type="search" placeholder="Buscar por título, SKU ou EAN..." oninput="filtrarFila()">
+        </div>
+        <span id="busca-fila-count" style="font-size:11px;color:var(--muted)"></span>
+        <button class="btn secondary sm" onclick="carregarFila()">Atualizar</button>
+      </div>
+    </div>
+    <div id="lista-fila"></div>
+  </div>
+
+  <div class="secao">
+    <div class="secao-header">
+      <div class="secao-titulo">Estoque Negativo <span id="badge-neg" style="background:#ef4444;color:#fff;border-radius:999px;padding:2px 10px;font-size:12px">0</span></div>
+      <div class="secao-actions">
+        <button class="btn secondary sm" onclick="ignorarTodosNegativos()">Ignorar todos</button>
+        <button class="btn secondary sm" onclick="carregarNegativo()">Atualizar</button>
+      </div>
+    </div>
+    <div id="tabela-negativo-wrap">
+      <div class="empty">Carregando...</div>
+    </div>
+  </div>
+</div>
+<script>
+let _todosItens = [];
+let _todosNegativos = [];
+
+function moeda(v){return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
+function formatDate(v){if(!v)return '-';const d=new Date(v);return isNaN(d)?v:d.toLocaleString('pt-BR')}
+function mostrarNotice(msg, tipo){const el=document.getElementById('notice');el.className='notice '+tipo;el.textContent=msg;if(tipo==='ok')setTimeout(()=>{el.className='notice'},4000)}
+
+function cardStatus(status){const map={pendente:'#f59e0b',aprovado:'#16a34a',rejeitado:'#ef4444',incompleto:'#7c3aed'};return `<span class="tag ${status||'pendente'}">${(status||'pendente').toUpperCase()}</span>`}
+
+function renderMarketplaces(marketplaces){
+  const items=Object.values(marketplaces||{});
+  if(!items.length)return '<div class="mini" style="padding:12px">Sem canais para exibir.</div>';
+  return `<div class="table-wrap"><table><thead><tr><th>Canal</th><th>Preço promo</th><th>Preço virtual</th><th>Dif. nominal</th><th>Dif. %</th><th>Receita líquida</th><th>Lucro</th><th>Margem</th><th>Frete</th><th>Comissão</th><th>Imposto</th><th>Custo total</th></tr></thead><tbody>${items.map(item=>{const raw=item.raw||{};const promo=Number(item.preco_promocional||raw.preco_promocional||raw.preco_final||0);const virt=Number(item.preco||raw.preco_virtual||0);const difNom=Number(raw.diferenca_nominal??(virt-promo));const difPct=Number(raw.diferenca_percentual??(promo?((virt-promo)/promo)*100:0));const margem=Number(item.margem||raw.margem||0);return `<tr><td>${item.label||'-'}</td><td>${moeda(promo)}</td><td>${moeda(virt)}</td><td>${moeda(difNom)}</td><td>${difPct.toFixed(2)}%</td><td>${moeda(raw.receita_liquida||0)}</td><td>${moeda(item.lucro||raw.lucro||0)}</td><td class="${margem<0?'neg':''}">${margem.toFixed(2)}%</td><td>${moeda(item.frete||raw.frete||0)}</td><td>${Number(item.comissao||raw.comissao||0).toFixed(2)}</td><td>${moeda(item.imposto||raw.imposto||0)}</td><td>${moeda(item.custo_total||raw.custo_total||0)}</td></tr>`}).join('')}</tbody></table></div>`;
+}
+
+function renderComponentes(aud){
+  const comps=aud.componentes_custo||[];
+  if(!comps.length)return '<div class="mini" style="padding:10px 0">Sem componentes detalhados.</div>';
+  return `<div class="table-wrap"><table style="min-width:700px"><thead><tr><th>SKU</th><th>ID</th><th>Qtd.</th><th>Custo unit.</th><th>Subtotal</th><th>Origem busca</th><th>Origem custo</th><th>Warning</th></tr></thead><tbody>${comps.map(c=>`<tr><td>${c.sku||'-'}</td><td>${c.id||'-'}</td><td>${Number(c.quantidade||0).toFixed(2)}</td><td>${moeda(c.custo_unitario||0)}</td><td>${moeda(c.subtotal||0)}</td><td>${c.origem_busca||'-'}</td><td>${c.origem_custo||'-'}</td><td>${c.warning||'-'}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+function renderHistorico(item){
+  const hist=item.historico_decisao||[];
+  if(!hist.length)return '<div class="mini">Sem decisões registradas.</div>';
+  return `<div class="table-wrap"><table style="min-width:500px"><thead><tr><th>Ação</th><th>Quando</th><th>Motivo</th></tr></thead><tbody>${hist.map(h=>`<tr><td>${h.acao||'-'}</td><td>${formatDate(h.quando)}</td><td>${h.motivo||JSON.stringify(h.resultado_resumido||{})}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+async function aprovar(id){
+  const res=await fetch(`/fila/aprovar/${id}`,{method:'POST'});
+  const data=await res.json();
+  if(data.ok){mostrarNotice('Item aprovado e aplicado.','ok');carregarFila();}
+  else mostrarNotice(data.detail||'Erro ao aprovar.','err');
+}
+
+async function rejeitar(id){
+  const motivo=prompt('Motivo da rejeição:','Rejeitado manualmente.')||'Rejeitado manualmente.';
+  const res=await fetch(`/fila/rejeitar/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({motivo})});
+  const data=await res.json();
+  if(data.ok){mostrarNotice('Item rejeitado.','ok');carregarFila();}
+  else mostrarNotice(data.detail||'Erro ao rejeitar.','err');
+}
+
+function renderItem(item){
+  if(item.status==='incompleto') return renderItemIncompleto(item);
+  const produto=item.produto_bling||{};
+  const aud=item.auditoria||{};
+  return `<div class="item"><div class="item-head"><div><div class="item-title">${item.nome||produto.nome||'[Item sem nome]'}</div><div class="meta">${cardStatus(item.status||'pendente')}<span class="pill">SKU ${item.sku||aud.sku||produto.codigo||'-'}</span><span class="pill">Bling ID ${produto.id||'-'}</span><span class="pill">${formatDate(item.criado_em)}</span></div></div><div class="meta"><button class="btn success" onclick="aprovar('${item.id}')">Aprovar</button><button class="btn danger" onclick="rejeitar('${item.id}')">Rejeitar</button></div></div><div class="summary"><div class="metric"><div class="label">Tipo de custo</div><div class="value">${aud.tipo_custo||'-'}</div></div><div class="metric"><div class="label">Custo usado</div><div class="value">${moeda(aud.custo_usado||0)}</div></div><div class="metric"><div class="label">Peso usado</div><div class="value">${Number(aud.peso_usado||0).toFixed(3)}</div></div><div class="metric"><div class="label">Origem custo</div><div class="value" style="font-size:14px">${aud.origem_custo||'-'}</div></div><div class="metric"><div class="label">Melhor canal</div><div class="value" style="font-size:14px">${(item.payload_original&&item.payload_original.melhor_canal)||'-'}</div></div><div class="metric"><div class="label">Fórmula</div><div class="value" style="font-size:14px">${aud.formula_version||'-'}</div></div></div><h3 style="margin:0 0 10px">Retrato multicanal</h3>${renderMarketplaces(item.marketplaces||{})}<details open><summary>Auditoria do custo e composição</summary><div class="mini" style="margin:10px 0 12px">${aud.warning_custo||'Sem alertas de custo.'}</div>${renderComponentes(aud)}</details><details><summary>Histórico de decisão</summary>${renderHistorico(item)}</details></div>`;
+}
+
+function renderItemIncompleto(item){
+  const campos=item.campos_faltando||[];
+  const sku=item.sku||'';
+  const id=item.id||'';
+  const comps=(item.dados_incompletos||{}).componentes_sem_custo||[];
+  const comp_nome=comps.length>0?comps[0].nome||comps[0].sku||'':'';
+  const titulo=campos.includes('peso')?'Preencha o peso do produto no Bling.':campos.includes('composicao')&&comp_nome?`Componente sem custo: ${comp_nome}`:campos.includes('custo')||campos.includes('composicao')?'Preencha o preço de compra no estoque ou revise a composição.':'Dados incompletos para precificação.';
+  const tipo_campo=campos.includes('peso')?'peso':'custo';
+  const label_campo=campos.includes('peso')?'Peso do produto (kg)':'Custo de compra (R$)';
+  const placeholder=campos.includes('peso')?'ex: 0.300':'ex: 15.90';
+  const nome_produto=item.nome||'';
+  return `<div class="item" style="border-left:4px solid #7c3aed" id="card-${id}"><div class="item-head"><div>${nome_produto?`<div class="item-title">${nome_produto}</div>`:''}<div style="font-size:13px;color:#f59e0b;margin-bottom:6px">${titulo}</div><div class="meta"><span class="tag incompleto">INCOMPLETO</span><span class="pill">SKU ${sku}</span><span class="pill">${formatDate(item.criado_em)}</span></div></div><div class="meta"><button class="btn danger" onclick="ignorarIncompleto('${id}')">Ignorar</button></div></div><div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;margin-top:12px"><div style="flex:1;min-width:260px"><div style="color:#f59e0b;font-weight:600;margin-bottom:8px">Corrigir no Bling</div><label style="font-size:12px;color:#9fb0d9">${label_campo}</label><div style="display:flex;gap:8px;margin-top:4px"><input type="number" id="val-${id}" step="0.001" min="0" placeholder="${placeholder}" style="background:#1e293b;border:1px solid #334155;color:#eef2ff;padding:8px 12px;border-radius:6px;width:160px"><button class="btn success" onclick="salvarIncompleto('${id}','${sku}','${tipo_campo}')">Salvar no Bling</button></div></div></div></div>`;
+}
+
+async function salvarIncompleto(id,sku,tipo){
+  const valEl=document.getElementById('val-'+id);
+  const val=parseFloat(valEl?.value);
+  if(!val||val<=0){mostrarNotice('Informe um valor válido.','err');return;}
+  const btnEl=valEl?.parentElement?.querySelector('button');
+  if(btnEl){btnEl.disabled=true;btnEl.textContent='Salvando...';}
+  const r=await fetch('/fila/completar/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tipo,valor:val})});
+  const d=await r.json();
+  if(d.ok){mostrarNotice(d.mensagem||'Salvo! Será recalculado no próximo ciclo.','ok');setTimeout(()=>carregarFila(),2000);}
+  else{mostrarNotice(d.detail||'Erro ao salvar.','err');if(btnEl){btnEl.disabled=false;btnEl.textContent='Salvar no Bling';}}
+}
+
+async function ignorarIncompleto(id){
+  if(!confirm('Ignorar este item?')) return;
+  await fetch('/fila/rejeitar/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({motivo:'Ignorado manualmente.'})});
+  carregarFila();
+}
+
+function filtrarFila(){
+  const termo=(document.getElementById('busca-fila')?.value||'').toLowerCase().trim();
+  const filtrados=termo?_todosItens.filter(i=>{
+    const t=(i.nome||'').toLowerCase();
+    const s=(i.sku||(i.auditoria||{}).sku||(i.produto_bling||{}).codigo||'').toLowerCase();
+    const e=((i.produto_bling||{}).gtin||'').toLowerCase();
+    return t.includes(termo)||s.includes(termo)||e.includes(termo);
+  }):_todosItens;
+  const countEl=document.getElementById('busca-fila-count');
+  if(countEl) countEl.textContent=termo?`${filtrados.length} de ${_todosItens.length}`:'';
+  const el=document.getElementById('lista-fila');
+  if(!filtrados.length){el.innerHTML=_todosItens.length?`<div class="empty">Nenhum item para "${termo}".</div>`:'<div class="empty">Nenhum item na fila.</div>';return;}
+  el.innerHTML=filtrados.map(renderItem).join('');
+}
+
+async function carregarFila(){
+  try{
+    const res=await fetch('/fila/lista');
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    const lista=data.itens||[];
+    const stats=data.stats||{};
+    document.getElementById('stat-pendente').textContent=stats.pendente||0;
+    document.getElementById('stat-incompleto').textContent=stats.incompleto||0;
+    _todosItens=lista;
+    filtrarFila();
+  }catch(e){
+    document.getElementById('lista-fila').innerHTML=`<div class="empty" style="color:#fca5a5">Erro ao carregar fila: ${e.message}</div>`;
+  }
+}
+
+async function carregarNegativo(){
+  try{
+    const res=await fetch('/auditoria/negativo');
+    if(!res.ok) throw new Error();
+    const data=await res.json();
+    const itens=data.itens||[];
+    _todosNegativos=itens;
+    document.getElementById('stat-negativo').textContent=itens.length;
+    document.getElementById('badge-neg').textContent=itens.length;
+    const wrap=document.getElementById('tabela-negativo-wrap');
+    if(!itens.length){wrap.innerHTML='<div class="empty">Nenhum estoque negativo detectado.</div>';return;}
+    wrap.innerHTML=`<div class="table-wrap"><table><thead><tr><th>SKU</th><th>Produto</th><th>Estoque</th><th>Detectado</th><th>Status</th><th>Ação</th></tr></thead><tbody>${itens.map(i=>`<tr><td style="font-family:monospace;color:#f87171">${i.sku||'-'}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${i.nome||'-'}</td><td style="text-align:center;font-weight:700;color:#ef4444">${i.estoque}</td><td style="font-size:11px;color:var(--muted)">${(i.detectado_em||'').replace('T',' ').substring(0,16)}</td><td><span class="tag ${i.status==='pendente'?'pendente':'aprovado'}">${i.status}</span></td><td>${i.status==='pendente'?`<button class="btn sm secondary" onclick="ignorarNegativo('${i.id}')">Ignorar</button>`:''}</td></tr>`).join('')}</tbody></table></div>`;
+  }catch(e){
+    document.getElementById('tabela-negativo-wrap').innerHTML='<div class="empty" style="color:#fca5a5">Erro ao carregar estoque negativo.</div>';
+  }
+}
+
+async function ignorarNegativo(id){
+  await fetch('/auditoria/estoque-negativo/ignorar/'+id,{method:'POST'});
+  carregarNegativo();
+}
+
+async function ignorarTodosNegativos(){
+  if(!confirm('Ignorar todos os alertas de estoque negativo?')) return;
+  for(const i of _todosNegativos.filter(i=>i.status==='pendente'))
+    await fetch('/auditoria/estoque-negativo/ignorar/'+i.id,{method:'POST'});
+  carregarNegativo();
+}
+
+async function carregarTudo(){
+  await Promise.all([carregarFila(), carregarNegativo()]);
+}
+
+carregarTudo();
+</script>
+</body>
+</html>
