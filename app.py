@@ -2479,18 +2479,108 @@ def regras_modelo_download():
         filename="Shinsei_Regras_Modelo.xlsx",
     )
 
+def _severidade_negativo(estoque: int) -> str:
+    """Classifica a severidade do estoque negativo."""
+    if estoque >= -5:   return "leve"
+    if estoque >= -20:  return "moderado"
+    if estoque >= -100: return "grave"
+    return "critico"
+
+
 @app.get("/auditoria/estoque-negativo")
-def auditoria_estoque_negativo_lista(status: str = ""):
+def auditoria_estoque_negativo_lista(status: str = "", severidade: str = "", busca: str = "", limit: int = 200, offset: int = 0):
     import json as _j
     fila_path = DATA_DIR / "fila_estoque_negativo.json"
     itens = _j.loads(fila_path.read_text(encoding="utf-8")) if fila_path.exists() else []
-    # Exibe apenas itens com estoque realmente negativo
+    # Enriquece com severidade
+    for i in itens:
+        i["severidade"] = _severidade_negativo(int(i.get("estoque", 0)))
+    # Filtra apenas negativos
     itens = [i for i in itens if int(i.get("estoque", 0)) < 0]
     if status:
         itens = [i for i in itens if i.get("status") == status]
+    if severidade:
+        itens = [i for i in itens if i.get("severidade") == severidade]
+    if busca:
+        b = busca.lower()
+        itens = [i for i in itens if b in str(i.get("sku","")).lower() or b in str(i.get("nome","")).lower()]
+    # Ordena do mais grave ao mais leve
+    itens.sort(key=lambda x: int(x.get("estoque", 0)))
     total = len(itens)
     pendentes = sum(1 for i in itens if i.get("status") == "pendente")
-    return {"itens": itens, "stats": {"pendente": pendentes, "total": total}}
+    # Stats de severidade
+    sv = {"leve":0,"moderado":0,"grave":0,"critico":0}
+    for i in itens:
+        sv[i.get("severidade","leve")] = sv.get(i.get("severidade","leve"), 0) + 1
+    return {
+        "itens": itens[offset:offset+limit],
+        "total": total,
+        "stats": {
+            "pendente": pendentes,
+            "total": total,
+            "severidade": sv,
+        }
+    }
+
+
+@app.get("/auditoria/estoque-negativo/resumo")
+def auditoria_estoque_negativo_resumo():
+    """Resumo rápido por severidade — sem retornar todos os itens."""
+    import json as _j
+    fila_path = DATA_DIR / "fila_estoque_negativo.json"
+    itens = _j.loads(fila_path.read_text(encoding="utf-8")) if fila_path.exists() else []
+    negativos = [i for i in itens if int(i.get("estoque", 0)) < 0]
+    pendentes = [i for i in negativos if i.get("status") == "pendente"]
+    sv = {"leve":0,"moderado":0,"grave":0,"critico":0}
+    piores = []
+    for i in pendentes:
+        s = _severidade_negativo(int(i.get("estoque", 0)))
+        sv[s] = sv.get(s, 0) + 1
+        if s in ("grave","critico"):
+            piores.append({"sku": i.get("sku"), "nome": str(i.get("nome",""))[:50], "estoque": i.get("estoque"), "severidade": s})
+    piores.sort(key=lambda x: int(x.get("estoque", 0)))
+    return {
+        "total_negativos": len(negativos),
+        "pendentes": len(pendentes),
+        "severidade": sv,
+        "piores": piores[:20],
+    }
+
+
+@app.post("/auditoria/estoque-negativo/ignorar-leves")
+def auditoria_negativo_ignorar_leves():
+    """Ignora em batch todos os itens com estoque entre -1 e -5 (provavelmente transientes)."""
+    import json as _j
+    fila_path = DATA_DIR / "fila_estoque_negativo.json"
+    itens = _j.loads(fila_path.read_text(encoding="utf-8")) if fila_path.exists() else []
+    count = 0
+    for i in itens:
+        est = int(i.get("estoque", 0))
+        if est < 0 and est >= -5 and i.get("status") == "pendente":
+            i["status"] = "ignorado"
+            count += 1
+    DATA_DIR.mkdir(exist_ok=True)
+    fila_path.write_text(_j.dumps(itens, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"ok": True, "ignorados": count}
+
+
+@app.post("/auditoria/estoque-negativo/ignorar-severidade/{sev}")
+def auditoria_negativo_ignorar_por_severidade(sev: str):
+    """Ignora em batch todos os itens de uma severidade específica."""
+    if sev not in ("leve","moderado","grave","critico"):
+        raise HTTPException(status_code=400, detail="Severidade inválida")
+    import json as _j
+    fila_path = DATA_DIR / "fila_estoque_negativo.json"
+    itens = _j.loads(fila_path.read_text(encoding="utf-8")) if fila_path.exists() else []
+    count = 0
+    for i in itens:
+        est = int(i.get("estoque", 0))
+        if _severidade_negativo(est) == sev and i.get("status") == "pendente":
+            i["status"] = "ignorado"
+            count += 1
+    DATA_DIR.mkdir(exist_ok=True)
+    fila_path.write_text(_j.dumps(itens, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"ok": True, "ignorados": count, "severidade": sev}
 
 @app.post("/auditoria/estoque-negativo/ignorar/{item_id}")
 def auditoria_estoque_negativo_ignorar(item_id: str):

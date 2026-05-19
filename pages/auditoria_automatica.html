@@ -1012,11 +1012,35 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ─── ESTOQUE NEGATIVO ─────────────────────────────────────────
+let _negOffset = 0;
+const _negLimit = 100;
+
+function filtrarNegativo(sev){
+  document.getElementById('neg-filtro-sev').value = sev;
+  _negOffset = 0;
+  carregarNegativo();
+}
+
+async function ignorarSeveridade(sev){
+  if(!confirm(`Ignorar todos os itens "${sev}"?`)) return;
+  await fetch('/auditoria/estoque-negativo/ignorar-severidade/'+sev, {method:'POST'});
+  carregarNegativo();
+}
+
 async function carregarNegativo(){
-  const res = await fetch('/auditoria/estoque-negativo').catch(()=>null);
+  const busca = document.getElementById('neg-busca')?.value || '';
+  const sev   = document.getElementById('neg-filtro-sev')?.value || '';
+  const status = document.getElementById('neg-filtro-status')?.value || '';
+  let url = `/auditoria/estoque-negativo?limit=${_negLimit}&offset=${_negOffset}`;
+  if(busca) url += '&busca='+encodeURIComponent(busca);
+  if(sev)   url += '&severidade='+sev;
+  if(status) url += '&status='+status;
+
+  const res = await fetch(url).catch(()=>null);
   if(!res) return;
   const data = await res.json();
   const itens = data.itens || [];
+  const total = data.total || 0;
   const pendentes = itens.filter(i=>i.status==='pendente');
   document.getElementById('badge-negativo').textContent = pendentes.length;
   const tbody = document.getElementById('tabela-negativo');
@@ -1024,17 +1048,54 @@ async function carregarNegativo(){
   if(!tbody) return;
   if(!itens.length){ tbody.innerHTML=''; if(empty) empty.style.display='block'; return; }
   if(empty) empty.style.display='none';
-  tbody.innerHTML = itens.map(i=>`
-    <tr style="border-bottom:1px solid #1a2540;${i.status==='pendente'?'background:rgba(239,68,68,0.05)':''}">
-      <td style="padding:8px 12px;font-family:monospace;color:#f87171">${i.sku||'-'}</td>
-      <td style="padding:8px 12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${i.nome||''}">${i.nome||'-'}</td>
-      <td style="padding:8px 12px;text-align:center;font-weight:700;color:#ef4444">${i.estoque}</td>
+  // Atualiza badge e contador
+  document.getElementById('badge-negativo').textContent = total;
+  const countEl = document.getElementById('neg-count-total');
+  if(countEl) countEl.textContent = `${itens.length} de ${total} exibidos`;
+
+  // Atualiza cards de severidade com resumo global
+  fetch('/auditoria/estoque-negativo/resumo').then(r=>r.json()).then(r=>{
+    const sv = r.severidade || {};
+    document.getElementById('neg-sv-leve').textContent    = sv.leve    ?? '–';
+    document.getElementById('neg-sv-moderado').textContent= sv.moderado ?? '–';
+    document.getElementById('neg-sv-grave').textContent   = sv.grave    ?? '–';
+    document.getElementById('neg-sv-critico').textContent = sv.critico  ?? '–';
+  }).catch(()=>{});
+
+  const sevCores = {leve:'#eab308', moderado:'#f97316', grave:'#ef4444', critico:'#ff0000'};
+  const sevLabel = {leve:'Leve', moderado:'Moderado', grave:'Grave', critico:'Crítico'};
+
+  const tbody = document.getElementById('tabela-negativo');
+  const empty = document.getElementById('negativo-empty');
+  if(!tbody) return;
+  if(!itens.length){ tbody.innerHTML=''; if(empty) empty.style.display='block'; return; }
+  if(empty) empty.style.display='none';
+
+  tbody.innerHTML = itens.map(i=>{
+    const sev = i.severidade || 'leve';
+    const cor = sevCores[sev] || '#eab308';
+    return `<tr style="border-bottom:1px solid #1a2540;${i.status==='pendente'?'background:rgba(239,68,68,0.04)':'opacity:.6'}">
+      <td style="padding:8px 12px"><span style="background:${cor}22;color:${cor};border:1px solid ${cor}44;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">${sevLabel[sev]||sev}</span></td>
+      <td style="padding:8px 12px;font-family:monospace;font-size:12px;color:#f87171">${i.sku||'-'}</td>
+      <td style="padding:8px 12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${i.nome||''}">${i.nome||'-'}</td>
+      <td style="padding:8px 12px;text-align:center;font-weight:800;color:${cor};font-size:15px">${i.estoque}</td>
       <td style="padding:8px 12px;color:#9fb0d9;font-size:11px">${(i.detectado_em||'').replace('T',' ').substring(0,16)}</td>
       <td style="padding:8px 12px"><span style="background:${i.status==='pendente'?'#ef4444':'#374151'};color:white;border-radius:999px;padding:2px 8px;font-size:11px">${i.status}</span></td>
       <td style="padding:8px 12px">
-        ${i.status==='pendente'?`<button class="btn success sm" onclick="ignorarNegativo('${i.id}')">✓ Ignorar</button>`:''}
+        ${i.status==='pendente'?`<button class="btn success sm" onclick="ignorarNegativo('${i.id}')">✓</button>`:''}
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
+
+  // Paginação
+  const pag = document.getElementById('neg-paginacao');
+  if(pag && total > _negLimit){
+    const pages = Math.ceil(total / _negLimit);
+    const cur   = Math.floor(_negOffset / _negLimit);
+    pag.innerHTML = Array.from({length:Math.min(pages,10)},(_,p)=>
+      `<button onclick="_negOffset=${p*_negLimit};carregarNegativo()" style="padding:6px 12px;border-radius:8px;border:1px solid #263458;background:${p===cur?'#3b82f6':'transparent'};color:${p===cur?'#fff':'#9fb0d9'};cursor:pointer">${p+1}</button>`
+    ).join('');
+  } else if(pag) pag.innerHTML='';
 }
 
 async function ignorarNegativo(id){
@@ -1043,10 +1104,11 @@ async function ignorarNegativo(id){
 }
 
 async function ignorarTodosNegativos(){
-  if(!confirm('Ignorar todos os alertas de estoque negativo pendentes?')) return;
-  const data = await fetch('/auditoria/estoque-negativo').then(r=>r.json());
-  const pendentes = (data.itens||[]).filter(i=>i.status==='pendente');
-  for(const i of pendentes) await fetch('/auditoria/estoque-negativo/ignorar/'+i.id, {method:'POST'});
+  if(!confirm('Ignorar TODOS os alertas de estoque negativo pendentes? (Inclui graves)')) return;
+  // Usa endpoint em batch por severidade para cada nível
+  for(const sev of ['leve','moderado','grave','critico']){
+    await fetch('/auditoria/estoque-negativo/ignorar-severidade/'+sev, {method:'POST'});
+  }
   carregarNegativo();
 }
 
@@ -1175,13 +1237,55 @@ async function ignorarAmazon(id){
             <button class="btn sm secondary" onclick="limparFilaCompleta('negativo')" style="background:#374151">🗑️ Limpar fila</button>
           </div>
         </div>
+
+        <!-- Cards de severidade -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px" id="neg-sev-cards">
+          <div style="background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.3);border-radius:12px;padding:12px;text-align:center;cursor:pointer" onclick="filtrarNegativo('leve')">
+            <div style="font-size:22px;font-weight:800;color:#eab308" id="neg-sv-leve">–</div>
+            <div style="font-size:11px;color:#9fb0d9;margin-top:2px">Leve (-1 a -5)</div>
+            <button style="margin-top:6px;font-size:11px;background:rgba(234,179,8,.2);border:none;color:#eab308;padding:3px 8px;border-radius:6px;cursor:pointer" onclick="event.stopPropagation();ignorarSeveridade('leve')">Ignorar todos</button>
+          </div>
+          <div style="background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.3);border-radius:12px;padding:12px;text-align:center;cursor:pointer" onclick="filtrarNegativo('moderado')">
+            <div style="font-size:22px;font-weight:800;color:#f97316" id="neg-sv-moderado">–</div>
+            <div style="font-size:11px;color:#9fb0d9;margin-top:2px">Moderado (-6 a -20)</div>
+            <button style="margin-top:6px;font-size:11px;background:rgba(249,115,22,.2);border:none;color:#f97316;padding:3px 8px;border-radius:6px;cursor:pointer" onclick="event.stopPropagation();ignorarSeveridade('moderado')">Ignorar todos</button>
+          </div>
+          <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:12px;text-align:center;cursor:pointer" onclick="filtrarNegativo('grave')">
+            <div style="font-size:22px;font-weight:800;color:#ef4444" id="neg-sv-grave">–</div>
+            <div style="font-size:11px;color:#9fb0d9;margin-top:2px">Grave (-21 a -100)</div>
+          </div>
+          <div style="background:rgba(139,0,0,.2);border:1px solid rgba(239,68,68,.5);border-radius:12px;padding:12px;text-align:center;cursor:pointer" onclick="filtrarNegativo('critico')">
+            <div style="font-size:22px;font-weight:800;color:#ff0000" id="neg-sv-critico">–</div>
+            <div style="font-size:11px;color:#9fb0d9;margin-top:2px">Crítico (&lt; -100)</div>
+          </div>
+        </div>
+
+        <!-- Filtros -->
+        <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+          <input id="neg-busca" placeholder="🔍 Buscar por SKU ou nome..." style="flex:1;min-width:200px;padding:9px 12px;background:rgba(255,255,255,.06);border:1px solid #263458;color:#eef2ff;border-radius:10px;font-size:13px" oninput="carregarNegativo()" />
+          <select id="neg-filtro-sev" style="padding:9px 12px;background:rgba(255,255,255,.06);border:1px solid #263458;color:#eef2ff;border-radius:10px;font-size:13px" onchange="carregarNegativo()">
+            <option value="">Todas as severidades</option>
+            <option value="leve">Leve (-1 a -5)</option>
+            <option value="moderado">Moderado (-6 a -20)</option>
+            <option value="grave">Grave (-21 a -100)</option>
+            <option value="critico">Crítico (&lt; -100)</option>
+          </select>
+          <select id="neg-filtro-status" style="padding:9px 12px;background:rgba(255,255,255,.06);border:1px solid #263458;color:#eef2ff;border-radius:10px;font-size:13px" onchange="carregarNegativo()">
+            <option value="">Todos os status</option>
+            <option value="pendente">Pendente</option>
+            <option value="ignorado">Ignorado</option>
+          </select>
+          <span id="neg-count-total" style="font-size:13px;color:#9fb0d9;white-space:nowrap"></span>
+        </div>
+
         <div style="font-size:13px;color:#f87171;margin-bottom:12px">
-          ⚡ Produtos com saldo negativo indicam venda sem estoque. Verifique e corrija no Bling.
+          ⚡ Produtos com saldo negativo indicam venda sem estoque. <strong>Leves</strong> geralmente são transientes (sync pendente). <strong>Graves e Críticos</strong> precisam de atenção imediata.
         </div>
         <div style="overflow-x:auto">
           <table style="width:100%;border-collapse:collapse;font-size:13px">
             <thead>
               <tr style="border-bottom:1px solid #263458;color:#9fb0d9;text-align:left">
+                <th style="padding:8px 12px">Severidade</th>
                 <th style="padding:8px 12px">SKU</th>
                 <th style="padding:8px 12px">Produto</th>
                 <th style="padding:8px 12px;text-align:center">Estoque</th>
@@ -1193,6 +1297,7 @@ async function ignorarAmazon(id){
             <tbody id="tabela-negativo"></tbody>
           </table>
         </div>
+        <div id="neg-paginacao" style="display:flex;gap:8px;justify-content:center;margin-top:12px"></div>
         <div id="negativo-empty" style="display:none;text-align:center;padding:40px;color:#9fb0d9">
           <div style="font-size:32px;margin-bottom:8px">✅</div>
           Nenhum estoque negativo detectado.

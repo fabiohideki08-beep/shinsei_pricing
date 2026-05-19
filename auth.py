@@ -142,7 +142,13 @@ PUBLIC_PATHS = {
     "/sie/anti-colapso",
     "/sie/health-dashboard",
     "/sie/score-config",
+    # Estoque negativo — análise e batch
+    "/auditoria/estoque-negativo/resumo",
+    "/auditoria/estoque-negativo/ignorar-leves",
 }
+
+# Prefixo dinâmico para ignorar-severidade (leve/moderado/grave/critico)
+# já coberto por PUBLIC_PREFIXES abaixo
 
 # Prefixos pÃºblicos (qualquer rota que comece com esses valores)
 PUBLIC_PREFIXES = (
@@ -152,6 +158,7 @@ PUBLIC_PREFIXES = (
     "/fila/links/",
     "/auditoria/shopify/",
     "/auditoria/ml-estoque/",
+    "/auditoria/estoque-negativo/",
     "/static/",
     "/pages/",
     "/frete/",       # Shopify Carrier Service + widget de frete (sem API key)
