@@ -473,6 +473,86 @@ def regras_calculo_page():
 def sie_page():
     return HTMLResponse((PAGES_DIR / "sie.html").read_text(encoding="utf-8"))
 
+@app.get("/conferencia-sku", response_class=HTMLResponse)
+def conferencia_sku_page():
+    return HTMLResponse((PAGES_DIR / "conferencia_sku.html").read_text(encoding="utf-8"))
+
+# ─── Conferência de SKUs ────────────────────────────────────────────────────
+
+@app.post("/conferencia-sku/executar")
+def conferencia_sku_executar():
+    """Inicia a conferência cruzada de SKUs em background."""
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="Bling não disponível.")
+    from conferencia_sku import iniciar_conferencia_em_background, get_estado
+    estado = get_estado()
+    if estado.get("status") == "rodando":
+        return {"ok": False, "msg": "Conferência já em andamento.", "estado": estado}
+    bling = BlingClient()
+    iniciou = iniciar_conferencia_em_background(bling)
+    return {"ok": iniciou, "msg": "Conferência iniciada." if iniciou else "Já rodando.", "estado": get_estado()}
+
+@app.get("/conferencia-sku/status")
+def conferencia_sku_status():
+    """Retorna o progresso da conferência em andamento."""
+    from conferencia_sku import get_estado
+    return get_estado()
+
+@app.get("/conferencia-sku/resultado")
+def conferencia_sku_resultado(
+    canal: str = "",
+    ausente_em: str = "",
+    busca: str = "",
+    so_bling: bool = False,
+    limit: int = 500,
+    offset: int = 0,
+):
+    """
+    Retorna o resultado da última conferência com filtros.
+    canal: filtra por canal específico (ml, shopify, amazon, shopee)
+    ausente_em: mostra só SKUs AUSENTES naquele canal
+    busca: filtra por SKU ou nome
+    so_bling: mostra só produtos que estão APENAS no Bling (sem presença em nenhum canal)
+    """
+    from conferencia_sku import get_resultado
+    dados = get_resultado()
+    if not dados:
+        return {"ok": False, "erro": "Nenhuma conferência executada ainda.", "matrix": [], "stats": {}}
+
+    matrix = dados.get("matrix", [])
+
+    # Filtros
+    if busca:
+        b = busca.lower()
+        matrix = [r for r in matrix if b in r["sku"].lower() or b in (r.get("nome") or "").lower()]
+
+    if ausente_em:
+        campo = f"presente_{ausente_em}"
+        matrix = [r for r in matrix if r.get(campo) is False]
+
+    if so_bling:
+        matrix = [
+            r for r in matrix
+            if r.get("presente_bling")
+            and not r.get("presente_ml")
+            and not r.get("presente_shopify")
+            and not r.get("presente_amazon")
+            and not r.get("presente_shopee")
+        ]
+
+    total = len(matrix)
+    matrix_paginada = matrix[offset : offset + limit]
+
+    return {
+        "ok": True,
+        "executado_em": dados.get("executado_em"),
+        "duracao_segundos": dados.get("duracao_segundos"),
+        "stats": dados.get("stats", {}),
+        "sem_sku_ml": dados.get("sem_sku_ml", []),
+        "total_filtrado": total,
+        "matrix": matrix_paginada,
+    }
+
 @app.get("/health")
 def health():
     itens = [i for i in carregar_fila() if i.get("status") in ("pendente","incompleto")]

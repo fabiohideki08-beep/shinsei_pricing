@@ -148,6 +148,11 @@ PUBLIC_PATHS = {
     # Estoque negativo — análise e batch
     "/auditoria/estoque-negativo/resumo",
     "/auditoria/estoque-negativo/ignorar-leves",
+    # Conferência de SKUs
+    "/conferencia-sku",
+    "/conferencia-sku/executar",
+    "/conferencia-sku/status",
+    "/conferencia-sku/resultado",
 }
 
 

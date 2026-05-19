@@ -43,7 +43,16 @@ body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(
     </div>
     <div class="top-actions">
       <a class="btn secondary" href="/hub">&#8592; Hub</a>
+      <a class="btn" href="/conferencia-sku" style="background:rgba(99,102,241,.85)">🔗 Conferência SKU</a>
     </div>
+  </div>
+
+  <div id="sku-banner" style="display:none;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.3);border-radius:16px;padding:14px 18px;margin-bottom:16px;align-items:center;gap:18px;flex-wrap:wrap">
+    <div style="flex:1;min-width:200px">
+      <div style="font-size:13px;font-weight:700;color:#a5b4fc;margin-bottom:4px">🔗 Conferência SKU — Shopee</div>
+      <div style="font-size:12px;color:var(--muted)" id="sku-banner-texto">Carregando...</div>
+    </div>
+    <a class="btn sm" href="/conferencia-sku?ausente_em=shopee" style="background:rgba(99,102,241,.7);white-space:nowrap">Ver SKUs ausentes →</a>
   </div>
 
   <div class="center-card">
@@ -99,6 +108,24 @@ async function carregarStatus(){
   }
 }
 carregarStatus();
+
+// Banner Conferência SKU — canal Shopee
+(async function() {
+  try {
+    const r = await fetch('/conferencia-sku/resultado?limit=0');
+    const d = await r.json();
+    if (!d.ok || !d.stats) return;
+    const s = d.stats;
+    if (!s.shopee || !s.shopee.conectado) return;
+    const semBling = s.shopee.sem_bling ?? 0;
+    const totalShopee = s.shopee.total ?? 0;
+    const semShopee = s.bling_sem_shopee ?? 0;
+    const exec = d.executado_em ? new Date(d.executado_em).toLocaleString('pt-BR') : '';
+    document.getElementById('sku-banner-texto').innerHTML =
+      `${totalShopee} SKUs mapeados na Shopee · <b style="color:#fbbf24">${semShopee} SKUs do Bling sem mapeamento</b> · ${semBling} SKUs Shopee sem correspondência no Bling${exec ? ` <span style="opacity:.6">(${exec})</span>` : ''}`;
+    document.getElementById('sku-banner').style.display = 'flex';
+  } catch(e) {}
+})();
 </script>
 
 <!-- Botão Início -->

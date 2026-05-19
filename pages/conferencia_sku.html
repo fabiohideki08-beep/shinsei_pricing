@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Conferência SKU — Shinsei Pricing</title>
+<style>
+:root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--ok:#16a34a;--danger:#ef4444;--warn:#f59e0b;--indigo:#6366f1}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text);min-height:100vh}
+.wrap{max-width:1500px;margin:0 auto;padding:22px}
+/* Topbar */
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px;background:rgba(18,26,49,.97);border:1px solid var(--line);border-radius:18px;padding:16px 18px;position:sticky;top:12px;z-index:20}
+.brand h1{margin:0;font-size:21px;font-weight:800;display:flex;align-items:center;gap:10px}
+.brand p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.top-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+/* Botões */
+.btn{border:none;background:var(--accent);color:#fff;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:7px;font-size:13px;transition:opacity .15s}
+.btn:hover{opacity:.85}.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+.btn.success{background:var(--ok)}.btn.danger{background:var(--danger)}
+.btn.indigo{background:var(--indigo)}
+.btn.sm{padding:7px 10px;font-size:12px;border-radius:9px}
+/* Progresso */
+.progress-wrap{background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.3);border-radius:16px;padding:14px 18px;margin-bottom:18px;display:none}
+.progress-label{font-size:13px;color:var(--muted);margin-bottom:8px;display:flex;justify-content:space-between}
+.progress-bar-bg{height:8px;background:var(--line);border-radius:4px}
+.progress-bar{height:8px;background:var(--indigo);border-radius:4px;width:0%;transition:width .4s}
+/* Cards de stats */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
+.stat{background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:14px 16px;cursor:pointer;transition:border-color .15s}
+.stat:hover{border-color:rgba(99,102,241,.5)}
+.stat.active{border-color:var(--indigo);background:rgba(99,102,241,.1)}
+.stat .label{color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.stat .value{font-size:26px;font-weight:800;margin-top:6px}
+.stat .sub{font-size:11px;color:var(--muted);margin-top:3px}
+.warn{color:var(--warn)}.ok-color{color:#22c55e}.danger{color:var(--danger)}.indigo-color{color:#a5b4fc}
+/* Filtros */
+.filtros-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;background:rgba(18,26,49,.8);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.filtro-label{font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap}
+.filtro-btn{padding:6px 13px;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-size:12px;font-weight:600;transition:all .15s}
+.filtro-btn.active{background:var(--indigo);color:#fff;border-color:var(--indigo)}
+.busca{background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;width:240px;outline:none}
+.busca:focus{border-color:var(--indigo)}
+.busca::placeholder{color:var(--muted)}
+/* Tabs */
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--line);margin-bottom:18px}
+.tab{padding:10px 18px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;background:none;border-top:none;border-left:none;border-right:none;transition:all .15s}
+.tab.active{color:var(--text);border-bottom-color:var(--indigo)}
+.tab-content{display:none}.tab-content.active{display:block}
+/* Tabela */
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:14px}
+table{width:100%;border-collapse:collapse;min-width:800px}
+th,td{padding:9px 11px;border-bottom:1px solid var(--line);font-size:12px;text-align:left;vertical-align:middle}
+th{background:#0d1628;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.04em;position:sticky;top:0;z-index:5}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(79,140,255,.04)}
+/* Presença */
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700}
+.chip.ok{background:rgba(34,197,94,.15);color:#22c55e}
+.chip.no{background:rgba(239,68,68,.1);color:#f87171}
+.chip.na{background:rgba(100,100,100,.1);color:var(--muted)}
+/* Cobertura bar */
+.cob-wrap{width:64px;height:6px;background:var(--line);border-radius:3px;display:inline-block;vertical-align:middle;margin-right:5px}
+.cob-fill{height:6px;border-radius:3px;background:var(--ok)}
+/* Notice */
+.notice{padding:12px 14px;border-radius:12px;border:1px solid var(--line);font-size:13px;margin-bottom:14px;display:none}
+.notice.ok{border-color:#166534;background:rgba(22,163,74,.1);color:#bbf7d0;display:block}
+.notice.err{border-color:#991b1b;background:rgba(239,68,68,.1);color:#fca5a5;display:block}
+.notice.warn{border-color:#92400e;background:rgba(245,158,11,.1);color:#fde68a;display:block}
+.empty{text-align:center;padding:50px 20px;color:var(--muted);border:1px dashed var(--line);border-radius:14px}
+.empty svg{opacity:.3;margin-bottom:12px}
+/* Paginação */
+.pag{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:14px;flex-wrap:wrap}
+.pag-info{font-size:12px;color:var(--muted)}
+.pag-btns{display:flex;gap:6px}
+/* Legenda canais */
+.canal-badge{display:inline-block;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700;vertical-align:middle}
+.c-bling{background:rgba(249,115,22,.15);color:#fb923c}
+.c-ml{background:rgba(234,179,8,.15);color:#fbbf24}
+.c-shopify{background:rgba(34,197,94,.15);color:#4ade80}
+.c-amazon{background:rgba(255,153,0,.15);color:#fb923c}
+.c-shopee{background:rgba(249,115,22,.15);color:#f97316}
+/* Resumo canal card */
+.canal-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:18px}
+.canal-card{background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:14px 16px}
+.canal-card .c-title{font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.canal-card .c-row{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:5px}
+.canal-card .c-row b{color:var(--text)}
+.canal-card .c-row .alerta{color:var(--warn)}
+.canal-card .c-row .ok{color:#22c55e}
+@media(max-width:700px){.stats-grid{grid-template-columns:repeat(2,1fr)}.filtros-bar{gap:6px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="brand">
+      <h1>🔗 Conferência de SKU</h1>
+      <p>Cruzamento de produtos: Bling ↔ Mercado Livre · Shopify · Amazon · Shopee</p>
+    </div>
+    <div class="top-actions">
+      <a class="btn secondary" href="/hub">&#8592; Hub</a>
+      <span id="ultima-exec" style="font-size:12px;color:var(--muted)"></span>
+      <button class="btn indigo" id="btnExecutar" onclick="executarConferencia()">▶ Executar conferência</button>
+    </div>
+  </div>
+
+  <div id="notice" class="notice"></div>
+
+  <!-- Barra de progresso -->
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-label">
+      <span id="progressMsg">Iniciando...</span>
+      <span id="progressPct">0%</span>
+    </div>
+    <div class="progress-bar-bg"><div class="progress-bar" id="progressBar"></div></div>
+  </div>
+
+  <!-- Stats resumo -->
+  <div class="stats-grid" id="statsGrid">
+    <div class="stat" onclick="setFiltro('')">
+      <div class="label">Total no Bling</div>
+      <div class="value indigo-color" id="s-bling">—</div>
+      <div class="sub">produtos ativos com SKU</div>
+    </div>
+    <div class="stat" onclick="setFiltro('ml')">
+      <div class="label">Bling sem ML</div>
+      <div class="value warn" id="s-sem-ml">—</div>
+      <div class="sub" id="sub-ml">sem anúncio ativo</div>
+    </div>
+    <div class="stat" onclick="setFiltro('shopify')">
+      <div class="label">Bling sem Shopify</div>
+      <div class="value warn" id="s-sem-shopify">—</div>
+      <div class="sub" id="sub-shopify">sem variante cadastrada</div>
+    </div>
+    <div class="stat" onclick="setFiltro('amazon')">
+      <div class="label">Bling sem Amazon</div>
+      <div class="value warn" id="s-sem-amazon">—</div>
+      <div class="sub" id="sub-amazon">sem listing/FBA</div>
+    </div>
+    <div class="stat" onclick="setFiltro('shopee')">
+      <div class="label">Bling sem Shopee</div>
+      <div class="value warn" id="s-sem-shopee">—</div>
+      <div class="sub" id="sub-shopee">sem mapeamento</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="mudarTab('matrix',this)">Matriz de Cobertura</button>
+    <button class="tab" onclick="mudarTab('canais',this)">Por Canal</button>
+    <button class="tab" onclick="mudarTab('semsku',this)">Anúncios ML sem SKU <span id="badge-semsku" style="display:none;background:var(--danger);color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:4px">0</span></button>
+  </div>
+
+  <!-- Tab: Matriz -->
+  <div id="tab-matrix" class="tab-content active">
+    <!-- Filtros -->
+    <div class="filtros-bar">
+      <span class="filtro-label">Filtrar ausente em:</span>
+      <button class="filtro-btn active" id="f-todos" onclick="setFiltro('')">Todos</button>
+      <button class="filtro-btn" id="f-ml" onclick="setFiltro('ml')">🟡 ML</button>
+      <button class="filtro-btn" id="f-shopify" onclick="setFiltro('shopify')">🟢 Shopify</button>
+      <button class="filtro-btn" id="f-amazon" onclick="setFiltro('amazon')">🟠 Amazon</button>
+      <button class="filtro-btn" id="f-shopee" onclick="setFiltro('shopee')">🔴 Shopee</button>
+      <button class="filtro-btn" id="f-sobling" onclick="setFiltroSoBling()">⚠️ Só Bling</button>
+      <div style="flex:1"></div>
+      <input class="busca" id="busca" type="search" placeholder="Buscar SKU ou nome..." oninput="aplicarBusca()">
+      <span id="count-label" style="font-size:12px;color:var(--muted);white-space:nowrap"></span>
+      <button class="btn sm secondary" onclick="exportarCSV()">⬇ CSV</button>
+    </div>
+
+    <div class="table-wrap">
+      <table id="tabela">
+        <thead id="thead-matrix">
+          <tr>
+            <th>SKU</th>
+            <th>Nome</th>
+            <th style="text-align:center">Estoque</th>
+            <th style="text-align:center">Preço</th>
+            <th style="text-align:center" id="th-ml">ML</th>
+            <th style="text-align:center" id="th-shopify">Shopify</th>
+            <th style="text-align:center" id="th-amazon">Amazon</th>
+            <th style="text-align:center" id="th-shopee">Shopee</th>
+            <th style="text-align:center">Cobertura</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-matrix">
+          <tr><td colspan="9" class="empty">Execute a conferência para visualizar os dados.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pag" id="paginacao">
+      <span class="pag-info" id="pag-info"></span>
+      <div class="pag-btns">
+        <button class="btn sm secondary" id="btnAnterior" onclick="irPagina(-1)" disabled>‹ Anterior</button>
+        <button class="btn sm secondary" id="btnProxima" onclick="irPagina(1)" disabled>Próxima ›</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Por Canal -->
+  <div id="tab-canais" class="tab-content">
+    <div class="canal-cards" id="canal-cards">
+      <div class="empty">Execute a conferência para ver os dados por canal.</div>
+    </div>
+    <div id="tab-canais-details"></div>
+  </div>
+
+  <!-- Tab: Sem SKU ML -->
+  <div id="tab-semsku" class="tab-content">
+    <div class="filtros-bar">
+      <span class="filtro-label">Anúncios no Mercado Livre sem SKU vinculado (seller_custom_field vazio)</span>
+      <div style="flex:1"></div>
+      <input class="busca" id="busca-semsku" type="search" placeholder="Buscar título..." oninput="filtrarSemSku()">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ID do Anúncio</th>
+            <th>Título</th>
+            <th style="text-align:center">Estoque</th>
+            <th>Link</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-semsku">
+          <tr><td colspan="4" class="empty">Nenhum dado. Execute a conferência.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /wrap -->
+
+<script>
+// ─── Estado global ───────────────────────────────────────────────────────────
+let _matrix = [];       // todos os itens carregados
+let _filtroAusente = ''; // canal ausente filtrado
+let _sobling = false;
+let _busca = '';
+let _pagina = 0;
+const PER_PAGE = 100;
+let _ivPool = null;
+let _canaisConectados = [];
+let _semSkuML = [];
+let _stats = {};
+
+// ─── Utilitários ─────────────────────────────────────────────────────────────
+function notice(msg, tipo) {
+  const el = document.getElementById('notice');
+  el.className = 'notice ' + tipo;
+  el.textContent = msg;
+  if (tipo === 'ok') setTimeout(() => { el.className = 'notice'; }, 5000);
+}
+
+function moeda(v) {
+  return v ? 'R$ ' + Number(v).toFixed(2).replace('.', ',') : '—';
+}
+
+function chipCanal(presente, conectado) {
+  if (!conectado) return '<span class="chip na">N/A</span>';
+  if (presente === true) return '<span class="chip ok">✓</span>';
+  return '<span class="chip no">✗</span>';
+}
+
+function coberturaBar(cob) {
+  const pct = Math.round(cob * 100);
+  const cor = cob >= 0.9 ? '#22c55e' : cob >= 0.5 ? '#f59e0b' : '#ef4444';
+  return `<div class="cob-wrap"><div class="cob-fill" style="width:${pct}%;background:${cor}"></div></div>${pct}%`;
+}
+
+function mudarTab(id, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + id).classList.add('active');
+}
+
+// ─── Filtros ──────────────────────────────────────────────────────────────────
+function setFiltro(canal) {
+  _filtroAusente = canal;
+  _sobling = false;
+  _pagina = 0;
+  document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(canal ? 'f-' + canal : 'f-todos').classList.add('active');
+  // Marcar stat card ativo
+  document.querySelectorAll('.stat').forEach(s => s.classList.remove('active'));
+  renderTabela();
+}
+
+function setFiltroSoBling() {
+  _filtroAusente = '';
+  _sobling = true;
+  _pagina = 0;
+  document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('f-sobling').classList.add('active');
+  renderTabela();
+}
+
+function aplicarBusca() {
+  _busca = document.getElementById('busca').value.trim().toLowerCase();
+  _pagina = 0;
+  renderTabela();
+}
+
+function filtrarDados() {
+  let items = _matrix;
+  if (_busca) {
+    items = items.filter(r =>
+      r.sku.toLowerCase().includes(_busca) ||
+      (r.nome || '').toLowerCase().includes(_busca)
+    );
+  }
+  if (_filtroAusente) {
+    items = items.filter(r => r['presente_' + _filtroAusente] === false);
+  }
+  if (_sobling) {
+    items = items.filter(r =>
+      r.presente_bling &&
+      !r.presente_ml &&
+      !r.presente_shopify &&
+      !r.presente_amazon &&
+      !r.presente_shopee
+    );
+  }
+  return items;
+}
+
+function irPagina(dir) {
+  _pagina += dir;
+  renderTabela();
+}
+
+// ─── Render tabela ────────────────────────────────────────────────────────────
+function renderTabela() {
+  const dados = filtrarDados();
+  const total = dados.length;
+  const inicio = _pagina * PER_PAGE;
+  const fim = Math.min(inicio + PER_PAGE, total);
+  const pagina = dados.slice(inicio, fim);
+
+  const mlOk = _canaisConectados.includes('ml');
+  const shOk = _canaisConectados.includes('shopify');
+  const amOk = _canaisConectados.includes('amazon');
+  const spOk = _canaisConectados.includes('shopee');
+
+  // Cabeçalho — esconde colunas de canais não conectados
+  document.getElementById('th-ml').style.display = mlOk ? '' : 'none';
+  document.getElementById('th-shopify').style.display = shOk ? '' : 'none';
+  document.getElementById('th-amazon').style.display = amOk ? '' : 'none';
+  document.getElementById('th-shopee').style.display = spOk ? '' : 'none';
+
+  const tbody = document.getElementById('tbody-matrix');
+  if (!pagina.length) {
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty">Nenhum SKU encontrado com os filtros aplicados.</div></td></tr>`;
+  } else {
+    tbody.innerHTML = pagina.map(r => {
+      const mlId = r.ml_id ? `<a href="https://produto.mercadolivre.com.br/${r.ml_id}" target="_blank" style="font-size:10px;color:var(--accent);margin-left:4px">↗</a>` : '';
+      const shId = r.shopify_variant_id ? '' : '';
+      return `<tr>
+        <td><b style="font-family:monospace;font-size:12px">${r.sku}</b></td>
+        <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.nome}">${r.nome || '—'}</td>
+        <td style="text-align:center">${r.estoque_bling ?? '—'}</td>
+        <td style="text-align:center">${r.preco_bling ? moeda(r.preco_bling) : '—'}</td>
+        ${mlOk ? `<td style="text-align:center">${chipCanal(r.presente_ml, mlOk)}${mlId}</td>` : ''}
+        ${shOk ? `<td style="text-align:center">${chipCanal(r.presente_shopify, shOk)}</td>` : ''}
+        ${amOk ? `<td style="text-align:center">${chipCanal(r.presente_amazon, amOk)}</td>` : ''}
+        ${spOk ? `<td style="text-align:center">${chipCanal(r.presente_shopee, spOk)}</td>` : ''}
+        <td style="text-align:center;white-space:nowrap">${coberturaBar(r.cobertura ?? 0)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Paginação
+  document.getElementById('pag-info').textContent =
+    total > 0 ? `${inicio + 1}–${fim} de ${total} SKUs` : '0 SKUs';
+  document.getElementById('count-label').textContent =
+    total !== _matrix.length ? `${total} de ${_matrix.length}` : `${total} SKUs`;
+  document.getElementById('btnAnterior').disabled = _pagina === 0;
+  document.getElementById('btnProxima').disabled = fim >= total;
+}
+
+// ─── Cards por canal ──────────────────────────────────────────────────────────
+function renderCanais(stats) {
+  const canaisMeta = [
+    { key: 'ml', icon: '🟡', nome: 'Mercado Livre', semKey: 'bling_sem_ml' },
+    { key: 'shopify', icon: '🟢', nome: 'Shopify', semKey: 'bling_sem_shopify' },
+    { key: 'amazon', icon: '🟠', nome: 'Amazon', semKey: 'bling_sem_amazon' },
+    { key: 'shopee', icon: '🔴', nome: 'Shopee', semKey: 'bling_sem_shopee' },
+  ];
+
+  const cards = canaisMeta.map(m => {
+    const c = stats[m.key] || {};
+    if (!c.conectado) {
+      return `<div class="canal-card">
+        <div class="c-title">${m.icon} ${m.nome} <span style="font-size:11px;color:var(--muted);font-weight:400">desconectado</span></div>
+        <div style="color:var(--muted);font-size:12px">Canal não conectado ou sem dados.</div>
+      </div>`;
+    }
+    const semBling = c.sem_bling ?? 0;
+    const semCanal = stats[m.semKey] ?? 0;
+    const cob = c.total > 0 ? Math.round(c.presentes_em_bling / c.total * 100) : 100;
+    return `<div class="canal-card">
+      <div class="c-title">${m.icon} ${m.nome}</div>
+      <div class="c-row"><span>Total no canal</span><b>${c.total ?? 0}</b></div>
+      <div class="c-row"><span>Presentes no Bling</span><b class="ok">${c.presentes_em_bling ?? 0}</b></div>
+      <div class="c-row"><span>Sem correspondência no Bling</span><b class="${semBling > 0 ? 'alerta' : 'ok'}">${semBling}</b></div>
+      <div class="c-row"><span>SKUs Bling ausentes aqui</span><b class="${semCanal > 0 ? 'alerta' : 'ok'}">${semCanal}</b></div>
+      <div style="margin-top:10px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px"><span>Cobertura</span><span>${cob}%</span></div>
+        <div style="height:6px;background:var(--line);border-radius:3px">
+          <div style="height:6px;border-radius:3px;background:${cob>=90?'#22c55e':cob>=60?'#f59e0b':'#ef4444'};width:${cob}%"></div>
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <a class="btn sm" href="/conferencia-sku?ausente_em=${m.key}" style="background:rgba(99,102,241,.7)" onclick="event.preventDefault();setFiltro('${m.key}');mudarTab('matrix',document.querySelector('.tab'))">Ver ausentes →</a>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('canal-cards').innerHTML = cards ||
+    '<div class="empty">Nenhum canal conectado.</div>';
+}
+
+// ─── Tabela Sem SKU ML ────────────────────────────────────────────────────────
+let _semSkuFiltrado = [];
+function renderSemSku(data) {
+  _semSkuML = data || [];
+  filtrarSemSku();
+  const badge = document.getElementById('badge-semsku');
+  if (_semSkuML.length > 0) {
+    badge.textContent = _semSkuML.length;
+    badge.style.display = 'inline';
+  }
+}
+
+function filtrarSemSku() {
+  const b = document.getElementById('busca-semsku').value.toLowerCase();
+  _semSkuFiltrado = b ? _semSkuML.filter(i => (i.titulo || '').toLowerCase().includes(b)) : _semSkuML;
+  const tbody = document.getElementById('tbody-semsku');
+  if (!_semSkuFiltrado.length) {
+    tbody.innerHTML = '<tr><td colspan="4"><div class="empty">Nenhum anúncio sem SKU encontrado.</div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = _semSkuFiltrado.map(i => `<tr>
+    <td><code style="font-size:11px">${i.id}</code></td>
+    <td>${i.titulo || '—'}</td>
+    <td style="text-align:center">${i.estoque ?? 0}</td>
+    <td><a href="https://www.mercadolivre.com.br/anuncios/${i.id}/editar" target="_blank" class="btn sm secondary">Editar ↗</a></td>
+  </tr>`).join('');
+}
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
+function atualizarStats(stats) {
+  _stats = stats;
+  const fmt = v => v !== null && v !== undefined ? v.toLocaleString('pt-BR') : '—';
+
+  document.getElementById('s-bling').textContent = fmt(stats.total_bling);
+  document.getElementById('s-sem-ml').textContent =
+    stats.ml?.conectado ? fmt(stats.bling_sem_ml) : 'N/A';
+  document.getElementById('s-sem-shopify').textContent =
+    stats.shopify?.conectado ? fmt(stats.bling_sem_shopify) : 'N/A';
+  document.getElementById('s-sem-amazon').textContent =
+    stats.amazon?.conectado ? fmt(stats.bling_sem_amazon) : 'N/A';
+  document.getElementById('s-sem-shopee').textContent =
+    stats.shopee?.conectado ? fmt(stats.bling_sem_shopee) : 'N/A';
+
+  if (stats.ml?.conectado) document.getElementById('sub-ml').textContent = `de ${fmt(stats.ml.total)} anúncios ativos`;
+  if (stats.shopify?.conectado) document.getElementById('sub-shopify').textContent = `de ${fmt(stats.shopify.total)} variantes`;
+  if (stats.amazon?.conectado) document.getElementById('sub-amazon').textContent = `de ${fmt(stats.amazon.total)} SKUs`;
+  if (stats.shopee?.conectado) document.getElementById('sub-shopee').textContent = `de ${fmt(stats.shopee.total)} mapeados`;
+
+  // Canais conectados
+  _canaisConectados = ['ml','shopify','amazon','shopee'].filter(c => stats[c]?.conectado);
+}
+
+// ─── Executar conferência ─────────────────────────────────────────────────────
+async function executarConferencia() {
+  const btn = document.getElementById('btnExecutar');
+  btn.disabled = true;
+  btn.textContent = '⏳ Iniciando...';
+  try {
+    const r = await fetch('/conferencia-sku/executar', { method: 'POST' });
+    const d = await r.json();
+    if (!d.ok && d.msg !== 'Conferência iniciada.') {
+      notice('Erro ao iniciar: ' + (d.msg || d.detail || 'falha'), 'err');
+      btn.disabled = false;
+      btn.textContent = '▶ Executar conferência';
+      return;
+    }
+    notice('Conferência iniciada! Isso pode levar alguns minutos dependendo do volume de produtos.', 'warn');
+    iniciarPolling();
+  } catch(e) {
+    notice('Erro de conexão.', 'err');
+    btn.disabled = false;
+    btn.textContent = '▶ Executar conferência';
+  }
+}
+
+// ─── Polling de progresso ─────────────────────────────────────────────────────
+function iniciarPolling() {
+  if (_ivPool) clearInterval(_ivPool);
+  document.getElementById('progressWrap').style.display = 'block';
+  _ivPool = setInterval(async () => {
+    try {
+      const r = await fetch('/conferencia-sku/status');
+      const d = await r.json();
+      atualizarProgresso(d);
+      if (d.status === 'concluido' || d.status === 'erro') {
+        clearInterval(_ivPool);
+        _ivPool = null;
+        if (d.status === 'concluido') {
+          await carregarResultado();
+        } else {
+          notice('Erro na conferência: ' + d.msg, 'err');
+        }
+        const btn = document.getElementById('btnExecutar');
+        btn.disabled = false;
+        btn.textContent = '▶ Executar conferência';
+        setTimeout(() => { document.getElementById('progressWrap').style.display = 'none'; }, 4000);
+      }
+    } catch(e) {}
+  }, 2000);
+}
+
+function atualizarProgresso(d) {
+  const pct = d.pct || 0;
+  document.getElementById('progressBar').style.width = pct + '%';
+  document.getElementById('progressPct').textContent = pct + '%';
+  const etapas = {
+    bling: '🔵 Coletando Bling...', ml: '🟡 Coletando ML...',
+    shopify: '🟢 Coletando Shopify...', amazon: '🟠 Coletando Amazon...',
+    shopee: '🔴 Coletando Shopee...', cruzamento: '🔗 Cruzando SKUs...',
+    concluido: '✅ Concluído!', erro: '❌ Erro'
+  };
+  document.getElementById('progressMsg').textContent = etapas[d.etapa] || d.msg || d.etapa;
+}
+
+// ─── Carregar resultado ───────────────────────────────────────────────────────
+async function carregarResultado() {
+  try {
+    const r = await fetch('/conferencia-sku/resultado?limit=2000');
+    const d = await r.json();
+    if (!d.ok) return;
+
+    _matrix = d.matrix || [];
+    atualizarStats(d.stats || {});
+    renderTabela();
+    renderCanais(d.stats || {});
+    renderSemSku(d.sem_sku_ml || []);
+
+    const exec = d.executado_em ? new Date(d.executado_em).toLocaleString('pt-BR') : '';
+    if (exec) {
+      document.getElementById('ultima-exec').textContent = `Última: ${exec} (${d.duracao_segundos}s)`;
+    }
+    notice(`Conferência carregada — ${_matrix.length} SKUs analisados.`, 'ok');
+  } catch(e) {
+    notice('Erro ao carregar resultado.', 'err');
+  }
+}
+
+// ─── Exportar CSV ──────────────────────────────────────────────────────────────
+function exportarCSV() {
+  const dados = filtrarDados();
+  if (!dados.length) { notice('Nenhum dado para exportar.', 'warn'); return; }
+  const canais = ['ml','shopify','amazon','shopee'].filter(c => _canaisConectados.includes(c));
+  const header = ['SKU','Nome','Estoque','Preco', ...canais.map(c => c.toUpperCase()), 'Cobertura_%'];
+  const rows = dados.map(r => [
+    r.sku,
+    `"${(r.nome||'').replace(/"/g,'""')}"`,
+    r.estoque_bling ?? '',
+    r.preco_bling ?? '',
+    ...canais.map(c => r['presente_' + c] === true ? 'SIM' : r['presente_' + c] === false ? 'NÃO' : 'N/A'),
+    Math.round((r.cobertura || 0) * 100)
+  ]);
+  const csv = [header, ...rows].map(r => r.join(';')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `conferencia_sku_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+// Verifica se há conferência em andamento ou resultado anterior
+(async function init() {
+  // Verifica status
+  try {
+    const rs = await fetch('/conferencia-sku/status');
+    const ds = await rs.json();
+    if (ds.status === 'rodando') {
+      document.getElementById('progressWrap').style.display = 'block';
+      atualizarProgresso(ds);
+      iniciarPolling();
+      const btn = document.getElementById('btnExecutar');
+      btn.disabled = true;
+      btn.textContent = '⏳ Conferência em andamento...';
+    }
+  } catch(e) {}
+
+  // Carrega resultado anterior se existir
+  await carregarResultado();
+
+  // Aplica filtro da URL (ex: /conferencia-sku?ausente_em=ml)
+  const params = new URLSearchParams(window.location.search);
+  const ausente = params.get('ausente_em');
+  if (ausente) setFiltro(ausente);
+})();
+</script>
+
+<!-- Botão flutuante de início -->
+<style>
+.fab{position:fixed;bottom:24px;right:24px;background:var(--indigo);color:#fff;border:none;border-radius:50%;width:52px;height:52px;font-size:22px;cursor:pointer;box-shadow:0 4px 20px rgba(99,102,241,.5);display:flex;align-items:center;justify-content:center;z-index:999;transition:transform .15s}
+.fab:hover{transform:scale(1.1)}
+</style>
+<button class="fab" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="Topo">↑</button>
+</body>
+</html>

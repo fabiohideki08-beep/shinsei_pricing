@@ -76,11 +76,21 @@ details>summary{cursor:pointer;color:#c9d7ff;font-weight:700}
     <div class="top-actions">
       <a class="btn secondary" href="/hub">&#8592; Hub</a>
       <a class="btn secondary" href="/simulador">Simulador</a>
+      <a class="btn" href="/conferencia-sku" style="background:rgba(99,102,241,.85)">🔗 Conferência SKU</a>
       <button class="btn secondary" onclick="carregarTudo()">Atualizar</button>
     </div>
   </div>
 
   <div id="notice" class="notice"></div>
+
+  <!-- Card Conferência SKU -->
+  <div id="sku-banner" style="display:none;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.3);border-radius:16px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+    <div style="flex:1;min-width:200px">
+      <div style="font-size:13px;font-weight:700;color:#a5b4fc;margin-bottom:4px">🔗 Conferência SKU — Visão Bling</div>
+      <div style="font-size:12px;color:var(--muted)" id="sku-banner-texto">Carregando dados da última conferência...</div>
+    </div>
+    <a class="btn sm" href="/conferencia-sku" style="background:rgba(99,102,241,.7);white-space:nowrap">Ver conferência completa →</a>
+  </div>
 
   <div class="stats-grid">
     <div class="stat"><div class="label">Pendentes na fila</div><div class="value warn" id="stat-pendente">—</div></div>
@@ -263,6 +273,27 @@ async function carregarTudo(){
 }
 
 carregarTudo();
+
+// Banner de Conferência SKU
+(async function() {
+  try {
+    const r = await fetch('/conferencia-sku/resultado?limit=0');
+    const d = await r.json();
+    if (!d.ok || !d.stats) return;
+    const s = d.stats;
+    const total = s.total_bling || 0;
+    const partes = [];
+    if ((s.bling_sem_ml ?? null) !== null) partes.push(`<b style="color:#fbbf24">${s.bling_sem_ml}</b> sem ML`);
+    if ((s.bling_sem_shopify ?? null) !== null) partes.push(`<b style="color:#fbbf24">${s.bling_sem_shopify}</b> sem Shopify`);
+    if ((s.bling_sem_amazon ?? null) !== null) partes.push(`<b style="color:#fbbf24">${s.bling_sem_amazon}</b> sem Amazon`);
+    if ((s.bling_sem_shopee ?? null) !== null) partes.push(`<b style="color:#fbbf24">${s.bling_sem_shopee}</b> sem Shopee`);
+    if (!partes.length) return;
+    const exec = d.executado_em ? new Date(d.executado_em).toLocaleString('pt-BR') : '';
+    document.getElementById('sku-banner-texto').innerHTML =
+      `${total} SKUs no Bling — ${partes.join(' · ')}${exec ? `<span style="margin-left:10px;opacity:.6">(${exec})</span>` : ''}`;
+    document.getElementById('sku-banner').style.display = 'flex';
+  } catch(e) {}
+})();
 </script>
 
 <!-- Botão Início -->
