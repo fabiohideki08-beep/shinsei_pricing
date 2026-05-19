@@ -74,5 +74,8 @@ async function salvar(){const payload={}; ['velocidade_venda','share_faturamento
 async function simular(){const payload={}; ['velocidade_venda','share_faturamento','margem_real','prazo_entrega_fornecedor','prazo_pagamento_fornecedor','tempo_para_vender','devolucao_defeito','devolucao_transporte'].forEach(k=>payload[k]=Number(document.getElementById(k).value||0)); await salvar(); document.getElementById('result').textContent=JSON.stringify(payload,null,2);}
 document.addEventListener('DOMContentLoaded', carregar);
 </script>
+
+<!-- Botão Início -->
+<a href="/" id="btn-inicio" title="Voltar para o início" style="position:fixed;bottom:24px;left:24px;z-index:9999;background:#4f8cff;color:#fff;padding:10px 20px;border-radius:14px;font-weight:700;text-decoration:none;font-family:Arial,sans-serif;font-size:14px;box-shadow:0 4px 20px rgba(79,140,255,.45);display:inline-flex;align-items:center;gap:8px;transition:background .2s,transform .15s" onmouseover="this.style.background='#2563eb';this.style.transform='scale(1.05)'" onmouseout="this.style.background='#4f8cff';this.style.transform='scale(1)'">🏠 Início</a>
 </body>
 </html>

@@ -65,5 +65,8 @@ async function carregar(){const res=await fetch('/modulos/cost-engine'); const d
 async function salvar(){const itens=[...document.querySelectorAll('#tbody tr')].map(tr=>{const i=tr.querySelectorAll('input'); return {categoria:i[0].value,tipo:i[1].value,descricao:i[2].value,valor:i[3].value,periodicidade:i[4].value,centro_custo:i[5].value,observacao:i[6].value};}); await fetch('/modulos/cost-engine',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({itens})}); alert('Custos salvos');}
 document.addEventListener('DOMContentLoaded', carregar);
 </script>
+
+<!-- Botão Início -->
+<a href="/" id="btn-inicio" title="Voltar para o início" style="position:fixed;bottom:24px;left:24px;z-index:9999;background:#4f8cff;color:#fff;padding:10px 20px;border-radius:14px;font-weight:700;text-decoration:none;font-family:Arial,sans-serif;font-size:14px;box-shadow:0 4px 20px rgba(79,140,255,.45);display:inline-flex;align-items:center;gap:8px;transition:background .2s,transform .15s" onmouseover="this.style.background='#2563eb';this.style.transform='scale(1.05)'" onmouseout="this.style.background='#4f8cff';this.style.transform='scale(1)'">🏠 Início</a>
 </body>
 </html>
