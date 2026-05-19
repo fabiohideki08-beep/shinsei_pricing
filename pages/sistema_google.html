@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Google — Shinsei Pricing</title>
+<style>
+:root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--ok:#16a34a;--danger:#ef4444;--warn:#f59e0b}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text);min-height:100vh}
+.wrap{max-width:1400px;margin:0 auto;padding:22px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 18px;position:sticky;top:16px;z-index:10}
+.brand h1{margin:0;font-size:22px}
+.brand p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.top-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.btn{border:none;background:var(--accent);color:#fff;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:7px;font-size:13px}
+.btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+.btn.success{background:var(--ok)} .btn.danger{background:var(--danger)} .btn.warn{background:var(--warn);color:#000}
+.btn.sm{padding:7px 10px;font-size:12px;border-radius:9px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+.tabs{display:flex;gap:4px;background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:5px;margin-bottom:20px;width:fit-content}
+.tab{padding:9px 20px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;border:none;background:transparent;color:var(--muted);transition:all .15s}
+.tab.active{background:var(--accent);color:#fff}
+
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
+.stat{background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:16px}
+.stat .label{color:var(--muted);font-size:12px;font-weight:600}
+.stat .value{font-size:28px;font-weight:800;margin-top:8px}
+.stat .value.warn{color:var(--warn)} .stat .value.ok{color:#22c55e} .stat .value.danger{color:var(--danger)}
+
+.secao{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:20px;padding:20px;margin-bottom:18px}
+.secao-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px}
+.secao-titulo{font-size:17px;font-weight:700;display:flex;align-items:center;gap:10px}
+.secao-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:14px}
+table{width:100%;border-collapse:collapse;min-width:700px}
+th,td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;text-align:left}
+th{background:#10182f;color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.04em}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(79,140,255,.04)}
+.tag{display:inline-block;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700}
+.tag.approved{background:rgba(34,197,94,.15);color:#22c55e}
+.tag.disapproved{background:rgba(239,68,68,.15);color:#ef4444}
+.tag.limited{background:rgba(245,158,11,.15);color:var(--warn)}
+.tag.pending{background:rgba(79,140,255,.15);color:#4f8cff}
+
+.empty{text-align:center;padding:40px;color:var(--muted);border:1px dashed var(--line);border-radius:14px}
+.placeholder-card{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:20px;padding:48px;text-align:center}
+.placeholder-card .ico{font-size:48px;display:block;margin-bottom:16px}
+.placeholder-card h3{margin:0 0 10px;font-size:20px}
+.placeholder-card p{color:var(--muted);margin:0;font-size:14px;line-height:1.6}
+
+.notice{padding:12px 14px;border-radius:12px;border:1px solid var(--line);font-size:13px;margin-bottom:14px;display:none}
+.notice.ok{border-color:#166534;background:rgba(22,163,74,.1);color:#bbf7d0;display:block}
+.notice.err{border-color:#991b1b;background:rgba(239,68,68,.1);color:#fca5a5;display:block}
+.notice.warn{border-color:#92400e;background:rgba(245,158,11,.1);color:#fde68a;display:block}
+
+.skel{display:inline-block;background:rgba(255,255,255,.08);border-radius:4px;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+.spin{animation:spin 1s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+iframe{border:none;width:100%;height:800px;border-radius:16px;border:1px solid var(--line)}
+
+@media(max-width:900px){.stats-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.stats-grid{grid-template-columns:1fr}.topbar{flex-direction:column;align-items:flex-start}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1>Google &middot; Merchant Center, Ads e SEO</h1>
+      <p>GMC product feed, Google Ads conversions e auditoria de SEO</p>
+    </div>
+    <div class="top-actions">
+      <a class="btn secondary" href="/hub">&#8592; Hub</a>
+    </div>
+  </div>
+
+  <div id="notice" class="notice"></div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="mudarAba('gmc', this)">GMC</button>
+    <button class="tab" onclick="mudarAba('seo', this)">SEO Health</button>
+    <button class="tab" onclick="mudarAba('ads', this)">Google Ads</button>
+  </div>
+
+  <!-- ABA GMC -->
+  <div id="aba-gmc">
+    <div class="stats-grid">
+      <div class="stat">
+        <div class="label">Aprovados</div>
+        <div class="value ok" id="stat-aprovados"><span class="skel" style="width:40px;height:24px;display:block"></span></div>
+      </div>
+      <div class="stat">
+        <div class="label">Reprovados</div>
+        <div class="value danger" id="stat-reprovados"><span class="skel" style="width:40px;height:24px;display:block"></span></div>
+      </div>
+      <div class="stat">
+        <div class="label">Limitados</div>
+        <div class="value warn" id="stat-limitados"><span class="skel" style="width:40px;height:24px;display:block"></span></div>
+      </div>
+      <div class="stat">
+        <div class="label">Total</div>
+        <div class="value" id="stat-total"><span class="skel" style="width:40px;height:24px;display:block"></span></div>
+      </div>
+    </div>
+
+    <div class="secao">
+      <div class="secao-header">
+        <div class="secao-titulo">
+          Produtos com Problemas
+          <span id="badge-gmc" style="background:var(--danger);color:#fff;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:700">0</span>
+        </div>
+        <div class="secao-actions">
+          <button class="btn warn" id="btnScanGMC" onclick="escanearGMC()">Escanear GMC</button>
+          <button class="btn secondary sm" onclick="carregarGMC()">Atualizar</button>
+        </div>
+      </div>
+      <div id="tabela-gmc"><div class="empty">Carregando dados do GMC...</div></div>
+    </div>
+  </div>
+
+  <!-- ABA SEO -->
+  <div id="aba-seo" style="display:none">
+    <div class="secao">
+      <div class="secao-header">
+        <div class="secao-titulo">SEO Health</div>
+        <div class="secao-actions">
+          <a class="btn secondary sm" href="/seo-health" target="_blank">Abrir em nova aba</a>
+        </div>
+      </div>
+      <iframe src="/seo-health" title="SEO Health" id="iframe-seo"></iframe>
+    </div>
+  </div>
+
+  <!-- ABA ADS -->
+  <div id="aba-ads" style="display:none">
+    <div class="placeholder-card">
+      <span class="ico">📢</span>
+      <h3>Google Ads</h3>
+      <p>Integração com Google Ads em configuração.<br>Em breve será possível acompanhar campanhas, conversões e ROAS diretamente por aqui.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+function mudarAba(aba, btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('aba-gmc').style.display = aba==='gmc' ? 'block' : 'none';
+  document.getElementById('aba-seo').style.display = aba==='seo' ? 'block' : 'none';
+  document.getElementById('aba-ads').style.display = aba==='ads' ? 'block' : 'none';
+}
+
+function mostrarNotice(msg, tipo){
+  const el=document.getElementById('notice');
+  el.className='notice '+tipo;
+  el.textContent=msg;
+  if(tipo==='ok') setTimeout(()=>{el.className='notice'},4000);
+}
+
+function setStatVal(id, val, fallback='—'){
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.innerHTML='';
+  el.textContent=val!=null?val:fallback;
+}
+
+async function carregarStats(){
+  try{
+    const res=await fetch('/gmc/status');
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    setStatVal('stat-aprovados', data.aprovados);
+    setStatVal('stat-reprovados', data.reprovados);
+    setStatVal('stat-limitados', data.limitados);
+    setStatVal('stat-total', data.total);
+    const problemas=(data.reprovados||0)+(data.limitados||0);
+    document.getElementById('badge-gmc').textContent=problemas;
+  }catch(e){
+    setStatVal('stat-aprovados','—');
+    setStatVal('stat-reprovados','—');
+    setStatVal('stat-limitados','—');
+    setStatVal('stat-total','—');
+    document.getElementById('badge-gmc').textContent='—';
+  }
+}
+
+async function carregarGMC(){
+  try{
+    const res=await fetch('/gmc/produtos');
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    const itens=data.itens||data.produtos||[];
+    renderTabelaGMC(itens);
+  }catch(e){
+    document.getElementById('tabela-gmc').innerHTML=`<div class="empty" style="color:#fca5a5">Não foi possível carregar produtos do GMC: ${e.message}</div>`;
+  }
+}
+
+function renderTabelaGMC(itens){
+  const wrap=document.getElementById('tabela-gmc');
+  if(!itens.length){
+    wrap.innerHTML='<div class="empty">Nenhum produto com problema no GMC.</div>';
+    return;
+  }
+  const rows=itens.map(item=>{
+    const status=item.status||item.state||'—';
+    const tagClass=status==='approved'?'approved':status==='disapproved'?'disapproved':status==='limited'?'limited':'pending';
+    const problemas=Array.isArray(item.issues)?item.issues.map(i=>i.title||i.description||i).join(', '):(item.problema||item.issue||'—');
+    return `<tr>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${item.title||item.nome||''}">${item.title||item.nome||'—'}</td>
+      <td style="font-family:monospace;font-size:12px">${item.id||item.offerId||'—'}</td>
+      <td><span class="tag ${tagClass}">${status}</span></td>
+      <td style="max-width:260px;font-size:12px;color:var(--muted)">${problemas}</td>
+      <td style="font-size:11px;color:var(--muted)">${item.channel||item.canal||'online'}</td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML=`<div class="table-wrap"><table>
+    <thead><tr><th>Produto</th><th>ID / Offer ID</th><th>Status</th><th>Problemas</th><th>Canal</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+async function escanearGMC(){
+  const btn=document.getElementById('btnScanGMC');
+  btn.disabled=true;
+  btn.innerHTML='<span class="spin">⏳</span> Escaneando...';
+  try{
+    const res=await fetch('/gmc/scan',{method:'GET'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    mostrarNotice(
+      data.ok
+        ? `GMC escaneado: ${data.total||0} produtos, ${data.reprovados||0} reprovados, ${data.limitados||0} limitados.`
+        : (data.detail||data.erro||'Escaneamento concluído.'),
+      data.ok?'ok':'warn'
+    );
+    await Promise.all([carregarStats(), carregarGMC()]);
+  }catch(e){
+    mostrarNotice('Erro ao escanear GMC: '+e.message,'err');
+    document.getElementById('tabela-gmc').innerHTML=`<div class="empty" style="color:#fca5a5">Erro ao escanear: ${e.message}<br><small style="color:var(--muted)">Verifique se a service account Google está configurada.</small></div>`;
+  }finally{
+    btn.disabled=false;
+    btn.innerHTML='Escanear GMC';
+  }
+}
+
+Promise.all([carregarStats(), carregarGMC()]);
+</script>
+</body>
+</html>

@@ -103,6 +103,9 @@ try:
 except Exception as _frete_exc:
     logger.warning("Motor de frete não carregado: %s", _frete_exc)
 
+from dashboard_blueprint import router as dashboard_router
+app.include_router(dashboard_router)
+
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     return await verificar_api_key(request, call_next)
@@ -385,6 +388,59 @@ def auditoria_ml_sem_sku():
 def home():
     html_file = _first_existing([BASE_DIR / "index.html", PAGES_DIR / "simulador.html"])
     return HTMLResponse(html_file.read_text(encoding="utf-8")) if html_file else HTMLResponse(FALLBACK_HTML)
+
+@app.get("/hub", response_class=HTMLResponse)
+def hub_page():
+    html_file = PAGES_DIR / "hub.html"
+    return HTMLResponse(html_file.read_text(encoding="utf-8")) if html_file.exists() else HTMLResponse(FALLBACK_HTML)
+
+@app.get("/sistema/bling", response_class=HTMLResponse)
+def sistema_bling():
+    return HTMLResponse((PAGES_DIR / "sistema_bling.html").read_text(encoding="utf-8"))
+
+@app.get("/sistema/ml", response_class=HTMLResponse)
+def sistema_ml():
+    return HTMLResponse((PAGES_DIR / "sistema_ml.html").read_text(encoding="utf-8"))
+
+@app.get("/sistema/shopify", response_class=HTMLResponse)
+def sistema_shopify_page():
+    return HTMLResponse((PAGES_DIR / "sistema_shopify.html").read_text(encoding="utf-8"))
+
+@app.get("/sistema/amazon", response_class=HTMLResponse)
+def sistema_amazon():
+    return HTMLResponse((PAGES_DIR / "sistema_amazon.html").read_text(encoding="utf-8"))
+
+@app.get("/sistema/shopee", response_class=HTMLResponse)
+def sistema_shopee():
+    return HTMLResponse((PAGES_DIR / "sistema_shopee.html").read_text(encoding="utf-8"))
+
+@app.get("/sistema/google", response_class=HTMLResponse)
+def sistema_google():
+    return HTMLResponse((PAGES_DIR / "sistema_google.html").read_text(encoding="utf-8"))
+
+@app.get("/cost-engine", response_class=HTMLResponse)
+def cost_engine_page():
+    return HTMLResponse((PAGES_DIR / "cost_engine.html").read_text(encoding="utf-8"))
+
+@app.get("/cost-allocation", response_class=HTMLResponse)
+def cost_allocation_page():
+    return HTMLResponse((PAGES_DIR / "cost_allocation.html").read_text(encoding="utf-8"))
+
+@app.get("/oee", response_class=HTMLResponse)
+def oee_page():
+    return HTMLResponse((PAGES_DIR / "oee.html").read_text(encoding="utf-8"))
+
+@app.get("/perfis", response_class=HTMLResponse)
+def perfis_page():
+    return HTMLResponse((PAGES_DIR / "perfis.html").read_text(encoding="utf-8"))
+
+@app.get("/regras-calculo", response_class=HTMLResponse)
+def regras_calculo_page():
+    return HTMLResponse((PAGES_DIR / "regras_calculo.html").read_text(encoding="utf-8"))
+
+@app.get("/sie", response_class=HTMLResponse)
+def sie_page():
+    return HTMLResponse((PAGES_DIR / "sie.html").read_text(encoding="utf-8"))
 
 @app.get("/simulador", response_class=HTMLResponse)
 def simulador_page():
@@ -956,13 +1012,6 @@ def marketing_ml_sugestoes_limpar_post():
     from services.ml_price_suggestions import limpar_sugestoes
     limpar_sugestoes()
     return {"ok": True}
-
-@app.get("/fila", response_class=HTMLResponse)
-def fila_page():
-    html_file = PAGES_DIR / "fila.html"
-    if html_file.exists():
-        return HTMLResponse(html_file.read_text(encoding="utf-8"))
-    raise HTTPException(status_code=404, detail="pages/fila.html não encontrado.")
 
 @app.post("/marketing/ml/sugestoes/reprocessar")
 async def marketing_ml_sugestoes_reprocessar(background_tasks: BackgroundTasks):
@@ -2589,3 +2638,93 @@ async def scbot_executar_endpoint(urls_extras: list[str] = None):
     cache["scbot"] = scbot_status()
     _save_json(SEO_CACHE_PATH, cache)
     return {"ok": True, "resultado": resultado}
+
+
+# ── MÓDULOS AVANÇADOS ─────────────────────────────────────────────────────
+
+_COST_ENGINE_PATH     = DATA_DIR / "cost_engine.json"
+_COST_ALLOC_PATH      = DATA_DIR / "cost_allocation_module.json"
+_OEE_MODULE_PATH      = DATA_DIR / "oee_module.json"
+_SIE_MODULE_PATH      = DATA_DIR / "sie_module.json"
+_REGRAS_CALC_PATH     = DATA_DIR / "regras_calculo.json"
+_REGRAS_PRECIF_PATH   = DATA_DIR / "regras_precificacao.json"
+
+# Cost Engine
+@app.get("/modulos/cost-engine")
+def get_cost_engine():
+    return _load_json(_COST_ENGINE_PATH, {"itens": []})
+
+@app.post("/modulos/cost-engine")
+def post_cost_engine(payload: dict = Body(...)):
+    _save_json(_COST_ENGINE_PATH, payload)
+    return {"status": "ok"}
+
+# Cost Allocation
+@app.get("/modulos/cost-allocation")
+def get_cost_allocation():
+    return _load_json(_COST_ALLOC_PATH, {"estrategia": "vendido_por_faturamento", "periodo": "", "custo_fixo_total": 0.0, "observacoes": ""})
+
+@app.post("/modulos/cost-allocation")
+def post_cost_allocation(payload: dict = Body(...)):
+    _save_json(_COST_ALLOC_PATH, payload)
+    return {"status": "ok"}
+
+@app.get("/rateio/visoes")
+def get_rateio_visoes():
+    data = _load_json(_COST_ALLOC_PATH, {})
+    if not data.get("custo_fixo_total"):
+        return {"sem_calculo_ainda": True}
+    return {"estrategia": data.get("estrategia"), "custo_fixo_total": data.get("custo_fixo_total"), "sem_calculo_ainda": True}
+
+# OEE
+@app.get("/config/automacao")
+def get_config_automacao():
+    oee = _load_json(_OEE_MODULE_PATH, {})
+    return {"oee": oee}
+
+@app.post("/config/automacao")
+def post_config_automacao(payload: dict = Body(...)):
+    oee_data = payload.get("oee", {})
+    existing = _load_json(_OEE_MODULE_PATH, {})
+    existing.update(oee_data)
+    _save_json(_OEE_MODULE_PATH, existing)
+    return {"status": "ok"}
+
+# SIE
+@app.get("/modulos/sie")
+def get_sie():
+    return _load_json(_SIE_MODULE_PATH, {"velocidade_venda": 0.0, "share_faturamento": 0.0, "margem_real": 0.0, "prazo_entrega_fornecedor": 30.0, "prazo_pagamento_fornecedor": 30.0, "tempo_para_vender": 30.0, "devolucao_defeito": 0.02, "devolucao_transporte": 0.01})
+
+@app.post("/modulos/sie")
+def post_sie(payload: dict = Body(...)):
+    _save_json(_SIE_MODULE_PATH, payload)
+    return {"status": "ok"}
+
+# Regras de Cálculo
+@app.get("/modulos/regras-calculo")
+def get_regras_calculo():
+    return _load_json(_REGRAS_CALC_PATH, [])
+
+@app.post("/modulos/regras-calculo")
+def post_regras_calculo(payload: list = Body(...)):
+    _save_json(_REGRAS_CALC_PATH, payload)
+    return {"message": "Regras salvas com sucesso"}
+
+# Perfis de Precificação
+@app.get("/config/regras-precificacao")
+def get_regras_precificacao():
+    return _load_json(_REGRAS_PRECIF_PATH, {"regra_ativa": "padrao", "perfis": {}})
+
+@app.post("/config/regras-precificacao")
+def post_regras_precificacao(payload: dict = Body(...)):
+    _save_json(_REGRAS_PRECIF_PATH, payload)
+    return {"status": "ok"}
+
+@app.post("/config/regras-precificacao/ativar/{perfil_id}")
+def ativar_perfil_precificacao(perfil_id: str):
+    data = _load_json(_REGRAS_PRECIF_PATH, {"regra_ativa": "padrao", "perfis": {}})
+    if perfil_id not in data.get("perfis", {}):
+        raise HTTPException(status_code=404, detail=f"Perfil '{perfil_id}' não encontrado.")
+    data["regra_ativa"] = perfil_id
+    _save_json(_REGRAS_PRECIF_PATH, data)
+    return {"status": "ok", "ativo": perfil_id}

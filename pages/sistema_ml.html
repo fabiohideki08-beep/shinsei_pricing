@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Mercado Livre — Shinsei Pricing</title>
+<style>
+:root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--ok:#16a34a;--danger:#ef4444;--warn:#f59e0b}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text)}
+.wrap{max-width:1400px;margin:0 auto;padding:22px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 18px;position:sticky;top:16px;z-index:10}
+.brand h1{margin:0;font-size:22px;display:flex;align-items:center;gap:10px}
+.brand h1 .dot{display:inline-block;width:12px;height:12px;border-radius:50%;background:#eab308}
+.brand p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.top-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.btn{border:none;background:var(--accent);color:#fff;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:7px;font-size:13px}
+.btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+.btn.success{background:var(--ok)} .btn.danger{background:var(--danger)}
+.btn.sm{padding:7px 10px;font-size:12px;border-radius:9px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
+.stat{background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:16px}
+.stat .label{color:var(--muted);font-size:12px;font-weight:600}
+.stat .value{font-size:28px;font-weight:800;margin-top:8px}
+.stat .value.warn{color:var(--warn)} .stat .value.ok{color:#22c55e}
+.secao{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:20px;padding:20px;margin-bottom:18px}
+.secao-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px}
+.secao-titulo{font-size:17px;font-weight:700;display:flex;align-items:center;gap:10px}
+.secao-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.filtro-btn{padding:6px 12px;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-size:12px;font-weight:600}
+.filtro-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.busca-wrap{position:relative;display:flex;align-items:center;margin-bottom:12px}
+.busca-wrap svg{position:absolute;left:12px;color:var(--muted);pointer-events:none}
+.busca{background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--text);padding:9px 14px 9px 36px;border-radius:11px;font-size:13px;width:300px;outline:none;transition:border-color .2s}
+.busca::placeholder{color:var(--muted)}.busca:focus{border-color:var(--accent)}
+.busca-count{font-size:11px;color:var(--muted);white-space:nowrap;margin-left:8px}
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:14px}
+table{width:100%;border-collapse:collapse;min-width:800px}
+th,td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;text-align:left}
+th{background:#10182f;color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.04em}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(79,140,255,.04)}
+.tag{display:inline-block;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700}
+.tag.pendente{background:rgba(245,158,11,.15);color:var(--warn)}
+.tag.corrigido{background:rgba(34,197,94,.15);color:#22c55e}
+.tag.ignorado{background:rgba(150,150,150,.15);color:var(--muted)}
+.tag.alerta{background:rgba(239,68,68,.15);color:#ef4444}
+.dif-pos{color:#ef4444;font-weight:700}
+.dif-neg{color:#22c55e;font-weight:700}
+.actions-row{display:flex;gap:6px;flex-wrap:wrap}
+.empty{text-align:center;padding:40px;color:var(--muted);border:1px dashed var(--line);border-radius:14px}
+.notice{padding:12px 14px;border-radius:12px;border:1px solid var(--line);font-size:13px;margin-bottom:14px;display:none}
+.notice.ok{border-color:#166534;background:rgba(22,163,74,.1);color:#bbf7d0;display:block}
+.notice.err{border-color:#991b1b;background:rgba(239,68,68,.1);color:#fca5a5;display:block}
+.notice.warn{border-color:#92400e;background:rgba(245,158,11,.1);color:#fde68a;display:block}
+.progress-wrap{display:none;padding:10px;background:rgba(79,140,255,.08);border-radius:12px;margin-bottom:12px;font-size:13px;color:var(--muted)}
+.progress-bar-bg{height:6px;background:var(--line);border-radius:4px;margin-top:8px}
+.progress-bar{height:6px;background:var(--accent);border-radius:4px;width:0%;transition:width .3s}
+@media(max-width:900px){.stats-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.stats-grid{grid-template-columns:1fr}.topbar{flex-direction:column;align-items:flex-start}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1><span class="dot"></span> Mercado Livre &middot; Auditoria de Estoque e Preços</h1>
+      <p>Conferência de anúncios, SKUs ausentes e divergências de estoque</p>
+    </div>
+    <div class="top-actions">
+      <a class="btn secondary" href="/hub">&#8592; Hub</a>
+      <button class="btn secondary" onclick="carregarEstoqueML()">Atualizar</button>
+    </div>
+  </div>
+
+  <div id="notice" class="notice"></div>
+
+  <div class="stats-grid">
+    <div class="stat"><div class="label">Pendentes</div><div class="value warn" id="stat-pendente">—</div></div>
+    <div class="stat"><div class="label">Sem SKU</div><div class="value warn" id="stat-semsku">—</div></div>
+    <div class="stat"><div class="label">Divergências</div><div class="value warn" id="stat-div">—</div></div>
+  </div>
+
+  <div class="secao">
+    <div class="secao-header">
+      <div class="secao-titulo">Conferência de Estoque ML <span id="badge-ml" style="background:var(--warn);color:#000;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:700">0</span></div>
+      <div class="secao-actions">
+        <button class="btn sm warn" id="btnConferirMLEstoque" onclick="conferirEstoqueML('estoque')">Conferir estoque</button>
+        <button class="btn sm" id="btnConferirMLPreco" onclick="conferirEstoqueML('preco')" style="background:#7c3aed">Conferir preços</button>
+        <button class="btn sm success" id="btnCorrigirTodosML" onclick="corrigirTodosML('divergencia')">Corrigir estoque</button>
+        <button class="btn sm secondary" onclick="limparFila()">Limpar fila</button>
+        <button class="btn sm success" id="btnCorrigirTodosMLPreco" onclick="corrigirTodosMLPreco()" style="background:#7c3aed">Corrigir preços</button>
+      </div>
+    </div>
+
+    <div class="filtros">
+      <button class="filtro-btn active" onclick="filtrarML('','',this)">Todos</button>
+      <button class="filtro-btn" onclick="filtrarML('pendente','',this)">Pendentes</button>
+      <button class="filtro-btn" onclick="filtrarML('','sem_sku',this)">Sem SKU</button>
+      <button class="filtro-btn" onclick="filtrarML('','divergencia',this)">Divergências</button>
+      <button class="filtro-btn" onclick="filtrarML('corrigido','',this)">Corrigidos</button>
+    </div>
+
+    <div class="busca-wrap">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="busca-ml" class="busca" type="search" placeholder="Buscar por título, SKU ou EAN..." oninput="buscarML()">
+      <span id="busca-ml-count" class="busca-count"></span>
+    </div>
+
+    <div id="progresso-ml" class="progress-wrap">
+      <div id="progresso-ml-texto">Aguardando...</div>
+      <div class="progress-bar-bg"><div id="progresso-ml-bar" class="progress-bar"></div></div>
+    </div>
+
+    <div id="tabela-ml"><div class="empty">Clique em "Conferir estoque" para iniciar.</div></div>
+  </div>
+</div>
+<script>
+let _dadosML = [];
+let filtroMLStatus = '';
+let filtroMLTipo = '';
+
+function mostrarNotice(msg, tipo){
+  const el=document.getElementById('notice');
+  el.className='notice '+tipo;
+  el.textContent=msg;
+  if(tipo==='ok') setTimeout(()=>{el.className='notice'},4000);
+}
+
+function _filtrar(itens, termo, campos){
+  if(!termo) return itens;
+  const t=termo.toLowerCase();
+  return itens.filter(i=>campos.some(c=>(i[c]||'').toString().toLowerCase().includes(t)));
+}
+
+function buscarML(){
+  const t=document.getElementById('busca-ml')?.value||'';
+  const f=_filtrar(_dadosML,t,['titulo','sku','ean','gtin']);
+  const countEl=document.getElementById('busca-ml-count');
+  if(countEl) countEl.textContent=t?`${f.length} de ${_dadosML.length}`:'';
+  renderTabelaEstoqueML(f, true);
+}
+
+async function carregarEstoqueML(){
+  try{
+    let url='/auditoria/ml-estoque';
+    const params=[];
+    if(filtroMLStatus) params.push('status='+filtroMLStatus);
+    if(filtroMLTipo) params.push('tipo='+filtroMLTipo);
+    if(params.length) url+='?'+params.join('&');
+    const res=await fetch(url);
+    if(!res.ok) return;
+    const data=await res.json();
+    const itens=data.itens||[];
+    const stats=data.stats||{};
+    const pendentes=stats.pendente||0;
+    const semSku=stats.sem_sku||0;
+    document.getElementById('stat-pendente').textContent=pendentes;
+    document.getElementById('stat-semsku').textContent=semSku;
+    document.getElementById('stat-div').textContent=itens.filter(i=>i.tipo==='divergencia'&&i.status==='pendente').length;
+    document.getElementById('badge-ml').textContent=pendentes;
+    renderTabelaEstoqueML(itens);
+  }catch(e){ console.error(e); }
+}
+
+function renderTabelaEstoqueML(itens, fromSearch=false){
+  if(!fromSearch) _dadosML=itens;
+  const wrap=document.getElementById('tabela-ml');
+  if(!itens.length){
+    wrap.innerHTML='<div class="empty">Nenhuma divergência de estoque ML.</div>';
+    return;
+  }
+  const rows=itens.map(item=>{
+    const isSemSku=item.tipo==='sem_sku';
+    const permalink=item.permalink?`<a href="${item.permalink}" target="_blank" style="color:var(--accent);font-size:11px">Ver anúncio</a>`:'';
+    let acoes='—';
+    if(item.status==='pendente'){
+      if(isSemSku){
+        const candidatos=item.candidatos_bling||[];
+        let selectCandidatos='';
+        if(candidatos.length>1){
+          const opts=candidatos.map(c=>`<option value="${c.codigo}">${c.codigo} — ${c.nome.substring(0,35)} (est:${c.estoque})</option>`).join('');
+          selectCandidatos=`<select id="sku_select_${item.id}" style="padding:5px;border-radius:6px;border:1px solid var(--accent);background:#0d1630;color:#fff;font-size:11px;max-width:200px" onchange="document.getElementById('sku_input_${item.id}').value=this.value"><option value="">— Selecione —</option>${opts}</select>`;
+        }
+        const skuSugerido=item.sku_sugerido||'';
+        acoes=`<div class="actions-row" style="flex-direction:column;align-items:flex-start;gap:4px">${selectCandidatos}<div style="display:flex;gap:4px;align-items:center"><input type="text" placeholder="SKU Bling" id="sku_input_${item.id}" value="${skuSugerido}" style="padding:6px;border-radius:8px;border:1px solid ${skuSugerido?'#22c55e':'var(--warn)'};background:#0d1630;color:#fff;width:120px;font-size:12px"/><button class="btn success sm" onclick="cadastrarSKU('${item.id}')">Salvar SKU</button><button class="btn secondary sm" onclick="ignorarML('${item.id}')">Ignorar</button></div>${skuSugerido?'<small style="color:#22c55e;font-size:10px">Sugerido pelo Bling</small>':(candidatos.length>0?`<small style="color:#f59e0b;font-size:10px">${candidatos.length} candidato(s)</small>`:'')}</div>`;
+      } else {
+        acoes=`<div class="actions-row"><button class="btn success sm" onclick="corrigirML('${item.id}')">Corrigir</button><button class="btn secondary sm" onclick="ignorarML('${item.id}')">Ignorar</button></div>`;
+      }
+    }
+    const estoqueBlinkCell=(isSemSku&&!item.estoque_bling&&item.estoque_bling!==0)?'<td style="color:var(--muted)">—</td>':`<td style="color:#22c55e;font-weight:700">${item.estoque_bling??'—'}</td>`;
+    const difCell=(isSemSku&&item.diferenca===null)?'<td><span class="tag alerta">Sem SKU</span></td>':`<td class="${(item.diferenca||0)>0?'dif-pos':'dif-neg'}">${(item.diferenca||0)>0?'+':''}${item.diferenca??'—'}</td>`;
+    return `<tr><td><strong>${item.item_id_ml||'—'}</strong><br/>${permalink}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${item.titulo||''}">${item.titulo||'—'}</td><td>${item.sku||'<span style="color:var(--warn)">AUSENTE</span>'}</td>${estoqueBlinkCell}<td style="color:#4f8cff;font-weight:700">${item.estoque_ml??'—'}</td>${difCell}<td><span class="tag ${item.status||'pendente'}">${item.status||'pendente'}</span></td><td style="font-size:11px;color:var(--muted)">${item.criado_em?new Date(item.criado_em).toLocaleString('pt-BR'):''}</td><td>${acoes}</td></tr>`;
+  }).join('');
+  wrap.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Item ML</th><th>Título</th><th>SKU</th><th>Bling</th><th>ML</th><th>Diferença</th><th>Status</th><th>Detectado</th><th>Ação</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function filtrarML(status, tipo, btn){
+  filtroMLStatus=status;
+  filtroMLTipo=tipo;
+  document.querySelectorAll('.filtro-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  carregarEstoqueML();
+}
+
+async function conferirEstoqueML(tipo=''){
+  const btnConf=document.getElementById(tipo==='preco'?'btnConferirMLPreco':'btnConferirMLEstoque');
+  const progWrap=document.getElementById('progresso-ml');
+  const progTexto=document.getElementById('progresso-ml-texto');
+  const progBar=document.getElementById('progresso-ml-bar');
+  if(btnConf){btnConf.disabled=true;}
+  progWrap.style.display='block';
+  progBar.style.width='0%';
+  progBar.style.background='var(--accent)';
+  progTexto.textContent='Iniciando conferência ML...';
+  let progSim=0;
+  const iv=setInterval(()=>{if(progSim<85){progSim+=Math.random()*3;progBar.style.width=Math.min(progSim,85)+'%';progTexto.textContent=`Varrendo anúncios ML... (página ${Math.floor(progSim/10)+1}/10 aprox.)`;}},1500);
+  let pollInterval=null;
+  const finalizar=(sucesso, msg)=>{
+    clearInterval(iv);
+    if(pollInterval) clearInterval(pollInterval);
+    progBar.style.width='100%';
+    progBar.style.background=sucesso?(sucesso==='warn'?'var(--warn)':'var(--ok)'):'var(--danger)';
+    progTexto.textContent=msg;
+    if(btnConf) btnConf.disabled=false;
+    setTimeout(()=>{progWrap.style.display='none';},8000);
+    carregarEstoqueML();
+  };
+  try{
+    const res=await fetch('/auditoria/ml-estoque/conferir'+(tipo?'?tipo='+tipo:''),{method:'POST'});
+    const startData=await res.json();
+    if(!startData.ok){finalizar(false,startData.detail||startData.erro||'Erro ao iniciar.');mostrarNotice(startData.detail||'Erro ao iniciar conferência ML.','err');return;}
+    pollInterval=setInterval(async()=>{
+      try{
+        const sr=await fetch('/auditoria/ml-estoque/conferir/status');
+        const status=await sr.json();
+        if(status.max_paginas&&status.pagina){const pct=Math.min(Math.round((status.pagina/status.max_paginas)*95),95);progSim=pct;progBar.style.width=pct+'%';progTexto.textContent=`Varrendo anúncios ML... (página ${status.pagina}/${status.max_paginas})`;}
+        if(status.concluido){
+          const r=status.resultado||{};
+          const verificados=r.verificados??status.verificados??0;
+          const semSku=r.sem_sku??status.sem_sku??0;
+          const divergencias=r.novas_divergencias??status.divergencias??0;
+          const erros=r.erros??status.erros??0;
+          const tem=(semSku+divergencias)>0;
+          finalizar(tem?'warn':true,`Concluído! ${verificados} verificados — ${semSku} sem SKU, ${divergencias} novas divergências, ${erros} erros.`);
+          mostrarNotice(`ML: ${verificados} anúncios verificados — ${semSku} sem SKU, ${divergencias} divergências.`,tem?'warn':'ok');
+        }
+      }catch(e){}
+    },2000);
+  }catch(e){finalizar(false,'Erro ao conferir estoque ML.');mostrarNotice('Erro ao conferir estoque ML.','err');}
+}
+
+async function corrigirTodosML(tipo='divergencia'){
+  if(!confirm('Corrigir todos os itens com divergência de estoque no ML?')) return;
+  const btn=document.getElementById('btnCorrigirTodosML');
+  const progWrap=document.getElementById('progresso-ml');
+  const progTexto=document.getElementById('progresso-ml-texto');
+  const progBar=document.getElementById('progresso-ml-bar');
+  btn.disabled=true;
+  progWrap.style.display='block';
+  const res=await fetch('/auditoria/ml-estoque?status=pendente&tipo='+tipo);
+  const data=await res.json();
+  const itens=data.itens||[];
+  if(!itens.length){mostrarNotice('Nenhuma divergência pendente.','ok');progWrap.style.display='none';btn.disabled=false;return;}
+  let corrigidos=0,erros=0;
+  for(let i=0;i<itens.length;i++){
+    const item=itens[i];
+    progTexto.textContent=`Corrigindo ${i+1}/${itens.length}: ${item.titulo||item.item_id_ml}...`;
+    progBar.style.width=Math.round(((i+1)/itens.length)*100)+'%';
+    try{const r=await fetch('/auditoria/ml-estoque/corrigir/'+item.id,{method:'POST'});const d=await r.json();if(d.ok) corrigidos++;else erros++;}catch(e){erros++;}
+    await new Promise(r=>setTimeout(r,300));
+  }
+  progTexto.textContent=`Concluído! ${corrigidos} corrigidos, ${erros} erros.`;
+  progBar.style.background=erros>0?'var(--warn)':'var(--ok)';
+  mostrarNotice(`Correção em massa: ${corrigidos} corrigidos no ML, ${erros} erros.`,erros>0?'warn':'ok');
+  btn.disabled=false;
+  setTimeout(()=>{progWrap.style.display='none';progBar.style.background='var(--accent)';},5000);
+  carregarEstoqueML();
+}
+
+async function corrigirTodosMLPreco(){
+  if(!confirm('Corrigir todos os preços pendentes no ML?')) return;
+  const btn=document.getElementById('btnCorrigirTodosMLPreco');
+  btn.disabled=true;
+  const res=await fetch('/auditoria/ml-estoque?status=pendente&tipo=preco');
+  const data=await res.json();
+  const itens=data.itens||[];
+  let ok=0,err=0;
+  for(const item of itens){
+    try{const r=await fetch('/auditoria/ml-estoque/corrigir/'+item.id,{method:'POST'});const d=await r.json();if(d.ok) ok++;else err++;}catch(e){err++;}
+    await new Promise(r=>setTimeout(r,300));
+  }
+  mostrarNotice(`Preços ML: ${ok} corrigidos, ${err} erros.`,err>0?'warn':'ok');
+  btn.disabled=false;
+  carregarEstoqueML();
+}
+
+async function corrigirML(id){
+  if(!confirm('Corrigir estoque no ML com o valor do Bling?')) return;
+  try{
+    const res=await fetch('/auditoria/ml-estoque/corrigir/'+id,{method:'POST'});
+    const data=await res.json();
+    mostrarNotice(data.ok?'Estoque corrigido no ML!':'Erro: '+(data.detail||'falha'),data.ok?'ok':'err');
+    carregarEstoqueML();
+  }catch(e){mostrarNotice('Erro de conexão.','err');}
+}
+
+async function cadastrarSKU(id){
+  const input=document.getElementById('sku_input_'+id);
+  const sku=input?input.value.trim():'';
+  if(!sku){alert('Digite o SKU do Bling.');return;}
+  try{
+    const res=await fetch('/auditoria/ml-estoque/cadastrar-sku/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sku})});
+    const data=await res.json();
+    mostrarNotice(data.ok?`SKU ${sku} cadastrado no ML!`:'Erro: '+(data.detail||'falha'),data.ok?'ok':'err');
+    carregarEstoqueML();
+  }catch(e){mostrarNotice('Erro de conexão.','err');}
+}
+
+async function ignorarML(id){
+  try{await fetch('/auditoria/ml-estoque/ignorar/'+id,{method:'POST'});carregarEstoqueML();}catch(e){}
+}
+
+async function limparFila(){
+  if(!confirm('Limpar TODA a fila de ML? Esta ação não pode ser desfeita.')) return;
+  await fetch('/auditoria/ml-estoque/limpar-tudo',{method:'POST'});
+  mostrarNotice('Fila de ML limpa!','ok');
+  carregarEstoqueML();
+}
+
+carregarEstoqueML();
+</script>
+</body>
+</html>

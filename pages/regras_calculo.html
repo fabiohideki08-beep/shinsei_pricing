@@ -80,7 +80,7 @@ function addRow(item={}){
   tbody.appendChild(tr);
 }
 async function carregar(){
-  const res=await fetch('/regras'); const data=await res.json(); const tbody=document.getElementById('tbodyRegras'); tbody.innerHTML=''; (data||[]).forEach(addRow);
+  const res=await fetch('/modulos/regras-calculo'); const data=await res.json(); const tbody=document.getElementById('tbodyRegras'); tbody.innerHTML=''; (data||[]).forEach(addRow);
 }
 async function salvar(){
   const rows=[...document.querySelectorAll('#tbodyRegras tr')].map(tr=>{const inputs=tr.querySelectorAll('input'); return {canal:inputs[0].value,peso_min:inputs[1].value,peso_max:inputs[2].value,preco_min:inputs[3].value,preco_max:inputs[4].value,taxa_fixa:inputs[5].value,taxa_frete:inputs[6].value,comissao:inputs[7].value};});

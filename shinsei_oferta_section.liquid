@@ -1,0 +1,83 @@
+{%- comment -%}
+  SHINSEI MARKET - Banner Ofertas +50% OFF
+  Usa background-image CSS para evitar interferencia do JS do tema Horizon
+{%- endcomment -%}
+
+{%- assign banner_url = 'oferta-desktop-banner.png' | asset_url -%}
+
+<style>
+.shinsei-oferta-wrap {
+  display: block;
+  width: 100%;
+  position: relative;
+  /* Aspect ratio 1400x520 = 37.14% */
+  padding-bottom: 37.14%;
+  background-image: url('{{ banner_url }}');
+  background-size: 100% auto;
+  background-repeat: no-repeat;
+  background-position: top center;
+  overflow: hidden;
+}
+
+.shinsei-oferta-wrap a {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  display: block;
+  background: transparent !important;
+  text-decoration: none;
+}
+
+.shinsei-oferta-bg-link {
+  left: 0;
+  right: 0;
+  z-index: 1;
+}
+
+.shinsei-oferta-wrap .prod-link {
+  z-index: 2;
+}
+
+@media (max-width: 749px) {
+  .shinsei-oferta-wrap { display: none !important; }
+}
+</style>
+
+<div class="shinsei-oferta-wrap">
+  <!-- Link de fundo: colecao de descontos -->
+  <a class="shinsei-oferta-bg-link"
+     href="/collections/descontos-acima-de-50"
+     aria-label="Ver todas as ofertas com mais de 50% OFF"></a>
+
+  <!-- Card 1: Alfaparf Evolution (38% a 51.34%) -->
+  <a class="prod-link"
+     href="/search?type=product&q=alfaparf+evolution+coloracao"
+     aria-label="Coloracao Alfaparf Evolution - 51% OFF"
+     style="left:38%;width:13.34%;"></a>
+
+  <!-- Card 2: Mascara Ozonio (51.33% a 64.67%) -->
+  <a class="prod-link"
+     href="/products/mascara-ozonio-embalagem-promocional-150g-dr-triskle"
+     aria-label="Mascara Ozonio Dr. Triskle - 54% OFF"
+     style="left:51.33%;width:13.34%;"></a>
+
+  <!-- Card 3: Batom Ruby Rose (64.67% a 78%) -->
+  <a class="prod-link"
+     href="/products/rubyrose-batom-duo-matte-mood-hb-8614-7-cm07"
+     aria-label="Batom Duo Matte Mood Ruby Rose - 54% OFF"
+     style="left:64.67%;width:13.34%;"></a>
+</div>
+
+{% schema %}
+{
+  "name": "Banner Ofertas 50% OFF",
+  "tag": "div",
+  "class": "shinsei-oferta-section",
+  "settings": [],
+  "presets": [
+    {
+      "name": "Banner Ofertas 50% OFF"
+    }
+  ]
+}
+{% endschema %}

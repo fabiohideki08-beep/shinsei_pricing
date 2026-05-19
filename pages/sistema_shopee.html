@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Shopee — Shinsei Pricing</title>
+<style>
+:root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--ok:#16a34a;--danger:#ef4444;--warn:#f59e0b}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text);min-height:100vh}
+.wrap{max-width:900px;margin:0 auto;padding:22px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:28px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 18px;position:sticky;top:16px;z-index:10}
+.brand h1{margin:0;font-size:22px;display:flex;align-items:center;gap:10px}
+.shopee-dot{display:inline-block;width:12px;height:12px;border-radius:50%;background:#f97316}
+.brand p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.top-actions{display:flex;gap:10px}
+.btn{border:none;background:var(--accent);color:#fff;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:7px;font-size:13px}
+.btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+.center-card{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:24px;padding:48px 40px;text-align:center;margin-top:40px}
+.shopee-logo{font-size:64px;display:block;margin-bottom:16px}
+.center-card h2{margin:0 0 12px;font-size:26px;font-weight:800}
+.center-card p{color:var(--muted);font-size:15px;margin:0 auto;max-width:460px;line-height:1.6}
+.status-pills{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:24px}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:999px;font-size:13px;font-weight:700;border:1px solid var(--line);background:var(--card2)}
+.pill.muted{color:var(--muted)}
+.pill.warn{border-color:rgba(249,115,22,.4);background:rgba(249,115,22,.1);color:#f97316}
+.border-top-shopee{height:4px;background:linear-gradient(90deg,#f97316,#fb923c);border-radius:4px 4px 0 0;margin:-48px -40px 40px;border-radius:24px 24px 0 0}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:32px;text-align:left}
+.info-item{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:16px}
+.info-item .label{color:var(--muted);font-size:12px;font-weight:600;margin-bottom:6px}
+.info-item .value{font-size:15px;font-weight:700}
+.skel{display:inline-block;background:rgba(255,255,255,.08);border-radius:4px;animation:pulse 1.4s ease-in-out infinite;width:60px;height:14px}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+@media(max-width:600px){.info-grid{grid-template-columns:1fr}.topbar{flex-direction:column;align-items:flex-start}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1><span class="shopee-dot"></span> Shopee &middot; Integração</h1>
+      <p>Módulo em configuração</p>
+    </div>
+    <div class="top-actions">
+      <a class="btn secondary" href="/hub">&#8592; Hub</a>
+    </div>
+  </div>
+
+  <div class="center-card">
+    <div class="border-top-shopee"></div>
+    <span class="shopee-logo">🛍️</span>
+    <h2>Módulo Shopee em configuração</h2>
+    <p>A integração com a Shopee está sendo desenvolvida. Em breve será possível gerenciar estoque, preços e pedidos diretamente por aqui.</p>
+
+    <div class="status-pills">
+      <span class="pill warn">Em configuração</span>
+      <span class="pill muted" id="pill-status">Status: <span class="skel" id="val-status"></span></span>
+    </div>
+
+    <div class="info-grid">
+      <div class="info-item">
+        <div class="label">Estoque sincronizado</div>
+        <div class="value" id="info-estoque"><span class="skel"></span></div>
+      </div>
+      <div class="info-item">
+        <div class="label">Produtos listados</div>
+        <div class="value" id="info-produtos"><span class="skel"></span></div>
+      </div>
+      <div class="info-item">
+        <div class="label">Última sincronização</div>
+        <div class="value" id="info-sync"><span class="skel"></span></div>
+      </div>
+      <div class="info-item">
+        <div class="label">Pendências</div>
+        <div class="value" id="info-pendencias"><span class="skel"></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+async function carregarStatus(){
+  try{
+    const res=await fetch('/shopee/status');
+    if(!res.ok) throw new Error();
+    const data=await res.json();
+    document.getElementById('val-status').classList.remove('skel');
+    document.getElementById('val-status').textContent=data.status||'—';
+    document.getElementById('info-estoque').textContent=data.estoque_sincronizado!=null?data.estoque_sincronizado:'—';
+    document.getElementById('info-produtos').textContent=data.produtos_listados!=null?data.produtos_listados:'—';
+    document.getElementById('info-sync').textContent=data.ultima_sync?new Date(data.ultima_sync).toLocaleString('pt-BR'):'—';
+    document.getElementById('info-pendencias').textContent=data.pendencias!=null?data.pendencias:'—';
+  }catch(e){
+    document.getElementById('val-status').classList.remove('skel');
+    document.getElementById('val-status').textContent='Indisponível';
+    document.getElementById('info-estoque').textContent='—';
+    document.getElementById('info-produtos').textContent='—';
+    document.getElementById('info-sync').textContent='—';
+    document.getElementById('info-pendencias').textContent='—';
+  }
+}
+carregarStatus();
+</script>
+</body>
+</html>

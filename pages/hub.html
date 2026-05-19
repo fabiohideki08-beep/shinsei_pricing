@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Shinsei Pricing — Hub</title>
+<style>
+:root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--ok:#16a34a;--danger:#ef4444;--warn:#f59e0b}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text);min-height:100vh}
+.wrap{max-width:1280px;margin:0 auto;padding:22px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:28px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 20px;position:sticky;top:16px;z-index:10}
+.brand{display:flex;align-items:center;gap:12px}
+.brand h1{margin:0;font-size:22px;font-weight:800;letter-spacing:-.3px}
+.brand span{font-size:12px;color:var(--muted);background:var(--card2);border:1px solid var(--line);padding:3px 10px;border-radius:999px}
+.top-actions{display:flex;gap:10px;align-items:center}
+.btn{border:none;background:var(--accent);color:#fff;padding:10px 16px;border-radius:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:7px;font-size:13px}
+.btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-bottom:32px}
+.sys-card{background:rgba(18,26,49,.97);border:1px solid var(--line);border-radius:22px;padding:0;overflow:hidden;display:flex;flex-direction:column;transition:transform .18s,box-shadow .18s}
+.sys-card:hover{transform:translateY(-3px);box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.card-top{height:5px;width:100%}
+.card-body{padding:22px;flex:1;display:flex;flex-direction:column;gap:14px}
+.card-icon{font-size:36px;line-height:1;margin-bottom:2px}
+.card-name{font-size:18px;font-weight:800;margin:0}
+.card-desc{font-size:13px;color:var(--muted);margin:0;line-height:1.5}
+.pills{display:flex;flex-wrap:wrap;gap:7px;margin-top:4px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid var(--line);background:var(--card2);white-space:nowrap}
+.pill.warn{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.1);color:var(--warn)}
+.pill.ok{border-color:rgba(22,163,74,.4);background:rgba(22,163,74,.1);color:#22c55e}
+.pill.muted{color:var(--muted)}
+.card-footer{padding:16px 22px;border-top:1px solid var(--line)}
+.card-link{display:block;width:100%;text-align:center;padding:11px;border-radius:12px;background:var(--accent);color:#fff;font-weight:700;font-size:14px;text-decoration:none;transition:background .15s}
+.card-link:hover{background:#3a78f2}
+.skel{display:inline-block;width:40px;height:12px;background:rgba(255,255,255,.08);border-radius:4px;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+footer{text-align:center;padding:24px 0;color:var(--muted);font-size:13px;border-top:1px solid var(--line);margin-top:12px}
+@media(max-width:1000px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.grid{grid-template-columns:1fr}.topbar{flex-direction:column;align-items:flex-start}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1>Shinsei Pricing</h1>
+      <span>Hub de sistemas</span>
+    </div>
+    <div class="top-actions">
+      <a class="btn secondary" href="/simulador">Simulador</a>
+      <a class="btn" href="/auditoria-automatica">Auditoria Completa</a>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <div style="margin-bottom:12px">
+    <div style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;padding-left:2px">⚙️ Módulos Avançados</div>
+    <div class="grid" id="grid-modulos"></div>
+  </div>
+
+  <footer>Shinsei Market &middot; Sistema de Pricing</footer>
+</div>
+<script>
+const SISTEMAS = [
+  {
+    key:'bling', nome:'Bling', icon:'🔵', desc:'Gestão de custos, precificação e fila de aprovação',
+    cor:'#f97316', href:'/sistema/bling',
+    pills:[
+      {label:'Pendentes', id:'bling-pendente', valor:null},
+      {label:'Incompletos', id:'bling-incompleto', valor:null}
+    ]
+  },
+  {
+    key:'shopify', nome:'Shopify', icon:'🟢', desc:'Sincronização de estoque e preços com a loja Shopify',
+    cor:'#22c55e', href:'/sistema/shopify',
+    pills:[
+      {label:'Divergências', id:'shopify-pendente', valor:null}
+    ]
+  },
+  {
+    key:'ml', nome:'Mercado Livre', icon:'🟡', desc:'Auditoria de estoque e preços nos anúncios ML',
+    cor:'#eab308', href:'/sistema/ml',
+    pills:[
+      {label:'Pendentes', id:'ml-pendente', valor:null},
+      {label:'Sem SKU', id:'ml-semsku', valor:null}
+    ]
+  },
+  {
+    key:'amazon', nome:'Amazon', icon:'🟠', desc:'Conferência de estoque e preços na plataforma Amazon',
+    cor:'#3b82f6', href:'/sistema/amazon',
+    pills:[
+      {label:'Pendentes', id:'amazon-pendente', valor:null}
+    ]
+  },
+  {
+    key:'shopee', nome:'Shopee', icon:'🛍️', desc:'Integração com a plataforma Shopee',
+    cor:'#f97316', href:'/sistema/shopee',
+    pills:[
+      {label:'Em configuração', id:'shopee-status', valor:'—', fixed:true}
+    ]
+  },
+  {
+    key:'google', nome:'Google', icon:'🔍', desc:'Merchant Center, Google Ads e SEO Health',
+    cor:'#4f8cff', href:'/sistema/google',
+    pills:[
+      {label:'Reprovados', id:'gmc-reprovados', valor:null},
+      {label:'Limitados', id:'gmc-limitados', valor:null}
+    ]
+  }
+];
+
+function renderGrid(){
+  const grid = document.getElementById('grid');
+  grid.innerHTML = SISTEMAS.map(s => `
+    <div class="sys-card">
+      <div class="card-top" style="background:${s.cor}"></div>
+      <div class="card-body">
+        <div>
+          <div class="card-icon">${s.icon}</div>
+          <div class="card-name">${s.nome}</div>
+          <p class="card-desc">${s.desc}</p>
+        </div>
+        <div class="pills" id="pills-${s.key}">
+          ${s.pills.map(p => `<span class="pill muted" id="pill-${p.id}">
+            ${p.label}: <span class="skel" id="val-${p.id}"></span>
+          </span>`).join('')}
+        </div>
+      </div>
+      <div class="card-footer">
+        <a class="card-link" href="${s.href}">Acessar &rarr;</a>
+      </div>
+    </div>
+  `).join('');
+}
+
+function setPill(id, valor, tipo){
+  const valEl = document.getElementById('val-' + id);
+  const pillEl = document.getElementById('pill-' + id);
+  if(!valEl || !pillEl) return;
+  valEl.classList.remove('skel');
+  valEl.textContent = valor;
+  pillEl.classList.remove('muted');
+  if(tipo === 'warn') pillEl.classList.add('warn');
+  else if(tipo === 'ok') pillEl.classList.add('ok');
+  else pillEl.classList.add('muted');
+}
+
+async function carregarStats(){
+  const results = await Promise.allSettled([
+    fetch('/fila/lista').then(r => r.json()),
+    fetch('/auditoria/shopify').then(r => r.json()),
+    fetch('/auditoria/ml-estoque').then(r => r.json()),
+    fetch('/auditoria/amazon').then(r => r.json()),
+    fetch('/gmc/status').then(r => r.json())
+  ]);
+
+  const [rBling, rShopify, rML, rAmazon, rGMC] = results;
+
+  if(rBling.status === 'fulfilled'){
+    const s = rBling.value.stats || {};
+    const p = s.pendente || 0;
+    const i = s.incompleto || 0;
+    setPill('bling-pendente', p, p > 0 ? 'warn' : 'ok');
+    setPill('bling-incompleto', i, i > 0 ? 'warn' : 'ok');
+  } else {
+    setPill('bling-pendente', '—', 'muted');
+    setPill('bling-incompleto', '—', 'muted');
+  }
+
+  if(rShopify.status === 'fulfilled'){
+    const p = (rShopify.value.stats || {}).pendente || 0;
+    setPill('shopify-pendente', p, p > 0 ? 'warn' : 'ok');
+  } else {
+    setPill('shopify-pendente', '—', 'muted');
+  }
+
+  if(rML.status === 'fulfilled'){
+    const s = rML.value.stats || {};
+    const p = s.pendente || 0;
+    const sk = s.sem_sku || 0;
+    setPill('ml-pendente', p, p > 0 ? 'warn' : 'ok');
+    setPill('ml-semsku', sk, sk > 0 ? 'warn' : 'ok');
+  } else {
+    setPill('ml-pendente', '—', 'muted');
+    setPill('ml-semsku', '—', 'muted');
+  }
+
+  if(rAmazon.status === 'fulfilled'){
+    const p = (rAmazon.value.stats || {}).pendente || 0;
+    setPill('amazon-pendente', p, p > 0 ? 'warn' : 'ok');
+  } else {
+    setPill('amazon-pendente', '—', 'muted');
+  }
+
+  setPill('shopee-status', 'Em configuração', 'muted');
+
+  if(rGMC.status === 'fulfilled'){
+    const r = (rGMC.value || {}).resumo || {};
+    const rep = r.total_reprovados ?? '—';
+    const lim = r.total_limitados ?? '—';
+    setPill('gmc-reprovados', rep, rep > 0 ? 'warn' : 'ok');
+    setPill('gmc-limitados', lim, lim > 0 ? 'warn' : 'ok');
+  } else {
+    setPill('gmc-reprovados', '—', 'muted');
+    setPill('gmc-limitados', '—', 'muted');
+  }
+}
+
+const MODULOS = [
+  { nome:'Cost Engine', icon:'💰', desc:'Cadastro e gestão de custos fixos e variáveis por categoria e centro de custo', cor:'#8b5cf6', href:'/cost-engine', tag:'Financeiro' },
+  { nome:'Cost Allocation', icon:'📊', desc:'Rateio de custos fixos entre SKUs por estratégia de faturamento ou estoque', cor:'#7c3aed', href:'/cost-allocation', tag:'Financeiro' },
+  { nome:'OEE', icon:'⚙️', desc:'Configuração de eficiência operacional: custo/hora, pedidos, materiais e endereço', cor:'#0ea5e9', href:'/oee', tag:'Operacional' },
+  { nome:'Perfis', icon:'🎯', desc:'Perfis de estratégia de precificação com regras de margem, SIE e variação máxima', cor:'#10b981', href:'/perfis', tag:'Precificação' },
+  { nome:'Regras de Cálculo', icon:'📐', desc:'Tabela de regras por canal com faixas de peso, preço, comissão e frete', cor:'#f59e0b', href:'/regras-calculo', tag:'Precificação' },
+  { nome:'SIE', icon:'📈', desc:'Supply-chain Inventory Efficiency: velocidade de venda, prazos e devoluções', cor:'#ef4444', href:'/sie', tag:'Estoque' },
+];
+
+function renderModulos() {
+  const grid = document.getElementById('grid-modulos');
+  grid.innerHTML = MODULOS.map(m => `
+    <div class="sys-card">
+      <div class="card-top" style="background:${m.cor}"></div>
+      <div class="card-body">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <div class="card-icon">${m.icon}</div>
+            <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--muted)">${m.tag}</span>
+          </div>
+          <div class="card-name">${m.nome}</div>
+          <p class="card-desc">${m.desc}</p>
+        </div>
+      </div>
+      <div class="card-footer">
+        <a class="card-link" href="${m.href}">Acessar &rarr;</a>
+      </div>
+    </div>
+  `).join('');
+}
+
+renderGrid();
+renderModulos();
+carregarStats();
+</script>
+</body>
+</html>
