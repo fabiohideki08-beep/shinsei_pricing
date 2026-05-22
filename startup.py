@@ -109,6 +109,7 @@ if bling_access and bling_refresh:
         pr("bling_tokens.json já existe no volume — token OAuth preservado")
     else:
         # Primeira vez: tenta renovar via refresh_token para garantir token fresco
+        _new = None
         if bling_cid and bling_csec:
             try:
                 import base64 as _b64mod
@@ -128,8 +129,8 @@ if bling_access and bling_refresh:
                 pr(f"AVISO: refresh do token Bling falhou ({_e}) — usando token da env var")
 
         # Usa o expires_in real retornado pelo Bling (normalmente 3600s = 1h).
-        # Não hardcoda 21600 (6h) para evitar enviar token expirado sem refresh.
-        _expires_in = int(_new.get("expires_in", 3600))
+        # _new só existe se o refresh foi bem-sucedido; caso contrário usa 3600.
+        _expires_in = int(_new.get("expires_in", 3600)) if _new else 3600
         raw_token = {
             "access_token":  bling_access,
             "refresh_token": bling_refresh,
