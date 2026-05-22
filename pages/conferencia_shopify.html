@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Bling ↔ Shopify — Shinsei Pricing</title>
+<style>
+:root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--ok:#22c55e;--danger:#ef4444;--warn:#f59e0b;--canal-cor:#22c55e}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text);min-height:100vh}
+.wrap{max-width:1280px;margin:0 auto;padding:22px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:24px;background:rgba(18,26,49,.97);border:1px solid var(--line);border-radius:18px;padding:14px 20px;position:sticky;top:16px;z-index:10;border-left:4px solid var(--canal-cor)}
+.brand h1{margin:0;font-size:19px;font-weight:800;display:flex;align-items:center;gap:10px}
+.brand span{font-size:11px;color:var(--muted)}
+.topbar-right{display:flex;gap:9px;align-items:center}
+.btn{border:none;background:var(--accent);color:#fff;padding:9px 16px;border-radius:11px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:7px;font-size:13px;transition:background .15s}
+.btn:hover{background:#3a78f2}
+.btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+.btn.secondary:hover{background:var(--card2)}
+.btn.sm{padding:6px 12px;font-size:12px;border-radius:8px}
+.btn.ok-btn{background:rgba(34,197,94,.2);color:var(--ok);border:1px solid rgba(34,197,94,.3)}
+.btn.ok-btn:hover{background:rgba(34,197,94,.35)}
+.btn.danger-btn{background:rgba(239,68,68,.2);color:var(--danger);border:1px solid rgba(239,68,68,.3)}
+.btn.danger-btn:hover{background:rgba(239,68,68,.35)}
+.progress-wrap{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 20px;margin-bottom:20px;display:none}
+.progress-wrap.visible{display:block}
+.progress-label{font-size:13px;font-weight:700;margin-bottom:8px;color:var(--muted)}
+.progress-bar-bg{background:var(--card2);border-radius:999px;height:8px;overflow:hidden}
+.progress-bar-fill{height:100%;border-radius:999px;background:var(--accent);transition:width .4s}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.stat-link{cursor:pointer;transition:background .15s,border-color .15s}.stat-link:hover{background:var(--card2);border-color:var(--accent)}
+.stat-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700}
+.stat-val{font-size:26px;font-weight:900;margin-top:4px}
+.tabs{display:flex;gap:6px;margin-bottom:20px;border-bottom:1px solid var(--line);padding-bottom:0}
+.tab{padding:10px 18px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s,border-color .15s;background:none;border-top:none;border-left:none;border-right:none}
+.tab.active{color:var(--text);border-bottom-color:var(--canal-cor)}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+.table-wrap{overflow-x:auto;border-radius:14px;border:1px solid var(--line)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--card2);padding:10px 12px;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);white-space:nowrap;border-bottom:1px solid var(--line)}
+td{padding:10px 12px;border-bottom:1px solid rgba(38,52,88,.5);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.025)}
+.sku-code{font-family:monospace;font-size:12px;color:var(--accent)}
+.nome-cell{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.margem-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:700}
+.margem-verde{background:rgba(34,197,94,.15);color:var(--ok);border:1px solid rgba(34,197,94,.3)}
+.margem-amarelo{background:rgba(245,158,11,.15);color:var(--warn);border:1px solid rgba(245,158,11,.3)}
+.margem-vermelho{background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3)}
+.status-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid var(--line);background:var(--card2)}
+.status-active{border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.1);color:var(--ok)}
+.status-archived{border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.1);color:var(--warn)}
+.status-draft{border-color:rgba(147,197,253,.3);background:rgba(147,197,253,.1);color:#93c5fd}
+.fila-resumo{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.fila-stat{padding:8px 14px;border-radius:10px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:6px}
+.fila-stat.total{background:var(--card2);border:1px solid var(--line);color:var(--muted)}
+.fila-stat.verde{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.25);color:var(--ok)}
+.fila-stat.amarelo{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);color:var(--warn)}
+.fila-stat.vermelho{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:var(--danger)}
+.filtro-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.filtro-bar label{font-size:12px;color:var(--muted);font-weight:700}
+.fbtn{padding:5px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--line);background:var(--card2);color:var(--muted);transition:all .15s}
+.fbtn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.ausente-section{margin-bottom:28px}
+.ausente-section h3{font-size:14px;font-weight:800;margin:0 0 12px 0;padding-bottom:10px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.count-badge{background:var(--card2);border:1px solid var(--line);color:var(--muted);padding:2px 10px;border-radius:999px;font-size:12px;font-weight:700}
+.empty{padding:32px;text-align:center;color:var(--muted);font-size:14px}
+.paginacao{display:flex;align-items:center;gap:10px;margin-top:14px;justify-content:flex-end;font-size:13px;color:var(--muted)}
+@media(max-width:900px){.stats-row{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1>🟢 Bling ↔ Shopify</h1>
+      <span id="meta-ultima">Carregando...</span>
+    </div>
+    <div class="topbar-right">
+      <a class="btn secondary" href="/dashboard">← Dashboard</a>
+      <button class="btn" id="btn-executar" onclick="executarConferencia()">▶ Executar conferência</button>
+    </div>
+  </div>
+
+  <div class="progress-wrap" id="progress-wrap">
+    <div class="progress-label" id="progress-etapa">Inicializando...</div>
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-bar" style="width:0%"></div></div>
+  </div>
+
+  <div class="stats-row" id="stats-row">
+    <div class="stat"><div class="stat-lbl">Total Bling</div><div class="stat-val">—</div></div>
+    <div class="stat stat-link" onclick="irParaAba('estoque')"><div class="stat-lbl">Mapeados Shopify</div><div class="stat-val" style="color:var(--ok)">—</div></div>
+    <div class="stat stat-link" onclick="irParaAba('ausentes','secao-sem-canal')"><div class="stat-lbl">Bling sem Shopify</div><div class="stat-val" style="color:var(--warn)">—</div></div>
+    <div class="stat stat-link" onclick="irParaAba('ausentes','secao-canal-sem-bling')"><div class="stat-lbl">Shopify sem Bling</div><div class="stat-val" style="color:var(--danger)">—</div></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="trocarTab('fila',this)">💰 Fila de Preços</button>
+    <button class="tab" onclick="trocarTab('estoque',this)">📦 Estoque</button>
+    <button class="tab" onclick="trocarTab('ausentes',this)">⚠️ SKUs Ausentes</button>
+  </div>
+
+  <div class="tab-panel active" id="tab-fila">
+    <div class="fila-resumo" id="fila-resumo"><span class="fila-stat total">Carregando...</span></div>
+    <div class="filtro-bar">
+      <label>Margem:</label>
+      <button class="fbtn active" id="fm-todos" onclick="setFiltroMargem('todos',this)">Todos</button>
+      <button class="fbtn" id="fm-verde" onclick="setFiltroMargem('verde',this)">🟢 ≥10%</button>
+      <button class="fbtn" id="fm-amarelo" onclick="setFiltroMargem('amarelo',this)">🟡 0–10%</button>
+      <button class="fbtn" id="fm-vermelho" onclick="setFiltroMargem('vermelho',this)">🔴 Prejuízo</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>SKU</th><th>Nome</th><th>Preço Bling</th><th>Preço Shopify</th><th>Margem</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="fila-tbody"><tr><td colspan="7" class="empty">Carregando...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="paginacao" id="fila-pag"></div>
+  </div>
+
+  <div class="tab-panel" id="tab-estoque">
+    <div class="filtro-bar">
+      <label>Status Shopify:</label>
+      <button class="fbtn active" id="fe-todos" onclick="setFiltroEstoque('todos',this)">Todos</button>
+      <button class="fbtn" id="fe-active" onclick="setFiltroEstoque('active',this)">🟢 Ativo</button>
+      <button class="fbtn" id="fe-archived" onclick="setFiltroEstoque('archived',this)">🟡 Arquivado</button>
+      <button class="fbtn" id="fe-draft" onclick="setFiltroEstoque('draft',this)">📝 Rascunho</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>SKU</th><th>Nome</th><th>Estoque Bling</th><th>Status Shopify</th><th>Variant ID</th></tr></thead>
+        <tbody id="estoque-tbody"><tr><td colspan="5" class="empty">Carregando...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="paginacao" id="estoque-pag"></div>
+  </div>
+
+  <div class="tab-panel" id="tab-ausentes">
+    <div class="ausente-section" id="secao-sem-canal">
+      <h3>⚠️ No Bling, ausente no Shopify <span class="count-badge" id="cnt-sem-canal">—</span></h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>SKU</th><th>Nome</th><th>Estoque</th><th>Preço</th></tr></thead>
+          <tbody id="sem-canal-tbody"><tr><td colspan="4" class="empty">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="paginacao" id="sem-canal-pag"></div>
+    </div>
+    <div class="ausente-section" id="secao-canal-sem-bling">
+      <h3>🔗 No Shopify, sem mapeamento Bling <span class="count-badge" id="cnt-canal-sem-bling">—</span></h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>SKU</th><th>Nome</th><th>Status</th></tr></thead>
+          <tbody id="canal-sem-bling-tbody"><tr><td colspan="3" class="empty">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const CANAL_KEY_FILA = ['shopify'];
+const CANAL_PRESENTE = 'presente_shopify';
+const CANAL_STATUS   = 'status_shopify';
+const CANAL_ID       = 'shopify_variant_id';
+const CANAL_NOME     = 'Shopify';
+const CANAL_STAT_KEY = 'shopify';
+const CANAL_SEM_KEY  = 'bling_sem_shopify';
+const PAGE_SIZE = 100;
+
+let _conf=null, _fila=[], _polling=false;
+let _filtroMargem='todos', _filtroEstoque='todos';
+let _pgFila=1, _pgEstoque=1, _pgSem=1;
+
+const fmt   = n=>(n==null)?'—':Number(n).toLocaleString('pt-BR');
+const fmtR$ = n=>(n==null)?'—':'R$ '+Number(n).toFixed(2).replace('.',',');
+
+function margemBadge(m){
+  if(m==null||isNaN(m)) return `<span class="margem-badge" style="color:var(--muted)">—</span>`;
+  const v=parseFloat(m);
+  if(v<0) return `<span class="margem-badge margem-vermelho">🔴 ${v.toFixed(1)}%</span>`;
+  if(v<10) return `<span class="margem-badge margem-amarelo">🟡 ${v.toFixed(1)}%</span>`;
+  return `<span class="margem-badge margem-verde">🟢 ${v.toFixed(1)}%</span>`;
+}
+function margemClasse(m){const v=parseFloat(m);if(isNaN(v))return'neutro';if(v<0)return'vermelho';if(v<10)return'amarelo';return'verde';}
+function statusChip(st){
+  const MAP={active:'🟢 Ativo',archived:'🟡 Arquivado',draft:'📝 Rascunho'};
+  return `<span class="status-chip status-${st||'draft'}">${MAP[st]||st||'—'}</span>`;
+}
+function trocarTab(nome,el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active'); document.getElementById('tab-'+nome).classList.add('active');
+}
+function irParaAba(tab, scrollId){
+  const btn=[...document.querySelectorAll('.tab')].find(t=>(t.getAttribute('onclick')||'').includes("'"+tab+"'"));
+  trocarTab(tab, btn||document.querySelector('.tab'));
+  if(scrollId) setTimeout(()=>{const el=document.getElementById(scrollId);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},80);
+}
+function pagControls(id,total,pag,onNav){
+  const el=document.getElementById(id); if(!el)return;
+  const tp=Math.max(1,Math.ceil(total/PAGE_SIZE));
+  if(tp<=1){el.innerHTML='';return;}
+  el.innerHTML=`<span>${total.toLocaleString('pt-BR')} itens</span>
+    <button class="btn secondary sm" onclick="${onNav}(${pag-1})" ${pag<=1?'disabled':''}>‹</button>
+    <span>${pag}/${tp}</span>
+    <button class="btn secondary sm" onclick="${onNav}(${pag+1})" ${pag>=tp?'disabled':''}>›</button>`;
+}
+function pagSlice(arr,pag){return arr.slice((pag-1)*PAGE_SIZE,pag*PAGE_SIZE);}
+
+function filtrarFila(){
+  return _fila.filter(item=>{
+    if(_filtroMargem==='todos')return true;
+    let m=null;
+    for(const k of CANAL_KEY_FILA){if(item.marketplaces?.[k]){m=item.marketplaces[k].margem;break;}}
+    return margemClasse(m)===_filtroMargem;
+  });
+}
+function renderFila(){
+  const filtrado=filtrarFila(), slice=pagSlice(filtrado,_pgFila);
+  const tbody=document.getElementById('fila-tbody');
+  if(!slice.length){tbody.innerHTML=`<tr><td colspan="7" class="empty">${_fila.length?'Nenhum no filtro.':'Sem itens para Shopify.'}</td></tr>`;document.getElementById('fila-pag').innerHTML='';return;}
+  tbody.innerHTML=slice.map(item=>{
+    let preco_canal=null,margem=null,preco_bling=null;
+    for(const k of CANAL_KEY_FILA){if(item.marketplaces?.[k]){const mp=item.marketplaces[k];preco_canal=mp.preco;margem=mp.margem;break;}}
+    if(item.produto_bling)preco_bling=item.produto_bling.preco||item.produto_bling.preco_venda;
+    const status=item.status||'pendente';
+    const statusCor=status==='pendente'?'var(--warn)':status==='aprovado'?'var(--ok)':'var(--danger)';
+    return `<tr>
+      <td class="sku-code">${item.sku||'—'}</td>
+      <td class="nome-cell" title="${(item.nome||'').replace(/"/g,'&quot;')}">${item.nome||'—'}</td>
+      <td>${fmtR$(preco_bling)}</td><td>${fmtR$(preco_canal)}</td>
+      <td>${margemBadge(margem)}</td>
+      <td><span style="font-size:12px;font-weight:700;color:${statusCor}">${status}</span></td>
+      <td style="white-space:nowrap">${status==='pendente'?`<button class="btn sm ok-btn" onclick="aprovar('${item.id}')">✓</button> <button class="btn sm danger-btn" onclick="rejeitar('${item.id}')">✗</button>`:'—'}</td>
+    </tr>`;
+  }).join('');
+  pagControls('fila-pag',filtrado.length,_pgFila,'navFila');
+}
+function navFila(p){_pgFila=p;renderFila();window.scrollTo(0,0);}
+function setFiltroMargem(f,el){_filtroMargem=f;_pgFila=1;document.querySelectorAll('[id^="fm-"]').forEach(b=>b.classList.remove('active'));el.classList.add('active');renderFila();}
+
+async function aprovar(id){if(!confirm('Aprovar?'))return;try{await fetch(`/fila/aprovar/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});carregarFila();}catch(e){alert('Erro: '+e);}}
+async function rejeitar(id){const motivo=prompt('Motivo (opcional):')||'';try{await fetch(`/fila/rejeitar/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({motivo})});carregarFila();}catch(e){alert('Erro: '+e);}}
+
+async function carregarFila(){
+  try{
+    const r=await fetch('/fila/lista').then(r=>r.json());
+    _fila=(r.itens||[]).filter(item=>CANAL_KEY_FILA.some(k=>k in (item.marketplaces||{})));
+    let verde=0,amarelo=0,vermelho=0;
+    _fila.forEach(item=>{let m=null;for(const k of CANAL_KEY_FILA){if(item.marketplaces?.[k]){m=item.marketplaces[k].margem;break;}}const cl=margemClasse(m);if(cl==='verde')verde++;else if(cl==='amarelo')amarelo++;else if(cl==='vermelho')vermelho++;});
+    document.getElementById('fila-resumo').innerHTML=`<span class="fila-stat total">📋 ${_fila.length} itens</span><span class="fila-stat verde">🟢 ${verde}</span><span class="fila-stat amarelo">🟡 ${amarelo}</span><span class="fila-stat vermelho">🔴 ${vermelho} prejuízo</span>`;
+    _pgFila=1; renderFila();
+  }catch(e){document.getElementById('fila-resumo').innerHTML=`<span class="fila-stat total" style="color:var(--danger)">Erro ao carregar fila</span>`;}
+}
+
+function renderEstoque(){
+  if(!_conf)return;
+  let mapeados=(_conf.matrix||[]).filter(r=>r[CANAL_PRESENTE]===true);
+  if(_filtroEstoque!=='todos')mapeados=mapeados.filter(r=>r[CANAL_STATUS]===_filtroEstoque);
+  mapeados.sort((a,b)=>(b.estoque_bling||0)-(a.estoque_bling||0));
+  const slice=pagSlice(mapeados,_pgEstoque);
+  const tbody=document.getElementById('estoque-tbody');
+  if(!slice.length){tbody.innerHTML=`<tr><td colspan="5" class="empty">${mapeados.length?'Nenhum no filtro.':'Nenhum mapeado.'}</td></tr>`;document.getElementById('estoque-pag').innerHTML='';return;}
+  tbody.innerHTML=slice.map(r=>`<tr>
+    <td class="sku-code">${r.sku||'—'}</td>
+    <td class="nome-cell" title="${(r.nome||'').replace(/"/g,'&quot;')}">${r.nome||'—'}</td>
+    <td>${fmt(r.estoque_bling)}</td>
+    <td>${statusChip(r[CANAL_STATUS])}</td>
+    <td style="font-size:11px;color:var(--muted)">${r[CANAL_ID]||'—'}</td>
+  </tr>`).join('');
+  pagControls('estoque-pag',mapeados.length,_pgEstoque,'navEstoque');
+}
+function navEstoque(p){_pgEstoque=p;renderEstoque();window.scrollTo(0,0);}
+function setFiltroEstoque(f,el){_filtroEstoque=f;_pgEstoque=1;document.querySelectorAll('[id^="fe-"]').forEach(b=>b.classList.remove('active'));el.classList.add('active');renderEstoque();}
+
+function renderAusentes(){
+  if(!_conf)return;
+  const matrix=_conf.matrix||[];
+  const semCanal=matrix.filter(r=>r[CANAL_PRESENTE]===false);
+  document.getElementById('cnt-sem-canal').textContent=semCanal.length.toLocaleString('pt-BR');
+  const slice=pagSlice(semCanal,_pgSem);
+  document.getElementById('sem-canal-tbody').innerHTML=slice.length
+    ?slice.map(r=>`<tr><td class="sku-code">${r.sku||'—'}</td><td class="nome-cell" title="${(r.nome||'').replace(/"/g,'&quot;')}">${r.nome||'—'}</td><td>${fmt(r.estoque_bling)}</td><td>${fmtR$(r.preco_bling)}</td></tr>`).join('')
+    :`<tr><td colspan="4" class="empty">✅ Todos os produtos Bling estão no Shopify!</td></tr>`;
+  pagControls('sem-canal-pag',semCanal.length,_pgSem,'navSem');
+
+  // Canal sem Bling — Shopify: busca na matrix as variantes que têm shopify_variant_id mas não têm SKU em Bling
+  // Usamos os sem_bling do stats (não temos lista detalhada para Shopify como o ML)
+  const s=_conf.stats||{};
+  const canalStat=s[CANAL_STAT_KEY]||{};
+  document.getElementById('cnt-canal-sem-bling').textContent=fmt(canalStat.sem_bling);
+  document.getElementById('canal-sem-bling-tbody').innerHTML=`<tr><td colspan="3" class="empty" style="color:var(--muted);font-size:13px">
+    ${canalStat.sem_bling>0
+      ? `${fmt(canalStat.sem_bling)} variantes no Shopify sem mapeamento no Bling.<br><small>Execute a conferência completa para ver a lista detalhada.</small>`
+      : '✅ Todas as variantes Shopify estão mapeadas no Bling!'}</td></tr>`;
+}
+function navSem(p){_pgSem=p;renderAusentes();window.scrollTo(0,0);}
+
+async function carregarConferencia(){
+  try{
+    const res=await fetch('/conferencia-sku/resultado').then(r=>r.json());
+    if(!res||!res.stats)return;
+    _conf=res;
+    const s=res.stats, cs=s[CANAL_STAT_KEY]||{};
+    document.getElementById('stats-row').innerHTML=`
+      <div class="stat"><div class="stat-lbl">Total Bling</div><div class="stat-val">${fmt(s.total_bling)}</div></div>
+      <div class="stat stat-link" onclick="irParaAba('estoque')"><div class="stat-lbl">Mapeados ${CANAL_NOME}</div><div class="stat-val" style="color:var(--ok)">${fmt(cs.presentes_em_bling)}</div></div>
+      <div class="stat stat-link" onclick="irParaAba('ausentes','secao-sem-canal')"><div class="stat-lbl">Bling sem ${CANAL_NOME}</div><div class="stat-val" style="color:var(--warn)">${fmt(s[CANAL_SEM_KEY])}</div></div>
+      <div class="stat stat-link" onclick="irParaAba('ausentes','secao-canal-sem-bling')"><div class="stat-lbl">${CANAL_NOME} sem Bling</div><div class="stat-val" style="color:var(--danger)">${fmt(cs.sem_bling)}</div></div>`;
+    if(res.executado_em){const dt=new Date(res.executado_em);document.getElementById('meta-ultima').textContent=`Última: ${dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})} ${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;}
+    renderEstoque(); renderAusentes();
+  }catch(e){document.getElementById('meta-ultima').textContent='Execute a conferência para ver dados.';}
+}
+
+async function executarConferencia(){
+  const btn=document.getElementById('btn-executar');
+  btn.disabled=true;btn.textContent='⏳ Iniciando...';
+  try{const r=await fetch('/conferencia-sku/executar',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});const d=await r.json();if(d.ok||d.estado?.status==='rodando'){iniciarPolling();}else{alert(d.msg||'Erro');btn.disabled=false;btn.textContent='▶ Executar conferência';}}
+  catch(e){alert('Erro: '+e);btn.disabled=false;btn.textContent='▶ Executar conferência';}
+}
+function iniciarPolling(){
+  if(_polling)return;_polling=true;
+  document.getElementById('progress-wrap').classList.add('visible');
+  document.getElementById('btn-executar').disabled=true;document.getElementById('btn-executar').textContent='⏳ Rodando...';
+  const ETAPAS={bling:'Coletando Bling',ml:'Coletando ML',shopify:'Coletando Shopify',amazon:'Coletando Amazon',shopee:'Coletando Shopee',cruzamento:'Cruzando SKUs',concluido:'Concluído'};
+  const iv=setInterval(async()=>{
+    try{const st=await fetch('/conferencia-sku/status').then(r=>r.json());
+    document.getElementById('progress-etapa').textContent=`${ETAPAS[st.etapa]||st.etapa||''} — ${st.pct||0}%`;
+    document.getElementById('progress-bar').style.width=(st.pct||0)+'%';
+    if(st.status==='concluido'||st.status==='erro'){clearInterval(iv);_polling=false;document.getElementById('progress-wrap').classList.remove('visible');document.getElementById('btn-executar').disabled=false;document.getElementById('btn-executar').textContent='▶ Executar conferência';if(st.status==='concluido'){carregarConferencia();carregarFila();}}}catch(e){clearInterval(iv);_polling=false;}
+  },2500);
+}
+
+carregarConferencia(); carregarFila();
+fetch('/conferencia-sku/status').then(r=>r.json()).then(st=>{if(st.status==='rodando')iniciarPolling();});
+</script>
+</body>
+</html>
