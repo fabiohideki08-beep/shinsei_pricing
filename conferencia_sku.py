@@ -219,9 +219,12 @@ def _fetch_ml() -> tuple[dict[str, dict], list[dict], bool]:
                 time.sleep(0.1)
             return resultado
 
-        # Coleta IDs de todos os status relevantes
+        # Coleta IDs apenas de anúncios relevantes para conferência:
+        # "active" = anunciado | "paused" = pausado (ainda existe no ML)
+        # Excluímos "closed" e "inactive" — podem ser milhares de anúncios
+        # históricos encerrados que travam a coleta sem agregar valor à análise.
         todos_ids: list[tuple[str, str]] = []
-        for st in ["active", "paused", "closed", "inactive"]:
+        for st in ["active", "paused"]:
             ids_st = _buscar_ids_por_status(st)
             logger.info("ML status=%s: %d anúncios", st, len(ids_st))
             todos_ids.extend(ids_st)
