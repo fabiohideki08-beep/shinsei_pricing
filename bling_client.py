@@ -90,10 +90,32 @@ class BlingClient:
         raw = self._load_json(TOKEN_PATH, {})
         if "encrypted" in raw:
             try:
-                return _decrypt_tokens(raw["encrypted"])
+                tokens = _decrypt_tokens(raw["encrypted"])
             except Exception:
-                return {}
-        return raw  # fallback legado (texto plano)
+                tokens = {}
+        else:
+            tokens = raw  # fallback legado (texto plano)
+
+        # Se o token local estiver expirado, busca tokens frescos do Secret Manager
+        # (necessário em Cloud Run multi-instância: o OAuth pode ter rodado em outra instância)
+        if not tokens.get("access_token") or time.time() >= float(tokens.get("expires_at", 0) or 0):
+            try:
+                from token_persistence import load_bling_tokens
+                sm_data = load_bling_tokens() or {}
+                sm_access = sm_data.get("access_token")
+                if sm_access:
+                    tokens = {
+                        "access_token":  sm_access,
+                        "refresh_token": sm_data.get("refresh_token", ""),
+                        "expires_at":    time.time() + 3600,
+                    }
+                    self._save_json(TOKEN_PATH, {"encrypted": _encrypt_tokens(tokens)})
+                    import logging as _log
+                    _log.getLogger(__name__).info("Bling: tokens recarregados do Secret Manager (instância sem token fresco)")
+            except Exception:
+                pass
+
+        return tokens
 
     def _save_tokens(self, data: dict):
         self._save_json(TOKEN_PATH, {"encrypted": _encrypt_tokens(data)})
