@@ -273,7 +273,7 @@ function iniciarPolling(){
       document.getElementById('progress-bar').style.width = (st.pct||0)+'%';
       document.getElementById('progress-msg').textContent = st.msg || '';
 
-      if(st.status === 'concluido' || st.status === 'erro'){
+      if(st.status === 'concluido' || st.status === 'erro' || st.status === 'ocioso' || st.status === 'cancelado'){
         clearInterval(interval);
         _polling = false;
         wrap.classList.remove('visible');
@@ -282,7 +282,10 @@ function iniciarPolling(){
         document.getElementById('btn-cancelar').style.display = 'none';
         if(st.status === 'concluido'){
           carregarDados();
-        } else if(st.status === 'erro'){
+        } else if(st.status === 'ocioso'){
+          // deploy matou a conferência — reseta silenciosamente
+          carregarDados();
+        } else if(st.status === 'erro' || st.status === 'cancelado'){
           // Mostra o erro de forma clara
           const errMsg = st.msg || 'Erro desconhecido na conferência';
           const errBanner = document.getElementById('erro-banner') || (() => {
