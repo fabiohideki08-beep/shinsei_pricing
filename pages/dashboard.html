@@ -83,6 +83,7 @@ footer{text-align:center;padding:20px 0;color:var(--muted);font-size:12px;border
       <span class="meta" id="meta-ultima">Carregando...</span>
       <a class="btn secondary" href="/hub">← Hub</a>
       <button class="btn" id="btn-executar" onclick="executarConferencia()">▶ Executar conferência</button>
+      <button class="btn secondary" id="btn-cancelar" onclick="cancelarConferencia()" style="display:none">✕ Cancelar</button>
     </div>
   </div>
 
@@ -242,6 +243,18 @@ async function executarConferencia(){
   }
 }
 
+async function cancelarConferencia(){
+  if(!confirm('Cancelar a conferência em andamento?')) return;
+  try {
+    await fetch('/conferencia-sku/cancelar', {method:'POST'});
+  } catch(e){}
+  _polling = false;
+  document.getElementById('progress-wrap').classList.remove('visible');
+  document.getElementById('btn-executar').disabled = false;
+  document.getElementById('btn-executar').textContent = '▶ Executar conferência';
+  document.getElementById('btn-cancelar').style.display = 'none';
+}
+
 function iniciarPolling(){
   if(_polling) return;
   _polling = true;
@@ -249,6 +262,7 @@ function iniciarPolling(){
   wrap.classList.add('visible');
   document.getElementById('btn-executar').disabled = true;
   document.getElementById('btn-executar').textContent = '⏳ Rodando...';
+  document.getElementById('btn-cancelar').style.display = '';
 
   const ETAPAS = {bling:'Coletando Bling',ml:'Coletando ML',shopify:'Coletando Shopify',amazon:'Coletando Amazon',shopee:'Coletando Shopee',cruzamento:'Cruzando SKUs',concluido:'Concluído'};
   const interval = setInterval(async ()=>{
@@ -265,6 +279,7 @@ function iniciarPolling(){
         wrap.classList.remove('visible');
         document.getElementById('btn-executar').disabled = false;
         document.getElementById('btn-executar').textContent = '▶ Executar conferência';
+        document.getElementById('btn-cancelar').style.display = 'none';
         if(st.status === 'concluido'){
           carregarDados();
         } else if(st.status === 'erro'){

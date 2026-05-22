@@ -527,6 +527,16 @@ def conferencia_sku_executar():
     iniciou = iniciar_conferencia_em_background(bling)
     return {"ok": iniciou, "msg": "Conferência iniciada." if iniciou else "Já rodando.", "estado": get_estado()}
 
+@app.post("/conferencia-sku/cancelar")
+def conferencia_sku_cancelar():
+    """Cancela a conferência em andamento (marca como cancelado)."""
+    from conferencia_sku import _set_estado, get_estado
+    estado = get_estado()
+    if estado.get("status") == "rodando":
+        _set_estado("erro", 0, "cancelado", "Conferência cancelada pelo usuário.")
+        return {"ok": True, "msg": "Conferência cancelada."}
+    return {"ok": False, "msg": "Nenhuma conferência em andamento."}
+
 @app.get("/conferencia-sku/status")
 def conferencia_sku_status():
     """Retorna o progresso da conferência em andamento."""
