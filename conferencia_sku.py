@@ -531,20 +531,31 @@ def executar_conferencia(bling_client) -> dict:
                     f" (aviso: {bling_erro})" if bling_erro else "")
         _set_estado("rodando", 30, "ml", "Coletando anúncios do Mercado Livre...")
 
-        # 2. ML
-        skus_ml, sem_sku_ml, ml_ok = _fetch_ml()
-        _set_estado("rodando", 50, "shopify", "Coletando variantes da Shopify...")
+        # Coleta todos os canais em paralelo com timeout máximo por canal
+        import concurrent.futures as _cf
+        _set_estado("rodando", 35, "canais", "Coletando canais em paralelo (ML, Shopify, Amazon, Shopee)...")
 
-        # 3. Shopify
-        skus_shopify, shopify_ok = _fetch_shopify()
-        _set_estado("rodando", 65, "amazon", "Coletando inventário da Amazon...")
+        with _cf.ThreadPoolExecutor(max_workers=4) as _ex:
+            _fut_ml      = _ex.submit(_fetch_ml)
+            _fut_shopify = _ex.submit(_fetch_shopify)
+            _fut_amazon  = _ex.submit(_fetch_amazon)
+            _fut_shopee  = _ex.submit(_fetch_shopee)
 
-        # 4. Amazon
-        skus_amazon, amazon_ok = _fetch_amazon()
-        _set_estado("rodando", 78, "shopee", "Coletando mapeamento da Shopee...")
+            def _get(fut, timeout_s, fallback, nome):
+                try:
+                    return fut.result(timeout=timeout_s)
+                except _cf.TimeoutError:
+                    logger.warning("Timeout %ds na coleta de %s — canal ignorado", timeout_s, nome)
+                    return fallback
+                except Exception as e:
+                    logger.warning("Erro na coleta de %s: %s", nome, e)
+                    return fallback
 
-        # 5. Shopee
-        skus_shopee, shopee_ok = _fetch_shopee()
+            skus_ml,      sem_sku_ml, ml_ok      = _get(_fut_ml,      180, ({}, [], False), "ML")
+            skus_shopify, shopify_ok              = _get(_fut_shopify, 180, ({}, False),      "Shopify")
+            skus_amazon,  amazon_ok              = _get(_fut_amazon,  120, ({}, False),      "Amazon")
+            skus_shopee,  shopee_ok              = _get(_fut_shopee,  120, ({}, False),      "Shopee")
+
         _set_estado("rodando", 88, "cruzamento", "Cruzando SKUs...")
 
         # ── Cruzamento ──────────────────────────────────────────
