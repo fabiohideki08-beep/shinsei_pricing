@@ -551,10 +551,10 @@ def executar_conferencia(bling_client) -> dict:
                     logger.warning("Erro na coleta de %s: %s", nome, e)
                     return fallback
 
-            skus_ml,      sem_sku_ml, ml_ok      = _get(_fut_ml,      180, ({}, [], False), "ML")
+            skus_ml,      sem_sku_ml, ml_ok      = _get(_fut_ml,      360, ({}, [], False), "ML")
             skus_shopify, shopify_ok              = _get(_fut_shopify, 180, ({}, False),      "Shopify")
             skus_amazon,  amazon_ok              = _get(_fut_amazon,  120, ({}, False),      "Amazon")
-            skus_shopee,  shopee_ok              = _get(_fut_shopee,  120, ({}, False),      "Shopee")
+            skus_shopee,  shopee_ok              = _get(_fut_shopee,  480, ({}, False),      "Shopee")
 
         _set_estado("rodando", 88, "cruzamento", "Cruzando SKUs...")
 
