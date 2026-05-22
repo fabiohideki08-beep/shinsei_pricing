@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Dashboard — Shinsei Pricing</title>
+<style>
+:root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--ok:#22c55e;--danger:#ef4444;--warn:#f59e0b;--purple:#a78bfa}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text);min-height:100vh}
+.wrap{max-width:1300px;margin:0 auto;padding:22px}
+/* topbar */
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:28px;background:rgba(18,26,49,.97);border:1px solid var(--line);border-radius:18px;padding:14px 20px;position:sticky;top:16px;z-index:10}
+.brand{display:flex;align-items:center;gap:10px}
+.brand h1{margin:0;font-size:19px;font-weight:800}
+.brand span{font-size:11px;color:var(--muted);background:var(--card2);border:1px solid var(--line);padding:3px 10px;border-radius:999px}
+.topbar-right{display:flex;gap:9px;align-items:center}
+.meta{font-size:12px;color:var(--muted)}
+.btn{border:none;background:var(--accent);color:#fff;padding:9px 16px;border-radius:11px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:7px;font-size:13px;transition:background .15s}
+.btn:hover{background:#3a78f2}
+.btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+.btn.secondary:hover{background:var(--card2)}
+.btn.danger{background:var(--danger)}
+/* progress */
+.progress-wrap{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 20px;margin-bottom:22px;display:none}
+.progress-wrap.visible{display:block}
+.progress-label{font-size:13px;font-weight:700;margin-bottom:8px;color:var(--muted)}
+.progress-bar-bg{background:var(--card2);border-radius:999px;height:10px;overflow:hidden}
+.progress-bar-fill{height:100%;border-radius:999px;background:var(--accent);transition:width .4s ease}
+.progress-msg{font-size:12px;color:var(--muted);margin-top:8px}
+/* stats grid */
+.stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:28px}
+.stat-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 16px;display:flex;flex-direction:column;gap:6px;transition:transform .15s,box-shadow .15s}
+.stat-card:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(0,0,0,.35)}
+.stat-card a{text-decoration:none;color:inherit}
+.stat-label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700}
+.stat-value{font-size:32px;font-weight:900;line-height:1}
+.stat-sub{font-size:12px;color:var(--muted)}
+.stat-bar{height:4px;border-radius:999px;margin-top:6px;background:var(--line)}
+.stat-bar-fill{height:100%;border-radius:999px}
+/* channels */
+.section-title{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:14px;padding-left:2px}
+.channels-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
+.ch-card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;transition:transform .15s,box-shadow .15s;text-decoration:none;color:inherit;display:flex;flex-direction:column}
+.ch-card:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(0,0,0,.35)}
+.ch-top{height:4px}
+.ch-body{padding:16px;flex:1;display:flex;flex-direction:column;gap:10px}
+.ch-header{display:flex;align-items:center;gap:8px}
+.ch-icon{font-size:22px}
+.ch-name{font-size:15px;font-weight:800}
+.ch-badge{font-size:10px;padding:2px 8px;border-radius:999px;font-weight:700}
+.badge-ok{background:rgba(34,197,94,.15);color:var(--ok);border:1px solid rgba(34,197,94,.3)}
+.badge-err{background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3)}
+.ch-stats{display:flex;flex-direction:column;gap:5px}
+.ch-stat-row{display:flex;justify-content:space-between;font-size:12px}
+.ch-stat-row .lbl{color:var(--muted)}
+.ch-stat-row .val{font-weight:700}
+.ch-footer{border-top:1px solid var(--line);padding:10px 16px;font-size:12px;font-weight:700;color:var(--accent);text-align:center}
+/* modules */
+.modules-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
+.mod-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:8px;transition:transform .15s,box-shadow .15s}
+.mod-card:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(0,0,0,.3)}
+.mod-icon{font-size:24px}
+.mod-name{font-size:14px;font-weight:800}
+.mod-desc{font-size:12px;color:var(--muted);line-height:1.4}
+.skel{display:inline-block;width:50px;height:18px;background:rgba(255,255,255,.08);border-radius:4px;animation:pulse 1.4s ease-in-out infinite}
+.skel-sm{width:30px;height:12px}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+footer{text-align:center;padding:20px 0;color:var(--muted);font-size:12px;border-top:1px solid var(--line);margin-top:8px}
+@media(max-width:1100px){.stats-grid{grid-template-columns:repeat(3,1fr)}.channels-grid{grid-template-columns:repeat(2,1fr)}.modules-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:700px){.stats-grid{grid-template-columns:repeat(2,1fr)}.channels-grid{grid-template-columns:1fr}.modules-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="brand">
+      <h1>📊 Dashboard</h1>
+      <span>Cobertura & Status</span>
+    </div>
+    <div class="topbar-right">
+      <span class="meta" id="meta-ultima">Carregando...</span>
+      <a class="btn secondary" href="/hub">← Hub</a>
+      <button class="btn" id="btn-executar" onclick="executarConferencia()">▶ Executar conferência</button>
+    </div>
+  </div>
+
+  <!-- Barra de progresso -->
+  <div class="progress-wrap" id="progress-wrap">
+    <div class="progress-label" id="progress-etapa">Inicializando...</div>
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-bar" style="width:0%"></div></div>
+    <div class="progress-msg" id="progress-msg"></div>
+  </div>
+
+  <!-- Stats de cobertura -->
+  <div class="stats-grid" id="stats-grid">
+    <div class="stat-card"><div class="stat-label">Total Bling</div><div class="stat-value skel"></div><div class="stat-sub">produtos com SKU</div></div>
+    <div class="stat-card"><div class="stat-label">Sem ML</div><div class="stat-value skel"></div><div class="stat-sub">de <span class="skel skel-sm"></span> anúncios</div></div>
+    <div class="stat-card"><div class="stat-label">Sem Shopify</div><div class="stat-value skel"></div><div class="stat-sub">de <span class="skel skel-sm"></span> variantes</div></div>
+    <div class="stat-card"><div class="stat-label">Sem Amazon</div><div class="stat-value skel"></div><div class="stat-sub">de <span class="skel skel-sm"></span> listings</div></div>
+    <div class="stat-card"><div class="stat-label">Sem Shopee</div><div class="stat-value skel"></div><div class="stat-sub">de <span class="skel skel-sm"></span> mapeados</div></div>
+  </div>
+
+  <!-- Canais -->
+  <div class="section-title">🔌 Canais Conectados</div>
+  <div class="channels-grid" id="channels-grid">
+    <div class="ch-card"><div class="ch-top" style="background:#eab308"></div><div class="ch-body"><div class="ch-header"><span class="ch-icon">🟡</span><span class="ch-name">Mercado Livre</span><span class="ch-badge skel"></span></div><div class="ch-stats"><div class="ch-stat-row"><span class="lbl">Mapeados</span><span class="val skel skel-sm"></span></div><div class="ch-stat-row"><span class="lbl">Bling sem ML</span><span class="val skel skel-sm"></span></div></div></div><div class="ch-footer">→ Ver conferência ML</div></div>
+    <div class="ch-card"><div class="ch-top" style="background:#22c55e"></div><div class="ch-body"><div class="ch-header"><span class="ch-icon">🟢</span><span class="ch-name">Shopify</span><span class="ch-badge skel"></span></div><div class="ch-stats"><div class="ch-stat-row"><span class="lbl">Mapeados</span><span class="val skel skel-sm"></span></div><div class="ch-stat-row"><span class="lbl">Bling sem Shopify</span><span class="val skel skel-sm"></span></div></div></div><div class="ch-footer">→ Ver conferência Shopify</div></div>
+    <div class="ch-card"><div class="ch-top" style="background:#3b82f6"></div><div class="ch-body"><div class="ch-header"><span class="ch-icon">🟠</span><span class="ch-name">Amazon</span><span class="ch-badge skel"></span></div><div class="ch-stats"><div class="ch-stat-row"><span class="lbl">Mapeados</span><span class="val skel skel-sm"></span></div><div class="ch-stat-row"><span class="lbl">Bling sem Amazon</span><span class="val skel skel-sm"></span></div></div></div><div class="ch-footer">→ Ver conferência Amazon</div></div>
+    <div class="ch-card"><div class="ch-top" style="background:#f97316"></div><div class="ch-body"><div class="ch-header"><span class="ch-icon">🛍️</span><span class="ch-name">Shopee</span><span class="ch-badge skel"></span></div><div class="ch-stats"><div class="ch-stat-row"><span class="lbl">Mapeados</span><span class="val skel skel-sm"></span></div><div class="ch-stat-row"><span class="lbl">Bling sem Shopee</span><span class="val skel skel-sm"></span></div></div></div><div class="ch-footer">→ Ver conferência Shopee</div></div>
+  </div>
+
+  <!-- Módulos -->
+  <div class="section-title">⚙️ Módulos do Sistema</div>
+  <div class="modules-grid">
+    <a class="mod-card" href="/sistema/bling"><div class="mod-icon">🔵</div><div class="mod-name">Bling</div><div class="mod-desc">Gestão de custos, precificação e fila de aprovação</div></a>
+    <a class="mod-card" href="/sistema/google"><div class="mod-icon">🔍</div><div class="mod-name">Google</div><div class="mod-desc">Merchant Center, Google Ads e SEO Health</div></a>
+    <a class="mod-card" href="/simulador"><div class="mod-icon">🧮</div><div class="mod-name">Simulador</div><div class="mod-desc">Simule preços e margens antes de publicar</div></a>
+    <a class="mod-card" href="/auditoria-automatica"><div class="mod-icon">🔍</div><div class="mod-name">Auditoria Completa</div><div class="mod-desc">Auditoria automática de preços e estoques</div></a>
+    <a class="mod-card" href="/cost-engine"><div class="mod-icon">💰</div><div class="mod-name">Cost Engine</div><div class="mod-desc">Gestão de custos fixos e variáveis por categoria</div></a>
+    <a class="mod-card" href="/cost-allocation"><div class="mod-icon">📊</div><div class="mod-name">Cost Allocation</div><div class="mod-desc">Rateio de custos entre SKUs</div></a>
+    <a class="mod-card" href="/oee"><div class="mod-icon">⚙️</div><div class="mod-name">OEE</div><div class="mod-desc">Eficiência operacional e custo/hora</div></a>
+    <a class="mod-card" href="/sie"><div class="mod-icon">📈</div><div class="mod-name">SIE</div><div class="mod-desc">Supply-chain Inventory Efficiency</div></a>
+  </div>
+
+  <footer>Shinsei Market &middot; Dashboard</footer>
+</div>
+
+<script>
+const CANAIS = [
+  { key:'ml', nome:'Mercado Livre', icon:'🟡', cor:'#eab308', href:'/conferencia/ml',
+    statKey:'ml', semKey:'bling_sem_ml' },
+  { key:'shopify', nome:'Shopify', icon:'🟢', cor:'#22c55e', href:'/conferencia/shopify',
+    statKey:'shopify', semKey:'bling_sem_shopify' },
+  { key:'amazon', nome:'Amazon', icon:'🟠', cor:'#3b82f6', href:'/conferencia/amazon',
+    statKey:'amazon', semKey:'bling_sem_amazon' },
+  { key:'shopee', nome:'Shopee', icon:'🛍️', cor:'#f97316', href:'/conferencia/shopee',
+    statKey:'shopee', semKey:'bling_sem_shopee' },
+];
+
+let _polling = false;
+
+function fmt(n){ return (n===null||n===undefined)?'—':Number(n).toLocaleString('pt-BR'); }
+function pct(a,b){ return b>0 ? Math.round((a/b)*100) : 0; }
+
+function renderStats(res){
+  const s = res.stats || {};
+  const totalBling = s.total_bling || 0;
+  const grid = document.getElementById('stats-grid');
+
+  const cards = [
+    { label:'Total Bling', valor:totalBling, sub:'produtos com SKU', cor:'#4f8cff', pct:100, link:null },
+    { label:'Sem ML', valor:s.bling_sem_ml, sub:`de ${fmt((s.ml||{}).total)} anúncios`, cor:'#eab308', pct:pct(s.bling_sem_ml,totalBling), link:'/conferencia/ml' },
+    { label:'Sem Shopify', valor:s.bling_sem_shopify, sub:`de ${fmt((s.shopify||{}).total)} variantes`, cor:'#22c55e', pct:pct(s.bling_sem_shopify,totalBling), link:'/conferencia/shopify' },
+    { label:'Sem Amazon', valor:s.bling_sem_amazon, sub:`de ${fmt((s.amazon||{}).total)} listings`, cor:'#3b82f6', pct:pct(s.bling_sem_amazon,totalBling), link:'/conferencia/amazon' },
+    { label:'Sem Shopee', valor:s.bling_sem_shopee, sub:`de ${fmt((s.shopee||{}).total)} mapeados`, cor:'#f97316', pct:pct(s.bling_sem_shopee,totalBling), link:'/conferencia/shopee' },
+  ];
+
+  grid.innerHTML = cards.map(c => {
+    const inner = `
+      <div class="stat-label">${c.label}</div>
+      <div class="stat-value" style="color:${c.cor}">${fmt(c.valor)}</div>
+      <div class="stat-sub">${c.sub}</div>
+      <div class="stat-bar"><div class="stat-bar-fill" style="background:${c.cor};width:${c.pct}%"></div></div>`;
+    return c.link
+      ? `<div class="stat-card"><a href="${c.link}" style="text-decoration:none;color:inherit">${inner}</a></div>`
+      : `<div class="stat-card">${inner}</div>`;
+  }).join('');
+}
+
+function renderCanais(res){
+  const s = res.stats || {};
+  const grid = document.getElementById('channels-grid');
+  grid.innerHTML = CANAIS.map(c => {
+    const cs = s[c.statKey] || {};
+    const conectado = cs.conectado !== false;
+    const badge = conectado
+      ? `<span class="ch-badge badge-ok">✓ Conectado</span>`
+      : `<span class="ch-badge badge-err">✗ Desconectado</span>`;
+    const total = cs.total ?? '—';
+    const sem = s[c.semKey] ?? '—';
+    const pctVal = (typeof total==='number' && typeof sem==='number' && total>0)
+      ? Math.round((1 - sem / (s.total_bling||1)) * 100) : '—';
+    return `<a class="ch-card" href="${c.href}">
+      <div class="ch-top" style="background:${c.cor}"></div>
+      <div class="ch-body">
+        <div class="ch-header">
+          <span class="ch-icon">${c.icon}</span>
+          <span class="ch-name">${c.nome}</span>
+          ${badge}
+        </div>
+        <div class="ch-stats">
+          <div class="ch-stat-row"><span class="lbl">Produtos no canal</span><span class="val">${fmt(total)}</span></div>
+          <div class="ch-stat-row"><span class="lbl">Bling sem ${c.nome}</span><span class="val" style="color:${sem>0?'var(--warn)':'var(--ok)'}">${fmt(sem)}</span></div>
+          <div class="ch-stat-row"><span class="lbl">Cobertura Bling</span><span class="val">${pctVal !== '—' ? pctVal+'%' : '—'}</span></div>
+        </div>
+      </div>
+      <div class="ch-footer">→ Ver conferência ${c.nome}</div>
+    </a>`;
+  }).join('');
+}
+
+async function carregarDados(){
+  try {
+    const res = await fetch('/conferencia-sku/resultado').then(r=>r.json());
+    if(!res || !res.stats){ return; }
+    renderStats(res);
+    renderCanais(res);
+    const dt = res.executado_em ? new Date(res.executado_em) : null;
+    const dur = res.duracao_segundos ? `${Math.round(res.duracao_segundos/60)}min` : '';
+    if(dt){
+      const ts = dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) + ' ' +
+                 dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+      document.getElementById('meta-ultima').textContent = `Última: ${ts}${dur?' ('+dur+')':''}`;
+    } else {
+      document.getElementById('meta-ultima').textContent = 'Nenhuma conferência executada';
+    }
+  } catch(e){
+    document.getElementById('meta-ultima').textContent = 'Sem dados — execute a conferência';
+  }
+}
+
+async function executarConferencia(){
+  const btn = document.getElementById('btn-executar');
+  btn.disabled = true;
+  btn.textContent = '⏳ Iniciando...';
+  try {
+    const r = await fetch('/conferencia-sku/executar', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+    const d = await r.json();
+    if(d.ok || d.estado?.status === 'rodando'){
+      iniciarPolling();
+    } else {
+      alert(d.msg || 'Erro ao iniciar conferência');
+      btn.disabled = false;
+      btn.textContent = '▶ Executar conferência';
+    }
+  } catch(e){
+    alert('Erro de conexão: ' + e);
+    btn.disabled = false;
+    btn.textContent = '▶ Executar conferência';
+  }
+}
+
+function iniciarPolling(){
+  if(_polling) return;
+  _polling = true;
+  const wrap = document.getElementById('progress-wrap');
+  wrap.classList.add('visible');
+  document.getElementById('btn-executar').disabled = true;
+  document.getElementById('btn-executar').textContent = '⏳ Rodando...';
+
+  const ETAPAS = {bling:'Coletando Bling',ml:'Coletando ML',shopify:'Coletando Shopify',amazon:'Coletando Amazon',shopee:'Coletando Shopee',cruzamento:'Cruzando SKUs',concluido:'Concluído'};
+  const interval = setInterval(async ()=>{
+    try {
+      const st = await fetch('/conferencia-sku/status').then(r=>r.json());
+      const etapa = ETAPAS[st.etapa] || st.etapa || '';
+      document.getElementById('progress-etapa').textContent = `${etapa} — ${st.pct||0}%`;
+      document.getElementById('progress-bar').style.width = (st.pct||0)+'%';
+      document.getElementById('progress-msg').textContent = st.msg || '';
+
+      if(st.status === 'concluido' || st.status === 'erro'){
+        clearInterval(interval);
+        _polling = false;
+        wrap.classList.remove('visible');
+        document.getElementById('btn-executar').disabled = false;
+        document.getElementById('btn-executar').textContent = '▶ Executar conferência';
+        if(st.status === 'concluido'){
+          carregarDados();
+        } else if(st.status === 'erro'){
+          // Mostra o erro de forma clara
+          const errMsg = st.msg || 'Erro desconhecido na conferência';
+          const errBanner = document.getElementById('erro-banner') || (() => {
+            const el = document.createElement('div');
+            el.id = 'erro-banner';
+            el.style.cssText = 'background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);border-radius:12px;padding:14px 18px;margin-bottom:18px;color:#ef4444;font-size:13px;font-weight:700;';
+            document.querySelector('.wrap').insertBefore(el, document.querySelector('.stats-row'));
+            return el;
+          })();
+          errBanner.textContent = '⚠️ ' + errMsg;
+          errBanner.style.display = 'block';
+        }
+      }
+    } catch(e){ clearInterval(interval); _polling=false; }
+  }, 2500);
+}
+
+// Inicia
+carregarDados();
+// Verifica se já está rodando
+fetch('/conferencia-sku/status').then(r=>r.json()).then(st=>{
+  if(st.status === 'rodando') iniciarPolling();
+});
+</script>
+</body>
+</html>

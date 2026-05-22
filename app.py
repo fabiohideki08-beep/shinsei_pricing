@@ -88,6 +88,7 @@ from routes.bling import router as bling_page_router
 from monitoring import router as monitoring_router
 from routes.gmc import router as gmc_router
 from routes.shopee import router as shopee_router, aplicar_preco_shopee_por_sku
+from routes.estoque_sync import router as estoque_sync_router, _rebuild_caches_bg, sync_estoque_bling
 app.include_router(batch_router)
 from routes.mercado_livre import router as ml_page_router
 app.include_router(ml_page_router)
@@ -96,6 +97,7 @@ app.include_router(bling_page_router)
 app.include_router(monitoring_router)
 app.include_router(gmc_router)
 app.include_router(shopee_router)
+app.include_router(estoque_sync_router)
 try:
     from routes.frete import router as frete_router
     app.include_router(frete_router)
@@ -120,6 +122,19 @@ def startup():
     migrar_json_legado()
     iniciar_scheduler_background()
     iniciar_scbot()
+    # Inicia thread de auto-refresh de tokens (Bling, Shopee, ML)
+    try:
+        from token_autorefresh import iniciar as iniciar_autorefresh
+        iniciar_autorefresh()
+        logger.info("Token auto-refresh iniciado")
+    except Exception as _e:
+        logger.warning("Token auto-refresh não iniciado: %s", _e)
+    # Pré-aquece caches de SKU (Shopify + ML) para sync de estoque em tempo real
+    try:
+        _rebuild_caches_bg()
+        logger.info("Cache de SKU (estoque sync) sendo construído em background")
+    except Exception as _e:
+        logger.warning("Cache de SKU não iniciado: %s", _e)
     logger.info("Shinsei Pricing iniciado")
 
 @app.on_event("shutdown")
@@ -477,6 +492,26 @@ def sie_page():
 def conferencia_sku_page():
     return HTMLResponse((PAGES_DIR / "conferencia_sku.html").read_text(encoding="utf-8"))
 
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard_page():
+    return HTMLResponse((PAGES_DIR / "dashboard.html").read_text(encoding="utf-8"))
+
+@app.get("/conferencia/ml", response_class=HTMLResponse)
+def conferencia_ml_page():
+    return HTMLResponse((PAGES_DIR / "conferencia_ml.html").read_text(encoding="utf-8"))
+
+@app.get("/conferencia/shopify", response_class=HTMLResponse)
+def conferencia_shopify_page():
+    return HTMLResponse((PAGES_DIR / "conferencia_shopify.html").read_text(encoding="utf-8"))
+
+@app.get("/conferencia/amazon", response_class=HTMLResponse)
+def conferencia_amazon_page():
+    return HTMLResponse((PAGES_DIR / "conferencia_amazon.html").read_text(encoding="utf-8"))
+
+@app.get("/conferencia/shopee", response_class=HTMLResponse)
+def conferencia_shopee_page():
+    return HTMLResponse((PAGES_DIR / "conferencia_shopee.html").read_text(encoding="utf-8"))
+
 # ─── Conferência de SKUs ────────────────────────────────────────────────────
 
 @app.post("/conferencia-sku/executar")
@@ -587,6 +622,39 @@ def bling_callback(code: str | None = Query(None), state: str | None = Query(Non
         return {"ok":True,"message":"Conexão com Bling realizada.","expires_in":token.get("expires_in")}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+@app.get("/bling/exportar-tokens")
+def bling_exportar_tokens(api_key: str = Query(...)):
+    """Exporta tokens Bling para configurar como env vars no Cloud Run. Protegido por api_key (middleware)."""
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
+    try:
+        from bling_client import TOKEN_PATH, _decrypt_tokens
+        if not TOKEN_PATH.exists():
+            return {"ok": False, "erro": "Arquivo bling_tokens.json não encontrado. Faça a autorização em /bling/auth primeiro."}
+        raw = json.loads(TOKEN_PATH.read_text(encoding="utf-8"))
+        if "encrypted" in raw:
+            tokens = _decrypt_tokens(raw["encrypted"])
+        else:
+            tokens = raw
+        access_token = tokens.get("access_token", "")
+        refresh_token = tokens.get("refresh_token", "")
+        if not access_token or not refresh_token:
+            return {"ok": False, "erro": "Tokens inválidos ou ausentes. Reautorize em /bling/auth."}
+        cmd = (
+            f"gcloud run services update shinsei-pricing "
+            f"--region southamerica-east1 "
+            f"--update-env-vars BLING_ACCESS_TOKEN={access_token},BLING_REFRESH_TOKEN={refresh_token}"
+        )
+        return {
+            "ok": True,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "expires_at": tokens.get("expires_at"),
+            "gcloud_cmd": cmd,
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 @app.post("/bling/debug/sku")
 def bling_debug_sku(payload: DebugSkuPayload):
@@ -1667,7 +1735,7 @@ def scheduler_status():
 
 
 @app.post("/webhooks/bling")
-async def webhook_bling(request: Request):
+async def webhook_bling(request: Request, background_tasks: BackgroundTasks):
     raw = await request.body()
     sig = request.headers.get("X-Bling-Signature-256", "")
     if not _verificar_assinatura_bling(raw, sig):
@@ -1680,6 +1748,8 @@ async def webhook_bling(request: Request):
     evento = body.get("evento") or body.get("event") or "desconhecido"
     logger.info("Webhook Bling recebido: evento=%s", evento)
     _append_jsonl(LOG_PATH, {"evento":"webhook_bling","tipo":evento,"quando":datetime.utcnow().isoformat(),"payload":body})
+    # Propaga atualização de estoque em tempo real para Shopify e ML
+    background_tasks.add_task(sync_estoque_bling, body)
     return {"ok": True, "recebido": True}
 
 @app.post("/webhooks/ml")
@@ -2889,7 +2959,40 @@ def amazon_status():
         from amazon_client import AmazonClient
         c = AmazonClient()
         token = c._get_access_token()
-        return {"ok": True, "configurado": True, "conectado": bool(token)}
+
+        # Testa a Listings API para verificar se retorna anúncios
+        listings_ok = False
+        listings_count = 0
+        listings_erro = None
+        try:
+            resp = c.get_listings()
+            api_errors = resp.get("errors") or []
+            items = resp.get("items") or []
+            listings_count = len(items)
+            if api_errors:
+                listings_erro = str(api_errors[:2])
+                listings_ok = False
+            else:
+                listings_ok = True  # API respondeu, mesmo que vazia
+        except Exception as le:
+            listings_erro = str(le)
+
+        return {
+            "ok": True,
+            "configurado": True,
+            "conectado": bool(token),
+            "seller_id": c.config.get("seller_id", ""),
+            "marketplace_id": c.config.get("marketplace_id", ""),
+            "listings_api": {
+                "ok": listings_ok,
+                "itens_primeira_pagina": listings_count,
+                "erro": listings_erro,
+                "aviso": (
+                    "A API retornou 0 itens na 1ª página — a conferência tratará Amazon como desconectada. "
+                    "Verifique as permissões do app SP-API (precisa de 'Manage inventory' ou 'Listings')."
+                ) if (listings_ok and listings_count == 0) else None,
+            },
+        }
     except Exception as e:
         return {"ok": False, "configurado": False, "conectado": False, "erro": str(e)}
 
@@ -2905,7 +3008,17 @@ def amazon_auth(request: Request):
     import json as _json, secrets as _sec
     app_id = os.getenv("AMAZON_APP_ID", "")
     if not app_id:
-        return {"ok": False, "erro": "Defina AMAZON_APP_ID no Railway com o ID do app SP-API"}
+        # Verifica se já está conectado via LWA (refresh_token configurado)
+        amazon_conectado = bool(os.getenv("AMAZON_REFRESH_TOKEN", ""))
+        if amazon_conectado:
+            return {
+                "ok": True,
+                "status": "ja_conectado",
+                "mensagem": "Amazon ja esta conectada via LWA (refresh_token configurado). "
+                            "Este endpoint so e necessario para gerar um novo refresh_token. "
+                            "Acesse /amazon/status para confirmar a conexao.",
+            }
+        return {"ok": False, "erro": "Defina AMAZON_APP_ID no Cloud Run com o ID do app SP-API"}
     state = _sec.token_hex(16)
     (DATA_DIR / "amazon_oauth_state.json").write_text(
         _json.dumps({"state": state}), encoding="utf-8"

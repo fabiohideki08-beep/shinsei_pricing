@@ -5,6 +5,7 @@ Cliente SP-API da Amazon com autenticação LWA automática.
 from __future__ import annotations
 import json
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Optional
@@ -13,7 +14,6 @@ import requests
 logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).parent
-CONFIG_PATH = BASE_DIR / "data" / "amazon_config.py"
 TOKEN_CACHE_PATH = BASE_DIR / "data" / "amazon_token_cache.json"
 
 LWA_URL = "https://api.amazon.com/auth/o2/token"
@@ -27,10 +27,35 @@ class AmazonClient:
         self._token_expiry: float = 0
 
     def _load_config(self) -> dict:
+        # Prioridade 1: env vars (Cloud Run / Railway)
+        cfg_from_env = {
+            "seller_id":      os.getenv("AMAZON_SELLER_ID", ""),
+            "marketplace_id": os.getenv("AMAZON_MARKETPLACE_ID", "A2Q3Y263D00KWC"),
+            "client_id":      os.getenv("AMAZON_CLIENT_ID", ""),
+            "client_secret":  os.getenv("AMAZON_CLIENT_SECRET", ""),
+            "refresh_token":  os.getenv("AMAZON_REFRESH_TOKEN", ""),
+        }
+        if all([cfg_from_env["seller_id"], cfg_from_env["client_id"],
+                cfg_from_env["client_secret"], cfg_from_env["refresh_token"]]):
+            return cfg_from_env
+
+        # Prioridade 2: arquivo de configuração local
         path = BASE_DIR / "data" / "amazon_config.json"
-        if not path.exists():
-            raise FileNotFoundError("data/amazon_config.json não encontrado")
-        return json.loads(path.read_text(encoding="utf-8"))
+        if path.exists():
+            try:
+                file_cfg = json.loads(path.read_text(encoding="utf-8"))
+                # Preenche campos ausentes com env vars
+                for k, v in cfg_from_env.items():
+                    if v and not file_cfg.get(k):
+                        file_cfg[k] = v
+                return file_cfg
+            except Exception as e:
+                logger.warning("Erro ao ler amazon_config.json: %s", e)
+
+        raise FileNotFoundError(
+            "Amazon não configurado: defina AMAZON_SELLER_ID, AMAZON_CLIENT_ID, "
+            "AMAZON_CLIENT_SECRET e AMAZON_REFRESH_TOKEN nas variáveis de ambiente."
+        )
 
     def _get_access_token(self) -> str:
         if self._access_token and time.time() < self._token_expiry - 60:
@@ -63,15 +88,25 @@ class AmazonClient:
         return res.json()
 
     def get_listings(self, page_token: str = None) -> dict:
-        """Lista anúncios ativos do seller."""
+        """Lista anúncios MFN/DBA ativos do seller via Listings Items API."""
+        # Listings Items API v2021-08-01: GET /listings/2021-08-01/items/{sellerId}
+        # status válidos: BUYABLE, DISCOVERABLE (não ACTIVE)
+        # includedData=summaries retorna info básica de cada anúncio
         params = {
             "marketplaceIds": self.config["marketplace_id"],
-            "status": "ACTIVE",
-            "pageSize": 50,
+            "includedData": "summaries",
+            "pageSize": 50,  # máximo suportado pela API
         }
         if page_token:
             params["pageToken"] = page_token
-        return self._get(f"/listings/2021-08-01/items/{self.config['seller_id']}", params)
+        result = self._get(f"/listings/2021-08-01/items/{self.config['seller_id']}", params)
+        logger.debug(
+            "get_listings página=%s items=%d nextToken=%s",
+            "1" if not page_token else "N",
+            len(result.get("items") or []),
+            bool(result.get("pagination", {}).get("nextToken")),
+        )
+        return result
 
     def get_inventory(self, skus: list = None) -> dict:
         """Consulta estoque via FBA Inventory API."""

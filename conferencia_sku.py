@@ -65,35 +65,43 @@ def _salvar_resultado(dados: dict) -> None:
 # Fetch Bling — todos os produtos ativos
 # ─────────────────────────────────────────────
 
-def _fetch_bling(bling_client) -> tuple[dict[str, dict], int]:
+def _fetch_bling(bling_client) -> tuple[dict[str, dict], int, str | None]:
     """
-    Retorna (skus_bling, total_sem_sku)
+    Retorna (skus_bling, total_sem_sku, erro)
     skus_bling: {sku -> {nome, estoque, preco, id_bling}}
+    erro: None se OK, string com mensagem se falhou
     """
     skus: dict[str, dict] = {}
     sem_sku = 0
     pagina = 1
+    primeiro_erro: str | None = None
+
     while pagina <= 300:
         try:
-            payload = bling_client.list_products(page=pagina, limit=100)
+            payload = bling_client._get(
+                "/produtos",
+                params={"pagina": pagina, "limite": 100}
+            )
         except Exception as e:
-            logger.warning("Bling página %d erro: %s", pagina, e)
+            msg = str(e)[:200]
+            logger.error("Bling página %d erro: %s", pagina, msg)
+            if pagina == 1:
+                # Falha na primeira página = Bling inacessível (token expirado, etc.)
+                return {}, 0, f"Erro na página 1 do Bling: {msg}"
+            # Páginas seguintes: para mas usa o que já coletou
+            primeiro_erro = f"Interrompido na página {pagina}: {msg}"
             break
 
         data = payload.get("data", [])
         if not data:
+            logger.info("Bling: página %d retornou vazia (total: %d SKUs)", pagina, len(skus))
             break
 
         for item in data:
             try:
-                from bling_client import BlingClient as _BC
-                prod = _BC._normalize_product(None, item) if hasattr(_BC, "_normalize_product") else item
+                prod = bling_client._normalize_product(item) if hasattr(bling_client, "_normalize_product") else item
             except Exception:
                 prod = item
-
-            situacao = str(prod.get("situacao") or "").upper()
-            if situacao in ("I", "INATIVO", "E", "EXCLUIDO"):
-                continue
 
             sku = str(prod.get("codigo") or prod.get("sku") or "").strip()
             if not sku:
@@ -114,27 +122,31 @@ def _fetch_bling(bling_client) -> tuple[dict[str, dict], int]:
             except Exception:
                 pass
 
+            situacao = str(prod.get("situacao") or item.get("situacao") or "").strip().upper()
             skus[sku] = {
                 "nome": nome,
                 "estoque": estoque,
                 "preco": preco,
                 "id_bling": str(prod.get("id") or ""),
+                "situacao": situacao,
             }
 
         pagina += 1
         time.sleep(0.15)
 
-    return skus, sem_sku
+    logger.info("Bling: %d SKUs coletados em %d páginas (sem_sku=%d)", len(skus), pagina - 1, sem_sku)
+    return skus, sem_sku, primeiro_erro
 
 
 # ─────────────────────────────────────────────
 # Fetch ML — todos os anúncios ativos com SKU
 # ─────────────────────────────────────────────
 
-def _fetch_ml() -> tuple[dict[str, str], list[dict], bool]:
+def _fetch_ml() -> tuple[dict[str, dict], list[dict], bool]:
     """
     Retorna (skus_ml, sem_sku_ml, conectado)
-    skus_ml: {sku -> ml_id}
+    skus_ml: {sku -> {"ml_id": str, "status": str}}
+      status: "active" | "paused" | "closed" | "inactive" | ...
     sem_sku_ml: lista de {id, titulo} sem SKU
     """
     try:
@@ -148,65 +160,106 @@ def _fetch_ml() -> tuple[dict[str, str], list[dict], bool]:
             return {}, [], False
 
         h = {"Authorization": f"Bearer {token}"}
-        skus: dict[str, str] = {}
-        sem_sku: list[dict] = {}
+        skus: dict[str, dict] = {}
+        sem_sku: list[dict] = []
 
-        # Descobre user_id
+        # Descobre user_id — tenta refresh automático se token expirado
         me = requests.get("https://api.mercadolibre.com/users/me", headers=h, timeout=10)
+        if me.status_code == 401:
+            import os, urllib.parse, urllib.request
+            refresh_token = tokens.get("refresh_token", "")
+            client_id = tokens.get("client_id") or os.getenv("ML_CLIENT_ID", "")
+            client_secret = os.getenv("ML_CLIENT_SECRET", "")
+            if refresh_token and client_id and client_secret:
+                try:
+                    _data = urllib.parse.urlencode({
+                        "grant_type": "refresh_token",
+                        "client_id": client_id,
+                        "client_secret": client_secret,
+                        "refresh_token": refresh_token,
+                    }).encode()
+                    _req = urllib.request.Request("https://api.mercadolibre.com/oauth/token", data=_data)
+                    with urllib.request.urlopen(_req, timeout=15) as _resp:
+                        _new = json.loads(_resp.read())
+                        token = _new.get("access_token", token)
+                        tokens.update(_new)
+                        tp.write_text(json.dumps(tokens, ensure_ascii=False, indent=2), encoding="utf-8")
+                        h = {"Authorization": f"Bearer {token}"}
+                        me = requests.get("https://api.mercadolibre.com/users/me", headers=h, timeout=10)
+                except Exception as _e:
+                    logger.warning("ML refresh falhou na conferencia: %s", _e)
+
         if me.status_code != 200:
             return {}, [], False
-        user_id = me.json().get("id")
+        user_id = str(me.json().get("id", ""))
 
-        offset = 0
-        limit = 100
-        total_buscados = 0
-        MAX = 5000  # segurança
+        # Busca IDs por status: active + paused + closed
+        def _buscar_ids_por_status(status_filter: str) -> list[tuple[str, str]]:
+            """Retorna lista de (ml_id, status_filter)."""
+            resultado = []
+            offset = 0
+            limit = 100
+            MAX = 5000
+            while offset < MAX:
+                r = requests.get(
+                    f"https://api.mercadolibre.com/users/{user_id}/items/search",
+                    params={"status": status_filter, "limit": limit, "offset": offset},
+                    headers=h, timeout=15,
+                )
+                if r.status_code != 200:
+                    break
+                data = r.json()
+                items = data.get("results", [])
+                if not items:
+                    break
+                resultado.extend((item_id, status_filter) for item_id in items)
+                offset += limit
+                if len(items) < limit:
+                    break
+                time.sleep(0.1)
+            return resultado
 
-        while offset < MAX:
-            r = requests.get(
-                f"https://api.mercadolibre.com/users/{user_id}/items/search",
-                params={"status": "active", "limit": limit, "offset": offset},
+        # Coleta IDs de todos os status relevantes
+        todos_ids: list[tuple[str, str]] = []
+        for st in ["active", "paused", "closed", "inactive"]:
+            ids_st = _buscar_ids_por_status(st)
+            logger.info("ML status=%s: %d anúncios", st, len(ids_st))
+            todos_ids.extend(ids_st)
+            time.sleep(0.2)
+
+        # Mapa id → status_filtro (para atribuir status ao detalhar)
+        id_status_map: dict[str, str] = {ml_id: st for ml_id, st in todos_ids}
+
+        # Detalha em lotes de 20
+        ids_uniq = list(id_status_map.keys())
+        for i in range(0, len(ids_uniq), 20):
+            batch = ids_uniq[i: i + 20]
+            ids_str = ",".join(batch)
+            r2 = requests.get(
+                "https://api.mercadolibre.com/items",
+                params={"ids": ids_str, "attributes": "id,title,available_quantity,seller_custom_field,status"},
                 headers=h, timeout=15,
             )
-            if r.status_code != 200:
-                break
-            data = r.json()
-            items = data.get("results", [])
-            if not items:
-                break
-
-            # Detalha em lote de 20
-            for i in range(0, len(items), 20):
-                batch = items[i : i + 20]
-                ids = ",".join(batch)
-                r2 = requests.get(
-                    "https://api.mercadolibre.com/items",
-                    params={
-                        "ids": ids,
-                        "attributes": "id,title,available_quantity,seller_custom_field,status",
-                    },
-                    headers=h,
-                    timeout=15,
-                )
-                if r2.status_code != 200:
-                    continue
-                for entry in r2.json():
-                    item = entry.get("body") or entry
-                    sku = str(item.get("seller_custom_field") or "").strip()
-                    ml_id = item.get("id", "")
-                    titulo = (item.get("title") or "")[:80]
-                    estoque = item.get("available_quantity", 0)
-                    if sku:
-                        skus[sku] = ml_id
-                    else:
-                        sem_sku.append({"id": ml_id, "titulo": titulo, "estoque": estoque})
-
-            total_buscados += len(items)
-            offset += limit
-            if len(items) < limit:
-                break
+            if r2.status_code != 200:
+                continue
+            for entry in r2.json():
+                item = entry.get("body") or entry
+                sku = str(item.get("seller_custom_field") or "").strip()
+                ml_id = item.get("id", "")
+                titulo = (item.get("title") or "")[:80]
+                estoque = item.get("available_quantity", 0)
+                # status real do item (pode diferir do filtro de busca)
+                status_real = str(item.get("status") or id_status_map.get(ml_id, "")).strip()
+                if sku:
+                    # Mantém o mais recente (active tem prioridade)
+                    existing = skus.get(sku)
+                    if not existing or status_real == "active":
+                        skus[sku] = {"ml_id": ml_id, "status": status_real}
+                else:
+                    sem_sku.append({"id": ml_id, "titulo": titulo, "estoque": estoque})
             time.sleep(0.1)
 
+        logger.info("ML: %d SKUs coletados (active+paused+closed+inactive)", len(skus))
         return skus, sem_sku, True
 
     except Exception as e:
@@ -218,10 +271,11 @@ def _fetch_ml() -> tuple[dict[str, str], list[dict], bool]:
 # Fetch Shopify — todos os SKUs de variantes
 # ─────────────────────────────────────────────
 
-def _fetch_shopify() -> tuple[dict[str, str], bool]:
+def _fetch_shopify() -> tuple[dict[str, dict], bool]:
     """
     Retorna (skus_shopify, conectado)
-    skus_shopify: {sku -> variant_id}
+    skus_shopify: {sku -> {"variant_id": str, "status": str}}
+      status: "active" | "archived" | "draft"
     """
     try:
         cfg_path = DATA_DIR / "shopify_config.json"
@@ -229,7 +283,10 @@ def _fetch_shopify() -> tuple[dict[str, str], bool]:
             return {}, False
         cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
         token = cfg.get("access_token") or cfg.get("token", "")
-        shop = cfg.get("shop") or cfg.get("myshopify_domain", "")
+        shop = cfg.get("shop_url") or cfg.get("myshopify_domain") or cfg.get("shop", "")
+        # Garante domínio completo
+        if shop and "." not in shop:
+            shop = f"{shop}.myshopify.com"
         if not token or not shop:
             return {}, False
 
@@ -238,14 +295,18 @@ def _fetch_shopify() -> tuple[dict[str, str], bool]:
             "X-Shopify-Access-Token": token,
             "Content-Type": "application/json",
         }
+        # Busca todos os produtos (active + archived + draft) para poder filtrar no frontend
         base = f"https://{shop}/admin/api/2024-01/products.json"
-        skus: dict[str, str] = {}
+        skus: dict[str, dict] = {}
         page_info = None
 
         while True:
-            params: dict = {"limit": 250, "fields": "id,variants"}
+            params: dict = {"limit": 250, "fields": "id,status,variants"}
             if page_info:
                 params["page_info"] = page_info
+            else:
+                # Busca todos os status: active, archived, draft
+                params["status"] = "active,archived,draft"
 
             r = requests.get(base, headers=h, params=params, timeout=20)
             if r.status_code != 200:
@@ -253,20 +314,29 @@ def _fetch_shopify() -> tuple[dict[str, str], bool]:
 
             produtos = r.json().get("products", [])
             for p in produtos:
+                pstatus = str(p.get("status") or "active")
                 for v in p.get("variants", []):
                     sku = str(v.get("sku") or "").strip()
                     if sku:
-                        skus[sku] = str(v.get("id") or "")
+                        skus[sku] = {
+                            "variant_id": str(v.get("id") or ""),
+                            "status": pstatus,  # "active" | "archived" | "draft"
+                        }
 
             # Paginação via Link header
+            # Formato: <url?page_info=ABC>; rel="previous", <url?page_info=XYZ>; rel="next"
             link = r.headers.get("Link", "")
+            page_info = None
             if 'rel="next"' in link:
                 import re
-                m = re.search(r'page_info=([^&>]+)', link.split('rel="next"')[0])
-                page_info = m.group(1) if m else None
-                if not page_info:
-                    break
-            else:
+                # Separa os segmentos por vírgula e encontra o que tem rel="next"
+                for seg in link.split(","):
+                    if 'rel="next"' in seg:
+                        m = re.search(r'page_info=([^&>]+)', seg)
+                        if m:
+                            page_info = m.group(1)
+                        break
+            if not page_info:
                 break
 
             if not produtos:
@@ -284,64 +354,150 @@ def _fetch_shopify() -> tuple[dict[str, str], bool]:
 # Fetch Amazon — inventário FBA/MFN
 # ─────────────────────────────────────────────
 
-def _fetch_amazon() -> tuple[dict[str, int], bool]:
+def _fetch_amazon() -> tuple[dict[str, dict], bool]:
     """
     Retorna (skus_amazon, conectado)
-    skus_amazon: {sellerSku -> quantity}
+    skus_amazon: {sellerSku -> {"qty": int, "status": str}}
+      status: "active" (BUYABLE) | "inactive" (outros)
+    Usa Listings Items API v2021-08-01.
     """
     try:
         from amazon_client import AmazonClient
         client = AmazonClient()
-        # Tenta buscar inventário via SP-API
-        skus: dict[str, int] = {}
+        skus: dict[str, dict] = {}
 
-        resp = client.get_inventory_summaries()
-        summaries = (
-            resp.get("payload", {})
-            .get("inventorySummaries", [])
-        )
-        for s in summaries:
-            sku = str(s.get("sellerSku") or "").strip()
-            qty = int(s.get("totalQuantity") or s.get("fulfillableQuantity") or 0)
-            if sku:
-                skus[sku] = qty
+        page_token = None
+        pagina = 0
+        while True:
+            pagina += 1
+            resp = client.get_listings(page_token=page_token)
+
+            # A API pode retornar erros dentro do JSON (HTTP 200 com campo "errors")
+            api_errors = resp.get("errors") or []
+            if api_errors:
+                logger.warning("Amazon Listings API retornou erros na página %d: %s", pagina, api_errors)
+                if pagina == 1:
+                    # Falha na primeira página = canal não conectado
+                    return {}, False
+                # Páginas seguintes com erro: usa o que foi coletado
+                break
+
+            items = resp.get("items", [])
+            logger.info("Amazon página %d: %d anúncios recebidos", pagina, len(items))
+
+            # Se a primeira página retornar vazia (sem erro HTTP, sem api_errors),
+            # é sinal de configuração incorreta ou token sem permissão — não é
+            # "Amazon com 0 produtos", o que causaria falsos positivos de cobertura.
+            if pagina == 1 and not items:
+                logger.warning(
+                    "Amazon Listings API retornou 0 itens na 1ª página "
+                    "(seller_id=%s, marketplace=%s) — tratando como não conectado.",
+                    client.config.get("seller_id", "?"),
+                    client.config.get("marketplace_id", "?"),
+                )
+                return {}, False
+
+            for item in items:
+                sku = str(item.get("sku") or "").strip()
+                summaries = item.get("summaries") or []
+                if not sku:
+                    for s in summaries:
+                        sku = str(s.get("sku") or s.get("sellerSku") or "").strip()
+                        if sku:
+                            break
+                if sku:
+                    # Extrai status do primeiro summary (lista de strings ex: ["BUYABLE"])
+                    status_list = []
+                    for s in summaries:
+                        st = s.get("status")
+                        if isinstance(st, list):
+                            status_list.extend(st)
+                        elif isinstance(st, str) and st:
+                            status_list.append(st)
+                    amz_status = "active" if "BUYABLE" in status_list else ("inactive" if status_list else "active")
+                    skus[sku] = {"qty": 1, "status": amz_status}
+
+            page_token = resp.get("pagination", {}).get("nextToken")
+            if not page_token or not items:
+                break
+            time.sleep(0.5)
+
+        logger.info("Amazon: %d SKUs MFN coletados", len(skus))
+        return skus, True
+
+    except Exception as e:
+        logger.warning("Amazon indisponível: %s", e)
+        return {}, False
+
+
+# ─────────────────────────────────────────────
+# Fetch Shopee — via API (get_item_list + get_item_base_info)
+# ─────────────────────────────────────────────
+
+def _fetch_shopee() -> tuple[dict[str, dict], bool]:
+    """
+    Retorna (skus_shopee, conectado)
+    skus_shopee: {item_sku -> {"item_id": str, "status": str}}
+      status: "active" (NORMAL) | "inactive" (UNLIST/BANNED)
+    """
+    try:
+        from services.shopee import ShopeeService, tem_tokens
+        if not tem_tokens():
+            return {}, False
+
+        svc = ShopeeService()
+        skus: dict[str, dict] = {}
+
+        def _fetch_por_status(item_status: str, label: str):
+            """Busca todos os itens de um determinado status Shopee."""
+            offset = 0
+            page_size = 50
+            MAX = 5000
+            primeira = True
+            while offset < MAX:
+                resp = svc.listar_produtos(offset=offset, page_size=page_size, item_status=item_status)
+                if resp.get("error") or not resp.get("response"):
+                    if primeira:
+                        logger.warning("Shopee %s: primeira chamada com erro: %s", label, resp.get("error", ""))
+                        return False
+                    break
+                primeira = False
+                r = resp["response"]
+                item_ids = [i["item_id"] for i in r.get("item", []) if i.get("item_id")]
+                if not item_ids:
+                    break
+                for i in range(0, len(item_ids), 50):
+                    batch = item_ids[i:i+50]
+                    info_resp = svc.obter_info_items(batch)
+                    items_list = (info_resp.get("response") or {}).get("item_list") or []
+                    for item in items_list:
+                        item_id = str(item.get("item_id", ""))
+                        sku = str(item.get("item_sku") or "").strip()
+                        if sku and sku not in skus:
+                            skus[sku] = {"item_id": item_id, "status": label}
+                    time.sleep(0.2)
+                if not r.get("has_next_page"):
+                    break
+                offset += page_size
+                time.sleep(0.3)
+            return True
+
+        # Busca ativos (NORMAL) — se falhar aqui é erro de conexão
+        ok = _fetch_por_status("NORMAL", "active")
+        if not ok:
+            return {}, False
+        logger.info("Shopee NORMAL: %d SKUs", len(skus))
+
+        # Busca inativos (UNLIST) — falha silenciosa, só adiciona se não já presente
+        _fetch_por_status("UNLIST", "inactive")
+        logger.info("Shopee total (NORMAL+UNLIST): %d SKUs", len(skus))
 
         return skus, True
 
     except Exception as e:
-        logger.info("Amazon indisponível: %s", e)
-        return {}, False
-
-
-# ─────────────────────────────────────────────
-# Fetch Shopee — via mapeamento.json
-# ─────────────────────────────────────────────
-
-def _fetch_shopee() -> tuple[dict[str, str], bool]:
-    """
-    Retorna (skus_shopee, conectado)
-    skus_shopee: {sku -> item_id}
-    """
-    try:
-        mp = DATA_DIR / "shopee_mapeamento.json"
-        if not mp.exists():
-            return {}, False
-        data = json.loads(mp.read_text(encoding="utf-8"))
-        # formato: {"SKU": "item_id", ...}  ou lista de {sku, item_id}
-        if isinstance(data, dict):
-            skus = {k: str(v) for k, v in data.items() if k}
-        elif isinstance(data, list):
-            skus = {
-                str(d.get("sku") or ""): str(d.get("item_id") or "")
-                for d in data
-                if d.get("sku")
-            }
-        else:
-            return {}, False
-        return skus, bool(skus)
-    except Exception as e:
         logger.warning("Erro ao buscar Shopee: %s", e)
         return {}, False
+
 
 
 # ─────────────────────────────────────────────
@@ -358,7 +514,18 @@ def executar_conferencia(bling_client) -> dict:
 
     try:
         # 1. Bling
-        skus_bling, sem_sku_bling = _fetch_bling(bling_client)
+        skus_bling, sem_sku_bling, bling_erro = _fetch_bling(bling_client)
+
+        if not skus_bling:
+            # Bling retornou 0 produtos — abortamos para não gerar resultados enganosos
+            msg = bling_erro or "Bling retornou 0 produtos (token expirado ou API indisponível)"
+            logger.error("Conferência abortada: %s", msg)
+            _set_estado("erro", 0, "bling", msg)
+            return {"ok": False, "erro": msg}
+
+        logger.info("Bling: %d SKUs carregados%s",
+                    len(skus_bling),
+                    f" (aviso: {bling_erro})" if bling_erro else "")
         _set_estado("rodando", 30, "ml", "Coletando anúncios do Mercado Livre...")
 
         # 2. ML
@@ -418,21 +585,30 @@ def executar_conferencia(bling_client) -> dict:
                 "estoque_bling": bling_info.get("estoque", 0),
                 "preco_bling": bling_info.get("preco", 0.0),
                 "id_bling": bling_info.get("id_bling", ""),
+                "situacao_bling": bling_info.get("situacao", ""),  # "A" | "I" | ""
                 "presente_bling": no_bling,
                 "cobertura": cobertura,
             }
             if ml_ok:
+                ml_info = skus_ml.get(sku) or {}
                 row["presente_ml"] = no_ml
-                row["ml_id"] = skus_ml.get(sku, "")
+                row["ml_id"] = ml_info.get("ml_id", "")
+                row["status_ml"] = ml_info.get("status", "")  # "active" | "paused" | "closed" | "inactive"
             if shopify_ok:
+                sh_info = skus_shopify.get(sku) or {}
                 row["presente_shopify"] = no_shopify
-                row["shopify_variant_id"] = skus_shopify.get(sku, "")
+                row["shopify_variant_id"] = sh_info.get("variant_id", "")
+                row["status_shopify"] = sh_info.get("status", "")  # "active" | "archived" | "draft"
             if amazon_ok:
+                amz_info = skus_amazon.get(sku) or {}
                 row["presente_amazon"] = no_amazon
-                row["amazon_qty"] = skus_amazon.get(sku, 0)
+                row["amazon_qty"] = amz_info.get("qty", 0)
+                row["status_amazon"] = amz_info.get("status", "")  # "active" | "inactive"
             if shopee_ok:
+                sp_info = skus_shopee.get(sku) or {}
                 row["presente_shopee"] = no_shopee
-                row["shopee_item_id"] = skus_shopee.get(sku, "")
+                row["shopee_item_id"] = sp_info.get("item_id", "")
+                row["status_shopee"] = sp_info.get("status", "")  # "active" | "inactive"
 
             matrix.append(row)
 
@@ -461,6 +637,7 @@ def executar_conferencia(bling_client) -> dict:
         resultado = {
             "executado_em": datetime.now(timezone.utc).isoformat(),
             "duracao_segundos": round(time.time() - inicio, 1),
+            "bling_aviso": bling_erro,  # None ou mensagem se coleta foi parcial
             "stats": {
                 "total_bling": len(skus_bling),
                 "sem_sku_no_bling": sem_sku_bling,
@@ -479,7 +656,10 @@ def executar_conferencia(bling_client) -> dict:
         }
 
         _salvar_resultado(resultado)
-        _set_estado("concluido", 100, "concluido", f"Conferência concluída — {len(matrix)} SKUs analisados")
+        concluido_msg = f"Conferência concluída — {len(matrix)} SKUs analisados"
+        if bling_erro:
+            concluido_msg += f" (⚠️ Bling parcial: {bling_erro})"
+        _set_estado("concluido", 100, "concluido", concluido_msg)
         return resultado
 
     except Exception as e:
