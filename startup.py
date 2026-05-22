@@ -15,6 +15,42 @@ DATA_DIR.mkdir(exist_ok=True)
 
 def pr(msg): print(f"[startup] {msg}", flush=True)
 
+# ── Carrega tokens mais recentes do Secret Manager (sobrepõe env vars) ────────
+def _carregar_secret_manager():
+    """Tenta carregar tokens do Secret Manager e sobrepõe env vars em memória."""
+    try:
+        from token_persistence import load_bling_tokens, load_shopee_tokens, load_ml_tokens
+
+        # Bling
+        bt = load_bling_tokens()
+        if bt and bt.get("access_token") and bt.get("refresh_token"):
+            os.environ["BLING_ACCESS_TOKEN"]  = bt["access_token"]
+            os.environ["BLING_REFRESH_TOKEN"] = bt["refresh_token"]
+            pr("Secret Manager: tokens Bling carregados ✓")
+
+        # Shopee
+        st = load_shopee_tokens()
+        if st and st.get("access_token") and st.get("refresh_token"):
+            os.environ["SHOPEE_ACCESS_TOKEN"]  = st["access_token"]
+            os.environ["SHOPEE_REFRESH_TOKEN"] = st["refresh_token"]
+            if st.get("shop_id"):
+                os.environ["SHOPEE_SHOP_ID"] = str(st["shop_id"])
+            pr("Secret Manager: tokens Shopee carregados ✓")
+
+        # ML
+        mt = load_ml_tokens()
+        if mt and mt.get("access_token") and mt.get("refresh_token"):
+            os.environ["ML_ACCESS_TOKEN"]  = mt["access_token"]
+            os.environ["ML_REFRESH_TOKEN"] = mt["refresh_token"]
+            if mt.get("user_id"):
+                os.environ["ML_USER_ID"] = mt["user_id"]
+            pr("Secret Manager: tokens ML carregados ✓")
+
+    except Exception as e:
+        pr(f"AVISO: Secret Manager não disponível ({e}) — usando env vars")
+
+_carregar_secret_manager()
+
 # ── shopify_config.json ───────────────────────────────────────────────────────
 shopify_token = os.getenv("SHOPIFY_ACCESS_TOKEN", "")
 shopify_shop  = os.getenv("SHOPIFY_SHOP", "pknw4n-eg")
@@ -91,12 +127,15 @@ if bling_access and bling_refresh:
             except Exception as _e:
                 pr(f"AVISO: refresh do token Bling falhou ({_e}) — usando token da env var")
 
+        # Usa o expires_in real retornado pelo Bling (normalmente 3600s = 1h).
+        # Não hardcoda 21600 (6h) para evitar enviar token expirado sem refresh.
+        _expires_in = int(_new.get("expires_in", 3600))
         raw_token = {
             "access_token":  bling_access,
             "refresh_token": bling_refresh,
             "token_type":    "Bearer",
-            "expires_in":    21600,
-            "expires_at":    _time.time() + 21600,
+            "expires_in":    _expires_in,
+            "expires_at":    _time.time() + _expires_in,
         }
         key = hashlib.sha256((bling_csec + (bling_cid or "token-key")).encode()).digest()
         enc = base64.b64encode(_bling_xor(json.dumps(raw_token).encode(), key)).decode()
@@ -212,18 +251,75 @@ shopee_tokens_path   = DATA_DIR / "shopee_tokens.json"
 
 if shopee_access_token and shopee_refresh_token and shopee_shop_id:
     import time as _time2
-    shopee_tok = {
+    # Tenta usar expires_at do Secret Manager (mais preciso que recalcular)
+    _sm_shopee = {}
+    try:
+        from token_persistence import load_shopee_tokens as _lst
+        _sm_shopee = _lst() or {}
+    except Exception:
+        pass
+    _expires_at = _sm_shopee.get("expires_at", 0)
+    _agora = _time2.time()
+
+    # Sempre escreve o arquivo primeiro com os tokens disponíveis (env var / SM)
+    # para que renovar_token() possa lê-los se precisar renovar.
+    _tok_base = {
         "access_token":  shopee_access_token,
         "refresh_token": shopee_refresh_token,
-        "expires_at":    _time2.time() + 14400,  # será renovado automaticamente
+        "expires_at":    _expires_at if _expires_at > _agora else 0,  # 0 = forçar renovação
         "shop_id":       int(shopee_shop_id),
         "partner_id":    int(shopee_partner_id) if shopee_partner_id else 0,
         "obtido_em":     datetime.now(timezone.utc).isoformat(),
     }
-    shopee_tokens_path.write_text(json.dumps(shopee_tok, indent=2, ensure_ascii=False), encoding="utf-8")
-    pr(f"shopee_tokens.json criado (shop_id={shopee_shop_id})")
+    shopee_tokens_path.write_text(json.dumps(_tok_base, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    if _expires_at <= _agora + 300:  # expirado ou expirando em <5min → renova
+        pr("Shopee: token expirado ou próximo do limite — tentando renovar via refresh_token…")
+        try:
+            from services.shopee import ShopeeOAuthService as _ShopeeOAuth
+            _res = _ShopeeOAuth().renovar_token()
+            if _res.get("success"):
+                pr("Shopee: token renovado no startup ✓")
+            else:
+                pr(f"Shopee AVISO: renovação falhou ({_res.get('error')}) — usando token existente")
+                # Fallback: escreve arquivo com expires_at estimado para evitar loops
+                _tok_base["expires_at"] = _agora + 14400
+                shopee_tokens_path.write_text(json.dumps(_tok_base, indent=2, ensure_ascii=False), encoding="utf-8")
+        except Exception as _e:
+            pr(f"Shopee AVISO: erro ao renovar token ({_e})")
+            _tok_base["expires_at"] = _agora + 14400
+            shopee_tokens_path.write_text(json.dumps(_tok_base, indent=2, ensure_ascii=False), encoding="utf-8")
+        if shopee_tokens_path.exists():
+            pr("Shopee: shopee_tokens.json pronto")
+    else:
+        # Token ainda válido — atualiza expires_at real no arquivo
+        _tok_base["expires_at"] = _expires_at
+        shopee_tokens_path.write_text(json.dumps(_tok_base, indent=2, ensure_ascii=False), encoding="utf-8")
+        mins = int((_expires_at - _agora) / 60)
+        pr(f"shopee_tokens.json criado (shop_id={shopee_shop_id}, expira em {mins}min)")
 elif not shopee_tokens_path.exists():
     pr("INFO: SHOPEE_ACCESS_TOKEN não definido — shopee_tokens.json não criado (OAuth necessário)")
+
+# ── Amazon config (amazon_config.json) ───────────────────────────────────────
+amazon_client_id     = os.getenv("AMAZON_CLIENT_ID", "")
+amazon_client_secret = os.getenv("AMAZON_CLIENT_SECRET", "")
+amazon_refresh_token = os.getenv("AMAZON_REFRESH_TOKEN", "")
+amazon_seller_id     = os.getenv("AMAZON_SELLER_ID", "")
+amazon_marketplace   = os.getenv("AMAZON_MARKETPLACE_ID", "A2Q3Y263D00KWC")
+amazon_config_path   = DATA_DIR / "amazon_config.json"
+
+if amazon_client_id and amazon_client_secret and amazon_refresh_token and amazon_seller_id:
+    amazon_cfg = {
+        "client_id":      amazon_client_id,
+        "client_secret":  amazon_client_secret,
+        "refresh_token":  amazon_refresh_token,
+        "seller_id":      amazon_seller_id,
+        "marketplace_id": amazon_marketplace,
+    }
+    amazon_config_path.write_text(json.dumps(amazon_cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+    pr(f"amazon_config.json criado (seller_id={amazon_seller_id})")
+elif not amazon_config_path.exists():
+    pr("INFO: AMAZON_CLIENT_ID não definido — amazon_config.json não criado")
 
 # ── GMC Blacklist (merge do default com o volume a cada deploy) ───────────────
 _bl_src  = Path(__file__).parent / "gmc_blacklist_default.json"

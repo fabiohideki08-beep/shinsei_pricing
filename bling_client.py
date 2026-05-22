@@ -98,6 +98,16 @@ class BlingClient:
     def _save_tokens(self, data: dict):
         self._save_json(TOKEN_PATH, {"encrypted": _encrypt_tokens(data)})
         self.tokens = data
+        # Persiste no Secret Manager para sobreviver a deploys/reinícios
+        try:
+            from token_persistence import save_bling_tokens
+            save_bling_tokens(
+                data.get("access_token", ""),
+                data.get("refresh_token", ""),
+            )
+        except Exception as _e:
+            import logging as _log
+            _log.getLogger(__name__).warning("Bling: falha ao salvar no Secret Manager: %s", _e)
 
     def has_local_tokens(self) -> bool:
         return bool(self.tokens.get("access_token"))
@@ -211,6 +221,16 @@ class BlingClient:
             response = requests.get(url, headers=self._get_headers(), params=params or {}, timeout=30)
             if response.status_code == 200:
                 return response.json()
+            if response.status_code == 401 and attempt < retries:
+                # Token expirado na API mesmo que expires_at local diga válido
+                # (startup.py pode gravar expires_at errado). Força refresh e retry.
+                import logging as _log
+                _log.getLogger(__name__).info("Bling 401 — forçando refresh de token (tentativa %d)", attempt + 1)
+                try:
+                    self._refresh_token()
+                except Exception as _re:
+                    raise BlingAuthError(f"Token expirado e refresh falhou: {_re}")
+                continue
             if response.status_code == 429 and attempt < retries:
                 time.sleep(1.2 + attempt * 0.8)
                 continue
