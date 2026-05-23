@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Auditoria de Canais — Shinsei Pricing</title>
+<style>
+:root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--ok:#22c55e;--danger:#ef4444;--warn:#f59e0b;--critica:#ef4444;--alta:#f59e0b;--media:#4f8cff}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text);min-height:100vh}
+.wrap{max-width:1400px;margin:0 auto;padding:22px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:24px;background:rgba(18,26,49,.97);border:1px solid var(--line);border-radius:18px;padding:14px 20px;position:sticky;top:16px;z-index:10;border-left:4px solid var(--danger)}
+.brand h1{margin:0;font-size:19px;font-weight:800}
+.brand span{font-size:11px;color:var(--muted)}
+.topbar-right{display:flex;gap:9px;align-items:center}
+.btn{border:none;background:var(--accent);color:#fff;padding:9px 16px;border-radius:11px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:7px;font-size:13px;transition:background .15s}
+.btn:hover{background:#3a78f2}
+.btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+.btn.secondary:hover{background:var(--card2)}
+.btn.sm{padding:5px 11px;font-size:12px;border-radius:8px}
+
+/* Resumo cards */
+.resumo-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:22px}
+.rcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;text-align:center;cursor:pointer;transition:all .15s}
+.rcard:hover{background:var(--card2);border-color:var(--accent)}
+.rcard.active{border-color:var(--accent);background:rgba(79,140,255,.1)}
+.rcard-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700}
+.rcard-val{font-size:28px;font-weight:900;margin-top:4px}
+.rcard-sub{font-size:10px;color:var(--muted);margin-top:2px}
+.rcard.critica .rcard-val{color:var(--critica)}
+.rcard.alta    .rcard-val{color:var(--alta)}
+.rcard.media   .rcard-val{color:var(--media)}
+.rcard.ok      .rcard-val{color:var(--ok)}
+
+/* Filtros */
+.filtros{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.filtros label{font-size:12px;color:var(--muted);font-weight:700}
+.fbtn{padding:5px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--line);background:var(--card2);color:var(--muted);transition:all .15s}
+.fbtn.active{color:#fff;border-color:transparent}
+.fbtn.f-todos.active{background:var(--accent)}
+.fbtn.f-critica.active{background:var(--critica)}
+.fbtn.f-alta.active{background:var(--alta);color:#000}
+.fbtn.f-media.active{background:var(--media)}
+.fbtn.f-canal.active{background:rgba(79,140,255,.25);border-color:var(--accent);color:var(--accent)}
+.fbtn.f-tipo.active{background:rgba(79,140,255,.15);border-color:var(--accent);color:var(--accent)}
+.sep{width:1px;height:24px;background:var(--line);margin:0 4px}
+
+/* Tabela */
+.table-wrap{overflow-x:auto;border-radius:14px;border:1px solid var(--line)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--card2);padding:10px 12px;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);white-space:nowrap;border-bottom:1px solid var(--line)}
+td{padding:10px 12px;border-bottom:1px solid rgba(38,52,88,.4);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.02)}
+.sku-code{font-family:monospace;font-size:12px;color:var(--accent)}
+.nome-cell{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.problemas-cell{display:flex;flex-direction:column;gap:5px}
+
+/* Chips de problema */
+.prob-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:8px;font-size:11px;font-weight:700;line-height:1.3}
+.prob-critica{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5}
+.prob-alta{background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);color:#fcd34d}
+.prob-media{background:rgba(79,140,255,.12);border:1px solid rgba(79,140,255,.3);color:#93c5fd}
+.canal-tag{font-size:10px;padding:1px 6px;border-radius:4px;background:var(--card2);border:1px solid var(--line);color:var(--muted);font-weight:700;text-transform:uppercase;flex-shrink:0}
+
+/* Tipo legendas */
+.tipo-icons{font-size:13px}
+.estoque-diff{display:inline-flex;gap:8px;align-items:center;font-size:11px;color:var(--muted)}
+.estoque-diff b{color:var(--text)}
+
+/* Paginação */
+.paginacao{display:flex;align-items:center;gap:10px;margin-top:14px;justify-content:flex-end;font-size:13px;color:var(--muted)}
+.empty{padding:48px;text-align:center;color:var(--muted);font-size:14px}
+.loading{padding:32px;text-align:center;color:var(--muted)}
+
+/* Legenda tipos */
+.legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;padding:12px 16px;background:var(--card);border:1px solid var(--line);border-radius:12px;font-size:11px}
+.legend-item{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+@media(max-width:900px){.resumo-grid{grid-template-columns:repeat(3,1fr)}}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+.skel{display:inline-block;width:60px;height:16px;background:rgba(255,255,255,.08);border-radius:4px;animation:pulse 1.4s ease-in-out infinite}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1>🔍 Auditoria de Canais</h1>
+      <span id="meta-ultima">Carregando...</span>
+    </div>
+    <div class="topbar-right">
+      <a class="btn secondary sm" href="/dashboard">← Dashboard</a>
+      <button class="btn" onclick="executarConferencia()">▶ Executar conferência</button>
+    </div>
+  </div>
+
+  <!-- Resumo -->
+  <div class="resumo-grid" id="resumo-grid">
+    <div class="rcard"><div class="rcard-lbl">Total Problemas</div><div class="rcard-val skel"></div></div>
+    <div class="rcard critica"><div class="rcard-lbl">🔴 Críticos</div><div class="rcard-val skel"></div><div class="rcard-sub">Vende sem estoque</div></div>
+    <div class="rcard alta"><div class="rcard-lbl">🟡 Altos</div><div class="rcard-val skel"></div><div class="rcard-sub">Perde venda</div></div>
+    <div class="rcard media"><div class="rcard-lbl">🔵 Médios</div><div class="rcard-val skel"></div><div class="rcard-sub">Atenção</div></div>
+    <div class="rcard"><div class="rcard-lbl">Canais</div><div class="rcard-val skel"></div><div class="rcard-sub">afetados</div></div>
+    <div class="rcard"><div class="rcard-lbl">Tipos</div><div class="rcard-val skel"></div><div class="rcard-sub">de problema</div></div>
+  </div>
+
+  <!-- Legenda -->
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--critica)"></div><b style="color:var(--text)">Vende sem estoque</b> — Bling=0 mas canal tem estoque ativo</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--alta)"></div><b style="color:var(--text)">Perde venda</b> — Produto ativo no Bling sem anúncio no canal</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--alta)"></div><b style="color:var(--text)">Sem estoque no canal</b> — Bling tem estoque mas canal mostra 0</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--media)"></div><b style="color:var(--text)">Anúncio inativo</b> — Pausado, fechado ou arquivado</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--media)"></div><b style="color:var(--text)">Estoque divergente</b> — Números diferentes entre Bling e canal</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--media)"></div><b style="color:var(--text)">Sem mapeamento</b> — Anúncio sem SKU vinculado ao Bling</div>
+  </div>
+
+  <!-- Filtros -->
+  <div class="filtros" id="filtros-prio">
+    <label>Prioridade:</label>
+    <button class="fbtn f-todos active" onclick="setFiltro('prio','',this)">Todos</button>
+    <button class="fbtn f-critica" onclick="setFiltro('prio','critica',this)">🔴 Crítico</button>
+    <button class="fbtn f-alta"    onclick="setFiltro('prio','alta',this)">🟡 Alto</button>
+    <button class="fbtn f-media"   onclick="setFiltro('prio','media',this)">🔵 Médio</button>
+    <div class="sep"></div>
+    <label>Canal:</label>
+    <button class="fbtn f-canal" onclick="setFiltro('canal','',this)">Todos</button>
+    <button class="fbtn f-canal" onclick="setFiltro('canal','ml',this)">ML</button>
+    <button class="fbtn f-canal" onclick="setFiltro('canal','shopify',this)">Shopify</button>
+    <button class="fbtn f-canal" onclick="setFiltro('canal','amazon',this)">Amazon</button>
+    <button class="fbtn f-canal" onclick="setFiltro('canal','shopee',this)">Shopee</button>
+    <div class="sep"></div>
+    <label>Tipo:</label>
+    <button class="fbtn f-tipo" onclick="setFiltro('tipo','',this)">Todos</button>
+    <button class="fbtn f-tipo" onclick="setFiltro('tipo','vende_sem_estoque',this)">Vende sem estoque</button>
+    <button class="fbtn f-tipo" onclick="setFiltro('tipo','sem_estoque_canal',this)">Perde venda (estoque)</button>
+    <button class="fbtn f-tipo" onclick="setFiltro('tipo','ausente_ativo',this)">Ausente no canal</button>
+    <button class="fbtn f-tipo" onclick="setFiltro('tipo','anuncio_inativo',this)">Anúncio inativo</button>
+    <button class="fbtn f-tipo" onclick="setFiltro('tipo','estoque_divergente',this)">Estoque divergente</button>
+    <button class="fbtn f-tipo" onclick="setFiltro('tipo','sem_mapeamento',this)">Sem mapeamento</button>
+  </div>
+
+  <!-- Tabela -->
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>SKU</th><th>Nome</th><th>Estoque Bling</th><th>Situação</th><th>Problemas encontrados</th>
+      </tr></thead>
+      <tbody id="audit-tbody"><tr><td colspan="5" class="loading">Carregando auditoria...</td></tr></tbody>
+    </table>
+  </div>
+  <div class="paginacao" id="audit-pag"></div>
+</div>
+
+<script>
+const PAGE_SIZE = 100;
+let _filtros = {prio:'', canal:'', tipo:''};
+let _pg = 1;
+let _resumo = null;
+let _executado_em = null;
+
+const fmt = n => (n == null) ? '—' : Number(n).toLocaleString('pt-BR');
+
+const TIPO_LABEL = {
+  vende_sem_estoque: '🔴 Vende sem estoque',
+  sem_estoque_canal: '🟡 Sem estoque no canal',
+  ausente_ativo:     '🟡 Ausente no canal',
+  anuncio_inativo:   '🔵 Anúncio inativo',
+  estoque_divergente:'🔵 Estoque divergente',
+  sem_mapeamento:    '🔵 Sem mapeamento',
+};
+
+const CANAL_LABEL = {ml:'ML', shopify:'Shopify', amazon:'Amazon', shopee:'Shopee'};
+
+function prioClass(p){ return p==='critica'?'prob-critica':p==='alta'?'prob-alta':'prob-media'; }
+
+function renderResumo(r){
+  if(!r) return;
+  _resumo = r;
+  const canaisAfet = Object.keys(r.por_canal||{}).length;
+  const tiposAfet  = Object.keys(r.por_tipo||{}).length;
+  document.getElementById('resumo-grid').innerHTML = `
+    <div class="rcard" onclick="setFiltro('prio','',null)">
+      <div class="rcard-lbl">Total Problemas</div>
+      <div class="rcard-val" style="color:var(--text)">${fmt(r.total_com_problemas)}</div>
+      <div class="rcard-sub">itens afetados</div>
+    </div>
+    <div class="rcard critica" onclick="setFiltro('prio','critica',null)">
+      <div class="rcard-lbl">🔴 Críticos</div>
+      <div class="rcard-val">${fmt(r.criticos)}</div>
+      <div class="rcard-sub">Vendem sem estoque</div>
+    </div>
+    <div class="rcard alta" onclick="setFiltro('prio','alta',null)">
+      <div class="rcard-lbl">🟡 Altos</div>
+      <div class="rcard-val">${fmt(r.altos)}</div>
+      <div class="rcard-sub">Perdem vendas</div>
+    </div>
+    <div class="rcard media" onclick="setFiltro('prio','media',null)">
+      <div class="rcard-lbl">🔵 Médios</div>
+      <div class="rcard-val">${fmt(r.medios)}</div>
+      <div class="rcard-sub">Atenção</div>
+    </div>
+    <div class="rcard">
+      <div class="rcard-lbl">Canais afetados</div>
+      <div class="rcard-val" style="color:var(--muted)">${canaisAfet}</div>
+      <div class="rcard-sub">${Object.entries(r.por_canal||{}).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([c,n])=>`${(CANAL_LABEL[c]||c)}:${n}`).join(' · ')}</div>
+    </div>
+    <div class="rcard">
+      <div class="rcard-lbl">Tipos de problema</div>
+      <div class="rcard-val" style="color:var(--muted)">${tiposAfet}</div>
+      <div class="rcard-sub">${Object.entries(r.por_tipo||{}).sort((a,b)=>b[1]-a[1]).slice(0,2).map(([t,n])=>`${n}×`).join(', ')}</div>
+    </div>`;
+}
+
+function renderTabela(auditoria, total){
+  const tbody = document.getElementById('audit-tbody');
+  if(!auditoria.length){
+    tbody.innerHTML = `<tr><td colspan="5" class="empty">✅ Nenhum problema encontrado com os filtros selecionados.</td></tr>`;
+    document.getElementById('audit-pag').innerHTML='';
+    return;
+  }
+  tbody.innerHTML = auditoria.map(item => {
+    const sit = item.situacao_bling||'';
+    const sitBadge = sit==='A'
+      ? `<span style="font-size:11px;color:var(--ok);font-weight:700">● Ativo</span>`
+      : sit==='I'
+        ? `<span style="font-size:11px;color:var(--muted);font-weight:700">○ Inativo</span>`
+        : `<span style="font-size:11px;color:var(--muted)">—</span>`;
+
+    const probs = item.problemas.map(p => {
+      const canalTag = `<span class="canal-tag">${CANAL_LABEL[p.canal]||p.canal}</span>`;
+      const estoqueInfo = (p.bling_qty != null && p.canal_qty != null)
+        ? ` <span class="estoque-diff">Bling:<b>${p.bling_qty}</b> Canal:<b>${p.canal_qty}</b></span>` : '';
+      return `<div class="prob-chip ${prioClass(p.prioridade)}">${canalTag} ${TIPO_LABEL[p.tipo]||p.tipo}${estoqueInfo}</div>`;
+    }).join('');
+
+    return `<tr>
+      <td class="sku-code">${item.sku||'<span style="color:var(--muted);font-style:italic">sem SKU</span>'}</td>
+      <td class="nome-cell" title="${(item.nome||'').replace(/"/g,'&quot;')}">${item.nome||'—'}</td>
+      <td style="text-align:center;font-weight:700">${item.estoque_bling!=null?fmt(item.estoque_bling):'—'}</td>
+      <td>${sitBadge}</td>
+      <td class="problemas-cell">${probs}</td>
+    </tr>`;
+  }).join('');
+
+  // Paginação
+  const pag = document.getElementById('audit-pag');
+  const totalPags = Math.max(1, Math.ceil(total/PAGE_SIZE));
+  if(totalPags<=1){ pag.innerHTML=''; return; }
+  pag.innerHTML = `
+    <span>${fmt(total)} itens</span>
+    <button class="btn secondary sm" onclick="navPag(${_pg-1})" ${_pg<=1?'disabled':''}>‹ Anterior</button>
+    <span>${_pg} / ${totalPags}</span>
+    <button class="btn secondary sm" onclick="navPag(${_pg+1})" ${_pg>=totalPags?'disabled':''}>Próximo ›</button>`;
+}
+
+async function carregar(){
+  const params = new URLSearchParams({limit: PAGE_SIZE, offset: (_pg-1)*PAGE_SIZE});
+  if(_filtros.canal)     params.set('canal',     _filtros.canal);
+  if(_filtros.tipo)      params.set('tipo',       _filtros.tipo);
+  if(_filtros.prio)      params.set('prioridade', _filtros.prio);
+
+  try{
+    const r = await fetch('/auditoria/canais/dados?'+params).then(r=>r.json());
+    if(!r.ok){
+      document.getElementById('audit-tbody').innerHTML = `<tr><td colspan="5" class="empty">${r.erro||'Erro'}</td></tr>`;
+      return;
+    }
+    if(r.executado_em && !_executado_em){
+      _executado_em = r.executado_em;
+      const dt = new Date(r.executado_em);
+      document.getElementById('meta-ultima').textContent = `Última conferência: ${dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})} ${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
+    }
+    if(r.resumo && r.resumo.total_com_problemas != null) renderResumo(r.resumo);
+    renderTabela(r.auditoria||[], r.total_filtrado||0);
+  } catch(e){
+    document.getElementById('audit-tbody').innerHTML = `<tr><td colspan="5" class="empty">Erro ao carregar dados: ${e}</td></tr>`;
+  }
+}
+
+function setFiltro(key, val, el){
+  _filtros[key] = val;
+  _pg = 1;
+
+  if(el){
+    // Desmarca botões do mesmo grupo
+    const grupo = el.closest('.filtros') || document.getElementById('filtros-prio');
+    const cls = key==='prio' ? ['f-todos','f-critica','f-alta','f-media']
+               : key==='canal' ? ['f-canal'] : ['f-tipo'];
+    if(key==='prio'){
+      grupo.querySelectorAll('.fbtn').forEach(b => {
+        if(['f-todos','f-critica','f-alta','f-media'].some(c=>b.classList.contains(c))) b.classList.remove('active');
+      });
+    } else {
+      grupo.querySelectorAll('.fbtn.f-'+key).forEach(b => b.classList.remove('active'));
+      // Para canal/tipo, "Todos" está primeiro
+      if(!val){
+        // Não há um "Todos" separado para canal/tipo, o btn clicado é o Todos
+      }
+    }
+    el.classList.add('active');
+  }
+
+  carregar();
+}
+
+function navPag(p){ _pg = p; carregar(); window.scrollTo(0,400); }
+
+async function executarConferencia(){
+  if(!confirm('Executar nova conferência? Isso pode levar ~8 minutos.')) return;
+  await fetch('/conferencia-sku/executar', {method:'POST'});
+  window.location.href = '/dashboard';
+}
+
+// Init
+carregar();
+</script>
+</body>
+</html>

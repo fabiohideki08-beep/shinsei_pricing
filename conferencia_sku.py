@@ -324,7 +324,7 @@ def _fetch_ml() -> tuple[dict[str, dict], list[dict], bool]:
                     # Mantém o mais recente (active tem prioridade)
                     existing = skus.get(sku)
                     if not existing or status_real == "active":
-                        skus[sku] = {"ml_id": ml_id, "status": status_real}
+                        skus[sku] = {"ml_id": ml_id, "status": status_real, "qty": estoque}
                 else:
                     sem_sku.append({"id": ml_id, "titulo": titulo, "estoque": estoque})
             time.sleep(0.1)
@@ -400,9 +400,15 @@ def _fetch_shopify() -> tuple[dict[str, dict], bool]:
                 for v in p.get("variants", []):
                     sku = str(v.get("sku") or "").strip()
                     if sku:
+                        qty = None
+                        try:
+                            qty = int(v.get("inventory_quantity") or 0)
+                        except Exception:
+                            qty = None
                         skus[sku] = {
                             "variant_id": str(v.get("id") or ""),
                             "status": pstatus,  # "active" | "archived" | "draft"
+                            "qty": qty,
                         }
 
             # Paginação via Link header
@@ -559,7 +565,17 @@ def _fetch_shopee() -> tuple[dict[str, dict], bool]:
                         item_id = str(item.get("item_id", ""))
                         sku = str(item.get("item_sku") or "").strip()
                         if sku and sku not in skus:
-                            skus[sku] = {"item_id": item_id, "status": label}
+                            # Estoque Shopee: stock_info.current_stock ou stock_info.total_reserved_stock
+                            stock_info = item.get("stock_info_v2") or item.get("stock_info") or {}
+                            try:
+                                qty = int(
+                                    stock_info.get("summary_info", {}).get("total_available_stock")
+                                    or stock_info.get("current_stock")
+                                    or 0
+                                )
+                            except Exception:
+                                qty = None
+                            skus[sku] = {"item_id": item_id, "status": label, "qty": qty}
                     time.sleep(0.2)
                 if not r.get("has_next_page"):
                     break
@@ -785,29 +801,139 @@ def executar_conferencia(bling_client) -> dict:
                 ml_info = skus_ml.get(sku) or {}
                 row["presente_ml"] = no_ml
                 row["ml_id"] = ml_info.get("ml_id", "")
-                row["status_ml"] = ml_info.get("status", "")  # "active" | "paused" | "closed" | "inactive"
-                row["ml_matched_by"] = ml_info.get("matched_by", "sku")  # "sku" | "gtin"
-                row["ml_gtin"] = ml_info.get("original_key", "")  # GTIN original se matched_by == "gtin"
+                row["status_ml"] = ml_info.get("status", "")
+                row["qty_ml"] = ml_info.get("qty")      # None = sem dados, int = estoque real
+                row["ml_matched_by"] = ml_info.get("matched_by", "sku")
+                row["ml_gtin"] = ml_info.get("original_key", "")
             if shopify_ok:
                 sh_info = skus_shopify.get(sku) or {}
                 row["presente_shopify"] = no_shopify
                 row["shopify_variant_id"] = sh_info.get("variant_id", "")
-                row["status_shopify"] = sh_info.get("status", "")  # "active" | "archived" | "draft"
+                row["status_shopify"] = sh_info.get("status", "")
+                row["qty_shopify"] = sh_info.get("qty")
             if amazon_ok:
                 amz_info = skus_amazon.get(sku) or {}
                 row["presente_amazon"] = no_amazon
-                row["amazon_qty"] = amz_info.get("qty", 0)
-                row["status_amazon"] = amz_info.get("status", "")  # "active" | "inactive"
+                row["qty_amazon"] = amz_info.get("qty")
+                row["status_amazon"] = amz_info.get("status", "")
             if shopee_ok:
                 sp_info = skus_shopee.get(sku) or {}
                 row["presente_shopee"] = no_shopee
                 row["shopee_item_id"] = sp_info.get("item_id", "")
-                row["status_shopee"] = sp_info.get("status", "")  # "active" | "inactive"
+                row["status_shopee"] = sp_info.get("status", "")
+                row["qty_shopee"] = sp_info.get("qty")
 
             matrix.append(row)
 
         # Ordena: primeiro os que têm mais lacunas
         matrix.sort(key=lambda x: (x["cobertura"], x["sku"]))
+
+        # ── Auditoria: categoriza todos os problemas encontrados ─────────────────
+        canais_auditaveis = []
+        if ml_ok:      canais_auditaveis.append(("ml",      "qty_ml",      "status_ml"))
+        if shopify_ok: canais_auditaveis.append(("shopify",  "qty_shopify", "status_shopify"))
+        if amazon_ok:  canais_auditaveis.append(("amazon",   "qty_amazon",  "status_amazon"))
+        if shopee_ok:  canais_auditaveis.append(("shopee",   "qty_shopee",  "status_shopee"))
+
+        STATUS_INATIVOS = {
+            "ml":      {"paused", "closed", "inactive"},
+            "shopify": {"archived", "draft"},
+            "amazon":  {"inactive"},
+            "shopee":  {"inactive", "unlist", "banned"},
+        }
+
+        auditoria: list[dict] = []
+
+        for row in matrix:
+            sku        = row["sku"]
+            bling_qty  = row.get("estoque_bling", 0) or 0
+            bling_sit  = row.get("situacao_bling", "")
+            bling_ativo = bling_sit.upper() == "A"
+            problemas: list[dict] = []
+
+            for canal, qty_key, status_key in canais_auditaveis:
+                presente    = row.get(f"presente_{canal}")
+                if presente is None:
+                    continue  # canal não conectado
+
+                if not presente:
+                    # Produto ausente no canal
+                    if bling_ativo and bling_qty > 0:
+                        problemas.append({
+                            "tipo": "ausente_ativo", "canal": canal, "prioridade": "alta",
+                            "detalhe": f"Ativo no Bling ({bling_qty} un), sem anúncio no {canal.upper()}",
+                        })
+                else:
+                    canal_qty    = row.get(qty_key)
+                    canal_status = (row.get(status_key) or "").lower()
+
+                    if canal_status in STATUS_INATIVOS.get(canal, set()):
+                        problemas.append({
+                            "tipo": "anuncio_inativo", "canal": canal, "prioridade": "media",
+                            "detalhe": f"Anúncio {canal.upper()} com status '{canal_status}'",
+                        })
+
+                    if canal_qty is not None:
+                        if bling_qty > 0 and canal_qty == 0:
+                            problemas.append({
+                                "tipo": "sem_estoque_canal", "canal": canal, "prioridade": "alta",
+                                "detalhe": f"Bling={bling_qty}un → {canal.upper()}=0 (perde venda)",
+                                "bling_qty": bling_qty, "canal_qty": canal_qty,
+                            })
+                        elif bling_qty == 0 and canal_qty > 0:
+                            problemas.append({
+                                "tipo": "vende_sem_estoque", "canal": canal, "prioridade": "critica",
+                                "detalhe": f"Bling=0 → {canal.upper()}={canal_qty}un (risco de vender sem estoque!)",
+                                "bling_qty": bling_qty, "canal_qty": canal_qty,
+                            })
+                        elif canal_qty != bling_qty:
+                            problemas.append({
+                                "tipo": "estoque_divergente", "canal": canal, "prioridade": "media",
+                                "detalhe": f"Bling={bling_qty} ≠ {canal.upper()}={canal_qty}",
+                                "bling_qty": bling_qty, "canal_qty": canal_qty,
+                            })
+
+            if problemas:
+                auditoria.append({
+                    "sku": sku, "nome": row.get("nome", ""),
+                    "estoque_bling": bling_qty, "situacao_bling": bling_sit,
+                    "problemas": problemas, "n_problemas": len(problemas),
+                    "tem_critico": any(p["prioridade"] == "critica" for p in problemas),
+                    "tem_alto":    any(p["prioridade"] == "alta"    for p in problemas),
+                })
+
+        # Anúncios sem mapeamento
+        if ml_ok:
+            for entry in sem_sku_ml:
+                auditoria.append({
+                    "sku": "", "nome": entry.get("titulo", ""),
+                    "estoque_bling": None, "situacao_bling": "",
+                    "problemas": [{"tipo": "sem_mapeamento", "canal": "ml", "prioridade": "media",
+                                   "detalhe": f"Anúncio ML sem SKU vinculado ao Bling",
+                                   "ml_id": entry.get("id",""), "canal_qty": entry.get("estoque",0)}],
+                    "n_problemas": 1, "tem_critico": False, "tem_alto": False,
+                })
+
+        auditoria.sort(key=lambda x: (
+            0 if x["tem_critico"] else (1 if x["tem_alto"] else 2),
+            -x["n_problemas"], x["sku"],
+        ))
+
+        resumo_auditoria = {
+            "total_com_problemas": len(auditoria),
+            "criticos": sum(1 for a in auditoria if a["tem_critico"]),
+            "altos":    sum(1 for a in auditoria if a["tem_alto"] and not a["tem_critico"]),
+            "medios":   sum(1 for a in auditoria if not a["tem_critico"] and not a["tem_alto"]),
+            "por_tipo": {}, "por_canal": {},
+        }
+        for item in auditoria:
+            for p in item["problemas"]:
+                resumo_auditoria["por_tipo"][p["tipo"]]   = resumo_auditoria["por_tipo"].get(p["tipo"],   0) + 1
+                resumo_auditoria["por_canal"][p["canal"]] = resumo_auditoria["por_canal"].get(p["canal"], 0) + 1
+
+        logger.info("Auditoria: %d itens (%d críticos, %d altos, %d médios)",
+            len(auditoria), resumo_auditoria["criticos"],
+            resumo_auditoria["altos"], resumo_auditoria["medios"])
 
         # Stats por canal
         def _stats_canal(skus_canal: dict, canal_ok: bool) -> dict:
@@ -892,6 +1018,8 @@ def executar_conferencia(bling_client) -> dict:
                 key=lambda x: x["sku"]
             )[:1000] if shopee_ok else [],
             "matrix": matrix,
+            "auditoria": auditoria[:2000],       # itens com problemas, ordenados por gravidade
+            "resumo_auditoria": resumo_auditoria, # contagens por tipo/canal/prioridade
         }
 
         _salvar_resultado(resultado)

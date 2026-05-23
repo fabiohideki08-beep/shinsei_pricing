@@ -512,6 +512,42 @@ def conferencia_amazon_page():
 def conferencia_shopee_page():
     return HTMLResponse((PAGES_DIR / "conferencia_shopee.html").read_text(encoding="utf-8"))
 
+@app.get("/auditoria/canais", response_class=HTMLResponse)
+def auditoria_canais_page():
+    return HTMLResponse((PAGES_DIR / "auditoria_canais.html").read_text(encoding="utf-8"))
+
+@app.get("/auditoria/canais/dados")
+def auditoria_canais_dados(
+    canal: str = "",
+    tipo: str = "",
+    prioridade: str = "",
+    limit: int = 200,
+    offset: int = 0,
+):
+    """Retorna dados de auditoria filtrados por canal/tipo/prioridade."""
+    from conferencia_sku import get_resultado
+    dados = get_resultado()
+    if not dados:
+        return {"ok": False, "erro": "Nenhuma conferência executada ainda.", "auditoria": [], "resumo": {}}
+
+    auditoria = dados.get("auditoria", [])
+
+    if canal:
+        auditoria = [a for a in auditoria if any(p["canal"] == canal for p in a["problemas"])]
+    if tipo:
+        auditoria = [a for a in auditoria if any(p["tipo"] == tipo for p in a["problemas"])]
+    if prioridade:
+        auditoria = [a for a in auditoria if any(p["prioridade"] == prioridade for p in a["problemas"])]
+
+    total = len(auditoria)
+    return {
+        "ok": True,
+        "executado_em": dados.get("executado_em"),
+        "resumo": dados.get("resumo_auditoria", {}),
+        "total_filtrado": total,
+        "auditoria": auditoria[offset: offset + limit],
+    }
+
 # ─── Conferência de SKUs ────────────────────────────────────────────────────
 
 @app.post("/conferencia-sku/executar")
@@ -601,6 +637,7 @@ def conferencia_sku_resultado(
         "sem_sku_ml": dados.get("sem_sku_ml", []),
         "ml_anuncios_remapeados": dados.get("ml_anuncios_remapeados", 0),
         "ml_gtin_remapeados": dados.get("ml_gtin_remapeados", 0),
+        "resumo_auditoria": dados.get("resumo_auditoria", {}),
         "ml_sem_bling": dados.get("ml_sem_bling", []),
         "shopify_sem_bling": dados.get("shopify_sem_bling", []),
         "amazon_sem_bling": dados.get("amazon_sem_bling", []),

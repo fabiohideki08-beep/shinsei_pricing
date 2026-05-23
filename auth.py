@@ -153,6 +153,14 @@ PUBLIC_PATHS = {
     "/conferencia-sku/executar",
     "/conferencia-sku/status",
     "/conferencia-sku/resultado",
+    # Dashboard e páginas por canal
+    "/dashboard",
+    "/conferencia/ml",
+    "/conferencia/shopify",
+    "/conferencia/amazon",
+    "/conferencia/shopee",
+    "/auditoria/canais",
+    "/auditoria/canais/dados",
 }
 
 
