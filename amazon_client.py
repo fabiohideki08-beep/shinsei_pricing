@@ -80,12 +80,20 @@ class AmazonClient:
 
     def _get(self, path: str, params: dict = None) -> dict:
         url = SP_API_BASE + path
-        res = requests.get(url, headers=self._headers(), params=params or {}, timeout=15)
-        if res.status_code == 429:
-            time.sleep(2)
-            res = requests.get(url, headers=self._headers(), params=params or {}, timeout=15)
-        res.raise_for_status()
-        return res.json()
+        last_exc = None
+        for attempt in range(3):
+            try:
+                res = requests.get(url, headers=self._headers(), params=params or {}, timeout=20)
+                if res.status_code == 429:
+                    time.sleep(3 * (attempt + 1))
+                    continue
+                res.raise_for_status()
+                return res.json()
+            except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError) as e:
+                last_exc = e
+                logger.warning("Amazon _get conexão falhou (tentativa %d/3): %s", attempt + 1, e)
+                time.sleep(2 * (attempt + 1))
+        raise last_exc
 
     def get_listings(self, page_token: str = None) -> dict:
         """Lista anúncios MFN/DBA ativos do seller via Listings Items API."""

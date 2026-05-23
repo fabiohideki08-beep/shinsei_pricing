@@ -303,6 +303,18 @@ def _fetch_shopify() -> tuple[dict[str, dict], bool]:
         skus: dict[str, dict] = {}
         page_info = None
 
+        def _shopify_get(params):
+            """GET com retry para erros SSL transientes do Shopify."""
+            for attempt in range(3):
+                try:
+                    r = requests.get(base, headers=h, params=params, timeout=30)
+                    return r
+                except (requests.exceptions.SSLError, requests.exceptions.ConnectionError) as e:
+                    logger.warning("Shopify SSL/conexão falhou (tentativa %d/3): %s", attempt + 1, e)
+                    if attempt < 2:
+                        time.sleep(2 * (attempt + 1))
+            raise requests.exceptions.ConnectionError("Shopify: 3 tentativas falharam")
+
         while True:
             params: dict = {"limit": 250, "fields": "id,status,variants"}
             if page_info:
@@ -311,7 +323,7 @@ def _fetch_shopify() -> tuple[dict[str, dict], bool]:
                 # Busca todos os status: active, archived, draft
                 params["status"] = "active,archived,draft"
 
-            r = requests.get(base, headers=h, params=params, timeout=20)
+            r = _shopify_get(params)
             if r.status_code != 200:
                 break
 
@@ -551,7 +563,7 @@ def executar_conferencia(bling_client) -> dict:
                     logger.warning("Erro na coleta de %s: %s", nome, e)
                     return fallback
 
-            skus_ml,      sem_sku_ml, ml_ok      = _get(_fut_ml,      360, ({}, [], False), "ML")
+            skus_ml,      sem_sku_ml, ml_ok      = _get(_fut_ml,      450, ({}, [], False), "ML")
             skus_shopify, shopify_ok              = _get(_fut_shopify, 180, ({}, False),      "Shopify")
             skus_amazon,  amazon_ok              = _get(_fut_amazon,  120, ({}, False),      "Amazon")
             skus_shopee,  shopee_ok              = _get(_fut_shopee,  480, ({}, False),      "Shopee")
