@@ -123,12 +123,15 @@ def _fetch_bling(bling_client) -> tuple[dict[str, dict], int, str | None]:
                 pass
 
             situacao = str(prod.get("situacao") or item.get("situacao") or "").strip().upper()
+            # GTIN/EAN: usado para fallback de mapeamento com ML quando seller_custom_field é EAN
+            gtin = str(prod.get("gtin") or item.get("gtin") or "").strip()
             skus[sku] = {
                 "nome": nome,
                 "estoque": estoque,
                 "preco": preco,
                 "id_bling": str(prod.get("id") or ""),
                 "situacao": situacao,
+                "gtin": gtin,
             }
 
         pagina += 1
@@ -136,6 +139,70 @@ def _fetch_bling(bling_client) -> tuple[dict[str, dict], int, str | None]:
 
     logger.info("Bling: %d SKUs coletados em %d páginas (sem_sku=%d)", len(skus), pagina - 1, sem_sku)
     return skus, sem_sku, primeiro_erro
+
+
+# ─────────────────────────────────────────────
+# Fetch Bling Anúncios ML — mapa MLB → SKU Bling
+# ─────────────────────────────────────────────
+
+def _fetch_bling_anuncios_ml(bling_client, skus_bling: dict) -> dict[str, str]:
+    """
+    Busca os anúncios ML vinculados aos produtos Bling via GET /anuncios.
+    Retorna {mlb_code: bling_sku} — mapeamento direto e confiável.
+
+    A API Bling v3 /anuncios retorna os anúncios exportados para o Mercado Livre
+    com o campo 'codigo' contendo o MLB (ex: "MLB3037301672") e o campo
+    'produto.id' (ou 'produto.codigo') com o produto Bling vinculado.
+    """
+    mlb_to_sku: dict[str, str] = {}
+
+    # Mapa inverso: id_bling (int/str) → sku, construído a partir de skus_bling
+    id_to_sku: dict[str, str] = {}
+    for sku, info in skus_bling.items():
+        bid = str(info.get("id_bling") or "").strip()
+        if bid:
+            id_to_sku[bid] = sku
+
+    pagina = 1
+    MAX_PAGS = 200
+    while pagina <= MAX_PAGS:
+        try:
+            payload = bling_client._get("/anuncios", params={"pagina": pagina, "limite": 100})
+        except Exception as e:
+            logger.warning("Bling /anuncios página %d erro: %s", pagina, e)
+            break
+
+        data = payload.get("data", [])
+        if not data:
+            break
+
+        for ann in data:
+            if not isinstance(ann, dict):
+                continue
+
+            # MLB code: campo "codigo" contém o ID do anúncio no ML (ex: "MLB3037301672")
+            mlb = str(ann.get("codigo") or "").strip()
+            if not mlb or not mlb.upper().startswith("MLB"):
+                continue  # não é um anúncio ML
+
+            # Produto vinculado — pode ser dict {id, codigo, nome} ou só id
+            prod_info = ann.get("produto") or {}
+            if isinstance(prod_info, dict):
+                # Tenta pegar o SKU diretamente
+                sku_direto = str(prod_info.get("codigo") or "").strip()
+                if sku_direto and sku_direto in skus_bling:
+                    mlb_to_sku[mlb] = sku_direto
+                    continue
+                # Fallback: mapeia por id_bling
+                bid = str(prod_info.get("id") or "").strip()
+                if bid and bid in id_to_sku:
+                    mlb_to_sku[mlb] = id_to_sku[bid]
+
+        pagina += 1
+        time.sleep(0.15)
+
+    logger.info("Bling /anuncios: %d mapeamentos MLB→SKU coletados", len(mlb_to_sku))
+    return mlb_to_sku
 
 
 # ─────────────────────────────────────────────
@@ -571,6 +638,102 @@ def executar_conferencia(bling_client) -> dict:
             skus_amazon,  amazon_ok              = _get(_fut_amazon,  120, ({}, False),      "Amazon")
             skus_shopee,  shopee_ok              = _get(_fut_shopee,  480, ({}, False),      "Shopee")
 
+        _set_estado("rodando", 82, "anuncios_ml", "Buscando anúncios ML no Bling (MLB→SKU)...")
+
+        remapped_by_anuncio: dict[str, dict] = {}  # inicializado aqui para estar sempre em escopo
+
+        # ── Passo 1: Mapa definitivo via Bling /anuncios ─────────────────────────
+        # Bling armazena quais anúncios ML (MLBs) estão vinculados a cada produto.
+        # Isso permite mapear anúncios sem seller_custom_field (sem_sku_ml).
+        if ml_ok:
+            try:
+                mlb_to_sku = _fetch_bling_anuncios_ml(bling_client, skus_bling)
+            except Exception as _e:
+                logger.warning("_fetch_bling_anuncios_ml falhou: %s", _e)
+                mlb_to_sku = {}
+
+            if mlb_to_sku:
+                # Aplica remapeamento para sem_sku_ml: anúncios que não tinham seller_custom_field
+                # mas estão vinculados no Bling
+                nova_sem_sku: list[dict] = []
+                for entry in sem_sku_ml:
+                    mlb_id = str(entry.get("id") or "").strip()
+                    bling_sku = mlb_to_sku.get(mlb_id)
+                    if bling_sku and bling_sku not in skus_ml:
+                        # Promove: era "sem SKU", agora sabemos o SKU via Bling
+                        skus_ml[bling_sku] = {
+                            "ml_id": mlb_id,
+                            "status": entry.get("status", ""),
+                            "matched_by": "anuncio",
+                            "original_key": mlb_id,
+                        }
+                        remapped_by_anuncio[mlb_id] = {"sku": bling_sku, "ml_id": mlb_id}
+                    else:
+                        nova_sem_sku.append(entry)
+                sem_sku_ml = nova_sem_sku
+
+                # Também aplica para entradas existentes em skus_ml cujo "SKU" é na verdade o MLB code
+                # (alguns anúncios têm o próprio MLB no seller_custom_field por engano)
+                keys_to_remove_ann: list[str] = []
+                for key, val in skus_ml.items():
+                    if key.upper().startswith("MLB"):
+                        bling_sku = mlb_to_sku.get(key)
+                        if bling_sku and bling_sku not in skus_ml:
+                            skus_ml_entry = {**val, "matched_by": "anuncio", "original_key": key}
+                            remapped_by_anuncio[key] = {"sku": bling_sku, "ml_id": val.get("ml_id", key)}
+                            keys_to_remove_ann.append(key)
+                            skus_ml[bling_sku] = skus_ml_entry  # will be set after loop
+                for k in keys_to_remove_ann:
+                    old_val = skus_ml.pop(k)
+                    bling_sku = mlb_to_sku.get(k)
+                    if bling_sku:
+                        skus_ml[bling_sku] = {**old_val, "matched_by": "anuncio", "original_key": k}
+
+                if remapped_by_anuncio:
+                    logger.info(
+                        "ML fallback Bling /anuncios: %d anúncios sem SKU remapeados via MLB",
+                        len(remapped_by_anuncio)
+                    )
+
+        _set_estado("rodando", 85, "cruzamento_gtin", "Cruzando GTINs Bling ↔ ML...")
+
+        remapped_by_gtin: dict[str, dict] = {}  # inicializado aqui para estar em escopo no resultado
+
+        # ── Passo 2: Fallback GTIN: ML listings que usam EAN/GTIN como seller_custom_field ──
+        # Muitos anúncios no ML têm o GTIN (EAN-13) no seller_custom_field ao invés do SKU Bling.
+        # Construímos um mapa reverso gtin→sku_bling e remapeamos esses registros.
+        if ml_ok:
+            gtin_to_bling_sku: dict[str, str] = {}
+            for sku, info in skus_bling.items():
+                gtin = info.get("gtin", "")
+                if gtin and len(gtin) >= 8:  # aceita EAN-8, UPC-12, EAN-13, ITF-14
+                    gtin_to_bling_sku[gtin] = sku
+
+            if gtin_to_bling_sku:
+                keys_to_remove: list[str] = []
+
+                for key, val in skus_ml.items():
+                    # key parece GTIN se for numérico com 8–14 dígitos
+                    if key.isdigit() and 8 <= len(key) <= 14:
+                        bling_sku = gtin_to_bling_sku.get(key)
+                        if bling_sku and bling_sku not in skus_ml:
+                            # Remapeia: troca a chave GTIN pela chave do SKU Bling
+                            remapped_by_gtin[bling_sku] = {**val, "matched_by": "gtin", "original_key": key}
+                            keys_to_remove.append(key)
+                        # Se não achou no Bling, mantém no skus_ml mas ficará em "ml_sem_bling"
+
+                # Remove os GTINs remapeados e insere com chave correta
+                for k in keys_to_remove:
+                    del skus_ml[k]
+                skus_ml.update(remapped_by_gtin)
+
+                if remapped_by_gtin:
+                    logger.info(
+                        "ML fallback GTIN: %d anúncios remapeados por EAN/GTIN "
+                        "(de %d GTINs conhecidos no Bling)",
+                        len(remapped_by_gtin), len(gtin_to_bling_sku)
+                    )
+
         _set_estado("rodando", 88, "cruzamento", "Cruzando SKUs...")
 
         # ── Cruzamento ──────────────────────────────────────────
@@ -623,6 +786,8 @@ def executar_conferencia(bling_client) -> dict:
                 row["presente_ml"] = no_ml
                 row["ml_id"] = ml_info.get("ml_id", "")
                 row["status_ml"] = ml_info.get("status", "")  # "active" | "paused" | "closed" | "inactive"
+                row["ml_matched_by"] = ml_info.get("matched_by", "sku")  # "sku" | "gtin"
+                row["ml_gtin"] = ml_info.get("original_key", "")  # GTIN original se matched_by == "gtin"
             if shopify_ok:
                 sh_info = skus_shopify.get(sku) or {}
                 row["presente_shopify"] = no_shopify
@@ -702,7 +867,9 @@ def executar_conferencia(bling_client) -> dict:
                 "bling_sem_amazon_inativos": _bling_sem_situacao(skus_amazon, amazon_ok, skus_bling_inativos),
                 "bling_sem_shopee_inativos": _bling_sem_situacao(skus_shopee, shopee_ok, skus_bling_inativos),
             },
-            "sem_sku_ml": sem_sku_ml[:200],  # ML sem SKU (não mapeável)
+            "sem_sku_ml": sem_sku_ml[:200],  # ML sem SKU (não mapeável após todos os fallbacks)
+            "ml_anuncios_remapeados": len(remapped_by_anuncio),  # anúncios ML mapeados via Bling /anuncios
+            "ml_gtin_remapeados": len(remapped_by_gtin),  # anúncios ML mapeados via fallback GTIN
             # Canal sem Bling: itens COM SKU no canal que NÃO existem no Bling
             "ml_sem_bling": sorted(
                 [{"sku": s, "ml_id": v.get("ml_id", ""), "status": v.get("status", "")}

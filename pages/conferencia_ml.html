@@ -155,9 +155,9 @@ tr:hover td{background:rgba(255,255,255,.025)}
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>SKU</th><th>Nome</th><th>Estoque Bling</th><th>Status ML</th><th>ID ML</th>
+          <th>SKU</th><th>Nome</th><th>Estoque Bling</th><th>Status ML</th><th>ID ML</th><th>Mapeamento</th>
         </tr></thead>
-        <tbody id="estoque-tbody"><tr><td colspan="5" class="empty">Carregando...</td></tr></tbody>
+        <tbody id="estoque-tbody"><tr><td colspan="6" class="empty">Carregando...</td></tr></tbody>
       </table>
     </div>
     <div class="paginacao" id="estoque-pag"></div>
@@ -398,18 +398,27 @@ function renderEstoque(){
   const tbody = document.getElementById('estoque-tbody');
 
   if(!slice.length){
-    tbody.innerHTML = `<tr><td colspan="5" class="empty">${mapeados.length?'Nenhum no filtro.':'Nenhum produto mapeado em ambos.'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="empty">${mapeados.length?'Nenhum no filtro.':'Nenhum produto mapeado em ambos.'}</td></tr>`;
     document.getElementById('estoque-pag').innerHTML = '';
     return;
   }
 
-  tbody.innerHTML = slice.map(r => `<tr>
-    <td class="sku-code">${r.sku||'—'}</td>
-    <td class="nome-cell" title="${(r.nome||'').replace(/"/g,'&quot;')}">${r.nome||'—'}</td>
-    <td>${fmt(r.estoque_bling)}</td>
-    <td>${statusChip(r[CANAL_STATUS])}</td>
-    <td style="font-size:11px;color:var(--muted)">${r[CANAL_ID]||'—'}</td>
-  </tr>`).join('');
+  tbody.innerHTML = slice.map(r => {
+    const matchBy = r.ml_matched_by || 'sku';
+    const mapChip = matchBy === 'anuncio'
+      ? `<span title="Mapeado via Bling /anúncios (MLB: ${r.ml_gtin||r.ml_id||''})" style="font-size:10px;padding:2px 7px;border-radius:999px;background:rgba(34,197,94,.12);color:var(--ok);border:1px solid rgba(34,197,94,.3);cursor:default">📋 Anúncio</span>`
+      : matchBy === 'gtin'
+        ? `<span title="Mapeado via GTIN/EAN: ${r.ml_gtin||''}" style="font-size:10px;padding:2px 7px;border-radius:999px;background:rgba(79,140,255,.15);color:var(--accent);border:1px solid rgba(79,140,255,.3);cursor:default">🔗 GTIN</span>`
+        : `<span style="font-size:10px;color:var(--muted)">SKU</span>`;
+    return `<tr>
+      <td class="sku-code">${r.sku||'—'}</td>
+      <td class="nome-cell" title="${(r.nome||'').replace(/"/g,'&quot;')}">${r.nome||'—'}</td>
+      <td>${fmt(r.estoque_bling)}</td>
+      <td>${statusChip(r[CANAL_STATUS])}</td>
+      <td style="font-size:11px;color:var(--muted)">${r[CANAL_ID]||'—'}</td>
+      <td>${mapChip}</td>
+    </tr>`;
+  }).join('');
 
   pagControls('estoque-pag', mapeados.length, _pgEstoque, 'navEstoque');
 }
@@ -478,9 +487,16 @@ async function carregarConferencia(){
     const mlStat = s.ml || {};
     // Stats
     const statsRow = document.getElementById('stats-row');
+    const annRemap  = res.ml_anuncios_remapeados || 0;
+    const gtinRemap = res.ml_gtin_remapeados || 0;
+    const remapParts = [];
+    if(annRemap  > 0) remapParts.push(`📋 ${annRemap} via anúncio`);
+    if(gtinRemap > 0) remapParts.push(`🔗 ${gtinRemap} via GTIN`);
+    const remapNote = remapParts.length
+      ? `<div style="font-size:10px;color:var(--muted);margin-top:3px">${remapParts.join(' · ')}</div>` : '';
     statsRow.innerHTML = `
       <div class="stat"><div class="stat-lbl">Total Bling</div><div class="stat-val">${fmt(s.total_bling)}</div></div>
-      <div class="stat stat-link" onclick="irParaAba('estoque')"><div class="stat-lbl">Mapeados ML</div><div class="stat-val" style="color:var(--ok)">${fmt(mlStat.presentes_em_bling)}</div></div>
+      <div class="stat stat-link" onclick="irParaAba('estoque')"><div class="stat-lbl">Mapeados ML</div><div class="stat-val" style="color:var(--ok)">${fmt(mlStat.presentes_em_bling)}</div>${remapNote}</div>
       <div class="stat stat-link" onclick="irParaAba('ausentes','secao-sem-canal')"><div class="stat-lbl">Bling sem ML</div><div class="stat-val" style="color:var(--warn)">${fmt(s.bling_sem_ml)}</div></div>
       <div class="stat stat-link" onclick="irParaAba('ausentes','secao-canal-sem-bling')"><div class="stat-lbl">ML sem Bling</div><div class="stat-val" style="color:var(--danger)">${fmt(mlStat.sem_bling)}</div></div>`;
     // Timestamp

@@ -594,6 +594,8 @@ def conferencia_sku_resultado(
         "duracao_segundos": dados.get("duracao_segundos"),
         "stats": dados.get("stats", {}),
         "sem_sku_ml": dados.get("sem_sku_ml", []),
+        "ml_anuncios_remapeados": dados.get("ml_anuncios_remapeados", 0),
+        "ml_gtin_remapeados": dados.get("ml_gtin_remapeados", 0),
         "ml_sem_bling": dados.get("ml_sem_bling", []),
         "shopify_sem_bling": dados.get("shopify_sem_bling", []),
         "amazon_sem_bling": dados.get("amazon_sem_bling", []),
