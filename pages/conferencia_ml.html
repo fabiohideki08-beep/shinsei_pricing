@@ -249,12 +249,13 @@ function trocarTab(nome, el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
   el.classList.add('active');
+  const panel = document.getElementById('tab-'+nome);
+  if(panel) panel.classList.add('active');
 }
 function irParaAba(tab, scrollId){
   const btn=[...document.querySelectorAll('.tab')].find(t=>(t.getAttribute('onclick')||'').includes("'"+tab+"'"));
   trocarTab(tab, btn||document.querySelector('.tab'));
   if(scrollId) setTimeout(()=>{const el=document.getElementById(scrollId);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},80);
-  document.getElementById('tab-'+nome).classList.add('active');
 }
 
 // ── Paginação ────────────────────────────────────────────────────────────────
