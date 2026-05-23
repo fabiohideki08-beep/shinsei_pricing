@@ -660,22 +660,44 @@ def executar_conferencia(bling_client) -> dict:
                 return 0
             return sum(1 for s in skus_bling if s not in skus_canal)
 
+        # Subconjuntos por situação do Bling
+        skus_bling_ativos   = {s: v for s, v in skus_bling.items() if v.get("situacao", "").upper() == "A"}
+        skus_bling_inativos = {s: v for s, v in skus_bling.items() if v.get("situacao", "").upper() != "A"}
+
+        def _bling_sem_situacao(skus_canal: dict, canal_ok: bool, subset: dict) -> int:
+            if not canal_ok:
+                return 0
+            return sum(1 for s in subset if s not in skus_canal)
+
         resultado = {
             "executado_em": datetime.now(timezone.utc).isoformat(),
             "duracao_segundos": round(time.time() - inicio, 1),
             "bling_aviso": bling_erro,  # None ou mensagem se coleta foi parcial
             "stats": {
                 "total_bling": len(skus_bling),
+                "total_bling_ativos": len(skus_bling_ativos),
+                "total_bling_inativos": len(skus_bling_inativos),
                 "sem_sku_no_bling": sem_sku_bling,
                 "total_skus_universo": len(todos_skus),
                 "ml": _stats_canal(skus_ml, ml_ok),
                 "shopify": _stats_canal(skus_shopify, shopify_ok),
                 "amazon": _stats_canal(skus_amazon, amazon_ok),
                 "shopee": _stats_canal(skus_shopee, shopee_ok),
+                # Todos os Bling
                 "bling_sem_ml": _bling_sem(skus_ml, ml_ok),
                 "bling_sem_shopify": _bling_sem(skus_shopify, shopify_ok),
                 "bling_sem_amazon": _bling_sem(skus_amazon, amazon_ok),
                 "bling_sem_shopee": _bling_sem(skus_shopee, shopee_ok),
+                # Só Ativos
+                "bling_sem_ml_ativos": _bling_sem_situacao(skus_ml, ml_ok, skus_bling_ativos),
+                "bling_sem_shopify_ativos": _bling_sem_situacao(skus_shopify, shopify_ok, skus_bling_ativos),
+                "bling_sem_amazon_ativos": _bling_sem_situacao(skus_amazon, amazon_ok, skus_bling_ativos),
+                "bling_sem_shopee_ativos": _bling_sem_situacao(skus_shopee, shopee_ok, skus_bling_ativos),
+                # Só Inativos
+                "bling_sem_ml_inativos": _bling_sem_situacao(skus_ml, ml_ok, skus_bling_inativos),
+                "bling_sem_shopify_inativos": _bling_sem_situacao(skus_shopify, shopify_ok, skus_bling_inativos),
+                "bling_sem_amazon_inativos": _bling_sem_situacao(skus_amazon, amazon_ok, skus_bling_inativos),
+                "bling_sem_shopee_inativos": _bling_sem_situacao(skus_shopee, shopee_ok, skus_bling_inativos),
             },
             "sem_sku_ml": sem_sku_ml[:200],  # cap 200
             "matrix": matrix,

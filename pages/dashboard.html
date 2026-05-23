@@ -28,6 +28,14 @@ body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(
 .progress-bar-bg{background:var(--card2);border-radius:999px;height:10px;overflow:hidden}
 .progress-bar-fill{height:100%;border-radius:999px;background:var(--accent);transition:width .4s ease}
 .progress-msg{font-size:12px;color:var(--muted);margin-top:8px}
+/* filtro situação */
+.filtro-bar{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.filtro-label{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.filtro-btns{display:flex;gap:4px}
+.filtro-btn{border:1px solid var(--line);background:transparent;color:var(--muted);padding:5px 13px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s}
+.filtro-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.filtro-btn.ativo.active{background:#22c55e;border-color:#22c55e}
+.filtro-btn.inativo.active{background:#9fb0d9;border-color:#9fb0d9;color:#0b1020}
 /* stats grid */
 .stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:28px}
 .stat-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 16px;display:flex;flex-direction:column;gap:6px;transition:transform .15s,box-shadow .15s}
@@ -94,6 +102,17 @@ footer{text-align:center;padding:20px 0;color:var(--muted);font-size:12px;border
     <div class="progress-msg" id="progress-msg"></div>
   </div>
 
+  <!-- Filtro de situação Bling -->
+  <div class="filtro-bar" id="filtro-situacao" style="display:none">
+    <span class="filtro-label">Filtrar Bling:</span>
+    <div class="filtro-btns">
+      <button class="filtro-btn active" onclick="setFiltro('todos',this)">Todos</button>
+      <button class="filtro-btn ativo"  onclick="setFiltro('ativos',this)">✓ Só Ativos</button>
+      <button class="filtro-btn inativo" onclick="setFiltro('inativos',this)">✗ Só Inativos</button>
+    </div>
+    <span id="filtro-info" style="font-size:11px;color:var(--muted);margin-left:6px"></span>
+  </div>
+
   <!-- Stats de cobertura -->
   <div class="stats-grid" id="stats-grid">
     <div class="stat-card"><div class="stat-label">Total Bling</div><div class="stat-value skel"></div><div class="stat-sub">produtos com SKU</div></div>
@@ -141,21 +160,63 @@ const CANAIS = [
 ];
 
 let _polling = false;
+let _filtro = 'todos';   // 'todos' | 'ativos' | 'inativos'
+let _lastStats = null;
 
 function fmt(n){ return (n===null||n===undefined)?'—':Number(n).toLocaleString('pt-BR'); }
 function pct(a,b){ return b>0 ? Math.round((a/b)*100) : 0; }
 
+function setFiltro(val, btn){
+  _filtro = val;
+  document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if(_lastStats){
+    const res = {stats: _lastStats};
+    renderStats(res);
+    renderCanais(res);
+  }
+}
+
+function _sufixo(){ return _filtro === 'ativos' ? '_ativos' : _filtro === 'inativos' ? '_inativos' : ''; }
+
 function renderStats(res){
   const s = res.stats || {};
-  const totalBling = s.total_bling || 0;
+  _lastStats = s;
+  const suf = _sufixo();
+
+  // Total base muda conforme filtro
+  const totalBling = suf === '_ativos'   ? (s.total_bling_ativos  || 0)
+                   : suf === '_inativos' ? (s.total_bling_inativos || 0)
+                   : (s.total_bling || 0);
+
+  // Mostra filtro se tiver dados de ativos/inativos
+  if(s.total_bling_ativos != null){
+    const bar = document.getElementById('filtro-situacao');
+    bar.style.display = 'flex';
+    const info = document.getElementById('filtro-info');
+    info.textContent = `${fmt(s.total_bling_ativos)} ativos · ${fmt(s.total_bling_inativos)} inativos`;
+  }
+
   const grid = document.getElementById('stats-grid');
 
+  const semML      = s[`bling_sem_ml${suf}`]      ?? s.bling_sem_ml;
+  const semShopify = s[`bling_sem_shopify${suf}`] ?? s.bling_sem_shopify;
+  const semAmazon  = s[`bling_sem_amazon${suf}`]  ?? s.bling_sem_amazon;
+  const semShopee  = s[`bling_sem_shopee${suf}`]  ?? s.bling_sem_shopee;
+
+  const labelBling = _filtro === 'ativos'   ? 'Bling Ativos'
+                   : _filtro === 'inativos' ? 'Bling Inativos'
+                   : 'Total Bling';
+  const subBling   = _filtro === 'ativos'   ? 'produtos ativos com SKU'
+                   : _filtro === 'inativos' ? 'produtos inativos com SKU'
+                   : 'produtos com SKU';
+
   const cards = [
-    { label:'Total Bling', valor:totalBling, sub:'produtos com SKU', cor:'#4f8cff', pct:100, link:null },
-    { label:'Sem ML', valor:s.bling_sem_ml, sub:`de ${fmt((s.ml||{}).total)} anúncios`, cor:'#eab308', pct:pct(s.bling_sem_ml,totalBling), link:'/conferencia/ml' },
-    { label:'Sem Shopify', valor:s.bling_sem_shopify, sub:`de ${fmt((s.shopify||{}).total)} variantes`, cor:'#22c55e', pct:pct(s.bling_sem_shopify,totalBling), link:'/conferencia/shopify' },
-    { label:'Sem Amazon', valor:s.bling_sem_amazon, sub:`de ${fmt((s.amazon||{}).total)} listings`, cor:'#3b82f6', pct:pct(s.bling_sem_amazon,totalBling), link:'/conferencia/amazon' },
-    { label:'Sem Shopee', valor:s.bling_sem_shopee, sub:`de ${fmt((s.shopee||{}).total)} mapeados`, cor:'#f97316', pct:pct(s.bling_sem_shopee,totalBling), link:'/conferencia/shopee' },
+    { label:labelBling, valor:totalBling, sub:subBling, cor:'#4f8cff', pct:100, link:null },
+    { label:'Sem ML',      valor:semML,      sub:`de ${fmt((s.ml||{}).total)} anúncios`,   cor:'#eab308', pct:pct(semML,totalBling),      link:'/conferencia/ml' },
+    { label:'Sem Shopify', valor:semShopify, sub:`de ${fmt((s.shopify||{}).total)} variantes`, cor:'#22c55e', pct:pct(semShopify,totalBling), link:'/conferencia/shopify' },
+    { label:'Sem Amazon',  valor:semAmazon,  sub:`de ${fmt((s.amazon||{}).total)} listings`,   cor:'#3b82f6', pct:pct(semAmazon,totalBling),  link:'/conferencia/amazon' },
+    { label:'Sem Shopee',  valor:semShopee,  sub:`de ${fmt((s.shopee||{}).total)} mapeados`,   cor:'#f97316', pct:pct(semShopee,totalBling),  link:'/conferencia/shopee' },
   ];
 
   grid.innerHTML = cards.map(c => {
@@ -172,6 +233,10 @@ function renderStats(res){
 
 function renderCanais(res){
   const s = res.stats || {};
+  const suf = _sufixo();
+  const totalBase = suf === '_ativos'   ? (s.total_bling_ativos  || s.total_bling || 1)
+                  : suf === '_inativos' ? (s.total_bling_inativos || s.total_bling || 1)
+                  : (s.total_bling || 1);
   const grid = document.getElementById('channels-grid');
   grid.innerHTML = CANAIS.map(c => {
     const cs = s[c.statKey] || {};
@@ -180,9 +245,10 @@ function renderCanais(res){
       ? `<span class="ch-badge badge-ok">✓ Conectado</span>`
       : `<span class="ch-badge badge-err">✗ Desconectado</span>`;
     const total = cs.total ?? '—';
-    const sem = s[c.semKey] ?? '—';
-    const pctVal = (typeof total==='number' && typeof sem==='number' && total>0)
-      ? Math.round((1 - sem / (s.total_bling||1)) * 100) : '—';
+    const sem = s[`${c.semKey}${suf}`] ?? s[c.semKey] ?? '—';
+    const pctVal = (typeof total==='number' && typeof sem==='number' && totalBase>0)
+      ? Math.round((1 - sem / totalBase) * 100) : '—';
+    const lblSem = suf === '_ativos' ? `Ativos sem ${c.nome}` : suf === '_inativos' ? `Inativos sem ${c.nome}` : `Bling sem ${c.nome}`;
     return `<a class="ch-card" href="${c.href}">
       <div class="ch-top" style="background:${c.cor}"></div>
       <div class="ch-body">
@@ -193,7 +259,7 @@ function renderCanais(res){
         </div>
         <div class="ch-stats">
           <div class="ch-stat-row"><span class="lbl">Produtos no canal</span><span class="val">${fmt(total)}</span></div>
-          <div class="ch-stat-row"><span class="lbl">Bling sem ${c.nome}</span><span class="val" style="color:${sem>0?'var(--warn)':'var(--ok)'}">${fmt(sem)}</span></div>
+          <div class="ch-stat-row"><span class="lbl">${lblSem}</span><span class="val" style="color:${sem>0?'var(--warn)':'var(--ok)'}">${fmt(sem)}</span></div>
           <div class="ch-stat-row"><span class="lbl">Cobertura Bling</span><span class="val">${pctVal !== '—' ? pctVal+'%' : '—'}</span></div>
         </div>
       </div>
