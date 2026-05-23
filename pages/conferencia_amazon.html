@@ -305,7 +305,7 @@ function navCsb(p){_pgCsb=p;renderAusentes();window.scrollTo(0,0);}
 
 async function carregarConferencia(){
   try{
-    const res=await fetch('/conferencia-sku/resultado').then(r=>r.json());
+    const res=await fetch('/conferencia-sku/resultado?canal=amazon&limit=5000').then(r=>r.json());
     if(!res||!res.stats)return;
     _conf=res;
     const s=res.stats, cs=s[CANAL_STAT_KEY]||{};

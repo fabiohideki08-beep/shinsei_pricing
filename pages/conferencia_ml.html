@@ -481,7 +481,9 @@ function navMlSemBling(p){ _pgMlSemBling = p; renderAusentes(); window.scrollTo(
 // ── Conferência ──────────────────────────────────────────────────────────────
 async function carregarConferencia(){
   try{
-    const res = await fetch('/conferencia-sku/resultado').then(r=>r.json());
+    // canal=ml: retorna apenas itens com dados ML (mapeados + sem-bling)
+    // limit=5000: busca toda a matrix do canal de uma vez para filtragem client-side
+    const res = await fetch('/conferencia-sku/resultado?canal=ml&limit=5000').then(r=>r.json());
     if(!res || !res.stats) return;
     _conf = res;
     const s = res.stats;

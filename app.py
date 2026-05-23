@@ -567,6 +567,11 @@ def conferencia_sku_resultado(
     matrix = dados.get("matrix", [])
 
     # Filtros
+    if canal:
+        # Retorna apenas itens que têm dados do canal (presente_X não é None)
+        campo = f"presente_{canal}"
+        matrix = [r for r in matrix if r.get(campo) is not None]
+
     if busca:
         b = busca.lower()
         matrix = [r for r in matrix if b in r["sku"].lower() or b in (r.get("nome") or "").lower()]
