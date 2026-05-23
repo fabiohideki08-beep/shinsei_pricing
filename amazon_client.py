@@ -95,7 +95,7 @@ class AmazonClient:
         params = {
             "marketplaceIds": self.config["marketplace_id"],
             "includedData": "summaries",
-            "pageSize": 50,  # máximo suportado pela API
+            "pageSize": 20,  # máximo suportado pela Listings Items API v2021-08-01
         }
         if page_token:
             params["pageToken"] = page_token
