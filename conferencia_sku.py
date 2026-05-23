@@ -423,14 +423,17 @@ def _fetch_amazon() -> tuple[dict[str, dict], bool]:
                 if sku:
                     # Extrai status do primeiro summary (lista de strings ex: ["BUYABLE"])
                     status_list = []
+                    item_name = ""
                     for s in summaries:
                         st = s.get("status")
                         if isinstance(st, list):
                             status_list.extend(st)
                         elif isinstance(st, str) and st:
                             status_list.append(st)
+                        if not item_name:
+                            item_name = str(s.get("itemName") or "").strip()
                     amz_status = "active" if "BUYABLE" in status_list else ("inactive" if status_list else "active")
-                    skus[sku] = {"qty": 1, "status": amz_status}
+                    skus[sku] = {"qty": 1, "status": amz_status, "nome": item_name}
 
             page_token = resp.get("pagination", {}).get("nextToken")
             if not page_token or not items:
@@ -699,7 +702,28 @@ def executar_conferencia(bling_client) -> dict:
                 "bling_sem_amazon_inativos": _bling_sem_situacao(skus_amazon, amazon_ok, skus_bling_inativos),
                 "bling_sem_shopee_inativos": _bling_sem_situacao(skus_shopee, shopee_ok, skus_bling_inativos),
             },
-            "sem_sku_ml": sem_sku_ml[:200],  # cap 200
+            "sem_sku_ml": sem_sku_ml[:200],  # ML sem SKU (não mapeável)
+            # Canal sem Bling: itens COM SKU no canal que NÃO existem no Bling
+            "ml_sem_bling": sorted(
+                [{"sku": s, "ml_id": v.get("ml_id", ""), "status": v.get("status", "")}
+                 for s, v in skus_ml.items() if s not in skus_bling],
+                key=lambda x: x["sku"]
+            )[:1000] if ml_ok else [],
+            "shopify_sem_bling": sorted(
+                [{"sku": s, "variant_id": v.get("variant_id", ""), "status": v.get("status", "")}
+                 for s, v in skus_shopify.items() if s not in skus_bling],
+                key=lambda x: x["sku"]
+            )[:1000] if shopify_ok else [],
+            "amazon_sem_bling": sorted(
+                [{"sku": s, "status": v.get("status", ""), "nome": v.get("nome", "")}
+                 for s, v in skus_amazon.items() if s not in skus_bling],
+                key=lambda x: x["sku"]
+            )[:1000] if amazon_ok else [],
+            "shopee_sem_bling": sorted(
+                [{"sku": s, "item_id": v.get("item_id", ""), "status": v.get("status", "")}
+                 for s, v in skus_shopee.items() if s not in skus_bling],
+                key=lambda x: x["sku"]
+            )[:1000] if shopee_ok else [],
             "matrix": matrix,
         }
 

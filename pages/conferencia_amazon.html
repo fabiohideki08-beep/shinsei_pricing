@@ -155,6 +155,7 @@ tr:hover td{background:rgba(255,255,255,.025)}
           <tbody id="canal-sem-bling-tbody"><tr><td colspan="3" class="empty">Carregando...</td></tr></tbody>
         </table>
       </div>
+      <div class="paginacao" id="canal-sem-bling-pag"></div>
     </div>
   </div>
 </div>
@@ -170,7 +171,7 @@ const PAGE_SIZE = 100;
 
 let _conf=null, _fila=[], _polling=false;
 let _filtroMargem='todos', _filtroEstoque='todos';
-let _pgFila=1, _pgEstoque=1, _pgSem=1;
+let _pgFila=1, _pgEstoque=1, _pgSem=1, _pgCsb=1;
 
 const fmt   = n=>(n==null)?'—':Number(n).toLocaleString('pt-BR');
 const fmtR$ = n=>(n==null)?'—':'R$ '+Number(n).toFixed(2).replace('.',',');
@@ -287,15 +288,20 @@ function renderAusentes(){
     :`<tr><td colspan="4" class="empty">✅ Todos os produtos Bling estão no Amazon!</td></tr>`;
   pagControls('sem-canal-pag',semCanal.length,_pgSem,'navSem');
 
-  const s=_conf.stats||{};
-  const canalStat=s[CANAL_STAT_KEY]||{};
-  document.getElementById('cnt-canal-sem-bling').textContent=fmt(canalStat.sem_bling);
-  document.getElementById('canal-sem-bling-tbody').innerHTML=`<tr><td colspan="3" class="empty" style="color:var(--muted);font-size:13px">
-    ${canalStat.sem_bling>0
-      ? `${fmt(canalStat.sem_bling)} produtos no Amazon sem mapeamento no Bling.<br><small>Execute a conferência completa para ver a lista detalhada.</small>`
-      : '✅ Todos os produtos Amazon estão mapeados no Bling!'}</td></tr>`;
+  const canalSemBling = (_conf[CANAL_STAT_KEY+'_sem_bling'] || []);
+  document.getElementById('cnt-canal-sem-bling').textContent = fmt(canalSemBling.length);
+  const csbSlice = pagSlice(canalSemBling, _pgCsb);
+  document.getElementById('canal-sem-bling-tbody').innerHTML = csbSlice.length
+    ? csbSlice.map(r=>`<tr>
+        <td class="sku-code">${r.sku||'—'}</td>
+        <td class="nome-cell" title="${(r.nome||'').replace(/"/g,'&quot;')}">${r.nome||'—'}</td>
+        <td>${statusChip(r.status)}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="3" class="empty">✅ Todos os produtos Amazon estão mapeados no Bling!</td></tr>`;
+  pagControls('canal-sem-bling-pag', canalSemBling.length, _pgCsb, 'navCsb');
 }
 function navSem(p){_pgSem=p;renderAusentes();window.scrollTo(0,0);}
+function navCsb(p){_pgCsb=p;renderAusentes();window.scrollTo(0,0);}
 
 async function carregarConferencia(){
   try{

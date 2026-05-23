@@ -176,13 +176,25 @@ tr:hover td{background:rgba(255,255,255,.025)}
       <div class="paginacao" id="sem-ml-pag"></div>
     </div>
     <div class="ausente-section" id="secao-canal-sem-bling">
-      <h3>🔗 No Mercado Livre, sem mapeamento Bling <span class="count-badge" id="cnt-ml-sem-bling">—</span></h3>
+      <h3>🔗 No ML com SKU, ausente no Bling <span class="count-badge" id="cnt-ml-sem-bling">—</span></h3>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>ID ML</th><th>Título</th><th>Estoque</th></tr></thead>
+          <thead><tr><th>SKU</th><th>ID ML</th><th>Status</th></tr></thead>
           <tbody id="ml-sem-bling-tbody"><tr><td colspan="3" class="empty">Carregando...</td></tr></tbody>
         </table>
       </div>
+      <div class="paginacao" id="ml-sem-bling-pag"></div>
+      <details style="margin-top:14px">
+        <summary style="cursor:pointer;font-size:12px;color:var(--muted);font-weight:700">
+          📋 Anúncios ML sem SKU (não mapeáveis) <span id="cnt-sem-sku-ml">—</span>
+        </summary>
+        <div class="table-wrap" style="margin-top:10px">
+          <table>
+            <thead><tr><th>ID ML</th><th>Título</th><th>Estoque</th></tr></thead>
+            <tbody id="sem-sku-ml-tbody"><tr><td colspan="3" class="empty">Carregando...</td></tr></tbody>
+          </table>
+        </div>
+      </details>
     </div>
   </div>
 </div>
@@ -205,7 +217,7 @@ let _filtroMargem  = 'todos';
 let _filtroEstoque = 'todos';
 let _pgFila   = 1;
 let _pgEstoque = 1;
-let _pgSemMl  = 1;
+let _pgSemMl  = 1, _pgMlSemBling = 1;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const fmt   = n => (n==null)?'—':Number(n).toLocaleString('pt-BR');
@@ -428,19 +440,33 @@ function renderAusentes(){
     : `<tr><td colspan="4" class="empty">✅ Todos os produtos Bling estão no Mercado Livre!</td></tr>`;
   pagControls('sem-ml-pag', semMl.length, _pgSemMl, 'navSemMl');
 
-  // ML sem Bling
-  const mlSemBling = _conf.sem_sku_ml || [];
-  document.getElementById('cnt-ml-sem-bling').textContent = mlSemBling.length.toLocaleString('pt-BR');
-  document.getElementById('ml-sem-bling-tbody').innerHTML = mlSemBling.length
-    ? mlSemBling.slice(0,200).map(r => `<tr>
+  // ML com SKU, SKU ausente no Bling
+  const mlSemBling = _conf.ml_sem_bling || [];
+  document.getElementById('cnt-ml-sem-bling').textContent = fmt(mlSemBling.length);
+  const mlsbSlice = pagSlice(mlSemBling, _pgMlSemBling);
+  document.getElementById('ml-sem-bling-tbody').innerHTML = mlsbSlice.length
+    ? mlsbSlice.map(r => `<tr>
+        <td class="sku-code">${r.sku||'—'}</td>
+        <td class="sku-code" style="color:var(--muted)">${r.ml_id||'—'}</td>
+        <td>${statusChip(r.status)}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="3" class="empty">✅ Todos os SKUs do ML estão mapeados no Bling!</td></tr>`;
+  pagControls('ml-sem-bling-pag', mlSemBling.length, _pgMlSemBling, 'navMlSemBling');
+
+  // ML sem SKU (não mapeável) — exibe em seção recolhida
+  const semSkuMl = _conf.sem_sku_ml || [];
+  document.getElementById('cnt-sem-sku-ml').textContent = `(${fmt(semSkuMl.length)})`;
+  document.getElementById('sem-sku-ml-tbody').innerHTML = semSkuMl.length
+    ? semSkuMl.slice(0, 300).map(r => `<tr>
         <td class="sku-code">${r.id||'—'}</td>
         <td class="nome-cell" title="${(r.titulo||'').replace(/"/g,'&quot;')}">${r.titulo||'—'}</td>
         <td>${fmt(r.estoque)}</td>
       </tr>`).join('')
-    : `<tr><td colspan="3" class="empty">✅ Todos os anúncios ML estão mapeados no Bling!</td></tr>`;
+    : `<tr><td colspan="3" class="empty">Nenhum anúncio sem SKU</td></tr>`;
 }
 
 function navSemMl(p){ _pgSemMl = p; renderAusentes(); window.scrollTo(0,0); }
+function navMlSemBling(p){ _pgMlSemBling = p; renderAusentes(); window.scrollTo(0,0); }
 
 // ── Conferência ──────────────────────────────────────────────────────────────
 async function carregarConferencia(){
