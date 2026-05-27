@@ -153,7 +153,14 @@ def _fetch_bling_anuncios_ml(bling_client, skus_bling: dict) -> dict[str, str]:
     A API Bling v3 /anuncios retorna os anúncios exportados para o Mercado Livre
     com o campo 'codigo' contendo o MLB (ex: "MLB3037301672") e o campo
     'produto.id' (ou 'produto.codigo') com o produto Bling vinculado.
+
+    Requer o parâmetro idLoja para identificar a integração ML padrão (204058790).
     """
+    # ID e tipo do canal Mercado Livre padrão no Bling (idLoja=204058790, tipo=MercadoLivre)
+    # Obrigatório para o endpoint /anuncios não retornar 400 BAD_REQUEST.
+    ID_LOJA_ML = 204058790
+    TIPO_INTEGRACAO_ML = "MercadoLivre"
+
     mlb_to_sku: dict[str, str] = {}
 
     # Mapa inverso: id_bling (int/str) → sku, construído a partir de skus_bling
@@ -167,7 +174,12 @@ def _fetch_bling_anuncios_ml(bling_client, skus_bling: dict) -> dict[str, str]:
     MAX_PAGS = 200
     while pagina <= MAX_PAGS:
         try:
-            payload = bling_client._get("/anuncios", params={"pagina": pagina, "limite": 100})
+            payload = bling_client._get("/anuncios", params={
+                "pagina": pagina,
+                "limite": 100,
+                "idLoja": ID_LOJA_ML,
+                "tipoIntegracao": TIPO_INTEGRACAO_ML,
+            })
         except Exception as e:
             logger.warning("Bling /anuncios página %d erro: %s", pagina, e)
             break
@@ -301,35 +313,62 @@ def _fetch_ml() -> tuple[dict[str, dict], list[dict], bool]:
         id_status_map: dict[str, str] = {ml_id: st for ml_id, st in todos_ids}
 
         # Detalha em lotes de 20
+        # Inclui "variations" para detectar produtos pai (com variações) e processar
+        # cada variação individualmente — produtos pai têm available_quantity=0,
+        # apenas as variações têm estoque real.
         ids_uniq = list(id_status_map.keys())
         for i in range(0, len(ids_uniq), 20):
             batch = ids_uniq[i: i + 20]
             ids_str = ",".join(batch)
             r2 = requests.get(
                 "https://api.mercadolibre.com/items",
-                params={"ids": ids_str, "attributes": "id,title,available_quantity,seller_custom_field,status"},
+                params={"ids": ids_str, "attributes": "id,title,available_quantity,seller_custom_field,status,variations"},
                 headers=h, timeout=15,
             )
             if r2.status_code != 200:
                 continue
             for entry in r2.json():
                 item = entry.get("body") or entry
-                sku = str(item.get("seller_custom_field") or "").strip()
-                ml_id = item.get("id", "")
+                ml_id = str(item.get("id") or "")
                 titulo = (item.get("title") or "")[:80]
-                estoque = item.get("available_quantity", 0)
-                # status real do item (pode diferir do filtro de busca)
                 status_real = str(item.get("status") or id_status_map.get(ml_id, "")).strip()
-                if sku:
-                    # Mantém o mais recente (active tem prioridade)
-                    existing = skus.get(sku)
-                    if not existing or status_real == "active":
-                        skus[sku] = {"ml_id": ml_id, "status": status_real, "qty": estoque}
+                variations = item.get("variations") or []
+
+                if variations:
+                    # ── Produto pai com variações ──────────────────────────────
+                    # Descarta o pai (sem estoque próprio); processa cada variação.
+                    # Cada variação tem seu seller_custom_field (SKU) e available_quantity.
+                    for v in variations:
+                        v_sku = str(v.get("seller_custom_field") or "").strip()
+                        v_qty = int(v.get("available_quantity") or 0)
+                        v_id  = str(v.get("id") or ml_id)
+                        if v_sku:
+                            existing = skus.get(v_sku)
+                            if not existing or status_real == "active":
+                                skus[v_sku] = {"ml_id": ml_id, "status": status_real, "qty": v_qty, "titulo": titulo}
+                        else:
+                            # Variação sem SKU — inclui na lista sem mapeamento
+                            sem_sku.append({
+                                "id": ml_id,       # MLB do pai (usado pelo remapeamento via /anuncios)
+                                "titulo": f"{titulo} (var. {v_id})",
+                                "estoque": v_qty,
+                            })
                 else:
-                    sem_sku.append({"id": ml_id, "titulo": titulo, "estoque": estoque})
+                    # ── Produto simples (sem variações) ────────────────────────
+                    sku = str(item.get("seller_custom_field") or "").strip()
+                    estoque = int(item.get("available_quantity") or 0)
+                    if sku:
+                        existing = skus.get(sku)
+                        if not existing or status_real == "active":
+                            skus[sku] = {"ml_id": ml_id, "status": status_real, "qty": estoque, "titulo": titulo}
+                    else:
+                        sem_sku.append({"id": ml_id, "titulo": titulo, "estoque": estoque})
             time.sleep(0.1)
 
-        logger.info("ML: %d SKUs coletados (active+paused+closed+inactive)", len(skus))
+        logger.info(
+            "ML: %d SKUs coletados (active+paused), %d sem SKU",
+            len(skus), len(sem_sku),
+        )
         return skus, sem_sku, True
 
     except Exception as e:
@@ -506,7 +545,18 @@ def _fetch_amazon() -> tuple[dict[str, dict], bool]:
                         if not item_name:
                             item_name = str(s.get("itemName") or "").strip()
                     amz_status = "active" if "BUYABLE" in status_list else ("inactive" if status_list else "active")
-                    skus[sku] = {"qty": 1, "status": amz_status, "nome": item_name}
+
+                    # Extrai quantidade de fulfillmentAvailability (MFN=DEFAULT, FBA=AMAZON_NA)
+                    qty = 0
+                    fa_list = item.get("fulfillmentAvailability") or []
+                    for fa in fa_list:
+                        q = fa.get("quantity")
+                        if q is not None:
+                            qty += int(q)  # soma MFN + FBA se ambos presentes
+                    if not fa_list:
+                        qty = None  # campo não disponível — não exibir diferença
+
+                    skus[sku] = {"qty": qty, "status": amz_status, "nome": item_name}
 
             page_token = resp.get("pagination", {}).get("nextToken")
             if not page_token or not items:
@@ -631,28 +681,53 @@ def executar_conferencia(bling_client) -> dict:
 
         # Coleta todos os canais em paralelo com timeout máximo por canal
         import concurrent.futures as _cf
+        import threading as _threading
         _set_estado("rodando", 35, "canais", "Coletando canais em paralelo (ML, Shopify, Amazon, Shopee)...")
 
-        with _cf.ThreadPoolExecutor(max_workers=4) as _ex:
-            _fut_ml      = _ex.submit(_fetch_ml)
-            _fut_shopify = _ex.submit(_fetch_shopify)
-            _fut_amazon  = _ex.submit(_fetch_amazon)
-            _fut_shopee  = _ex.submit(_fetch_shopee)
+        # Thread de heartbeat: atualiza progresso gradualmente (35→78%) enquanto coleta
+        _canais_prontos = {"done": False, "concluidos": []}
+        def _heartbeat():
+            import time as _time
+            pct = 36
+            while not _canais_prontos["done"]:
+                _time.sleep(4)
+                if _canais_prontos["done"]:
+                    break
+                concl = _canais_prontos["concluidos"]
+                nomes_ok = ", ".join(concl) if concl else "aguardando..."
+                msg = f"Coletando canais... concluidos: [{nomes_ok}]"
+                pct = min(pct + 2, 78)
+                _set_estado("rodando", pct, "canais", msg)
+        _hb_thread = _threading.Thread(target=_heartbeat, daemon=True)
+        _hb_thread.start()
 
-            def _get(fut, timeout_s, fallback, nome):
-                try:
-                    return fut.result(timeout=timeout_s)
-                except _cf.TimeoutError:
-                    logger.warning("Timeout %ds na coleta de %s — canal ignorado", timeout_s, nome)
-                    return fallback
-                except Exception as e:
-                    logger.warning("Erro na coleta de %s: %s", nome, e)
-                    return fallback
+        _ex = _cf.ThreadPoolExecutor(max_workers=4)
+        _fut_ml      = _ex.submit(_fetch_ml)
+        _fut_shopify = _ex.submit(_fetch_shopify)
+        _fut_amazon  = _ex.submit(_fetch_amazon)
+        _fut_shopee  = _ex.submit(_fetch_shopee)
 
-            skus_ml,      sem_sku_ml, ml_ok      = _get(_fut_ml,      450, ({}, [], False), "ML")
-            skus_shopify, shopify_ok              = _get(_fut_shopify, 180, ({}, False),      "Shopify")
-            skus_amazon,  amazon_ok              = _get(_fut_amazon,  120, ({}, False),      "Amazon")
-            skus_shopee,  shopee_ok              = _get(_fut_shopee,  480, ({}, False),      "Shopee")
+        def _get(fut, timeout_s, fallback, nome):
+            try:
+                result = fut.result(timeout=timeout_s)
+                _canais_prontos["concluidos"].append(nome)
+                return result
+            except _cf.TimeoutError:
+                logger.warning("Timeout %ds na coleta de %s — canal ignorado", timeout_s, nome)
+                _canais_prontos["concluidos"].append(f"{nome}(timeout)")
+                return fallback
+            except Exception as e:
+                logger.warning("Erro na coleta de %s: %s", nome, e)
+                _canais_prontos["concluidos"].append(f"{nome}(erro)")
+                return fallback
+
+        skus_ml,      sem_sku_ml, ml_ok      = _get(_fut_ml,      450, ({}, [], False), "ML")
+        skus_shopify, shopify_ok              = _get(_fut_shopify, 180, ({}, False),      "Shopify")
+        skus_amazon,  amazon_ok              = _get(_fut_amazon,  120, ({}, False),      "Amazon")
+        skus_shopee,  shopee_ok              = _get(_fut_shopee,  480, ({}, False),      "Shopee")
+
+        _canais_prontos["done"] = True
+        _ex.shutdown(wait=False)
 
         _set_estado("rodando", 82, "anuncios_ml", "Buscando anúncios ML no Bling (MLB→SKU)...")
 
@@ -680,6 +755,7 @@ def executar_conferencia(bling_client) -> dict:
                         skus_ml[bling_sku] = {
                             "ml_id": mlb_id,
                             "status": entry.get("status", ""),
+                            "qty": entry.get("estoque"),  # carrega estoque da variação/item
                             "matched_by": "anuncio",
                             "original_key": mlb_id,
                         }
@@ -709,6 +785,33 @@ def executar_conferencia(bling_client) -> dict:
                     logger.info(
                         "ML fallback Bling /anuncios: %d anúncios sem SKU remapeados via MLB",
                         len(remapped_by_anuncio)
+                    )
+
+                # ── Passo 1b: Anúncios com GTIN como seller_custom_field ──────────────────
+                # Itens cujo seller_custom_field é um GTIN/EAN entram em skus_ml com chave
+                # numérica (ex: "2381155123982484"). Tentamos cruzar pelo ml_id real do item
+                # contra mlb_to_sku, pois o Bling /anuncios sabe o SKU correto.
+                keys_to_remove_gtin_ann: list[str] = []
+                for key, val in skus_ml.items():
+                    if key.isdigit() and 8 <= len(key) <= 14:
+                        ml_id = val.get("ml_id", "")
+                        bling_sku = mlb_to_sku.get(ml_id)
+                        if bling_sku and bling_sku not in skus_ml:
+                            remapped_by_anuncio[ml_id] = {"sku": bling_sku, "ml_id": ml_id}
+                            keys_to_remove_gtin_ann.append(key)
+
+                for k in keys_to_remove_gtin_ann:
+                    old_val = skus_ml.pop(k)
+                    ml_id = old_val.get("ml_id", "")
+                    bling_sku = mlb_to_sku.get(ml_id)
+                    if bling_sku:
+                        skus_ml[bling_sku] = {**old_val, "matched_by": "anuncio_gtin", "original_key": k}
+
+                if keys_to_remove_gtin_ann:
+                    logger.info(
+                        "ML fallback /anuncios (GTIN-key): %d anúncios com EAN como seller_custom_field "
+                        "remapeados via ml_id → Bling SKU",
+                        len(keys_to_remove_gtin_ann)
                     )
 
         _set_estado("rodando", 85, "cruzamento_gtin", "Cruzando GTINs Bling ↔ ML...")
@@ -867,31 +970,45 @@ def executar_conferencia(bling_client) -> dict:
                     canal_qty    = row.get(qty_key)
                     canal_status = (row.get(status_key) or "").lower()
 
-                    if canal_status in STATUS_INATIVOS.get(canal, set()):
+                    esta_inativo = canal_status in STATUS_INATIVOS.get(canal, set())
+
+                    if esta_inativo:
                         problemas.append({
                             "tipo": "anuncio_inativo", "canal": canal, "prioridade": "media",
                             "detalhe": f"Anúncio {canal.upper()} com status '{canal_status}'",
                         })
-
-                    if canal_qty is not None:
-                        if bling_qty > 0 and canal_qty == 0:
+                        # Pausado pelo Bling (bling=0) mas canal ainda mostra qty residual
+                        # → risco crítico: reativação manual causaria venda sem estoque
+                        if canal_qty is not None and canal_qty > 0 and bling_qty == 0:
                             problemas.append({
-                                "tipo": "sem_estoque_canal", "canal": canal, "prioridade": "alta",
-                                "detalhe": f"Bling={bling_qty}un → {canal.upper()}=0 (perde venda)",
+                                "tipo": "pausado_qty_residual", "canal": canal, "prioridade": "critica",
+                                "detalhe": (
+                                    f"Pausado (Bling=0) mas {canal.upper()} mostra {canal_qty}un residuais — "
+                                    f"reativação manual causaria venda sem estoque!"
+                                ),
                                 "bling_qty": bling_qty, "canal_qty": canal_qty,
                             })
-                        elif bling_qty == 0 and canal_qty > 0:
-                            problemas.append({
-                                "tipo": "vende_sem_estoque", "canal": canal, "prioridade": "critica",
-                                "detalhe": f"Bling=0 → {canal.upper()}={canal_qty}un (risco de vender sem estoque!)",
-                                "bling_qty": bling_qty, "canal_qty": canal_qty,
-                            })
-                        elif canal_qty != bling_qty:
-                            problemas.append({
-                                "tipo": "estoque_divergente", "canal": canal, "prioridade": "media",
-                                "detalhe": f"Bling={bling_qty} ≠ {canal.upper()}={canal_qty}",
-                                "bling_qty": bling_qty, "canal_qty": canal_qty,
-                            })
+                    else:
+                        # Anúncio ativo — verifica divergências de estoque
+                        if canal_qty is not None:
+                            if bling_qty > 0 and canal_qty == 0:
+                                problemas.append({
+                                    "tipo": "sem_estoque_canal", "canal": canal, "prioridade": "alta",
+                                    "detalhe": f"Bling={bling_qty}un → {canal.upper()}=0 (perde venda)",
+                                    "bling_qty": bling_qty, "canal_qty": canal_qty,
+                                })
+                            elif bling_qty == 0 and canal_qty > 0:
+                                problemas.append({
+                                    "tipo": "vende_sem_estoque", "canal": canal, "prioridade": "critica",
+                                    "detalhe": f"Bling=0 mas {canal.upper()}={canal_qty}un ATIVO (vendendo sem estoque!)",
+                                    "bling_qty": bling_qty, "canal_qty": canal_qty,
+                                })
+                            elif canal_qty != bling_qty:
+                                problemas.append({
+                                    "tipo": "estoque_divergente", "canal": canal, "prioridade": "media",
+                                    "detalhe": f"Bling={bling_qty} ≠ {canal.upper()}={canal_qty}",
+                                    "bling_qty": bling_qty, "canal_qty": canal_qty,
+                                })
 
             if problemas:
                 auditoria.append({
@@ -997,23 +1114,34 @@ def executar_conferencia(bling_client) -> dict:
             "ml_anuncios_remapeados": len(remapped_by_anuncio),  # anúncios ML mapeados via Bling /anuncios
             "ml_gtin_remapeados": len(remapped_by_gtin),  # anúncios ML mapeados via fallback GTIN
             # Canal sem Bling: itens COM SKU no canal que NÃO existem no Bling
+            # Sem integração: anúncios COM SKU no canal que NÃO existem no Bling
             "ml_sem_bling": sorted(
-                [{"sku": s, "ml_id": v.get("ml_id", ""), "status": v.get("status", "")}
+                [{
+                    "sku": s,
+                    "ml_id": v.get("ml_id",""),
+                    "status": v.get("status",""),
+                    "qty": v.get("qty"),
+                    "titulo": v.get("titulo",""),
+                    # Classifica o tipo de divergência:
+                    # "ean_divergente"      → chave é EAN/GTIN numérico (8-14 dígitos) sem match Bling
+                    # "sku_nao_encontrado"  → SKU alfanumérico não existe no Bling
+                    "tipo_divergencia": "ean_divergente" if (s.isdigit() and 8 <= len(s) <= 14) else "sku_nao_encontrado",
+                }
                  for s, v in skus_ml.items() if s not in skus_bling],
                 key=lambda x: x["sku"]
             )[:1000] if ml_ok else [],
             "shopify_sem_bling": sorted(
-                [{"sku": s, "variant_id": v.get("variant_id", ""), "status": v.get("status", "")}
+                [{"sku": s, "variant_id": v.get("variant_id",""), "status": v.get("status",""), "qty": v.get("qty")}
                  for s, v in skus_shopify.items() if s not in skus_bling],
                 key=lambda x: x["sku"]
             )[:1000] if shopify_ok else [],
             "amazon_sem_bling": sorted(
-                [{"sku": s, "status": v.get("status", ""), "nome": v.get("nome", "")}
+                [{"sku": s, "status": v.get("status",""), "nome": v.get("nome",""), "qty": v.get("qty")}
                  for s, v in skus_amazon.items() if s not in skus_bling],
                 key=lambda x: x["sku"]
             )[:1000] if amazon_ok else [],
             "shopee_sem_bling": sorted(
-                [{"sku": s, "item_id": v.get("item_id", ""), "status": v.get("status", "")}
+                [{"sku": s, "item_id": v.get("item_id",""), "status": v.get("status",""), "qty": v.get("qty")}
                  for s, v in skus_shopee.items() if s not in skus_bling],
                 key=lambda x: x["sku"]
             )[:1000] if shopee_ok else [],
