@@ -87,6 +87,16 @@ tr:hover td{background:rgba(255,255,255,.025)}
 .skel-row{height:40px;margin:4px 0;border-radius:8px;background:rgba(255,255,255,.05);animation:pulse 1.4s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
 .paginacao{display:flex;align-items:center;gap:10px;margin-top:14px;justify-content:flex-end;font-size:13px;color:var(--muted)}
+/* Sem Vínculo — sugestões inline */
+.conf-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}
+.conf-alta{background:rgba(34,197,94,.15);color:var(--ok);border:1px solid rgba(34,197,94,.3)}
+.conf-media{background:rgba(245,158,11,.15);color:var(--warn);border:1px solid rgba(245,158,11,.3)}
+.conf-baixa{background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3)}
+.sku-sug-input{background:var(--card2);border:1px solid var(--line);border-radius:6px;color:var(--text);font-family:monospace;font-size:11px;padding:3px 7px;width:140px;outline:none;transition:border-color .15s}
+.sku-sug-input:focus{border-color:var(--accent)}
+.sku-sug-input.editado{border-color:var(--warn);color:var(--warn)}
+.sv-aplicado td{opacity:.45}
+.sv-erro td{background:rgba(239,68,68,.06)}
 @media(max-width:900px){.stats-row{grid-template-columns:repeat(2,1fr)}.topbar{flex-wrap:wrap}}
 </style>
 </head>
@@ -227,14 +237,32 @@ tr:hover td{background:rgba(255,255,255,.025)}
 
   <!-- Tab: Sem Vínculo (ativos sem sync de estoque) -->
   <div class="tab-panel" id="tab-sem-vinculo">
-    <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:14px 18px;margin-bottom:20px">
+    <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:14px 18px;margin-bottom:16px">
       <div style="font-size:14px;font-weight:800;color:var(--danger);margin-bottom:4px">⚠️ Anúncios ATIVOS sem vínculo com o Bling</div>
-      <div style="font-size:12px;color:var(--muted)">Estes anúncios estão <b style="color:#fff">ativos e vendendo</b> no canal, mas o Bling não os reconhece — sem sync de estoque. Risco de sobrevenda.</div>
+      <div style="font-size:12px;color:var(--muted)">Ativos e vendendo, mas o Bling não os reconhece — sem sync de estoque. Risco de sobrevenda.</div>
     </div>
-    <div id="sem-vinculo-resumo" style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap"></div>
+    <div id="sem-vinculo-resumo" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap"></div>
+    <!-- Barra de sugestões/vínculo -->
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px">
+      <div style="display:flex;flex-direction:column;gap:3px;flex:1">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">🔗 Sugestões automáticas de vínculo</div>
+        <div id="sv-sug-status" style="font-size:11px;color:var(--muted)">Match por GTIN e similaridade de título — clique para carregar</div>
+      </div>
+      <button class="btn secondary" id="btn-sv-sug" onclick="carregarSugestoesSV()" style="border-color:rgba(234,179,8,.5);color:var(--canal-cor);white-space:nowrap">
+        🔗 Carregar sugestões
+      </button>
+      <div id="sv-vincular-bar" style="display:none;gap:8px;align-items:center">
+        <button class="btn secondary" onclick="selecionarAltaSV()" style="font-size:12px">✓ Alta confiança</button>
+        <button class="btn ok-btn btn" id="btn-sv-vincular" onclick="vincularSelecionadosSV()" disabled>
+          ▶ Vincular (<span id="cnt-sv-sel">0</span>)
+        </button>
+      </div>
+    </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>ID Canal</th><th>SKU/Código</th><th>Título</th><th>Estoque</th><th>Motivo</th></tr></thead>
+        <thead id="sem-vinculo-thead">
+          <tr><th>ID Canal</th><th>SKU/Código</th><th>Título</th><th>Estoque</th><th>Motivo</th></tr>
+        </thead>
         <tbody id="sem-vinculo-tbody"><tr><td colspan="5" class="empty">Carregando...</td></tr></tbody>
       </table>
     </div>
@@ -600,6 +628,19 @@ function renderAusentes(){
 function navSemMl(p){ _pgSemMl = p; renderAusentes(); }
 
 // ── Sem Vínculo ──────────────────────────────────────────────────────────────
+let _svSugestoes = null;   // null = não carregado | {ml_id: sugestão}
+let _svSel       = new Set();
+let _svEditado   = {};     // ml_id → sku editado pelo usuário
+let _svStatus    = {};     // ml_id → {ok, erro} após aplicar
+let _svTodos     = [];     // cache para paginação
+
+function atualizarSvSelUi(){
+  const n = _svSel.size;
+  document.getElementById('cnt-sv-sel').textContent = n;
+  const btn = document.getElementById('btn-sv-vincular');
+  if(btn) btn.disabled = n === 0;
+}
+
 function renderSemVinculo(){
   if(!_conf) return;
   const semBlingAtivos = (_conf.ml_sem_bling || [])
@@ -607,47 +648,180 @@ function renderSemVinculo(){
     .map(r => ({
       canal_id: r.ml_id || '—', sku: r.sku || '', titulo: r.titulo || '', estoque: r.qty,
       motivo: r.tipo_divergencia === 'ean_divergente' ? '🏷️ EAN/GTIN sem match no Bling'
-             : r.tipo_divergencia === 'codigo_numerico' ? '🔢 Código numérico (não é EAN/SKU padrão)'
+             : r.tipo_divergencia === 'codigo_numerico' ? '🔢 Código numérico'
              : '🔍 SKU não encontrado no Bling',
     }));
   const semSkuAtivos = (_conf.sem_sku_ml || [])
     .filter(r => (r.status || '') === 'active')
     .map(r => ({
       canal_id: r.id || '—', sku: '', titulo: r.titulo || '', estoque: r.estoque,
-      motivo: '❌ Sem SKU (impossível mapear automaticamente)',
+      motivo: '❌ Sem SKU',
     }));
-  const todos = [...semBlingAtivos, ...semSkuAtivos];
-  // Usa o stat pré-calculado do backend (calculado ANTES de qualquer truncamento)
-  const totalReal = (_conf.stats || {}).ml_ativo_sem_vinculo ?? todos.length;
+  _svTodos = [...semBlingAtivos, ...semSkuAtivos];
+
+  const totalReal = (_conf.stats || {}).ml_ativo_sem_vinculo ?? _svTodos.length;
   const el = document.getElementById('tab-cnt-sem-vinculo');
   if(el) el.textContent = totalReal || '';
   const sv = document.getElementById('sv-ativo-sem-vinculo');
   if(sv) sv.textContent = totalReal;
-  const resumo = document.getElementById('sem-vinculo-resumo');
-  const truncado = todos.length < totalReal;
-  const nEan = semBlingAtivos.filter(r=>r.motivo.includes('EAN')).length;
+
+  const nEan    = semBlingAtivos.filter(r=>r.motivo.includes('EAN')).length;
   const nCodNum = semBlingAtivos.filter(r=>r.motivo.includes('numérico')).length;
   const nSkuAus = semBlingAtivos.filter(r=>r.motivo.includes('encontrado')).length;
+  const truncado = _svTodos.length < totalReal;
+  const resumo = document.getElementById('sem-vinculo-resumo');
   if(resumo) resumo.innerHTML = `
     <span class="fila-stat vermelho">🚨 ${totalReal} ativos sem vínculo</span>
     ${nEan>0?`<span class="fila-stat amarelo">🏷️ ${nEan} EAN divergente</span>`:''}
     ${nCodNum>0?`<span class="fila-stat total">🔢 ${nCodNum} código numérico</span>`:''}
     ${nSkuAus>0?`<span class="fila-stat total">🔍 ${nSkuAus} SKU ausente</span>`:''}
-    <span class="fila-stat vermelho">❌ ${semSkuAtivos.length} sem SKU${truncado?' (parcial — rerun conferência para ver todos)':''}</span>`;
-  const slice = pagSlice(todos, _pgSemVinculo);
+    <span class="fila-stat vermelho">❌ ${semSkuAtivos.length} sem SKU${truncado?' (parcial)':''}</span>`;
+
+  const comSug = _svSugestoes !== null;
+  const COLS   = comSug ? 9 : 5;
+  // Atualiza header quando sugestões carregadas
+  if(comSug){
+    document.getElementById('sem-vinculo-thead').innerHTML = `<tr>
+      <th style="width:34px"><input type="checkbox" id="sv-check-all" onchange="toggleAllSV(this.checked)" title="Selecionar todos"/></th>
+      <th>ID Canal</th><th>Título</th><th>Est.</th>
+      <th>SKU Sugerido <span style="font-weight:400;font-size:10px;color:var(--muted)">(editável)</span></th>
+      <th>Produto Bling</th><th>Conf.</th><th>Motivo</th><th style="width:48px"></th>
+    </tr>`;
+  }
+
+  const slice = pagSlice(_svTodos, _pgSemVinculo);
   const tbody = document.getElementById('sem-vinculo-tbody');
-  tbody.innerHTML = slice.length
-    ? slice.map(r => `<tr>
+  if(!slice.length){
+    tbody.innerHTML = `<tr><td colspan="${COLS}" class="empty">✅ Nenhum anúncio ativo sem vínculo!</td></tr>`;
+    pagControls('sem-vinculo-pag', _svTodos.length, _pgSemVinculo, 'navSemVinculo');
+    return;
+  }
+
+  tbody.innerHTML = slice.map(r => {
+    const st     = _svStatus[r.canal_id];
+    const trCls  = st ? (st.ok ? 'sv-aplicado' : 'sv-erro') : '';
+    const stCell = st ? (st.ok ? '<span style="color:var(--ok)">✓</span>' : `<span style="color:var(--danger);font-size:10px" title="${(st.erro||'').replace(/"/g,'&quot;')}">✗</span>`) : '';
+
+    if(!comSug){
+      return `<tr class="${trCls}">
         <td class="sku-code" style="color:var(--danger)">${r.canal_id}</td>
-        <td class="sku-code">${r.sku || '<span style="color:var(--muted)">—</span>'}</td>
-        <td class="nome-cell" title="${(r.titulo||'').replace(/"/g,'&quot;')}">${r.titulo || '—'}</td>
+        <td class="sku-code">${r.sku||'<span style="color:var(--muted)">—</span>'}</td>
+        <td class="nome-cell" title="${(r.titulo||'').replace(/"/g,'&quot;')}">${r.titulo||'—'}</td>
         <td style="text-align:center;font-weight:700">${r.estoque!=null?fmt(r.estoque):'<span style="color:var(--muted)">N/D</span>'}</td>
-        <td style="font-size:12px">${r.motivo}</td>
-      </tr>`).join('')
-    : `<tr><td colspan="5" class="empty">✅ Nenhum anúncio ativo sem vínculo com o Bling!</td></tr>`;
-  pagControls('sem-vinculo-pag', todos.length, _pgSemVinculo, 'navSemVinculo');
+        <td style="font-size:11px;color:var(--muted)">${r.motivo}</td>
+      </tr>`;
+    }
+
+    const sug       = _svSugestoes[r.canal_id];
+    const skuVal    = _svEditado[r.canal_id] ?? (sug?.bling_sku || '');
+    const skuCls    = _svEditado[r.canal_id] ? 'sku-sug-input editado' : 'sku-sug-input';
+    const checked   = _svSel.has(r.canal_id) ? 'checked' : '';
+    const confBadge = sug ? (()=>{
+      const cls = sug.nivel==='alta'?'conf-alta':sug.nivel==='media'?'conf-media':'conf-baixa';
+      return `<span class="conf-badge ${cls}">${Math.round(sug.confianca*100)}%</span>`;
+    })() : '<span style="color:var(--muted);font-size:11px">—</span>';
+    const bling_nome = sug?.bling_nome
+      ? `<span class="nome-cell" style="max-width:180px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px" title="${(sug.bling_nome||'').replace(/"/g,'&quot;')}">${sug.bling_nome}</span>` : '—';
+
+    return `<tr class="${trCls}" data-mlid="${r.canal_id}">
+      <td><input type="checkbox" ${checked} ${st?.ok?'disabled':''} onchange="toggleSelSV('${r.canal_id}',this.checked)"/></td>
+      <td><a href="https://produto.mercadolivre.com.br/-${r.canal_id.replace('MLB','MLB-')}" target="_blank" class="sku-code" style="color:var(--danger);text-decoration:none;font-size:11px">${r.canal_id}</a></td>
+      <td class="nome-cell" title="${(r.titulo||'').replace(/"/g,'&quot;')}">${r.titulo||'—'}</td>
+      <td style="text-align:center;font-weight:700;font-size:12px">${r.estoque!=null?fmt(r.estoque):'—'}</td>
+      <td>${sug?`<input class="${skuCls}" type="text" value="${skuVal}" data-original="${sug.bling_sku}"
+           oninput="editarSkuSV('${r.canal_id}',this)" placeholder="—"/>`:'<span style="color:var(--muted);font-size:11px">sem sugestão</span>'}</td>
+      <td>${bling_nome}</td>
+      <td>${confBadge}</td>
+      <td style="font-size:10px;color:var(--muted)">${r.motivo}</td>
+      <td>${stCell}</td>
+    </tr>`;
+  }).join('');
+
+  pagControls('sem-vinculo-pag', _svTodos.length, _pgSemVinculo, 'navSemVinculo');
 }
 function navSemVinculo(p){ _pgSemVinculo = p; renderSemVinculo(); }
+
+function toggleSelSV(ml_id, checked){
+  if(checked) _svSel.add(ml_id); else _svSel.delete(ml_id);
+  atualizarSvSelUi();
+}
+function toggleAllSV(checked){
+  const slice = pagSlice(_svTodos, _pgSemVinculo);
+  slice.forEach(r => { if(!_svStatus[r.canal_id]?.ok){ if(checked) _svSel.add(r.canal_id); else _svSel.delete(r.canal_id); } });
+  atualizarSvSelUi();
+}
+function editarSkuSV(ml_id, input){
+  const val = input.value.trim();
+  if(val === input.dataset.original){ delete _svEditado[ml_id]; input.classList.remove('editado'); }
+  else { _svEditado[ml_id] = val; input.classList.add('editado'); }
+}
+function selecionarAltaSV(){
+  if(!_svSugestoes) return;
+  Object.entries(_svSugestoes).forEach(([ml_id, sug]) => {
+    if((sug.nivel==='alta'||sug.metodo==='gtin_exato') && !_svStatus[ml_id]?.ok)
+      _svSel.add(ml_id);
+  });
+  atualizarSvSelUi();
+  renderSemVinculo();
+}
+
+async function carregarSugestoesSV(){
+  const btn    = document.getElementById('btn-sv-sug');
+  const status = document.getElementById('sv-sug-status');
+  btn.disabled = true;
+  status.textContent = '⏳ Analisando GTINs e títulos...';
+  try {
+    const r = await fetch('/conferencia/ml/sugestoes-vinculo').then(res=>res.json());
+    if(!r.ok){ status.textContent='⚠️ '+(r.erro||'Erro'); btn.disabled=false; return; }
+    _svSugestoes = {};
+    (r.sugestoes||[]).forEach(s => { _svSugestoes[s.ml_id] = s; });
+    const n     = Object.keys(_svSugestoes).length;
+    const nAlta = (r.sugestoes||[]).filter(s=>s.nivel==='alta'||s.metodo==='gtin_exato').length;
+    status.textContent = `✅ ${n} sugestões · ${nAlta} alta confiança (≥68%)`;
+    btn.style.display = 'none';
+    const bar = document.getElementById('sv-vincular-bar');
+    if(bar) bar.style.display = 'flex';
+    renderSemVinculo();
+  } catch(e){ status.textContent='⚠️ Erro: '+e; btn.disabled=false; }
+}
+
+async function vincularSelecionadosSV(){
+  const ids = [..._svSel];
+  if(!ids.length) return;
+  if(!confirm(`Vincular ${ids.length} anúncio${ids.length!==1?'s':''} no Mercado Livre?\n\nIsto atualiza o seller_custom_field via API.`)) return;
+  const vinculos = ids
+    .map(ml_id => ({ ml_id, bling_sku: _svEditado[ml_id] ?? (_svSugestoes?.[ml_id]?.bling_sku||'') }))
+    .filter(v => v.bling_sku);
+
+  const btnVinc = document.getElementById('btn-sv-vincular');
+  const status  = document.getElementById('sv-sug-status');
+  if(btnVinc) btnVinc.disabled = true;
+  status.textContent = `⏳ Aplicando ${vinculos.length} vínculo${vinculos.length!==1?'s':''}...`;
+
+  const LOTE = 30;
+  let okTotal = 0, errTotal = 0;
+  for(let i=0; i<vinculos.length; i+=LOTE){
+    const lote = vinculos.slice(i, i+LOTE);
+    try {
+      const r = await fetch('/conferencia/ml/aplicar-vinculo', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({vinculos: lote}),
+      }).then(res=>res.json());
+      if(r.status === 401){ alert('Token ML expirado — acesse /ml/login para renovar.'); break; }
+      (r.resultados||[]).forEach(res => {
+        _svStatus[res.ml_id] = {ok: res.ok, erro: res.erro||''};
+        if(res.ok){ okTotal++; _svSel.delete(res.ml_id); }
+        else errTotal++;
+      });
+    } catch(e){ errTotal+=lote.length; lote.forEach(v=>{ _svStatus[v.ml_id]={ok:false,erro:String(e)}; }); }
+    renderSemVinculo();
+  }
+  atualizarSvSelUi();
+  const parts = [];
+  if(okTotal>0) parts.push(`✅ ${okTotal} aplicado${okTotal!==1?'s':''}`);
+  if(errTotal>0) parts.push(`⚠️ ${errTotal} erro${errTotal!==1?'s':''}`);
+  status.textContent = parts.join(' · ') + (okTotal>0 ? ' — execute a conferência para atualizar.' : '');
+}
 
 function toggleSoAtivos(){
   _soAtivos = !_soAtivos;
