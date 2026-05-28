@@ -193,9 +193,16 @@ def _fetch_bling_anuncios_ml(bling_client, skus_bling: dict) -> dict[str, str]:
                 continue
 
             # MLB code: campo "codigo" contém o ID do anúncio no ML (ex: "MLB3037301672")
-            mlb = str(ann.get("codigo") or "").strip()
-            if not mlb or not mlb.upper().startswith("MLB"):
-                continue  # não é um anúncio ML
+            # Bling pode retornar com ou sem prefixo "MLB" — normaliza sempre com prefixo
+            mlb_raw = str(ann.get("codigo") or "").strip()
+            if not mlb_raw:
+                continue
+            if mlb_raw.upper().startswith("MLB"):
+                mlb = mlb_raw.upper()          # já tem prefixo: normaliza maiúsculo
+            elif mlb_raw.isdigit():
+                mlb = "MLB" + mlb_raw          # só números → adiciona prefixo
+            else:
+                continue  # código de outro canal (Shopee, Amazon, etc.) — ignora
 
             # Produto vinculado — pode ser dict {id, codigo, nome} ou só id
             prod_info = ann.get("produto") or {}
@@ -322,7 +329,9 @@ def _fetch_ml() -> tuple[dict[str, dict], list[dict], bool]:
             ids_str = ",".join(batch)
             r2 = requests.get(
                 "https://api.mercadolibre.com/items",
-                params={"ids": ids_str, "attributes": "id,title,available_quantity,seller_custom_field,status,variations"},
+                # Inclui seller_custom_field tanto no item quanto dentro de cada variação
+                # (ML pode omitir variation.seller_custom_field se não explicitado)
+                params={"ids": ids_str, "attributes": "id,title,available_quantity,seller_custom_field,status,variations.id,variations.seller_custom_field,variations.available_quantity"},
                 headers=h, timeout=15,
             )
             if r2.status_code != 200:
@@ -338,8 +347,13 @@ def _fetch_ml() -> tuple[dict[str, dict], list[dict], bool]:
                     # ── Produto pai com variações ──────────────────────────────
                     # Descarta o pai (sem estoque próprio); processa cada variação.
                     # Cada variação tem seu seller_custom_field (SKU) e available_quantity.
+                    # Para itens "Únicos" (1 variação), o SKU pode estar apenas no pai.
+                    item_scf = str(item.get("seller_custom_field") or "").strip()
                     for v in variations:
                         v_sku = str(v.get("seller_custom_field") or "").strip()
+                        # Fallback: item "Único" (1 variação) sem SKU na variação → usa SKU do pai
+                        if not v_sku and item_scf and len(variations) == 1:
+                            v_sku = item_scf
                         v_qty = int(v.get("available_quantity") or 0)
                         v_id  = str(v.get("id") or ml_id)
                         if v_sku:
@@ -845,8 +859,12 @@ def executar_conferencia(bling_client) -> dict:
                 # (alguns anúncios têm o próprio MLB no seller_custom_field por engano)
                 keys_to_remove_ann: list[str] = []
                 for key, val in skus_ml.items():
-                    if key.upper().startswith("MLB"):
-                        bling_sku = mlb_to_sku.get(key)
+                    # Normaliza: aceita tanto "MLB123" quanto "123" (sem prefixo)
+                    key_norm = key.upper() if key.upper().startswith("MLB") else ("MLB" + key if key.isdigit() else "")
+                    if not key_norm:
+                        continue
+                    if key.upper().startswith("MLB") or (key.isdigit() and len(key) >= 8):
+                        bling_sku = mlb_to_sku.get(key) or mlb_to_sku.get(key_norm)
                         if bling_sku and bling_sku not in skus_ml:
                             skus_ml_entry = {**val, "matched_by": "anuncio", "original_key": key}
                             remapped_by_anuncio[key] = {"sku": bling_sku, "ml_id": val.get("ml_id", key)}
