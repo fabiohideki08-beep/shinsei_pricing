@@ -101,6 +101,7 @@ tr:hover td{background:rgba(255,255,255,.025)}
     <div class="topbar-right">
       <a class="btn secondary" href="/dashboard">← Dashboard</a>
       <button class="btn secondary" onclick="abrirDebug()" title="Diagnosticar anúncio ML pelo código MLB">🔍 Debug MLB</button>
+      <button class="btn secondary" id="btn-so-ativos" onclick="toggleSoAtivos()" title="Mostra apenas Bling ativos com listings ativos nos canais">☀️ Só Ativos</button>
       <button class="btn" id="btn-executar" onclick="executarConferencia()">▶ Executar conferência</button>
     </div>
   </div>
@@ -267,6 +268,7 @@ const PAGE_SIZE = 100;
 let _conf   = null;   // resultado da conferência
 let _fila   = [];     // itens da fila do canal
 let _polling = false;
+let _soAtivos = false;
 
 let _filtroMargem  = 'todos';
 let _filtroEstoque = 'todos';
@@ -464,7 +466,8 @@ function renderEstoque(){
   const matrix = _conf.matrix || [];
 
   // ── Seção A: COM integração (mapeados em ambos) ──
-  let mapeados = matrix.filter(r => r[CANAL_PRESENTE] === true && r.presente_bling === true);
+  let mapeados = matrix.filter(r => r[CANAL_PRESENTE] === true && r.presente_bling === true
+    && (!_soAtivos || (r.situacao_bling === 'A' && (r[CANAL_STATUS]||'').toLowerCase() === 'active')));
   document.getElementById('scnt-com-integ').textContent = mapeados.length.toLocaleString('pt-BR');
   if(_filtroEstoque !== 'todos') mapeados = mapeados.filter(r => r[CANAL_STATUS] === _filtroEstoque);
   mapeados.sort((a,b)=>(b.estoque_bling||0)-(a.estoque_bling||0));
@@ -497,7 +500,7 @@ function renderEstoque(){
   }
 
   // ── Seção B: SEM integração — SKU alfanumérico não existe no Bling ──
-  const todosMLSemBling = _conf.ml_sem_bling || [];
+  const todosMLSemBling = (_conf.ml_sem_bling || []).filter(r => !_soAtivos || r.status === 'active');
   const semIntegSku  = todosMLSemBling.filter(r => r.tipo_divergencia !== 'ean_divergente');
   const semIntegEan  = todosMLSemBling.filter(r => r.tipo_divergencia === 'ean_divergente');
 
@@ -559,7 +562,8 @@ function renderAusentes(){
   if(!_conf) return;
   const matrix = _conf.matrix || [];
   // Produtos no Bling mas sem presença no ML (presente_ml === false)
-  const semMl = matrix.filter(r => r.presente_bling === true && r[CANAL_PRESENTE] === false);
+  const semMl = matrix.filter(r => r.presente_bling === true && r[CANAL_PRESENTE] === false
+    && (!_soAtivos || r.situacao_bling === 'A'));
   document.getElementById('cnt-sem-ml').textContent = semMl.length.toLocaleString('pt-BR');
   const sliceSem = pagSlice(semMl, _pgSemMl);
   document.getElementById('sem-ml-tbody').innerHTML = sliceSem.length
@@ -575,6 +579,17 @@ function renderAusentes(){
 }
 
 function navSemMl(p){ _pgSemMl = p; renderAusentes(); }
+
+function toggleSoAtivos(){
+  _soAtivos = !_soAtivos;
+  const btn = document.getElementById('btn-so-ativos');
+  btn.style.background = _soAtivos ? 'rgba(34,197,94,.25)' : '';
+  btn.style.borderColor = _soAtivos ? '#22c55e' : '';
+  btn.style.color = _soAtivos ? '#22c55e' : '';
+  btn.textContent = _soAtivos ? '☀️ Só Ativos ✓' : '☀️ Só Ativos';
+  renderEstoque();
+  renderAusentes();
+}
 
 // ── Conferência ──────────────────────────────────────────────────────────────
 async function carregarConferencia(){

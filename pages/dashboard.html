@@ -36,6 +36,7 @@ body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(
 .filtro-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
 .filtro-btn.ativo.active{background:#22c55e;border-color:#22c55e}
 .filtro-btn.inativo.active{background:#9fb0d9;border-color:#9fb0d9;color:#0b1020}
+.filtro-btn.ativo-ativo.active{background:#16a34a;border-color:#16a34a}
 /* stats grid */
 .stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:28px}
 .stat-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 16px;display:flex;flex-direction:column;gap:6px;transition:transform .15s,box-shadow .15s}
@@ -90,6 +91,7 @@ footer{text-align:center;padding:20px 0;color:var(--muted);font-size:12px;border
     <div class="topbar-right">
       <span class="meta" id="meta-ultima">Carregando...</span>
       <a class="btn secondary" href="/hub">← Hub</a>
+      <a class="btn secondary" href="/auditoria/canais" style="border-color:rgba(239,68,68,.4);color:var(--danger)">🔍 Auditoria de Canais</a>
       <button class="btn" id="btn-executar" onclick="executarConferencia()">▶ Executar conferência</button>
       <button class="btn secondary" id="btn-cancelar" onclick="cancelarConferencia()" style="display:none">✕ Cancelar</button>
     </div>
@@ -109,6 +111,7 @@ footer{text-align:center;padding:20px 0;color:var(--muted);font-size:12px;border
       <button class="filtro-btn active" onclick="setFiltro('todos',this)">Todos</button>
       <button class="filtro-btn ativo"  onclick="setFiltro('ativos',this)">✓ Só Ativos</button>
       <button class="filtro-btn inativo" onclick="setFiltro('inativos',this)">✗ Só Inativos</button>
+      <button class="filtro-btn ativo-ativo" onclick="setFiltro('ativos_ativos',this)" title="Ativos no Bling sem listing ATIVO no canal (inclui pausados)">⚡ Ativos s/ canal ativo</button>
     </div>
     <span id="filtro-info" style="font-size:11px;color:var(--muted);margin-left:6px"></span>
   </div>
@@ -130,6 +133,27 @@ footer{text-align:center;padding:20px 0;color:var(--muted);font-size:12px;border
     <div class="ch-card"><div class="ch-top" style="background:#3b82f6"></div><div class="ch-body"><div class="ch-header"><span class="ch-icon">🟠</span><span class="ch-name">Amazon</span><span class="ch-badge skel"></span></div><div class="ch-stats"><div class="ch-stat-row"><span class="lbl">Mapeados</span><span class="val skel skel-sm"></span></div><div class="ch-stat-row"><span class="lbl">Bling sem Amazon</span><span class="val skel skel-sm"></span></div></div></div><div class="ch-footer">→ Ver conferência Amazon</div></div>
     <div class="ch-card"><div class="ch-top" style="background:#f97316"></div><div class="ch-body"><div class="ch-header"><span class="ch-icon">🛍️</span><span class="ch-name">Shopee</span><span class="ch-badge skel"></span></div><div class="ch-stats"><div class="ch-stat-row"><span class="lbl">Mapeados</span><span class="val skel skel-sm"></span></div><div class="ch-stat-row"><span class="lbl">Bling sem Shopee</span><span class="val skel skel-sm"></span></div></div></div><div class="ch-footer">→ Ver conferência Shopee</div></div>
   </div>
+
+  <!-- Auditoria de Canais — destaque -->
+  <a href="/auditoria/canais" style="display:block;text-decoration:none;margin-bottom:28px">
+    <div style="background:linear-gradient(135deg,rgba(239,68,68,.12),rgba(245,158,11,.08));border:1px solid rgba(239,68,68,.3);border-radius:16px;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;transition:all .15s;cursor:pointer"
+         onmouseover="this.style.borderColor='rgba(239,68,68,.6)'" onmouseout="this.style.borderColor='rgba(239,68,68,.3)'">
+      <div style="display:flex;align-items:center;gap:16px">
+        <span style="font-size:32px">🔍</span>
+        <div>
+          <div style="font-size:16px;font-weight:800;color:#fff;margin-bottom:4px">Auditoria de Canais</div>
+          <div style="font-size:12px;color:var(--muted)">Diagnóstico completo de problemas por canal · vende sem estoque, divergências, anúncios inativos, sem mapeamento</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:16px;align-items:center">
+        <div id="audit-resumo" style="display:flex;gap:10px">
+          <span style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:var(--danger);padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700" id="audit-criticos">— críticos</span>
+          <span style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);color:var(--warn);padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700" id="audit-altos">— altos</span>
+        </div>
+        <span style="color:var(--danger);font-weight:800;font-size:18px">→</span>
+      </div>
+    </div>
+  </a>
 
   <!-- Módulos -->
   <div class="section-title">⚙️ Módulos do Sistema</div>
@@ -177,7 +201,7 @@ function setFiltro(val, btn){
   }
 }
 
-function _sufixo(){ return _filtro === 'ativos' ? '_ativos' : _filtro === 'inativos' ? '_inativos' : ''; }
+function _sufixo(){ return _filtro === 'ativos' ? '_ativos' : _filtro === 'inativos' ? '_inativos' : _filtro === 'ativos_ativos' ? '_ativo_ativo' : ''; }
 
 function renderStats(res){
   const s = res.stats || {};
@@ -204,11 +228,13 @@ function renderStats(res){
   const semAmazon  = s[`bling_sem_amazon${suf}`]  ?? s.bling_sem_amazon;
   const semShopee  = s[`bling_sem_shopee${suf}`]  ?? s.bling_sem_shopee;
 
-  const labelBling = _filtro === 'ativos'   ? 'Bling Ativos'
-                   : _filtro === 'inativos' ? 'Bling Inativos'
+  const labelBling = _filtro === 'ativos'        ? 'Bling Ativos'
+                   : _filtro === 'inativos'      ? 'Bling Inativos'
+                   : _filtro === 'ativos_ativos' ? 'Bling Ativos'
                    : 'Total Bling';
-  const subBling   = _filtro === 'ativos'   ? 'produtos ativos com SKU'
-                   : _filtro === 'inativos' ? 'produtos inativos com SKU'
+  const subBling   = _filtro === 'ativos'        ? 'produtos ativos com SKU'
+                   : _filtro === 'inativos'      ? 'produtos inativos com SKU'
+                   : _filtro === 'ativos_ativos' ? 'ativos sem listing ativo no canal'
                    : 'produtos com SKU';
 
   const cards = [
@@ -234,8 +260,9 @@ function renderStats(res){
 function renderCanais(res){
   const s = res.stats || {};
   const suf = _sufixo();
-  const totalBase = suf === '_ativos'   ? (s.total_bling_ativos  || s.total_bling || 1)
-                  : suf === '_inativos' ? (s.total_bling_inativos || s.total_bling || 1)
+  const totalBase = suf === '_ativos'      ? (s.total_bling_ativos  || s.total_bling || 1)
+                  : suf === '_inativos'   ? (s.total_bling_inativos || s.total_bling || 1)
+                  : suf === '_ativo_ativo' ? (s.total_bling_ativos   || s.total_bling || 1)
                   : (s.total_bling || 1);
   const grid = document.getElementById('channels-grid');
   grid.innerHTML = CANAIS.map(c => {
@@ -248,7 +275,10 @@ function renderCanais(res){
     const sem = s[`${c.semKey}${suf}`] ?? s[c.semKey] ?? '—';
     const pctVal = (typeof total==='number' && typeof sem==='number' && totalBase>0)
       ? Math.round((1 - sem / totalBase) * 100) : '—';
-    const lblSem = suf === '_ativos' ? `Ativos sem ${c.nome}` : suf === '_inativos' ? `Inativos sem ${c.nome}` : `Bling sem ${c.nome}`;
+    const lblSem = suf === '_ativos'       ? `Ativos sem ${c.nome}`
+                 : suf === '_inativos'     ? `Inativos sem ${c.nome}`
+                 : suf === '_ativo_ativo'  ? `Ativos s/ listing ativo`
+                 : `Bling sem ${c.nome}`;
     return `<a class="ch-card" href="${c.href}">
       <div class="ch-top" style="background:${c.cor}"></div>
       <div class="ch-body">
@@ -274,6 +304,14 @@ async function carregarDados(){
     if(!res || !res.stats){ return; }
     renderStats(res);
     renderCanais(res);
+    // Contadores de auditoria no card de destaque
+    const ra = res.resumo_auditoria || {};
+    const criticos = (ra.critica || 0);
+    const altos    = (ra.alta    || 0);
+    const elC = document.getElementById('audit-criticos');
+    const elA = document.getElementById('audit-altos');
+    if(elC) elC.textContent = `${criticos} crítico${criticos!==1?'s':''}`;
+    if(elA) elA.textContent = `${altos} alto${altos!==1?'s':''}`;
     const dt = res.executado_em ? new Date(res.executado_em) : null;
     const dur = res.duracao_segundos ? `${Math.round(res.duracao_segundos/60)}min` : '';
     if(dt){
@@ -330,7 +368,7 @@ function iniciarPolling(){
   document.getElementById('btn-executar').textContent = '⏳ Rodando...';
   document.getElementById('btn-cancelar').style.display = '';
 
-  const ETAPAS = {bling:'Coletando Bling',ml:'Coletando ML',shopify:'Coletando Shopify',amazon:'Coletando Amazon',shopee:'Coletando Shopee',cruzamento:'Cruzando SKUs',concluido:'Concluído'};
+  const ETAPAS = {bling:'Coletando Bling',ml:'Coletando ML',shopify:'Coletando Shopify',amazon:'Coletando Amazon',shopee:'Coletando Shopee',canais:'Coletando canais (ML + Shopify + Amazon + Shopee)',anuncios_ml:'Mapeando anúncios ML',cruzamento:'Cruzando SKUs',concluido:'Concluído'};
   const interval = setInterval(async ()=>{
     try {
       const st = await fetch('/conferencia-sku/status').then(r=>r.json());

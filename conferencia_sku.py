@@ -1204,6 +1204,19 @@ def executar_conferencia(bling_client) -> dict:
                 return 0
             return sum(1 for s in subset if s not in skus_canal)
 
+        def _bling_ativo_sem_canal_ativo(skus_canal: dict, canal_ok: bool, subset: dict, status_ativos: set) -> int:
+            """Bling ativos sem listing ATIVO no canal (absent + paused/closed/inactive)."""
+            if not canal_ok:
+                return 0
+            count = 0
+            for sku in subset:
+                info = skus_canal.get(sku)
+                if not info:
+                    count += 1  # ausente do canal
+                elif (info.get("status") or "").lower() not in status_ativos:
+                    count += 1  # presente mas pausado/fechado/inativo
+            return count
+
         resultado = {
             "executado_em": datetime.now(timezone.utc).isoformat(),
             "duracao_segundos": round(time.time() - inicio, 1),
@@ -1233,6 +1246,12 @@ def executar_conferencia(bling_client) -> dict:
                 "bling_sem_shopify_inativos": _bling_sem_situacao(skus_shopify, shopify_ok, skus_bling_inativos),
                 "bling_sem_amazon_inativos": _bling_sem_situacao(skus_amazon, amazon_ok, skus_bling_inativos),
                 "bling_sem_shopee_inativos": _bling_sem_situacao(skus_shopee, shopee_ok, skus_bling_inativos),
+                # Bling ativo SEM listing ativo no canal (ausente + pausado/fechado/inativo)
+                # Métrica real: quantos produtos ativos você tem sem VENDER em cada canal
+                "bling_sem_ml_ativo_ativo": _bling_ativo_sem_canal_ativo(skus_ml, ml_ok, skus_bling_ativos, {"active"}),
+                "bling_sem_shopify_ativo_ativo": _bling_ativo_sem_canal_ativo(skus_shopify, shopify_ok, skus_bling_ativos, {"active"}),
+                "bling_sem_amazon_ativo_ativo": _bling_ativo_sem_canal_ativo(skus_amazon, amazon_ok, skus_bling_ativos, {"active"}),
+                "bling_sem_shopee_ativo_ativo": _bling_ativo_sem_canal_ativo(skus_shopee, shopee_ok, skus_bling_ativos, {"active"}),
             },
             "sem_sku_ml": sem_sku_ml[:200],  # ML sem SKU (não mapeável após todos os fallbacks)
             "ml_anuncios_remapeados": len(remapped_by_anuncio),  # anúncios ML mapeados via Bling /anuncios

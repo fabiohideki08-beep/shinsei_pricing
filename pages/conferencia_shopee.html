@@ -87,6 +87,7 @@ tr:hover td{background:rgba(255,255,255,.025)}
     <div class="topbar-right">
       <a class="btn secondary" href="/dashboard">← Dashboard</a>
       <button class="btn secondary" onclick="abrirImport()" title="Importar anúncio Shopee para o Bling">📥 Importar para Bling</button>
+      <button class="btn secondary" id="btn-so-ativos" onclick="toggleSoAtivos()" title="Mostra apenas Bling ativos com listings ativos nos canais">☀️ Só Ativos</button>
       <button class="btn" id="btn-executar" onclick="executarConferencia()">▶ Executar conferência</button>
     </div>
   </div>
@@ -316,6 +317,7 @@ const CANAL_SEM_KEY  = 'bling_sem_shopee';
 const PAGE_SIZE = 100;
 
 let _conf=null, _fila=[], _polling=false;
+let _soAtivos = false;
 let _filtroMargem='todos', _filtroEstoque='todos';
 let _pgFila=1, _pgEstoque=1, _pgCatalogo=1, _pgEanDiv=1, _pgSemSku=1, _pgSemItemsku=1, _pgSem=1;
 
@@ -436,7 +438,8 @@ function renderSemIntegTable(tbodyId, pagId, data, pg, navFn){
 function renderEstoque(){
   if(!_conf)return;
   // ── Sub-painel A: COM integração ──
-  let mapeados=(_conf.matrix||[]).filter(r=>r[CANAL_PRESENTE]===true && r.presente_bling===true);
+  let mapeados=(_conf.matrix||[]).filter(r=>r[CANAL_PRESENTE]===true && r.presente_bling===true
+    && (!_soAtivos || (r.situacao_bling === 'A' && (r[CANAL_STATUS]||'').toLowerCase() === 'active')));
   document.getElementById('scnt-com-integ').textContent=mapeados.length.toLocaleString('pt-BR');
   if(_filtroEstoque!=='todos')mapeados=mapeados.filter(r=>(r[CANAL_STATUS]||'').toLowerCase()===_filtroEstoque);
   mapeados.sort((a,b)=>(b.estoque_bling||0)-(a.estoque_bling||0));
@@ -459,7 +462,7 @@ function renderEstoque(){
   }
 
   // ── Sub-painéis B/C/D: categorias do shopee_sem_bling ──
-  const semBling=_conf.shopee_sem_bling||[];
+  const semBling=(_conf.shopee_sem_bling||[]).filter(r=>!_soAtivos || r.status === 'active');
   const catalogoData=semBling.filter(r=>r.tipo_divergencia==='codigo_catalogo');
   const eanDivData=semBling.filter(r=>r.tipo_divergencia==='ean_divergente');
   const semSkuData=semBling.filter(r=>r.tipo_divergencia==='sku_nao_encontrado');
@@ -497,7 +500,8 @@ function setFiltroEstoque(f,el){_filtroEstoque=f;_pgEstoque=1;document.querySele
 function renderAusentes(){
   if(!_conf)return;
   const matrix=_conf.matrix||[];
-  const semCanal=matrix.filter(r=>r.presente_bling===true && r[CANAL_PRESENTE]===false);
+  const semCanal=matrix.filter(r=>r.presente_bling===true && r[CANAL_PRESENTE]===false
+    && (!_soAtivos || r.situacao_bling === 'A'));
   document.getElementById('cnt-sem-canal').textContent=semCanal.length.toLocaleString('pt-BR');
   const slice=pagSlice(semCanal,_pgSem);
   document.getElementById('sem-canal-tbody').innerHTML=slice.length
@@ -512,6 +516,17 @@ function renderAusentes(){
   pagControls('sem-canal-pag',semCanal.length,_pgSem,'navSem');
 }
 function navSem(p){_pgSem=p;renderAusentes();}
+
+function toggleSoAtivos(){
+  _soAtivos = !_soAtivos;
+  const btn = document.getElementById('btn-so-ativos');
+  btn.style.background = _soAtivos ? 'rgba(34,197,94,.25)' : '';
+  btn.style.borderColor = _soAtivos ? '#22c55e' : '';
+  btn.style.color = _soAtivos ? '#22c55e' : '';
+  btn.textContent = _soAtivos ? '☀️ Só Ativos ✓' : '☀️ Só Ativos';
+  renderEstoque();
+  renderAusentes();
+}
 
 async function carregarConferencia(){
   try{
