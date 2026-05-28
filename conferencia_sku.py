@@ -352,6 +352,7 @@ def _fetch_ml() -> tuple[dict[str, dict], list[dict], bool]:
                                 "id": ml_id,       # MLB do pai (usado pelo remapeamento via /anuncios)
                                 "titulo": f"{titulo} (var. {v_id})",
                                 "estoque": v_qty,
+                                "status": status_real,
                             })
                 else:
                     # ── Produto simples (sem variações) ────────────────────────
@@ -362,7 +363,7 @@ def _fetch_ml() -> tuple[dict[str, dict], list[dict], bool]:
                         if not existing or status_real == "active":
                             skus[sku] = {"ml_id": ml_id, "status": status_real, "qty": estoque, "titulo": titulo}
                     else:
-                        sem_sku.append({"id": ml_id, "titulo": titulo, "estoque": estoque})
+                        sem_sku.append({"id": ml_id, "titulo": titulo, "estoque": estoque, "status": status_real})
             time.sleep(0.1)
 
         logger.info(
@@ -1258,6 +1259,22 @@ def executar_conferencia(bling_client) -> dict:
                 "bling_sem_shopify_ativo_ativo": _bling_ativo_sem_canal_ativo(skus_shopify, shopify_ok, skus_bling_ativos, {"active"}),
                 "bling_sem_amazon_ativo_ativo": _bling_ativo_sem_canal_ativo(skus_amazon, amazon_ok, skus_bling_ativos, {"active"}),
                 "bling_sem_shopee_ativo_ativo": _bling_ativo_sem_canal_ativo(skus_shopee, shopee_ok, skus_bling_ativos, {"active"}),
+                # Anúncios ATIVOS no canal sem nenhum vínculo com Bling
+                # (SKU inexistente no Bling + sem SKU totalmente) — RISCO CRÍTICO: sem sync de estoque
+                "ml_ativo_sem_vinculo": (
+                    sum(1 for s, v in skus_ml.items() if s not in skus_bling and (v.get("status") or "").lower() == "active")
+                    + sum(1 for e in sem_sku_ml if (e.get("status") or "").lower() == "active")
+                ) if ml_ok else 0,
+                "shopify_ativo_sem_vinculo": (
+                    sum(1 for s, v in skus_shopify.items() if s not in skus_bling and (v.get("status") or "").lower() == "active")
+                ) if shopify_ok else 0,
+                "amazon_ativo_sem_vinculo": (
+                    sum(1 for s, v in skus_amazon.items() if s not in skus_bling and (v.get("status") or "").lower() == "active")
+                ) if amazon_ok else 0,
+                "shopee_ativo_sem_vinculo": (
+                    sum(1 for s, v in skus_shopee.items() if s not in skus_bling and (v.get("status") or "").lower() == "active")
+                    + sum(1 for e in sem_sku_shopee if (e.get("status") or "").lower() == "active")
+                ) if shopee_ok else 0,
                 # TODOS do Bling SEM listing ativo no canal (canal filter = ativos, bling filter = todos)
                 "bling_sem_ml_canal_ativo": _bling_ativo_sem_canal_ativo(skus_ml, ml_ok, skus_bling, {"active"}),
                 "bling_sem_shopify_canal_ativo": _bling_ativo_sem_canal_ativo(skus_shopify, shopify_ok, skus_bling, {"active"}),

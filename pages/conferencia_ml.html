@@ -118,6 +118,7 @@ tr:hover td{background:rgba(255,255,255,.025)}
     <div class="stat stat-link" onclick="irParaAba('estoque')"><div class="stat-lbl">Mapeados ML</div><div class="stat-val skel"></div></div>
     <div class="stat stat-link" onclick="irParaAba('ausentes','secao-sem-canal')"><div class="stat-lbl">Bling sem ML</div><div class="stat-val" style="color:var(--warn)" id="sv-sem">—</div></div>
     <div class="stat stat-link" onclick="irParaAba('estoque');setTimeout(()=>setSubTab('sub-sem-sku'),60)"><div class="stat-lbl">ML sem Bling</div><div class="stat-val" style="color:var(--danger)" id="sv-sembling">—</div></div>
+    <div class="stat stat-link" style="border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.07)" onclick="irParaAba('sem-vinculo',this)"><div class="stat-lbl" style="color:var(--danger)">⚠️ Ativos sem vínculo</div><div class="stat-val" style="color:var(--danger)" id="sv-ativo-sem-vinculo">—</div><div style="font-size:10px;color:var(--muted);margin-top:2px">vendendo sem sync</div></div>
   </div>
 
   <!-- Tabs -->
@@ -125,6 +126,7 @@ tr:hover td{background:rgba(255,255,255,.025)}
     <button class="tab active" onclick="trocarTab('fila',this)">💰 Fila de Preços</button>
     <button class="tab" onclick="trocarTab('estoque',this)">📦 Estoque</button>
     <button class="tab" onclick="trocarTab('ausentes',this)">⚠️ SKUs Ausentes</button>
+    <button class="tab" id="tab-btn-sem-vinculo" onclick="trocarTab('sem-vinculo',this)" style="border-bottom-color:var(--danger)">🚨 Sem Vínculo <span id="tab-cnt-sem-vinculo" style="font-size:11px;padding:1px 7px;border-radius:999px;background:rgba(239,68,68,.2);color:var(--danger);margin-left:4px"></span></button>
   </div>
 
   <!-- Tab: Fila de Preços -->
@@ -222,6 +224,22 @@ tr:hover td{background:rgba(255,255,255,.025)}
 
   </div>
 
+  <!-- Tab: Sem Vínculo (ativos sem sync de estoque) -->
+  <div class="tab-panel" id="tab-sem-vinculo">
+    <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:14px 18px;margin-bottom:20px">
+      <div style="font-size:14px;font-weight:800;color:var(--danger);margin-bottom:4px">⚠️ Anúncios ATIVOS sem vínculo com o Bling</div>
+      <div style="font-size:12px;color:var(--muted)">Estes anúncios estão <b style="color:#fff">ativos e vendendo</b> no canal, mas o Bling não os reconhece — sem sync de estoque. Risco de sobrevenda.</div>
+    </div>
+    <div id="sem-vinculo-resumo" style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap"></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ID Canal</th><th>SKU/Código</th><th>Título</th><th>Estoque</th><th>Motivo</th></tr></thead>
+        <tbody id="sem-vinculo-tbody"><tr><td colspan="5" class="empty">Carregando...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="paginacao" id="sem-vinculo-pag"></div>
+  </div>
+
   <!-- Tab: SKUs Ausentes -->
   <div class="tab-panel" id="tab-ausentes">
     <div style="padding:10px 0 16px;font-size:12px;color:var(--muted)">
@@ -274,7 +292,7 @@ let _filtroMargem  = 'todos';
 let _filtroEstoque = 'todos';
 let _pgFila   = 1;
 let _pgEstoque = 1, _pgSemIntegSku = 1, _pgSemIntegEan = 1, _pgSemIntegNoSku = 1;
-let _pgSemMl  = 1, _pgMlSemBling = 1;
+let _pgSemMl  = 1, _pgMlSemBling = 1, _pgSemVinculo = 1;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const fmt   = n => (n==null)?'—':Number(n).toLocaleString('pt-BR');
@@ -580,6 +598,49 @@ function renderAusentes(){
 
 function navSemMl(p){ _pgSemMl = p; renderAusentes(); }
 
+// ── Sem Vínculo ──────────────────────────────────────────────────────────────
+function renderSemVinculo(){
+  if(!_conf) return;
+  const semBlingAtivos = (_conf.ml_sem_bling || [])
+    .filter(r => r.status === 'active')
+    .map(r => ({
+      canal_id: r.ml_id || '—', sku: r.sku || '', titulo: r.titulo || '', estoque: r.qty,
+      motivo: r.tipo_divergencia === 'ean_divergente' ? '🏷️ EAN/GTIN sem match no Bling'
+             : '🔍 SKU não encontrado no Bling',
+    }));
+  const semSkuAtivos = (_conf.sem_sku_ml || [])
+    .filter(r => (r.status || '') === 'active')
+    .map(r => ({
+      canal_id: r.id || '—', sku: '', titulo: r.titulo || '', estoque: r.estoque,
+      motivo: '❌ Sem SKU (impossível mapear automaticamente)',
+    }));
+  const todos = [...semBlingAtivos, ...semSkuAtivos];
+  const total = todos.length;
+  const el = document.getElementById('tab-cnt-sem-vinculo');
+  if(el) el.textContent = total || '';
+  const sv = document.getElementById('sv-ativo-sem-vinculo');
+  if(sv) sv.textContent = total;
+  const resumo = document.getElementById('sem-vinculo-resumo');
+  if(resumo) resumo.innerHTML = `
+    <span class="fila-stat vermelho">🚨 ${total} ativos sem vínculo</span>
+    <span class="fila-stat amarelo">🏷️ ${semBlingAtivos.filter(r=>r.motivo.includes('EAN')).length} EAN divergente</span>
+    <span class="fila-stat total">🔍 ${semBlingAtivos.filter(r=>r.motivo.includes('SKU')).length} SKU ausente</span>
+    <span class="fila-stat vermelho">❌ ${semSkuAtivos.length} sem SKU</span>`;
+  const slice = pagSlice(todos, _pgSemVinculo);
+  const tbody = document.getElementById('sem-vinculo-tbody');
+  tbody.innerHTML = slice.length
+    ? slice.map(r => `<tr>
+        <td class="sku-code" style="color:var(--danger)">${r.canal_id}</td>
+        <td class="sku-code">${r.sku || '<span style="color:var(--muted)">—</span>'}</td>
+        <td class="nome-cell" title="${(r.titulo||'').replace(/"/g,'&quot;')}">${r.titulo || '—'}</td>
+        <td style="text-align:center;font-weight:700">${r.estoque!=null?fmt(r.estoque):'<span style="color:var(--muted)">N/D</span>'}</td>
+        <td style="font-size:12px">${r.motivo}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="5" class="empty">✅ Nenhum anúncio ativo sem vínculo com o Bling!</td></tr>`;
+  pagControls('sem-vinculo-pag', total, _pgSemVinculo, 'navSemVinculo');
+}
+function navSemVinculo(p){ _pgSemVinculo = p; renderSemVinculo(); }
+
 function toggleSoAtivos(){
   _soAtivos = !_soAtivos;
   const btn = document.getElementById('btn-so-ativos');
@@ -624,6 +685,7 @@ async function carregarConferencia(){
     }
     renderEstoque();
     renderAusentes();
+    renderSemVinculo();
   } catch(e){
     document.getElementById('meta-ultima').textContent = 'Execute a conferência para ver dados.';
   }

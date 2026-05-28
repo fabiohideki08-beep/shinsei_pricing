@@ -101,12 +101,14 @@ tr:hover td{background:rgba(255,255,255,.025)}
     <div class="stat stat-link" onclick="irParaAba('estoque')"><div class="stat-lbl">Mapeados Amazon</div><div class="stat-val" style="color:var(--ok)">—</div></div>
     <div class="stat stat-link" onclick="irParaAba('ausentes','secao-sem-canal')"><div class="stat-lbl">Bling sem Amazon</div><div class="stat-val" style="color:var(--warn)">—</div></div>
     <div class="stat stat-link" onclick="irParaAba('estoque',null,'sub-sem-sku')"><div class="stat-lbl">Amazon sem Bling</div><div class="stat-val" style="color:var(--danger)" id="sv-sem-integ">—</div></div>
+    <div class="stat stat-link" style="border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.07)" onclick="irParaAba('sem-vinculo',this)"><div class="stat-lbl" style="color:var(--danger)">⚠️ Ativos sem vínculo</div><div class="stat-val" style="color:var(--danger)" id="sv-ativo-sem-vinculo">—</div><div style="font-size:10px;color:var(--muted);margin-top:2px">vendendo sem sync</div></div>
   </div>
 
   <div class="tabs">
     <button class="tab active" onclick="trocarTab('fila',this)">💰 Fila de Preços</button>
     <button class="tab" onclick="trocarTab('estoque',this)">📦 Estoque</button>
     <button class="tab" onclick="trocarTab('ausentes',this)">⚠️ SKUs Ausentes</button>
+    <button class="tab" id="tab-btn-sem-vinculo" onclick="trocarTab('sem-vinculo',this)" style="border-bottom-color:var(--danger)">🚨 Sem Vínculo <span id="tab-cnt-sem-vinculo" style="font-size:11px;padding:1px 7px;border-radius:999px;background:rgba(239,68,68,.2);color:var(--danger);margin-left:4px"></span></button>
   </div>
 
   <div class="tab-panel active" id="tab-fila">
@@ -178,6 +180,22 @@ tr:hover td{background:rgba(255,255,255,.025)}
     </div>
   </div>
 
+  <!-- Tab: Sem Vínculo -->
+  <div class="tab-panel" id="tab-sem-vinculo">
+    <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:14px 18px;margin-bottom:20px">
+      <div style="font-size:14px;font-weight:800;color:var(--danger);margin-bottom:4px">⚠️ Anúncios ATIVOS sem vínculo com o Bling</div>
+      <div style="font-size:12px;color:var(--muted)">Estes anúncios estão <b style="color:#fff">ativos e vendendo</b> no canal, mas o Bling não os reconhece — sem sync de estoque. Risco de sobrevenda.</div>
+    </div>
+    <div id="sem-vinculo-resumo" style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap"></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>SKU Canal</th><th>Nome</th><th>Estoque</th><th>Status</th><th>Motivo</th></tr></thead>
+        <tbody id="sem-vinculo-tbody"><tr><td colspan="5" class="empty">Carregando...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="paginacao" id="sem-vinculo-pag"></div>
+  </div>
+
   <div class="tab-panel" id="tab-ausentes">
     <div style="padding:10px 0 16px;font-size:12px;color:var(--muted)">
       💡 Produtos Amazon sem mapeamento Bling estão na aba <b>Estoque</b>.
@@ -206,7 +224,7 @@ const PAGE_SIZE = 100;
 let _conf=null, _fila=[], _polling=false;
 let _soAtivos = false;
 let _filtroMargem='todos', _filtroEstoque='todos';
-let _pgFila=1, _pgEstoque=1, _pgEanDiv=1, _pgSemSku=1, _pgSem=1;
+let _pgFila=1, _pgEstoque=1, _pgEanDiv=1, _pgSemSku=1, _pgSem=1, _pgSemVinculo=1;
 
 const fmt   = n=>(n==null)?'—':Number(n).toLocaleString('pt-BR');
 const fmtR$ = n=>(n==null)?'—':'R$ '+Number(n).toFixed(2).replace('.',',');
@@ -386,6 +404,41 @@ function renderAusentes(){
 }
 function navSem(p){_pgSem=p;renderAusentes();}
 
+// ── Sem Vínculo ──────────────────────────────────────────────────────────────
+function renderSemVinculo(){
+  if(!_conf) return;
+  const todos = (_conf.amazon_sem_bling || [])
+    .filter(r => r.status === 'active')
+    .map(r => ({
+      sku: r.sku || '—', nome: r.nome || '', estoque: r.qty, status: r.status,
+      motivo: r.tipo_divergencia === 'ean_divergente' ? '🏷️ EAN/GTIN sem match no Bling'
+             : '🔍 SKU não encontrado no Bling',
+    }));
+  const total = todos.length;
+  const el = document.getElementById('tab-cnt-sem-vinculo');
+  if(el) el.textContent = total || '';
+  const sv = document.getElementById('sv-ativo-sem-vinculo');
+  if(sv) sv.textContent = total;
+  const resumo = document.getElementById('sem-vinculo-resumo');
+  if(resumo) resumo.innerHTML = `
+    <span class="fila-stat vermelho">🚨 ${total} ativos sem vínculo</span>
+    <span class="fila-stat amarelo">🏷️ ${todos.filter(r=>r.motivo.includes('EAN')).length} EAN divergente</span>
+    <span class="fila-stat total">🔍 ${todos.filter(r=>r.motivo.includes('SKU')).length} SKU ausente</span>`;
+  const slice = pagSlice(todos, _pgSemVinculo);
+  const tbody = document.getElementById('sem-vinculo-tbody');
+  tbody.innerHTML = slice.length
+    ? slice.map(r => `<tr>
+        <td class="sku-code" style="color:var(--danger)">${r.sku}</td>
+        <td class="nome-cell" title="${(r.nome||'').replace(/"/g,'&quot;')}">${r.nome||'—'}</td>
+        <td style="text-align:center;font-weight:700">${r.estoque!=null?fmt(r.estoque):'<span style="color:var(--muted)">N/D</span>'}</td>
+        <td><span class="status-chip status-active">🟢 Ativo</span></td>
+        <td style="font-size:12px">${r.motivo}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="5" class="empty">✅ Nenhum anúncio ativo sem vínculo com o Bling!</td></tr>`;
+  pagControls('sem-vinculo-pag', total, _pgSemVinculo, 'navSemVinculo');
+}
+function navSemVinculo(p){_pgSemVinculo=p;renderSemVinculo();}
+
 function toggleSoAtivos(){
   _soAtivos = !_soAtivos;
   const btn = document.getElementById('btn-so-ativos');
@@ -409,7 +462,7 @@ async function carregarConferencia(){
       <div class="stat stat-link" onclick="irParaAba('ausentes','secao-sem-canal')"><div class="stat-lbl">Bling sem ${CANAL_NOME}</div><div class="stat-val" style="color:var(--warn)">${fmt(s[CANAL_SEM_KEY])}</div></div>
       <div class="stat stat-link" onclick="irParaAba('estoque','secao-sem-integ')"><div class="stat-lbl">${CANAL_NOME} sem Bling</div><div class="stat-val" style="color:var(--danger)" id="sv-sem-integ">${fmt(cs.sem_bling)}</div></div>`;
     if(res.executado_em){const dt=new Date(res.executado_em);document.getElementById('meta-ultima').textContent=`Última: ${dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})} ${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;}
-    renderEstoque(); renderAusentes();
+    renderEstoque(); renderAusentes(); renderSemVinculo();
   }catch(e){document.getElementById('meta-ultima').textContent='Execute a conferência para ver dados.';}
 }
 

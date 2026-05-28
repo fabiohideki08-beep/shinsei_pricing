@@ -144,6 +144,12 @@ footer{text-align:center;padding:20px 0;color:var(--muted);font-size:12px;border
     <div class="ch-card"><div class="ch-top" style="background:#f97316"></div><div class="ch-body"><div class="ch-header"><span class="ch-icon">🛍️</span><span class="ch-name">Shopee</span><span class="ch-badge skel"></span></div><div class="ch-stats"><div class="ch-stat-row"><span class="lbl">Mapeados</span><span class="val skel skel-sm"></span></div><div class="ch-stat-row"><span class="lbl">Bling sem Shopee</span><span class="val skel skel-sm"></span></div></div></div><div class="ch-footer">→ Ver conferência Shopee</div></div>
   </div>
 
+  <!-- Alerta: Ativos sem vínculo Bling -->
+  <div id="sem-vinculo-section" style="display:none;margin-bottom:28px">
+    <div class="section-title" style="color:var(--danger)">⚠️ Ativos nos Canais sem Vínculo Bling <span style="font-size:10px;font-weight:400;color:var(--muted)">(vendendo sem sync de estoque)</span></div>
+    <div id="sem-vinculo-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px"></div>
+  </div>
+
   <!-- Auditoria de Canais — destaque -->
   <a href="/auditoria/canais" style="display:block;text-decoration:none;margin-bottom:28px">
     <div style="background:linear-gradient(135deg,rgba(239,68,68,.12),rgba(245,158,11,.08));border:1px solid rgba(239,68,68,.3);border-radius:16px;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;transition:all .15s;cursor:pointer"
@@ -332,12 +338,55 @@ function renderCanais(res){
   }).join('');
 }
 
+function renderSemVinculo(res){
+  const s = res.stats || {};
+  const dados = [
+    { nome:'Mercado Livre', icon:'🟡', cor:'#eab308', key:'ml_ativo_sem_vinculo',      href:'/conferencia/ml' },
+    { nome:'Shopify',       icon:'🟢', cor:'#22c55e', key:'shopify_ativo_sem_vinculo', href:'/conferencia/shopify' },
+    { nome:'Amazon',        icon:'🟠', cor:'#3b82f6', key:'amazon_ativo_sem_vinculo',  href:'/conferencia/amazon' },
+    { nome:'Shopee',        icon:'🛍️', cor:'#f97316', key:'shopee_ativo_sem_vinculo',  href:'/conferencia/shopee' },
+  ];
+
+  const totalSemVinculo = dados.reduce((acc, d) => acc + (s[d.key] || 0), 0);
+  const section = document.getElementById('sem-vinculo-section');
+  const grid    = document.getElementById('sem-vinculo-grid');
+
+  if(totalSemVinculo === 0 && dados.every(d => s[d.key] === 0)){
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = 'block';
+
+  grid.innerHTML = dados.map(d => {
+    const n = s[d.key] ?? null;
+    if(n === null || n === undefined) return '';
+    const cor = n > 0 ? 'var(--danger)' : 'var(--ok)';
+    const bg  = n > 0 ? 'rgba(239,68,68,.12)' : 'rgba(34,197,94,.05)';
+    const bdr = n > 0 ? 'rgba(239,68,68,.35)' : 'rgba(34,197,94,.2)';
+    const lbl = n > 0 ? `${n} anúncio${n!==1?'s':''} ativo${n!==1?'s':''} sem vínculo`
+                      : 'Todos vinculados ✓';
+    return `<a href="${d.href}" style="text-decoration:none;background:${bg};border:1px solid ${bdr};border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;transition:all .15s;cursor:pointer"
+               onmouseover="this.style.borderColor='${bdr.replace('.35','.7').replace('.2','.5')}'" onmouseout="this.style.borderColor='${bdr}'">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:18px">${d.icon}</span>
+        <span style="font-size:13px;font-weight:700;color:#fff">${d.nome}</span>
+      </div>
+      <div style="font-size:26px;font-weight:900;color:${cor}">${n > 0 ? n : '0'}</div>
+      <div style="font-size:11px;color:${cor};font-weight:600">${lbl}</div>
+      <div style="height:3px;border-radius:999px;background:rgba(255,255,255,.08)">
+        <div style="height:100%;border-radius:999px;background:${cor};width:${n > 0 ? 100 : 0}%"></div>
+      </div>
+    </a>`;
+  }).join('');
+}
+
 async function carregarDados(){
   try {
     const res = await fetch('/conferencia-sku/resultado').then(r=>r.json());
     if(!res || !res.stats){ return; }
     renderStats(res);
     renderCanais(res);
+    renderSemVinculo(res);
     // Contadores de auditoria no card de destaque
     const ra = res.resumo_auditoria || {};
     const criticos = (ra.critica || 0);
@@ -419,7 +468,7 @@ function iniciarPolling(){
         document.getElementById('btn-executar').textContent = '▶ Executar conferência';
         document.getElementById('btn-cancelar').style.display = 'none';
         if(st.status === 'concluido'){
-          carregarDados();
+          await carregarDados();
         } else if(st.status === 'ocioso'){
           // deploy matou a conferência — reseta silenciosamente
           carregarDados();
