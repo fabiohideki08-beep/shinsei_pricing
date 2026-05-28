@@ -575,19 +575,21 @@ def _fetch_amazon() -> tuple[dict[str, dict], bool]:
 # Fetch Shopee — via API (get_item_list + get_item_base_info)
 # ─────────────────────────────────────────────
 
-def _fetch_shopee() -> tuple[dict[str, dict], bool]:
+def _fetch_shopee() -> tuple[dict[str, dict], list[dict], bool]:
     """
-    Retorna (skus_shopee, conectado)
+    Retorna (skus_shopee, sem_sku_shopee, conectado)
     skus_shopee: {item_sku -> {"item_id": str, "status": str}}
       status: "active" (NORMAL) | "inactive" (UNLIST/BANNED)
+    sem_sku_shopee: lista de {item_id, titulo, qty} sem item_sku
     """
     try:
         from services.shopee import ShopeeService, tem_tokens
         if not tem_tokens():
-            return {}, False
+            return {}, [], False
 
         svc = ShopeeService()
         skus: dict[str, dict] = {}
+        sem_sku: list[dict] = []
 
         def _fetch_por_status(item_status: str, label: str):
             """Busca todos os itens de um determinado status Shopee."""
@@ -613,19 +615,22 @@ def _fetch_shopee() -> tuple[dict[str, dict], bool]:
                     items_list = (info_resp.get("response") or {}).get("item_list") or []
                     for item in items_list:
                         item_id = str(item.get("item_id", ""))
+                        titulo = str(item.get("item_name") or "").strip()[:80]
                         sku = str(item.get("item_sku") or "").strip()
+                        stock_info = item.get("stock_info_v2") or item.get("stock_info") or {}
+                        try:
+                            qty = int(
+                                stock_info.get("summary_info", {}).get("total_available_stock")
+                                or stock_info.get("current_stock")
+                                or 0
+                            )
+                        except Exception:
+                            qty = None
                         if sku and sku not in skus:
-                            # Estoque Shopee: stock_info.current_stock ou stock_info.total_reserved_stock
-                            stock_info = item.get("stock_info_v2") or item.get("stock_info") or {}
-                            try:
-                                qty = int(
-                                    stock_info.get("summary_info", {}).get("total_available_stock")
-                                    or stock_info.get("current_stock")
-                                    or 0
-                                )
-                            except Exception:
-                                qty = None
                             skus[sku] = {"item_id": item_id, "status": label, "qty": qty}
+                        elif not sku:
+                            # Item sem item_sku — rastreia para remapeamento via Bling /anuncios
+                            sem_sku.append({"id": item_id, "titulo": titulo, "qty": qty, "status": label})
                     time.sleep(0.2)
                 if not r.get("has_next_page"):
                     break
@@ -636,19 +641,89 @@ def _fetch_shopee() -> tuple[dict[str, dict], bool]:
         # Busca ativos (NORMAL) — se falhar aqui é erro de conexão
         ok = _fetch_por_status("NORMAL", "active")
         if not ok:
-            return {}, False
-        logger.info("Shopee NORMAL: %d SKUs", len(skus))
+            return {}, [], False
+        logger.info("Shopee NORMAL: %d SKUs, %d sem SKU", len(skus), len(sem_sku))
 
         # Busca inativos (UNLIST) — falha silenciosa, só adiciona se não já presente
         _fetch_por_status("UNLIST", "inactive")
-        logger.info("Shopee total (NORMAL+UNLIST): %d SKUs", len(skus))
+        logger.info("Shopee total (NORMAL+UNLIST): %d SKUs, %d sem SKU", len(skus), len(sem_sku))
 
-        return skus, True
+        return skus, sem_sku, True
 
     except Exception as e:
         logger.warning("Erro ao buscar Shopee: %s", e)
-        return {}, False
+        return {}, [], False
 
+
+
+# ─────────────────────────────────────────────
+# Fetch Bling Anúncios Shopee — mapa item_id → SKU Bling
+# ─────────────────────────────────────────────
+
+def _fetch_bling_anuncios_shopee(bling_client, skus_bling: dict) -> dict[str, str]:
+    """
+    Busca os anúncios Shopee vinculados aos produtos Bling via GET /anuncios.
+    Retorna {shopee_item_id: bling_sku} — mapeamento direto.
+
+    A API Bling v3 /anuncios retorna os anúncios exportados para a Shopee com
+    o campo 'codigo' contendo o item_id Shopee e 'produto.codigo' com o SKU Bling.
+
+    Canal Shopee ativo no Bling: idLoja=204584797, tipoIntegracao=Shopee.
+    """
+    ID_LOJA_SHOPEE      = 204584797
+    TIPO_INTEGRACAO_SHOPEE = "Shopee"
+
+    item_id_to_sku: dict[str, str] = {}
+
+    # Mapa inverso: id_bling → sku
+    id_to_sku: dict[str, str] = {}
+    for sku, info in skus_bling.items():
+        bid = str(info.get("id_bling") or "").strip()
+        if bid:
+            id_to_sku[bid] = sku
+
+    pagina = 1
+    MAX_PAGS = 200
+    while pagina <= MAX_PAGS:
+        try:
+            payload = bling_client._get("/anuncios", params={
+                "pagina": pagina,
+                "limite": 100,
+                "idLoja": ID_LOJA_SHOPEE,
+                "tipoIntegracao": TIPO_INTEGRACAO_SHOPEE,
+            })
+        except Exception as e:
+            logger.warning("Bling /anuncios Shopee página %d erro: %s", pagina, e)
+            break
+
+        data = payload.get("data", [])
+        if not data:
+            break
+
+        for ann in data:
+            if not isinstance(ann, dict):
+                continue
+
+            # Código do item Shopee (numérico como string)
+            item_id = str(ann.get("codigo") or "").strip()
+            if not item_id:
+                continue
+
+            prod_info = ann.get("produto") or {}
+            if isinstance(prod_info, dict):
+                sku_direto = str(prod_info.get("codigo") or "").strip()
+                if sku_direto and sku_direto in skus_bling:
+                    item_id_to_sku[item_id] = sku_direto
+                    continue
+                bid = str(prod_info.get("id") or "").strip()
+                if bid and bid in id_to_sku:
+                    item_id_to_sku[item_id] = id_to_sku[bid]
+
+        pagina += 1
+        time.sleep(0.15)
+
+    logger.info("Bling /anuncios Shopee: %d mapeamentos item_id→SKU coletados", len(item_id_to_sku))
+    return item_id_to_sku
 
 
 # ─────────────────────────────────────────────
@@ -721,17 +796,18 @@ def executar_conferencia(bling_client) -> dict:
                 _canais_prontos["concluidos"].append(f"{nome}(erro)")
                 return fallback
 
-        skus_ml,      sem_sku_ml, ml_ok      = _get(_fut_ml,      450, ({}, [], False), "ML")
-        skus_shopify, shopify_ok              = _get(_fut_shopify, 180, ({}, False),      "Shopify")
-        skus_amazon,  amazon_ok              = _get(_fut_amazon,  120, ({}, False),      "Amazon")
-        skus_shopee,  shopee_ok              = _get(_fut_shopee,  480, ({}, False),      "Shopee")
+        skus_ml,      sem_sku_ml,     ml_ok      = _get(_fut_ml,      450, ({}, [], False), "ML")
+        skus_shopify, shopify_ok               = _get(_fut_shopify, 180, ({}, False),      "Shopify")
+        skus_amazon,  amazon_ok               = _get(_fut_amazon,  120, ({}, False),      "Amazon")
+        skus_shopee,  sem_sku_shopee, shopee_ok = _get(_fut_shopee,  480, ({}, [], False), "Shopee")
 
         _canais_prontos["done"] = True
         _ex.shutdown(wait=False)
 
         _set_estado("rodando", 82, "anuncios_ml", "Buscando anúncios ML no Bling (MLB→SKU)...")
 
-        remapped_by_anuncio: dict[str, dict] = {}  # inicializado aqui para estar sempre em escopo
+        remapped_by_anuncio: dict[str, dict] = {}          # inicializado aqui para estar sempre em escopo
+        remapped_by_anuncio_shopee: dict[str, dict] = {}   # idem para Shopee
 
         # ── Passo 1: Mapa definitivo via Bling /anuncios ─────────────────────────
         # Bling armazena quais anúncios ML (MLBs) estão vinculados a cada produto.
@@ -851,6 +927,43 @@ def executar_conferencia(bling_client) -> dict:
                         "ML fallback GTIN: %d anúncios remapeados por EAN/GTIN "
                         "(de %d GTINs conhecidos no Bling)",
                         len(remapped_by_gtin), len(gtin_to_bling_sku)
+                    )
+
+        _set_estado("rodando", 87, "anuncios_shopee", "Buscando anúncios Shopee no Bling (item_id→SKU)...")
+
+        # ── Passo 3: Remapeamento Shopee via Bling /anuncios ─────────────────────
+        # Itens Shopee sem item_sku (ou com item_id como "SKU") são remapeados
+        # usando o canal Shopee do Bling (idLoja=204584797, tipoIntegracao=Shopee).
+        if shopee_ok:
+            try:
+                shopee_item_id_to_sku = _fetch_bling_anuncios_shopee(bling_client, skus_bling)
+            except Exception as _e:
+                logger.warning("_fetch_bling_anuncios_shopee falhou: %s", _e)
+                shopee_item_id_to_sku = {}
+
+            if shopee_item_id_to_sku:
+                # Remapeia sem_sku_shopee: itens sem item_sku que estão no Bling via /anuncios
+                nova_sem_sku_shopee: list[dict] = []
+                for entry in sem_sku_shopee:
+                    sid = str(entry.get("id") or "").strip()
+                    bling_sku = shopee_item_id_to_sku.get(sid)
+                    if bling_sku and bling_sku not in skus_shopee:
+                        skus_shopee[bling_sku] = {
+                            "item_id": sid,
+                            "status": entry.get("status", ""),
+                            "qty": entry.get("qty"),
+                            "matched_by": "anuncio",
+                            "original_key": sid,
+                        }
+                        remapped_by_anuncio_shopee[sid] = {"sku": bling_sku, "item_id": sid}
+                    else:
+                        nova_sem_sku_shopee.append(entry)
+                sem_sku_shopee = nova_sem_sku_shopee
+
+                if remapped_by_anuncio_shopee:
+                    logger.info(
+                        "Shopee fallback Bling /anuncios: %d itens sem SKU remapeados via item_id",
+                        len(remapped_by_anuncio_shopee)
                     )
 
         _set_estado("rodando", 88, "cruzamento", "Cruzando SKUs...")
@@ -1031,6 +1144,17 @@ def executar_conferencia(bling_client) -> dict:
                     "n_problemas": 1, "tem_critico": False, "tem_alto": False,
                 })
 
+        if shopee_ok:
+            for entry in sem_sku_shopee:
+                auditoria.append({
+                    "sku": "", "nome": entry.get("titulo", ""),
+                    "estoque_bling": None, "situacao_bling": "",
+                    "problemas": [{"tipo": "sem_mapeamento", "canal": "shopee", "prioridade": "media",
+                                   "detalhe": "Item Shopee sem SKU vinculado ao Bling",
+                                   "shopee_item_id": entry.get("id",""), "canal_qty": entry.get("qty", 0)}],
+                    "n_problemas": 1, "tem_critico": False, "tem_alto": False,
+                })
+
         auditoria.sort(key=lambda x: (
             0 if x["tem_critico"] else (1 if x["tem_alto"] else 2),
             -x["n_problemas"], x["sku"],
@@ -1113,6 +1237,8 @@ def executar_conferencia(bling_client) -> dict:
             "sem_sku_ml": sem_sku_ml[:200],  # ML sem SKU (não mapeável após todos os fallbacks)
             "ml_anuncios_remapeados": len(remapped_by_anuncio),  # anúncios ML mapeados via Bling /anuncios
             "ml_gtin_remapeados": len(remapped_by_gtin),  # anúncios ML mapeados via fallback GTIN
+            "sem_sku_shopee": sem_sku_shopee[:200],  # Shopee sem item_sku (não mapeável após fallback)
+            "shopee_anuncios_remapeados": len(remapped_by_anuncio_shopee),  # itens Shopee remapeados via Bling /anuncios
             # Canal sem Bling: itens COM SKU no canal que NÃO existem no Bling
             # Sem integração: anúncios COM SKU no canal que NÃO existem no Bling
             "ml_sem_bling": sorted(
