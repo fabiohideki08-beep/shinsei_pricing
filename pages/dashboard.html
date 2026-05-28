@@ -389,8 +389,8 @@ async function carregarDados(){
     renderSemVinculo(res);
     // Contadores de auditoria no card de destaque
     const ra = res.resumo_auditoria || {};
-    const criticos = (ra.critica || 0);
-    const altos    = (ra.alta    || 0);
+    const criticos = (ra.criticos || 0);
+    const altos    = (ra.altos   || 0);
     const elC = document.getElementById('audit-criticos');
     const elA = document.getElementById('audit-altos');
     if(elC) elC.textContent = `${criticos} crítico${criticos!==1?'s':''}`;
