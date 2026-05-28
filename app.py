@@ -87,6 +87,7 @@ from routes.ml_unificado import router as ml_router
 from routes.bling import router as bling_page_router
 from monitoring import router as monitoring_router
 from routes.gmc import router as gmc_router
+from routes.ads import router as ads_router
 from routes.shopee import router as shopee_router, aplicar_preco_shopee_por_sku
 from routes.estoque_sync import router as estoque_sync_router, _rebuild_caches_bg, sync_estoque_bling
 app.include_router(batch_router)
@@ -96,6 +97,7 @@ app.include_router(ml_router)
 app.include_router(bling_page_router)
 app.include_router(monitoring_router)
 app.include_router(gmc_router)
+app.include_router(ads_router)
 app.include_router(shopee_router)
 app.include_router(estoque_sync_router)
 try:
@@ -512,6 +514,114 @@ def conferencia_amazon_page():
 def conferencia_shopee_page():
     return HTMLResponse((PAGES_DIR / "conferencia_shopee.html").read_text(encoding="utf-8"))
 
+
+@app.get("/shopee/item/preview")
+def shopee_item_preview(item_id: int = 0):
+    """
+    Busca detalhes de um item Shopee (nome, SKU, preço) + todos os modelos/variações.
+    Usado pelo modal de importação para Bling.
+    """
+    if not item_id:
+        return {"error": "Informe o item_id da Shopee."}
+    try:
+        from services.shopee import ShopeeService
+        svc = ShopeeService()
+        return svc.obter_item_completo(item_id)
+    except RuntimeError as e:
+        return {"error": str(e)}
+    except Exception as e:
+        logger.error("shopee_item_preview erro: %s", e)
+        return {"error": f"Erro inesperado: {e}"}
+
+
+@app.post("/shopee/item/importar-bling")
+async def shopee_importar_bling(request: Request):
+    """
+    Importa anúncio Shopee para o Bling em 2 etapas:
+    1. Cria o produto pai (tipo 'P') sem variações
+    2. Para cada variação com SKU preenchido, cria via /produtos/{id}/variacoes
+
+    Body: {
+      nome, codigo, preco, situacao?,
+      variacoes: [{nome, codigo, preco, estoque}]
+    }
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Body JSON inválido."}
+
+    nome   = str(body.get("nome", "")).strip()
+    codigo = str(body.get("codigo", "")).strip()
+    preco  = float(body.get("preco", 0) or 0)
+
+    if not nome:
+        return {"ok": False, "error": "Nome do produto é obrigatório."}
+    if not codigo:
+        return {"ok": False, "error": "Código (SKU pai) é obrigatório."}
+
+    variacoes_raw = body.get("variacoes") or []
+    variacoes = [
+        {
+            "nome":    str(v.get("nome", "")).strip(),
+            "codigo":  str(v.get("codigo", "")).strip(),
+            "preco":   round(float(v.get("preco", preco) or preco), 2),
+            "estoque": int(v.get("estoque", 0) or 0),
+        }
+        for v in variacoes_raw
+        if str(v.get("codigo", "")).strip()
+    ]
+    if variacoes_raw and not variacoes:
+        return {"ok": False, "error": "Nenhuma variação com SKU preenchido."}
+
+    # ── Etapa 1: Cria produto pai ─────────────────────────────────────────────
+    payload_pai: dict = {
+        "nome":     nome,
+        "codigo":   codigo,
+        "preco":    round(preco, 2),
+        "situacao": body.get("situacao", "A"),
+        "tipo":     "P",  # Bling v3: P=Produto, S=Serviço, N=Serviço fiscal
+    }
+
+    try:
+        client = BlingClient()
+        res_pai = client.criar_produto(payload_pai)
+    except Exception as e:
+        logger.error("shopee_importar_bling — criar pai: %s", e)
+        return {"ok": False, "step": "criar_produto", "error": str(e)}
+
+    prod_id = (res_pai.get("data") or {}).get("id")
+    if not prod_id:
+        return {"ok": False, "step": "criar_produto", "error": f"Bling não retornou ID do produto: {res_pai}"}
+
+    # ── Etapa 2: Cria variações (se houver) ──────────────────────────────────
+    if not variacoes:
+        return {"ok": True, "id": prod_id, "variacoes_criadas": 0}
+
+    erros_var = []
+    criadas = 0
+    for v in variacoes:
+        payload_var = {
+            "nome":    v["nome"],
+            "codigo":  v["codigo"],
+            "preco":   v["preco"],
+            "estoque": {"saldoInicial": v["estoque"]},
+        }
+        try:
+            client.criar_variacao(prod_id, payload_var)
+            criadas += 1
+        except Exception as e:
+            logger.warning("shopee_importar_bling — criar variação '%s': %s", v["codigo"], e)
+            erros_var.append({"codigo": v["codigo"], "nome": v["nome"], "error": str(e)})
+
+    return {
+        "ok": True,
+        "id": prod_id,
+        "variacoes_criadas": criadas,
+        "variacoes_erro": erros_var,
+    }
+
+
 @app.get("/auditoria/canais", response_class=HTMLResponse)
 def auditoria_canais_page():
     return HTMLResponse((PAGES_DIR / "auditoria_canais.html").read_text(encoding="utf-8"))
@@ -547,6 +657,146 @@ def auditoria_canais_dados(
         "total_filtrado": total,
         "auditoria": auditoria[offset: offset + limit],
     }
+
+@app.get("/bling/debug/sku-get")
+def bling_debug_sku_get(sku: str = ""):
+    """GET simplificado para buscar produto Bling por SKU — usado no debug modal ML."""
+    if not BlingClient:
+        return {"erro": "bling_client.py não encontrado"}
+    sku = sku.strip()
+    if not sku:
+        return {"erro": "SKU não informado"}
+    try:
+        client = BlingClient()
+        # Busca produto por código (SKU)
+        result = client._get("/produtos", params={"codigo": sku, "limite": 5})
+        produtos = result.get("data", [])
+        if not produtos:
+            return {"encontrado": False, "sku": sku, "mensagem": "Produto não encontrado no Bling com esse código/SKU"}
+        # Pega o mais relevante
+        prod = produtos[0]
+        estoque = prod.get("estoque") or {}
+        situacao = prod.get("situacao") or ""
+        return {
+            "encontrado": True,
+            "id": prod.get("id"),
+            "codigo": prod.get("codigo"),
+            "nome": prod.get("nome"),
+            "situacao": situacao,          # "A" = ativo, "I" = inativo
+            "preco": prod.get("preco"),
+            "estoque_atual": estoque.get("saldoVirtualTotal") or estoque.get("saldoFisicoTotal") or prod.get("estoqueAtual") or 0,
+            "estoque_fisico": estoque.get("saldoFisicoTotal") or 0,
+            "estoque_virtual": estoque.get("saldoVirtualTotal") or 0,
+            "estrutura": prod.get("estrutura"),  # se é kit/componente
+            "tipo": prod.get("tipo"),
+            "raw_estoque": estoque,
+        }
+    except Exception as e:
+        return {"erro": f"Erro Bling: {e}"}
+
+
+@app.get("/ml/debug/item")
+def ml_debug_item(mlb: str = ""):
+    """
+    Busca detalhes de um anúncio ML pelo código MLB.
+    Retorna: id, titulo, status, seller_custom_field, available_quantity, variações.
+    Útil para diagnosticar por que um anúncio não está sincronizando estoque.
+    """
+    import requests as _req
+    mlb = mlb.strip().upper()
+    if not mlb:
+        return {"erro": "Informe o código MLB (ex: MLB3798077573)"}
+
+    tp = DATA_DIR / "ml_tokens.json"
+    if not tp.exists():
+        return {"erro": "ML não conectado — faça login em /ml/login"}
+    try:
+        tokens = json.loads(tp.read_text(encoding="utf-8"))
+    except Exception:
+        return {"erro": "Erro ao ler tokens ML"}
+    token = tokens.get("access_token", "")
+    if not token:
+        return {"erro": "access_token ML vazio"}
+
+    h = {"Authorization": f"Bearer {token}"}
+    try:
+        r = _req.get(
+            "https://api.mercadolibre.com/items",
+            params={
+                "ids": mlb,
+                "attributes": "id,title,available_quantity,seller_custom_field,status,variations,listing_type_id,catalog_product_id",
+            },
+            headers=h,
+            timeout=12,
+        )
+        if r.status_code == 401:
+            return {"erro": "Token ML expirado — acesse /ml/login para reconectar"}
+        if r.status_code != 200:
+            return {"erro": f"ML API retornou HTTP {r.status_code}", "body": r.text[:300]}
+        data = r.json()
+        if not data:
+            return {"erro": "Nenhum resultado para este MLB"}
+        item = (data[0].get("body") or data[0]) if isinstance(data, list) else data
+
+        # Estrutura de resposta amigável
+        variations_out = []
+        for v in (item.get("variations") or []):
+            variations_out.append({
+                "id":                  v.get("id"),
+                "seller_custom_field": v.get("seller_custom_field"),
+                "available_quantity":  v.get("available_quantity"),
+                "attribute_combinations": [
+                    f"{a.get('name')}: {a.get('value_name')}"
+                    for a in (v.get("attribute_combinations") or [])
+                ],
+            })
+
+        return {
+            "mlb":                 item.get("id"),
+            "titulo":              item.get("title"),
+            "status":              item.get("status"),
+            "seller_custom_field": item.get("seller_custom_field"),  # SKU configurado no anúncio pai
+            "available_quantity":  item.get("available_quantity"),   # 0 para pais com variações
+            "listing_type_id":     item.get("listing_type_id"),
+            "catalog_product_id":  item.get("catalog_product_id"),
+            "tem_variacoes":       len(variations_out) > 0,
+            "total_variacoes":     len(variations_out),
+            "variacoes":           variations_out,
+            "diagnostico": _ml_diagnostico(item, variations_out),
+        }
+    except Exception as e:
+        return {"erro": f"Erro ao consultar ML: {e}"}
+
+
+def _ml_diagnostico(item: dict, variations: list) -> list[str]:
+    """Gera lista de avisos/diagnósticos para um item ML."""
+    diag = []
+    scf = (item.get("seller_custom_field") or "").strip()
+    qty = item.get("available_quantity", 0)
+    status = (item.get("status") or "").lower()
+
+    if status != "active":
+        diag.append(f"⚠️ Anúncio não está ativo (status: {status}) — Bling não sincroniza estoque de anúncios inativos/pausados")
+
+    if variations:
+        diag.append(f"📦 Produto com {len(variations)} variação(ões) — o pai sempre tem qty=0; estoque é por variação")
+        sem_sku = [v for v in variations if not (v.get("seller_custom_field") or "").strip()]
+        com_sku = [v for v in variations if (v.get("seller_custom_field") or "").strip()]
+        if sem_sku:
+            diag.append(f"❌ {len(sem_sku)} variação(ões) sem seller_custom_field (SKU) — Bling não consegue identificar e sincronizar")
+        if com_sku:
+            diag.append(f"✅ {len(com_sku)} variação(ões) com SKU configurado — podem ser sincronizadas")
+    else:
+        # Produto simples
+        if not scf:
+            diag.append("❌ seller_custom_field vazio — Bling não consegue identificar este anúncio pelo SKU; sincronização não funcionará via integração padrão")
+        else:
+            diag.append(f"✅ seller_custom_field = '{scf}' — SKU configurado no anúncio")
+        if qty == 0 and status == "active":
+            diag.append("⚠️ Estoque zerado no ML com anúncio ativo — verifique se o Bling está enviando atualizações")
+
+    return diag
+
 
 # ─── Conferência de SKUs ────────────────────────────────────────────────────
 
@@ -2454,6 +2704,140 @@ def shopify_gtag_status():
             "size": asset_info.get("size"),
         }
     }
+
+
+@app.post("/shopify/deploy-secao-oferta")
+def shopify_deploy_secao_oferta():
+    """
+    Faz o deploy do arquivo shinsei_oferta_section.liquid para o tema Shopify ativo.
+    Atualiza sections/shinsei-oferta-section.liquid via Admin API.
+    """
+    import json, requests as req
+    cfg_path = BASE_DIR / "data" / "shopify_config.json"
+    liquid_path = BASE_DIR / "shinsei_oferta_section.liquid"
+
+    if not cfg_path.exists():
+        raise HTTPException(status_code=400, detail="Shopify não conectado.")
+    if not liquid_path.exists():
+        raise HTTPException(status_code=404, detail="shinsei_oferta_section.liquid não encontrado.")
+
+    data  = json.loads(cfg_path.read_text(encoding="utf-8"))
+    token = data.get("access_token", "")
+    if not token:
+        raise HTTPException(status_code=400, detail="Token Shopify ausente.")
+
+    from shopify_oauth import SHOPIFY_STORE
+    TEMA_ID  = 185169445169
+    base     = f"https://{SHOPIFY_STORE}.myshopify.com/admin/api/2024-01"
+    headers  = {"X-Shopify-Access-Token": token, "Content-Type": "application/json"}
+
+    content  = liquid_path.read_text(encoding="utf-8")
+    payload  = {"asset": {"key": "sections/shinsei-oferta-section.liquid", "value": content}}
+
+    r = req.put(f"{base}/themes/{TEMA_ID}/assets.json", headers=headers, json=payload, timeout=30)
+    if r.status_code not in (200, 201):
+        raise HTTPException(status_code=r.status_code, detail=f"Shopify API: {r.text[:400]}")
+
+    asset = r.json().get("asset", {})
+    return {
+        "ok": True,
+        "key": asset.get("key"),
+        "updated_at": asset.get("updated_at"),
+        "size": asset.get("size"),
+        "public_url": asset.get("public_url"),
+        "msg": "sections/shinsei-oferta-section.liquid atualizado com sucesso no tema.",
+    }
+
+
+@app.get("/shopify/template-homepage")
+def shopify_template_homepage():
+    """Retorna o template index.json da homepage para inspecionar as seções."""
+    import json, requests as req
+    cfg_path = BASE_DIR / "data" / "shopify_config.json"
+    if not cfg_path.exists():
+        raise HTTPException(status_code=400, detail="Shopify não conectado.")
+    data  = json.loads(cfg_path.read_text(encoding="utf-8"))
+    token = data.get("access_token", "")
+    if not token:
+        raise HTTPException(status_code=400, detail="Token Shopify ausente.")
+    from shopify_oauth import SHOPIFY_STORE
+    TEMA_ID = 185169445169
+    base = f"https://{SHOPIFY_STORE}.myshopify.com/admin/api/2024-01"
+    headers = {"X-Shopify-Access-Token": token}
+    r = req.get(f"{base}/themes/{TEMA_ID}/assets.json?asset[key]=templates/index.json", headers=headers, timeout=15)
+    if r.status_code != 200:
+        raise HTTPException(status_code=r.status_code, detail=r.text[:300])
+    asset = r.json().get("asset", {})
+    value = asset.get("value", "{}")
+    return {"template": json.loads(value), "secoes": {k: v.get("type") for k, v in json.loads(value).get("sections", {}).items()}}
+
+
+@app.post("/shopify/substituir-secao")
+def shopify_substituir_secao(body: dict):
+    """
+    Substitui uma seção no template index.json da homepage.
+    body: { "substituir": "id_ou_tipo_da_secao_antiga", "nova_secao": "shinsei-oferta-section" }
+    """
+    import json, requests as req
+    cfg_path = BASE_DIR / "data" / "shopify_config.json"
+    if not cfg_path.exists():
+        raise HTTPException(status_code=400, detail="Shopify não conectado.")
+    data  = json.loads(cfg_path.read_text(encoding="utf-8"))
+    token = data.get("access_token", "")
+    if not token:
+        raise HTTPException(status_code=400, detail="Token Shopify ausente.")
+    from shopify_oauth import SHOPIFY_STORE
+    TEMA_ID  = 185169445169
+    base     = f"https://{SHOPIFY_STORE}.myshopify.com/admin/api/2024-01"
+    headers  = {"X-Shopify-Access-Token": token, "Content-Type": "application/json"}
+
+    # 1. Busca o template atual
+    r = req.get(f"{base}/themes/{TEMA_ID}/assets.json?asset[key]=templates/index.json", headers=headers, timeout=15)
+    if r.status_code != 200:
+        raise HTTPException(status_code=r.status_code, detail=f"GET template: {r.text[:300]}")
+    template = json.loads(r.json()["asset"]["value"])
+
+    substituir = body.get("substituir", "")  # id ou tipo a substituir
+    nova_secao = body.get("nova_secao", "shinsei-oferta-section")
+
+    sections = template.get("sections", {})
+    order    = template.get("order", [])
+
+    # Encontra a seção alvo (por id ou por tipo)
+    alvo_id = None
+    for sid, sdata in sections.items():
+        if substituir.lower() in sid.lower() or substituir.lower() in sdata.get("type", "").lower():
+            alvo_id = sid
+            break
+
+    if not alvo_id:
+        return {
+            "ok": False,
+            "msg": f"Seção '{substituir}' não encontrada.",
+            "secoes_disponiveis": {k: v.get("type") for k, v in sections.items()},
+        }
+
+    # Substitui
+    old_type = sections[alvo_id].get("type")
+    sections[alvo_id] = {"type": nova_secao, "disabled": False, "settings": {}, "blocks": {}, "block_order": []}
+    template["sections"] = sections
+    template["order"]    = order
+
+    # 2. PUT do template atualizado
+    new_value = json.dumps(template, ensure_ascii=False)
+    payload   = {"asset": {"key": "templates/index.json", "value": new_value}}
+    rp = req.put(f"{base}/themes/{TEMA_ID}/assets.json", headers=headers, json=payload, timeout=30)
+    if rp.status_code not in (200, 201):
+        raise HTTPException(status_code=rp.status_code, detail=f"PUT template: {rp.text[:400]}")
+
+    return {
+        "ok": True,
+        "substituiu": alvo_id,
+        "tipo_antigo": old_type,
+        "tipo_novo": nova_secao,
+        "msg": f"Seção '{alvo_id}' ({old_type}) substituída por '{nova_secao}' com sucesso.",
+    }
+
 
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
