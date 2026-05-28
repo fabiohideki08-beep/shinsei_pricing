@@ -1262,12 +1262,21 @@ def executar_conferencia(bling_client) -> dict:
                 key=lambda x: x["sku"]
             )[:1000] if shopify_ok else [],
             "amazon_sem_bling": sorted(
-                [{"sku": s, "status": v.get("status",""), "nome": v.get("nome",""), "qty": v.get("qty")}
+                [{"sku": s, "status": v.get("status",""), "nome": v.get("nome",""), "qty": v.get("qty"),
+                  "tipo_divergencia": (
+                      "ean_divergente"   if (s.isdigit() and 8 <= len(s) <= 14) else
+                      "sku_nao_encontrado"
+                  )}
                  for s, v in skus_amazon.items() if s not in skus_bling],
                 key=lambda x: x["sku"]
             )[:1000] if amazon_ok else [],
             "shopee_sem_bling": sorted(
-                [{"sku": s, "item_id": v.get("item_id",""), "status": v.get("status",""), "qty": v.get("qty")}
+                [{"sku": s, "item_id": v.get("item_id",""), "status": v.get("status",""), "qty": v.get("qty"),
+                  "tipo_divergencia": (
+                      "codigo_catalogo" if (s.isdigit() and len(s) > 14) else
+                      "ean_divergente"   if (s.isdigit() and 8 <= len(s) <= 14) else
+                      "sku_nao_encontrado"
+                  )}
                  for s, v in skus_shopee.items() if s not in skus_bling],
                 key=lambda x: x["sku"]
             )[:1000] if shopee_ok else [],
