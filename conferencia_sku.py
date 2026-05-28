@@ -1177,14 +1177,20 @@ def executar_conferencia(bling_client) -> dict:
             resumo_auditoria["altos"], resumo_auditoria["medios"])
 
         # Stats por canal
+        _STATUS_ATIVOS_CANAL = {"active"}
+
         def _stats_canal(skus_canal: dict, canal_ok: bool) -> dict:
             if not canal_ok:
                 return {"conectado": False}
             presentes = sum(1 for s in skus_canal if s in skus_bling)
             sem_bling = sum(1 for s in skus_canal if s not in skus_bling)
+            total_ativos   = sum(1 for v in skus_canal.values() if (v.get("status") or "").lower() in _STATUS_ATIVOS_CANAL)
+            total_inativos = len(skus_canal) - total_ativos
             return {
                 "conectado": True,
                 "total": len(skus_canal),
+                "total_ativos": total_ativos,
+                "total_inativos": total_inativos,
                 "presentes_em_bling": presentes,
                 "sem_bling": sem_bling,
             }
@@ -1252,6 +1258,16 @@ def executar_conferencia(bling_client) -> dict:
                 "bling_sem_shopify_ativo_ativo": _bling_ativo_sem_canal_ativo(skus_shopify, shopify_ok, skus_bling_ativos, {"active"}),
                 "bling_sem_amazon_ativo_ativo": _bling_ativo_sem_canal_ativo(skus_amazon, amazon_ok, skus_bling_ativos, {"active"}),
                 "bling_sem_shopee_ativo_ativo": _bling_ativo_sem_canal_ativo(skus_shopee, shopee_ok, skus_bling_ativos, {"active"}),
+                # TODOS do Bling SEM listing ativo no canal (canal filter = ativos, bling filter = todos)
+                "bling_sem_ml_canal_ativo": _bling_ativo_sem_canal_ativo(skus_ml, ml_ok, skus_bling, {"active"}),
+                "bling_sem_shopify_canal_ativo": _bling_ativo_sem_canal_ativo(skus_shopify, shopify_ok, skus_bling, {"active"}),
+                "bling_sem_amazon_canal_ativo": _bling_ativo_sem_canal_ativo(skus_amazon, amazon_ok, skus_bling, {"active"}),
+                "bling_sem_shopee_canal_ativo": _bling_ativo_sem_canal_ativo(skus_shopee, shopee_ok, skus_bling, {"active"}),
+                # Bling INATIVOS SEM listing ativo no canal
+                "bling_sem_ml_inativo_canal_ativo": _bling_ativo_sem_canal_ativo(skus_ml, ml_ok, skus_bling_inativos, {"active"}),
+                "bling_sem_shopify_inativo_canal_ativo": _bling_ativo_sem_canal_ativo(skus_shopify, shopify_ok, skus_bling_inativos, {"active"}),
+                "bling_sem_amazon_inativo_canal_ativo": _bling_ativo_sem_canal_ativo(skus_amazon, amazon_ok, skus_bling_inativos, {"active"}),
+                "bling_sem_shopee_inativo_canal_ativo": _bling_ativo_sem_canal_ativo(skus_shopee, shopee_ok, skus_bling_inativos, {"active"}),
             },
             "sem_sku_ml": sem_sku_ml[:200],  # ML sem SKU (não mapeável após todos os fallbacks)
             "ml_anuncios_remapeados": len(remapped_by_anuncio),  # anúncios ML mapeados via Bling /anuncios

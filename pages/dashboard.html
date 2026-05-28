@@ -37,6 +37,7 @@ body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(
 .filtro-btn.ativo.active{background:#22c55e;border-color:#22c55e}
 .filtro-btn.inativo.active{background:#9fb0d9;border-color:#9fb0d9;color:#0b1020}
 .filtro-btn.ativo-ativo.active{background:#16a34a;border-color:#16a34a}
+.filtro-btn.canal-ativo.active{background:#0284c7;border-color:#0284c7}
 /* stats grid */
 .stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:28px}
 .stat-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 16px;display:flex;flex-direction:column;gap:6px;transition:transform .15s,box-shadow .15s}
@@ -104,16 +105,25 @@ footer{text-align:center;padding:20px 0;color:var(--muted);font-size:12px;border
     <div class="progress-msg" id="progress-msg"></div>
   </div>
 
-  <!-- Filtro de situação Bling -->
-  <div class="filtro-bar" id="filtro-situacao" style="display:none">
-    <span class="filtro-label">Filtrar Bling:</span>
-    <div class="filtro-btns">
-      <button class="filtro-btn active" onclick="setFiltro('todos',this)">Todos</button>
-      <button class="filtro-btn ativo"  onclick="setFiltro('ativos',this)">✓ Só Ativos</button>
-      <button class="filtro-btn inativo" onclick="setFiltro('inativos',this)">✗ Só Inativos</button>
-      <button class="filtro-btn ativo-ativo" onclick="setFiltro('ativos_ativos',this)" title="Ativos no Bling sem listing ATIVO no canal (inclui pausados)">⚡ Ativos s/ canal ativo</button>
+  <!-- Filtros: Bling + Canal -->
+  <div id="filtro-wrap" style="display:none;flex-direction:column;gap:8px;margin-bottom:14px">
+    <div class="filtro-bar" style="margin-bottom:0">
+      <span class="filtro-label">Bling:</span>
+      <div class="filtro-btns">
+        <button class="filtro-btn active" onclick="setBlingFiltro('todos',this)">Todos</button>
+        <button class="filtro-btn ativo"  onclick="setBlingFiltro('ativos',this)">✓ Só Ativos</button>
+        <button class="filtro-btn inativo" onclick="setBlingFiltro('inativos',this)">✗ Só Inativos</button>
+      </div>
+      <span id="filtro-info" style="font-size:11px;color:var(--muted);margin-left:6px"></span>
     </div>
-    <span id="filtro-info" style="font-size:11px;color:var(--muted);margin-left:6px"></span>
+    <div class="filtro-bar" style="margin-bottom:0">
+      <span class="filtro-label">Canal:</span>
+      <div class="filtro-btns">
+        <button class="filtro-btn active" onclick="setCanalFiltro('todos',this)">Todos</button>
+        <button class="filtro-btn canal-ativo" onclick="setCanalFiltro('ativos',this)">✓ Só Ativos</button>
+      </div>
+      <span style="font-size:11px;color:var(--muted);margin-left:6px">filtra por anúncios ativos em cada canal</span>
+    </div>
   </div>
 
   <!-- Stats de cobertura -->
@@ -184,41 +194,56 @@ const CANAIS = [
 ];
 
 let _polling = false;
-let _filtro = 'todos';   // 'todos' | 'ativos' | 'inativos'
+let _filtro_bling = 'todos';   // 'todos' | 'ativos' | 'inativos'
+let _filtro_canal = 'todos';   // 'todos' | 'ativos'
 let _lastStats = null;
 
 function fmt(n){ return (n===null||n===undefined)?'—':Number(n).toLocaleString('pt-BR'); }
 function pct(a,b){ return b>0 ? Math.round((a/b)*100) : 0; }
 
-function setFiltro(val, btn){
-  _filtro = val;
-  document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
+function setBlingFiltro(val, btn){
+  _filtro_bling = val;
+  document.querySelectorAll('.filtro-btns')[0].querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  if(_lastStats){
-    const res = {stats: _lastStats};
-    renderStats(res);
-    renderCanais(res);
-  }
+  if(_lastStats){ renderStats({stats:_lastStats}); renderCanais({stats:_lastStats}); }
 }
 
-function _sufixo(){ return _filtro === 'ativos' ? '_ativos' : _filtro === 'inativos' ? '_inativos' : _filtro === 'ativos_ativos' ? '_ativo_ativo' : ''; }
+function setCanalFiltro(val, btn){
+  _filtro_canal = val;
+  document.querySelectorAll('.filtro-btns')[1].querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if(_lastStats){ renderStats({stats:_lastStats}); renderCanais({stats:_lastStats}); }
+}
+
+function _sufixo(){
+  // Combinação de filtros Bling × Canal
+  const b = _filtro_bling; // 'todos' | 'ativos' | 'inativos'
+  const c = _filtro_canal; // 'todos' | 'ativos'
+  if(c === 'ativos'){
+    if(b === 'ativos')   return '_ativo_ativo';         // bling ativo + canal ativo
+    if(b === 'inativos') return '_inativo_canal_ativo'; // bling inativo + canal ativo
+    return '_canal_ativo';                               // todos bling + canal ativo
+  }
+  // canal = todos
+  if(b === 'ativos')   return '_ativos';
+  if(b === 'inativos') return '_inativos';
+  return '';
+}
 
 function renderStats(res){
   const s = res.stats || {};
   _lastStats = s;
   const suf = _sufixo();
 
-  // Total base muda conforme filtro
-  const totalBling = suf === '_ativos'   ? (s.total_bling_ativos  || 0)
-                   : suf === '_inativos' ? (s.total_bling_inativos || 0)
+  // Total base do Bling conforme filtro
+  const totalBling = (_filtro_bling === 'ativos')   ? (s.total_bling_ativos  || 0)
+                   : (_filtro_bling === 'inativos') ? (s.total_bling_inativos || 0)
                    : (s.total_bling || 0);
 
-  // Mostra filtro se tiver dados de ativos/inativos
+  // Mostra filtros se tiver dados de ativos/inativos
   if(s.total_bling_ativos != null){
-    const bar = document.getElementById('filtro-situacao');
-    bar.style.display = 'flex';
-    const info = document.getElementById('filtro-info');
-    info.textContent = `${fmt(s.total_bling_ativos)} ativos · ${fmt(s.total_bling_inativos)} inativos`;
+    document.getElementById('filtro-wrap').style.display = 'flex';
+    document.getElementById('filtro-info').textContent = `${fmt(s.total_bling_ativos)} ativos · ${fmt(s.total_bling_inativos)} inativos`;
   }
 
   const grid = document.getElementById('stats-grid');
@@ -228,13 +253,11 @@ function renderStats(res){
   const semAmazon  = s[`bling_sem_amazon${suf}`]  ?? s.bling_sem_amazon;
   const semShopee  = s[`bling_sem_shopee${suf}`]  ?? s.bling_sem_shopee;
 
-  const labelBling = _filtro === 'ativos'        ? 'Bling Ativos'
-                   : _filtro === 'inativos'      ? 'Bling Inativos'
-                   : _filtro === 'ativos_ativos' ? 'Bling Ativos'
+  const labelBling = (_filtro_bling === 'ativos')   ? 'Bling Ativos'
+                   : (_filtro_bling === 'inativos') ? 'Bling Inativos'
                    : 'Total Bling';
-  const subBling   = _filtro === 'ativos'        ? 'produtos ativos com SKU'
-                   : _filtro === 'inativos'      ? 'produtos inativos com SKU'
-                   : _filtro === 'ativos_ativos' ? 'ativos sem listing ativo no canal'
+  const subBling   = (_filtro_bling === 'ativos')   ? 'produtos ativos com SKU'
+                   : (_filtro_bling === 'inativos') ? 'produtos inativos com SKU'
                    : 'produtos com SKU';
 
   const cards = [
@@ -260,10 +283,13 @@ function renderStats(res){
 function renderCanais(res){
   const s = res.stats || {};
   const suf = _sufixo();
-  const totalBase = suf === '_ativos'      ? (s.total_bling_ativos  || s.total_bling || 1)
-                  : suf === '_inativos'   ? (s.total_bling_inativos || s.total_bling || 1)
-                  : suf === '_ativo_ativo' ? (s.total_bling_ativos   || s.total_bling || 1)
+  const b = _filtro_bling, canal = _filtro_canal;
+
+  // Base do Bling para calcular cobertura
+  const totalBase = (b === 'ativos')   ? (s.total_bling_ativos  || s.total_bling || 1)
+                  : (b === 'inativos') ? (s.total_bling_inativos || s.total_bling || 1)
                   : (s.total_bling || 1);
+
   const grid = document.getElementById('channels-grid');
   grid.innerHTML = CANAIS.map(c => {
     const cs = s[c.statKey] || {};
@@ -271,14 +297,22 @@ function renderCanais(res){
     const badge = conectado
       ? `<span class="ch-badge badge-ok">✓ Conectado</span>`
       : `<span class="ch-badge badge-err">✗ Desconectado</span>`;
-    const total = cs.total ?? '—';
+
+    // Total do canal: mostra ativos/todos conforme filtro de canal
+    const totalCanal = (canal === 'ativos') ? (cs.total_ativos ?? cs.total ?? '—') : (cs.total ?? '—');
+    const lblTotal   = (canal === 'ativos') ? 'Ativos no canal' : 'Produtos no canal';
+
     const sem = s[`${c.semKey}${suf}`] ?? s[c.semKey] ?? '—';
-    const pctVal = (typeof total==='number' && typeof sem==='number' && totalBase>0)
+    const pctVal = (typeof totalCanal==='number' && typeof sem==='number' && totalBase>0)
       ? Math.round((1 - sem / totalBase) * 100) : '—';
-    const lblSem = suf === '_ativos'       ? `Ativos sem ${c.nome}`
-                 : suf === '_inativos'     ? `Inativos sem ${c.nome}`
-                 : suf === '_ativo_ativo'  ? `Ativos s/ listing ativo`
+
+    const lblSem = (b === 'ativos' && canal === 'ativos') ? `Ativos s/ ativo no ${c.nome}`
+                 : (b === 'ativos')                       ? `Ativos sem ${c.nome}`
+                 : (b === 'inativos' && canal === 'ativos')? `Inativos s/ ativo no ${c.nome}`
+                 : (b === 'inativos')                     ? `Inativos sem ${c.nome}`
+                 : (canal === 'ativos')                   ? `Bling s/ ativo no ${c.nome}`
                  : `Bling sem ${c.nome}`;
+
     return `<a class="ch-card" href="${c.href}">
       <div class="ch-top" style="background:${c.cor}"></div>
       <div class="ch-body">
@@ -288,7 +322,7 @@ function renderCanais(res){
           ${badge}
         </div>
         <div class="ch-stats">
-          <div class="ch-stat-row"><span class="lbl">Produtos no canal</span><span class="val">${fmt(total)}</span></div>
+          <div class="ch-stat-row"><span class="lbl">${lblTotal}</span><span class="val">${fmt(totalCanal)}</span></div>
           <div class="ch-stat-row"><span class="lbl">${lblSem}</span><span class="val" style="color:${sem>0?'var(--warn)':'var(--ok)'}">${fmt(sem)}</span></div>
           <div class="ch-stat-row"><span class="lbl">Cobertura Bling</span><span class="val">${pctVal !== '—' ? pctVal+'%' : '—'}</span></div>
         </div>
