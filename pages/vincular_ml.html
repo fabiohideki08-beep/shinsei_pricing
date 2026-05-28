@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Vincular SKUs — ML ↔ Bling</title>
+<style>
+:root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--ok:#22c55e;--danger:#ef4444;--warn:#f59e0b;--canal-cor:#eab308}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text);min-height:100vh}
+.wrap{max-width:1440px;margin:0 auto;padding:22px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:24px;background:rgba(18,26,49,.97);border:1px solid var(--line);border-left:4px solid var(--canal-cor);border-radius:18px;padding:14px 20px;position:sticky;top:16px;z-index:10;flex-wrap:wrap}
+.brand h1{margin:0;font-size:18px;font-weight:800}
+.brand p{margin:4px 0 0;font-size:11px;color:var(--muted)}
+.topbar-right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{border:none;background:var(--accent);color:#fff;padding:9px 16px;border-radius:11px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:7px;font-size:13px;transition:background .15s;white-space:nowrap}
+.btn:hover{background:#3a78f2}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+.btn.secondary:hover{background:var(--card2)}
+.btn.ok{background:#16a34a}.btn.ok:hover{background:#15803d}
+.btn.danger{background:rgba(239,68,68,.2);color:var(--danger);border:1px solid rgba(239,68,68,.3)}.btn.danger:hover{background:rgba(239,68,68,.35)}
+/* stats */
+.stats-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.stat-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700}
+.stat-val{font-size:26px;font-weight:900;line-height:1}
+/* filter bar */
+.filtro-bar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.fbtn{padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--line);background:var(--card2);color:var(--muted);transition:all .15s}
+.fbtn.active{color:#fff;border-color:var(--accent);background:rgba(79,140,255,.2)}
+.fbtn.alta.active{background:rgba(34,197,94,.2);border-color:var(--ok);color:var(--ok)}
+.fbtn.media.active{background:rgba(245,158,11,.2);border-color:var(--warn);color:var(--warn)}
+.fbtn.baixa.active{background:rgba(239,68,68,.2);border-color:var(--danger);color:var(--danger)}
+/* table */
+.table-wrap{overflow-x:auto;border-radius:14px;border:1px solid var(--line);margin-bottom:20px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--card2);padding:10px 12px;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);white-space:nowrap;border-bottom:1px solid var(--line)}
+td{padding:9px 12px;border-bottom:1px solid rgba(38,52,88,.5);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.025)}
+tr.aplicado td{opacity:.45}
+tr.erro td{background:rgba(239,68,68,.07)}
+.monospace{font-family:monospace;font-size:12px}
+.nome-cell{max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* confiança badge */
+.conf-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700}
+.conf-alta{background:rgba(34,197,94,.15);color:var(--ok);border:1px solid rgba(34,197,94,.3)}
+.conf-media{background:rgba(245,158,11,.15);color:var(--warn);border:1px solid rgba(245,158,11,.3)}
+.conf-baixa{background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3)}
+/* SKU input editável */
+.sku-input{background:var(--card2);border:1px solid var(--line);border-radius:6px;color:var(--text);font-family:monospace;font-size:12px;padding:4px 8px;width:160px;outline:none;transition:border-color .15s}
+.sku-input:focus{border-color:var(--accent)}
+.sku-input.editado{border-color:var(--warn);color:var(--warn)}
+/* progress */
+.progress-wrap{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 20px;margin-bottom:20px;display:none}
+.progress-wrap.visible{display:block}
+.progress-bar-bg{background:var(--card2);border-radius:999px;height:8px;overflow:hidden;margin:8px 0}
+.progress-bar-fill{height:100%;border-radius:999px;background:var(--ok);transition:width .3s}
+/* resultado banner */
+.resultado-banner{border-radius:12px;padding:14px 18px;margin-bottom:18px;display:none;font-weight:700;font-size:14px}
+.resultado-ok{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:var(--ok)}
+.resultado-err{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:var(--danger)}
+/* status cell */
+.status-ok{color:var(--ok);font-weight:700}
+.status-err{color:var(--danger);font-size:11px}
+.empty{padding:40px;text-align:center;color:var(--muted);font-size:14px}
+.skel{display:inline-block;width:60px;height:14px;background:rgba(255,255,255,.08);border-radius:4px;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+footer{text-align:center;padding:18px 0;color:var(--muted);font-size:12px;border-top:1px solid var(--line);margin-top:4px}
+@media(max-width:1200px){.stats-row{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:700px){.stats-row{grid-template-columns:repeat(2,1fr)}.topbar{flex-direction:column;align-items:flex-start}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="brand">
+      <h1>🔗 Vincular SKUs — ML ↔ Bling</h1>
+      <p>Sugestões geradas por GTIN exato e similaridade de título · revise e aplique</p>
+    </div>
+    <div class="topbar-right">
+      <a class="btn secondary" href="/conferencia/ml">← ML</a>
+      <button class="btn secondary" id="btn-alta" onclick="selecionarAlta()">✓ Selecionar alta conf.</button>
+      <button class="btn secondary" onclick="limparSelecao()">✗ Limpar</button>
+      <button class="btn ok" id="btn-aplicar" onclick="aplicarSelecionados()" disabled>
+        ▶ Aplicar selecionados &nbsp;<span id="cnt-sel" style="background:rgba(0,0,0,.25);padding:1px 8px;border-radius:999px">0</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-wrap" id="progress-wrap">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <span style="font-weight:700;font-size:13px" id="progress-label">Aplicando vínculos...</span>
+      <span style="font-size:12px;color:var(--muted)" id="progress-cnt">0 / 0</span>
+    </div>
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-bar" style="width:0%"></div></div>
+    <div style="font-size:12px;color:var(--muted);margin-top:4px" id="progress-msg"></div>
+  </div>
+
+  <!-- Resultado banner -->
+  <div class="resultado-banner resultado-ok" id="banner-ok"></div>
+  <div class="resultado-banner resultado-err" id="banner-err"></div>
+
+  <!-- Stats -->
+  <div class="stats-row" id="stats-row">
+    <div class="stat"><div class="stat-lbl">Total sugestões</div><div class="stat-val skel"></div></div>
+    <div class="stat"><div class="stat-lbl">🟢 Alta confiança</div><div class="stat-val skel" style="color:var(--ok)"></div></div>
+    <div class="stat"><div class="stat-lbl">🟡 Média</div><div class="stat-val skel" style="color:var(--warn)"></div></div>
+    <div class="stat"><div class="stat-lbl">🟠 Baixa</div><div class="stat-val skel" style="color:var(--danger)"></div></div>
+    <div class="stat"><div class="stat-lbl">Selecionados</div><div class="stat-val" style="color:var(--accent)" id="stat-sel">0</div></div>
+  </div>
+
+  <!-- Filtro -->
+  <div class="filtro-bar">
+    <span style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em">Confiança:</span>
+    <button class="fbtn active" onclick="setFiltro('todos',this)">Todos</button>
+    <button class="fbtn alta" onclick="setFiltro('alta',this)">🟢 Alta (≥68%)</button>
+    <button class="fbtn media" onclick="setFiltro('media',this)">🟡 Média (48–68%)</button>
+    <button class="fbtn baixa" onclick="setFiltro('baixa',this)">🟠 Baixa (&lt;48%)</button>
+    <button class="fbtn" onclick="setFiltro('gtin',this)">🔑 GTIN exato</button>
+    <input id="busca-sku" type="search" placeholder="Buscar título ou SKU..."
+           oninput="renderTabela()"
+           style="margin-left:auto;background:var(--card2);border:1px solid var(--line);border-radius:8px;color:var(--text);font-size:12px;padding:5px 12px;outline:none;width:220px"/>
+  </div>
+
+  <!-- Legenda -->
+  <div style="font-size:11px;color:var(--muted);margin-bottom:12px;display:flex;gap:16px;flex-wrap:wrap">
+    <span>🔑 GTIN exato = máxima confiança (código EAN bateu com cadastro Bling)</span>
+    <span>📝 Título = similaridade por palavras em comum</span>
+    <span>✏️ SKU editável — corrija se a sugestão estiver errada antes de aplicar</span>
+  </div>
+
+  <!-- Tabela -->
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:36px"><input type="checkbox" id="check-all" onchange="toggleAll(this.checked)" title="Selecionar todos visíveis"/></th>
+          <th>ID ML</th>
+          <th>Título do Anúncio</th>
+          <th>Código atual</th>
+          <th>SKU Bling sugerido <span style="font-weight:400;color:var(--muted)">(editável)</span></th>
+          <th>Produto Bling</th>
+          <th>Estoque</th>
+          <th>Confiança</th>
+          <th>Método</th>
+          <th style="width:60px">Status</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr><td colspan="10" class="empty"><div class="skel" style="width:220px;height:20px"></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-bottom:20px">
+    <span style="font-size:12px;color:var(--muted)" id="pag-info"></span>
+    <button class="btn secondary" id="btn-prev" onclick="mudarPag(-1)">‹ Anterior</button>
+    <button class="btn secondary" id="btn-next" onclick="mudarPag(1)">Próxima ›</button>
+  </div>
+
+  <footer>Shinsei Market &middot; Ferramenta de Vínculo ML ↔ Bling</footer>
+</div>
+
+<script>
+const PG_SIZE = 50;
+let _sugestoes = [];
+let _filtro = 'todos';
+let _pag = 1;
+let _sel = new Set();        // ml_ids selecionados
+let _status = {};            // ml_id → {ok, erro}
+let _skuEditado = {};        // ml_id → sku editado pelo usuário
+
+function fmt(n){ return (n==null||n===undefined)?'—':Number(n).toLocaleString('pt-BR'); }
+
+function _visivel(s){
+  const q = (document.getElementById('busca-sku')?.value||'').toLowerCase();
+  const passaFiltro = (
+    _filtro === 'todos' ||
+    (_filtro === 'gtin'  && s.metodo === 'gtin_exato') ||
+    s.nivel === _filtro
+  );
+  if(!passaFiltro) return false;
+  if(q) return s.ml_titulo.toLowerCase().includes(q) ||
+             (s.bling_sku||'').toLowerCase().includes(q) ||
+             (s.codigo_atual||'').toLowerCase().includes(q);
+  return true;
+}
+
+function renderStats(d){
+  const sr = document.getElementById('stats-row');
+  sr.innerHTML = `
+    <div class="stat"><div class="stat-lbl">Total sugestões</div><div class="stat-val">${fmt(d.total)}</div></div>
+    <div class="stat"><div class="stat-lbl">🟢 Alta confiança</div><div class="stat-val" style="color:var(--ok)">${fmt(d.alta)}</div></div>
+    <div class="stat"><div class="stat-lbl">🟡 Média</div><div class="stat-val" style="color:var(--warn)">${fmt(d.media)}</div></div>
+    <div class="stat"><div class="stat-lbl">🟠 Baixa</div><div class="stat-val" style="color:var(--danger)">${fmt(d.baixa)}</div></div>
+    <div class="stat"><div class="stat-lbl">Selecionados</div><div class="stat-val" style="color:var(--accent)" id="stat-sel">${_sel.size}</div></div>`;
+}
+
+function renderTabela(){
+  const visiveis = _sugestoes.filter(_visivel);
+  const total_pags = Math.max(1, Math.ceil(visiveis.length / PG_SIZE));
+  if(_pag > total_pags) _pag = total_pags;
+
+  const slice = visiveis.slice((_pag-1)*PG_SIZE, _pag*PG_SIZE);
+  const pi = document.getElementById('pag-info');
+  if(pi) pi.textContent = `Página ${_pag}/${total_pags} · ${visiveis.length} visíveis`;
+
+  const prev = document.getElementById('btn-prev');
+  const next = document.getElementById('btn-next');
+  if(prev) prev.disabled = _pag <= 1;
+  if(next) next.disabled = _pag >= total_pags;
+
+  // Sync check-all
+  const checkAll = document.getElementById('check-all');
+  const selVisiveis = slice.filter(s => _sel.has(s.ml_id)).length;
+  if(checkAll){ checkAll.indeterminate = selVisiveis > 0 && selVisiveis < slice.length; checkAll.checked = selVisiveis === slice.length && slice.length > 0; }
+
+  const tbody = document.getElementById('tbody');
+  if(!slice.length){
+    tbody.innerHTML = `<tr><td colspan="10" class="empty">Nenhuma sugestão com este filtro.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = slice.map(s => {
+    const checked   = _sel.has(s.ml_id) ? 'checked' : '';
+    const stAplic   = _status[s.ml_id];
+    const trClass   = stAplic ? (stAplic.ok ? 'aplicado' : 'erro') : '';
+    const statusCel = stAplic
+      ? (stAplic.ok
+          ? `<span class="status-ok">✓</span>`
+          : `<span class="status-err" title="${(stAplic.erro||'').replace(/"/g,'&quot;')}">✗ erro</span>`)
+      : '';
+    const confClass = s.nivel === 'alta' ? 'conf-alta' : s.nivel === 'media' ? 'conf-media' : 'conf-baixa';
+    const confPct   = Math.round(s.confianca * 100);
+    const metIcon   = s.metodo === 'gtin_exato' ? '🔑 GTIN' : '📝 Título';
+    const skuVal    = _skuEditado[s.ml_id] ?? s.bling_sku;
+    const skuClass  = _skuEditado[s.ml_id] ? 'sku-input editado' : 'sku-input';
+    const codigoAtual = s.codigo_atual
+      ? `<span class="monospace" style="color:var(--muted);font-size:11px">${s.codigo_atual}</span>`
+      : `<span style="color:var(--muted);font-size:11px">—</span>`;
+
+    return `<tr class="${trClass}" data-mlid="${s.ml_id}">
+      <td><input type="checkbox" ${checked} onchange="toggleSel('${s.ml_id}',this.checked)" ${stAplic?.ok?'disabled':''}></td>
+      <td><a href="https://www.mercadolivre.com.br/anuncio/MLB-${s.ml_id.replace('MLB','')}" target="_blank" class="monospace" style="color:var(--danger);text-decoration:none;font-size:11px">${s.ml_id}</a></td>
+      <td><div class="nome-cell" title="${(s.ml_titulo||'').replace(/"/g,'&quot;')}">${s.ml_titulo||'—'}</div></td>
+      <td>${codigoAtual}</td>
+      <td><input class="${skuClass}" type="text" value="${skuVal}" data-original="${s.bling_sku}"
+           oninput="editarSku('${s.ml_id}',this)" title="Edite o SKU se a sugestão estiver errada"/></td>
+      <td><div class="nome-cell" title="${(s.bling_nome||'').replace(/"/g,'&quot;')}">${s.bling_nome||'—'}</div></td>
+      <td style="text-align:center;font-weight:700">${fmt(s.bling_estoque)}</td>
+      <td><span class="conf-badge ${confClass}">${confPct}%</span></td>
+      <td style="font-size:11px;color:var(--muted)">${metIcon}</td>
+      <td>${statusCel}</td>
+    </tr>`;
+  }).join('');
+}
+
+function atualizarSelUi(){
+  const cnt = _sel.size;
+  document.getElementById('cnt-sel').textContent = cnt;
+  const ss = document.getElementById('stat-sel');
+  if(ss) ss.textContent = cnt;
+  const btn = document.getElementById('btn-aplicar');
+  if(btn) btn.disabled = cnt === 0;
+}
+
+function toggleSel(ml_id, checked){
+  if(checked) _sel.add(ml_id); else _sel.delete(ml_id);
+  atualizarSelUi();
+}
+
+function toggleAll(checked){
+  const visiveis = _sugestoes.filter(_visivel);
+  const slice = visiveis.slice((_pag-1)*PG_SIZE, _pag*PG_SIZE);
+  slice.forEach(s => { if(!_status[s.ml_id]?.ok){ if(checked) _sel.add(s.ml_id); else _sel.delete(s.ml_id); } });
+  atualizarSelUi();
+  renderTabela();
+}
+
+function selecionarAlta(){
+  _sugestoes.filter(s => (s.nivel==='alta'||s.metodo==='gtin_exato') && !_status[s.ml_id]?.ok)
+    .forEach(s => _sel.add(s.ml_id));
+  atualizarSelUi();
+  renderTabela();
+}
+
+function limparSelecao(){
+  _sel.clear();
+  atualizarSelUi();
+  renderTabela();
+}
+
+function editarSku(ml_id, input){
+  const val = input.value.trim();
+  if(val === input.dataset.original) { delete _skuEditado[ml_id]; input.classList.remove('editado'); }
+  else { _skuEditado[ml_id] = val; input.classList.add('editado'); }
+}
+
+function setFiltro(f, btn){
+  _filtro = f;
+  document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _pag = 1;
+  renderTabela();
+}
+
+function mudarPag(delta){
+  const visiveis = _sugestoes.filter(_visivel);
+  const total_pags = Math.max(1, Math.ceil(visiveis.length / PG_SIZE));
+  _pag = Math.max(1, Math.min(total_pags, _pag + delta));
+  renderTabela();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+async function aplicarSelecionados(){
+  const ids = [..._sel];
+  if(!ids.length) return;
+  if(!confirm(`Aplicar ${ids.length} vínculo${ids.length!==1?'s':''} no Mercado Livre?\n\nIsso vai atualizar o seller_custom_field de cada anúncio via API.`)) return;
+
+  // Monta lista de vinculos
+  const vinculos = ids.map(ml_id => ({
+    ml_id,
+    bling_sku: _skuEditado[ml_id] ?? (_sugestoes.find(s=>s.ml_id===ml_id)?.bling_sku||''),
+  })).filter(v => v.bling_sku);
+
+  // Mostra progress
+  const pw = document.getElementById('progress-wrap');
+  pw.classList.add('visible');
+  document.getElementById('progress-label').textContent = `Aplicando ${vinculos.length} vínculo${vinculos.length!==1?'s':''}...`;
+  document.getElementById('progress-cnt').textContent = `0 / ${vinculos.length}`;
+  document.getElementById('progress-bar').style.width = '0%';
+  document.getElementById('btn-aplicar').disabled = true;
+  document.getElementById('banner-ok').style.display = 'none';
+  document.getElementById('banner-err').style.display = 'none';
+
+  // Rate limit local: não enviar tudo de uma vez
+  // O backend já aplica 0.35s entre itens, mas com muitos itens
+  // vamos enviar em lotes de 30 para não dar timeout
+  const LOTE = 30;
+  let ok_total = 0, err_total = 0;
+
+  for(let i = 0; i < vinculos.length; i += LOTE){
+    const lote = vinculos.slice(i, i+LOTE);
+    document.getElementById('progress-msg').textContent = `Enviando itens ${i+1}–${Math.min(i+LOTE,vinculos.length)}...`;
+
+    try {
+      const r = await fetch('/conferencia/ml/aplicar-vinculo', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({vinculos: lote}),
+      });
+      const d = await r.json();
+      if(r.status === 401){
+        alert('Token ML expirado. Acesse /ml/login para renovar e tente novamente.');
+        break;
+      }
+      (d.resultados||[]).forEach(res => {
+        _status[res.ml_id] = {ok: res.ok, erro: res.erro||''};
+        if(res.ok){ ok_total++; _sel.delete(res.ml_id); }
+        else err_total++;
+      });
+    } catch(e){
+      err_total += lote.length;
+      lote.forEach(v => _status[v.ml_id] = {ok:false, erro: String(e)});
+    }
+
+    const done = Math.min(i+LOTE, vinculos.length);
+    const pct = Math.round(done/vinculos.length*100);
+    document.getElementById('progress-bar').style.width = pct+'%';
+    document.getElementById('progress-cnt').textContent = `${done} / ${vinculos.length}`;
+    renderTabela();
+  }
+
+  pw.classList.remove('visible');
+  atualizarSelUi();
+
+  if(ok_total > 0){
+    const elOk = document.getElementById('banner-ok');
+    elOk.textContent = `✅ ${ok_total} vínculo${ok_total!==1?'s':''} aplicado${ok_total!==1?'s':''}! Execute a conferência para atualizar os contadores.`;
+    elOk.style.display = 'block';
+  }
+  if(err_total > 0){
+    const elErr = document.getElementById('banner-err');
+    elErr.textContent = `⚠️ ${err_total} item${err_total!==1?'s':''} falharam. Verifique as linhas em vermelho na tabela.`;
+    elErr.style.display = 'block';
+  }
+}
+
+async function carregarSugestoes(){
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = `<tr><td colspan="10" class="empty"><div class="skel" style="width:280px;height:20px"></div><div style="margin-top:8px;font-size:12px;color:var(--muted)">Analisando títulos e GTINs — pode levar alguns segundos...</div></td></tr>`;
+
+  try {
+    const res = await fetch('/conferencia/ml/sugestoes-vinculo').then(r=>r.json());
+    if(!res.ok){
+      tbody.innerHTML = `<tr><td colspan="10" class="empty">⚠️ ${res.erro||'Erro ao carregar sugestões'}</td></tr>`;
+      return;
+    }
+    _sugestoes = res.sugestoes || [];
+    renderStats(res);
+    _pag = 1;
+    renderTabela();
+  } catch(e){
+    tbody.innerHTML = `<tr><td colspan="10" class="empty">⚠️ Erro de conexão: ${e}</td></tr>`;
+  }
+}
+
+carregarSugestoes();
+</script>
+</body>
+</html>

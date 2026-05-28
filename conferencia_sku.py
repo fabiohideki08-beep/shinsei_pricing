@@ -1031,6 +1031,7 @@ def executar_conferencia(bling_client) -> dict:
                 "preco_bling": bling_info.get("preco", 0.0),
                 "id_bling": bling_info.get("id_bling", ""),
                 "situacao_bling": bling_info.get("situacao", ""),  # "A" | "I" | ""
+                "gtin_bling": bling_info.get("gtin", ""),          # EAN/GTIN do produto no Bling
                 "presente_bling": no_bling,
                 "cobertura": cobertura,
             }
@@ -1359,6 +1360,12 @@ def executar_conferencia(bling_client) -> dict:
                  for s, v in skus_shopee.items() if s not in skus_bling],
                 key=lambda x: x["sku"]
             )[:5000] if shopee_ok else [],
+            # Mapa GTIN → SKU Bling (para ferramenta de vínculo em massa)
+            "bling_gtin_map": {
+                info["gtin"]: sku
+                for sku, info in skus_bling.items()
+                if info.get("gtin")
+            },
             "matrix": matrix,
             "auditoria": auditoria[:2000],       # itens com problemas, ordenados por gravidade
             "resumo_auditoria": resumo_auditoria, # contagens por tipo/canal/prioridade

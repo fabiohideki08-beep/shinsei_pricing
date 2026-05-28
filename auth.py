@@ -115,6 +115,9 @@ PUBLIC_PATHS = {
     "/seo-health/dados",
     "/gmc",
     "/gmc/status",
+    "/gmc/analise-shopping",
+    "/gmc/ads-link-status",
+    "/gmc/vincular-ads",
     "/marketing",
     "/oee",
     "/sie",
@@ -156,11 +159,25 @@ PUBLIC_PATHS = {
     # Dashboard e páginas por canal
     "/dashboard",
     "/conferencia/ml",
+    "/conferencia/ml/vincular",
+    "/conferencia/ml/sugestoes-vinculo",
+    "/conferencia/ml/aplicar-vinculo",
     "/conferencia/shopify",
     "/conferencia/amazon",
     "/conferencia/shopee",
     "/auditoria/canais",
     "/auditoria/canais/dados",
+    "/ml/debug/item",
+    "/bling/debug/sku-get",
+    "/shopee/item/preview",
+    "/shopee/item/importar-bling",
+    # Google Ads
+    "/ads/status",
+    "/ads/diagnostico",
+    # Shopify deploy
+    "/shopify/deploy-secao-oferta",
+    "/shopify/template-homepage",
+    "/shopify/substituir-secao",
 }
 
 

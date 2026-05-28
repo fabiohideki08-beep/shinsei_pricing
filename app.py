@@ -114,6 +114,13 @@ try:
 except Exception as _dash_exc:
     logger.warning("Dashboard blueprint não carregado: %s", _dash_exc)
 
+try:
+    from routes.vinculo_ml import router as vinculo_ml_router
+    app.include_router(vinculo_ml_router)
+    logger.info("Ferramenta de vínculo ML registrada em /conferencia/ml/vincular")
+except Exception as _vml_exc:
+    logger.warning("Ferramenta de vínculo ML não carregada: %s", _vml_exc)
+
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     return await verificar_api_key(request, call_next)
