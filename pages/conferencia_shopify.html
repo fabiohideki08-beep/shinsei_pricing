@@ -387,15 +387,15 @@ function renderSemVinculo(){
       sku: r.sku || '—', variant_id: r.variant_id || '—', estoque: r.qty, status: r.status,
       motivo: '🔍 SKU não encontrado no Bling',
     }));
-  const total = todos.length;
+  const totalReal = (_conf.stats || {}).shopify_ativo_sem_vinculo ?? todos.length;
   const el = document.getElementById('tab-cnt-sem-vinculo');
-  if(el) el.textContent = total || '';
+  if(el) el.textContent = totalReal || '';
   const sv = document.getElementById('sv-ativo-sem-vinculo');
-  if(sv) sv.textContent = total;
+  if(sv) sv.textContent = totalReal;
   const resumo = document.getElementById('sem-vinculo-resumo');
   if(resumo) resumo.innerHTML = `
-    <span class="fila-stat vermelho">🚨 ${total} ativos sem vínculo</span>
-    <span class="fila-stat total">🔍 SKU não encontrado no Bling</span>`;
+    <span class="fila-stat vermelho">🚨 ${totalReal} ativos sem vínculo</span>
+    <span class="fila-stat total">🔍 ${todos.length} SKU não encontrado no Bling</span>`;
   const slice = pagSlice(todos, _pgSemVinculo);
   const tbody = document.getElementById('sem-vinculo-tbody');
   tbody.innerHTML = slice.length

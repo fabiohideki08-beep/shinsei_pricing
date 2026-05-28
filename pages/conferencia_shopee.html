@@ -553,14 +553,14 @@ function renderSemVinculo(){
       motivo: '❌ Sem item_sku (impossível mapear automaticamente)',
     }));
   const todos = [...semBlingAtivos, ...semSkuAtivos];
-  const total = todos.length;
+  const totalReal = (_conf.stats || {}).shopee_ativo_sem_vinculo ?? todos.length;
   const el = document.getElementById('tab-cnt-sem-vinculo');
-  if(el) el.textContent = total || '';
+  if(el) el.textContent = totalReal || '';
   const sv = document.getElementById('sv-ativo-sem-vinculo');
-  if(sv) sv.textContent = total;
+  if(sv) sv.textContent = totalReal;
   const resumo = document.getElementById('sem-vinculo-resumo');
   if(resumo) resumo.innerHTML = `
-    <span class="fila-stat vermelho">🚨 ${total} ativos sem vínculo</span>
+    <span class="fila-stat vermelho">🚨 ${totalReal} ativos sem vínculo</span>
     <span class="fila-stat total">🏷️ ${semBlingAtivos.filter(r=>r.motivo.includes('catálogo')).length} código catálogo</span>
     <span class="fila-stat amarelo">🏷️ ${semBlingAtivos.filter(r=>r.motivo.includes('EAN')).length} EAN divergente</span>
     <span class="fila-stat total">🔍 ${semBlingAtivos.filter(r=>r.motivo.includes('SKU')).length} SKU ausente</span>

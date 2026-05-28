@@ -1286,10 +1286,12 @@ def executar_conferencia(bling_client) -> dict:
                 "bling_sem_amazon_inativo_canal_ativo": _bling_ativo_sem_canal_ativo(skus_amazon, amazon_ok, skus_bling_inativos, {"active"}),
                 "bling_sem_shopee_inativo_canal_ativo": _bling_ativo_sem_canal_ativo(skus_shopee, shopee_ok, skus_bling_inativos, {"active"}),
             },
-            "sem_sku_ml": sem_sku_ml[:200],  # ML sem SKU (não mapeável após todos os fallbacks)
+            "sem_sku_ml": sem_sku_ml[:5000],  # ML sem SKU (não mapeável após todos os fallbacks)
+            "sem_sku_ml_total": len(sem_sku_ml),   # total real antes do truncamento
             "ml_anuncios_remapeados": len(remapped_by_anuncio),  # anúncios ML mapeados via Bling /anuncios
             "ml_gtin_remapeados": len(remapped_by_gtin),  # anúncios ML mapeados via fallback GTIN
-            "sem_sku_shopee": sem_sku_shopee[:200],  # Shopee sem item_sku (não mapeável após fallback)
+            "sem_sku_shopee": sem_sku_shopee[:5000],  # Shopee sem item_sku (não mapeável após fallback)
+            "sem_sku_shopee_total": len(sem_sku_shopee),  # total real antes do truncamento
             "shopee_anuncios_remapeados": len(remapped_by_anuncio_shopee),  # itens Shopee remapeados via Bling /anuncios
             # Canal sem Bling: itens COM SKU no canal que NÃO existem no Bling
             # Sem integração: anúncios COM SKU no canal que NÃO existem no Bling
@@ -1307,12 +1309,12 @@ def executar_conferencia(bling_client) -> dict:
                 }
                  for s, v in skus_ml.items() if s not in skus_bling],
                 key=lambda x: x["sku"]
-            )[:1000] if ml_ok else [],
+            )[:5000] if ml_ok else [],
             "shopify_sem_bling": sorted(
                 [{"sku": s, "variant_id": v.get("variant_id",""), "status": v.get("status",""), "qty": v.get("qty")}
                  for s, v in skus_shopify.items() if s not in skus_bling],
                 key=lambda x: x["sku"]
-            )[:1000] if shopify_ok else [],
+            )[:5000] if shopify_ok else [],
             "amazon_sem_bling": sorted(
                 [{"sku": s, "status": v.get("status",""), "nome": v.get("nome",""), "qty": v.get("qty"),
                   "tipo_divergencia": (
@@ -1321,7 +1323,7 @@ def executar_conferencia(bling_client) -> dict:
                   )}
                  for s, v in skus_amazon.items() if s not in skus_bling],
                 key=lambda x: x["sku"]
-            )[:1000] if amazon_ok else [],
+            )[:5000] if amazon_ok else [],
             "shopee_sem_bling": sorted(
                 [{"sku": s, "item_id": v.get("item_id",""), "status": v.get("status",""), "qty": v.get("qty"),
                   "tipo_divergencia": (
@@ -1331,7 +1333,7 @@ def executar_conferencia(bling_client) -> dict:
                   )}
                  for s, v in skus_shopee.items() if s not in skus_bling],
                 key=lambda x: x["sku"]
-            )[:1000] if shopee_ok else [],
+            )[:5000] if shopee_ok else [],
             "matrix": matrix,
             "auditoria": auditoria[:2000],       # itens com problemas, ordenados por gravidade
             "resumo_auditoria": resumo_auditoria, # contagens por tipo/canal/prioridade

@@ -615,17 +615,19 @@ function renderSemVinculo(){
       motivo: '❌ Sem SKU (impossível mapear automaticamente)',
     }));
   const todos = [...semBlingAtivos, ...semSkuAtivos];
-  const total = todos.length;
+  // Usa o stat pré-calculado do backend (calculado ANTES de qualquer truncamento)
+  const totalReal = (_conf.stats || {}).ml_ativo_sem_vinculo ?? todos.length;
   const el = document.getElementById('tab-cnt-sem-vinculo');
-  if(el) el.textContent = total || '';
+  if(el) el.textContent = totalReal || '';
   const sv = document.getElementById('sv-ativo-sem-vinculo');
-  if(sv) sv.textContent = total;
+  if(sv) sv.textContent = totalReal;
   const resumo = document.getElementById('sem-vinculo-resumo');
+  const truncado = todos.length < totalReal;
   if(resumo) resumo.innerHTML = `
-    <span class="fila-stat vermelho">🚨 ${total} ativos sem vínculo</span>
+    <span class="fila-stat vermelho">🚨 ${totalReal} ativos sem vínculo</span>
     <span class="fila-stat amarelo">🏷️ ${semBlingAtivos.filter(r=>r.motivo.includes('EAN')).length} EAN divergente</span>
     <span class="fila-stat total">🔍 ${semBlingAtivos.filter(r=>r.motivo.includes('SKU')).length} SKU ausente</span>
-    <span class="fila-stat vermelho">❌ ${semSkuAtivos.length} sem SKU</span>`;
+    <span class="fila-stat vermelho">❌ ${semSkuAtivos.length} sem SKU${truncado?' (parcial — rerun conferência para ver todos)':''}</span>`;
   const slice = pagSlice(todos, _pgSemVinculo);
   const tbody = document.getElementById('sem-vinculo-tbody');
   tbody.innerHTML = slice.length
@@ -637,7 +639,7 @@ function renderSemVinculo(){
         <td style="font-size:12px">${r.motivo}</td>
       </tr>`).join('')
     : `<tr><td colspan="5" class="empty">✅ Nenhum anúncio ativo sem vínculo com o Bling!</td></tr>`;
-  pagControls('sem-vinculo-pag', total, _pgSemVinculo, 'navSemVinculo');
+  pagControls('sem-vinculo-pag', todos.length, _pgSemVinculo, 'navSemVinculo');
 }
 function navSemVinculo(p){ _pgSemVinculo = p; renderSemVinculo(); }
 
