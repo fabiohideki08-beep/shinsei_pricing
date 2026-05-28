@@ -888,7 +888,9 @@ def executar_conferencia(bling_client) -> dict:
                 # contra mlb_to_sku, pois o Bling /anuncios sabe o SKU correto.
                 keys_to_remove_gtin_ann: list[str] = []
                 for key, val in skus_ml.items():
-                    if key.isdigit() and 8 <= len(key) <= 14:
+                    # Cobre: EAN/GTIN (8-14 dígitos) E códigos de catálogo mais longos (15-20 dígitos)
+                    # Qualquer chave numérica que não seja o próprio MLB é candidata a remapeamento via ml_id
+                    if key.isdigit() and 8 <= len(key) <= 20:
                         ml_id = val.get("ml_id", "")
                         bling_sku = mlb_to_sku.get(ml_id)
                         if bling_sku and bling_sku not in skus_ml:
@@ -927,11 +929,11 @@ def executar_conferencia(bling_client) -> dict:
                 keys_to_remove: list[str] = []
 
                 for key, val in skus_ml.items():
-                    # key parece GTIN se for numérico com 8–14 dígitos
-                    if key.isdigit() and 8 <= len(key) <= 14:
+                    # key parece código numérico (GTIN/EAN/catálogo) se for numérico com 8–20 dígitos
+                    if key.isdigit() and 8 <= len(key) <= 20:
                         bling_sku = gtin_to_bling_sku.get(key)
                         if bling_sku and bling_sku not in skus_ml:
-                            # Remapeia: troca a chave GTIN pela chave do SKU Bling
+                            # Remapeia: troca a chave numérica pela chave do SKU Bling
                             remapped_by_gtin[bling_sku] = {**val, "matched_by": "gtin", "original_key": key}
                             keys_to_remove.append(key)
                         # Se não achou no Bling, mantém no skus_ml mas ficará em "ml_sem_bling"
@@ -1322,8 +1324,13 @@ def executar_conferencia(bling_client) -> dict:
                     "titulo": v.get("titulo",""),
                     # Classifica o tipo de divergência:
                     # "ean_divergente"      → chave é EAN/GTIN numérico (8-14 dígitos) sem match Bling
+                    # "codigo_numerico"     → código numérico longo (15-20 dígitos, ex: catálogo interno)
                     # "sku_nao_encontrado"  → SKU alfanumérico não existe no Bling
-                    "tipo_divergencia": "ean_divergente" if (s.isdigit() and 8 <= len(s) <= 14) else "sku_nao_encontrado",
+                    "tipo_divergencia": (
+                        "ean_divergente"   if (s.isdigit() and 8 <= len(s) <= 14) else
+                        "codigo_numerico"  if (s.isdigit() and 15 <= len(s) <= 20) else
+                        "sku_nao_encontrado"
+                    ),
                 }
                  for s, v in skus_ml.items() if s not in skus_bling],
                 key=lambda x: x["sku"]

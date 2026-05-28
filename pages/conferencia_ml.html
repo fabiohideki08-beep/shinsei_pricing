@@ -606,6 +606,7 @@ function renderSemVinculo(){
     .map(r => ({
       canal_id: r.ml_id || '—', sku: r.sku || '', titulo: r.titulo || '', estoque: r.qty,
       motivo: r.tipo_divergencia === 'ean_divergente' ? '🏷️ EAN/GTIN sem match no Bling'
+             : r.tipo_divergencia === 'codigo_numerico' ? '🔢 Código numérico (não é EAN/SKU padrão)'
              : '🔍 SKU não encontrado no Bling',
     }));
   const semSkuAtivos = (_conf.sem_sku_ml || [])
@@ -623,10 +624,14 @@ function renderSemVinculo(){
   if(sv) sv.textContent = totalReal;
   const resumo = document.getElementById('sem-vinculo-resumo');
   const truncado = todos.length < totalReal;
+  const nEan = semBlingAtivos.filter(r=>r.motivo.includes('EAN')).length;
+  const nCodNum = semBlingAtivos.filter(r=>r.motivo.includes('numérico')).length;
+  const nSkuAus = semBlingAtivos.filter(r=>r.motivo.includes('encontrado')).length;
   if(resumo) resumo.innerHTML = `
     <span class="fila-stat vermelho">🚨 ${totalReal} ativos sem vínculo</span>
-    <span class="fila-stat amarelo">🏷️ ${semBlingAtivos.filter(r=>r.motivo.includes('EAN')).length} EAN divergente</span>
-    <span class="fila-stat total">🔍 ${semBlingAtivos.filter(r=>r.motivo.includes('SKU')).length} SKU ausente</span>
+    ${nEan>0?`<span class="fila-stat amarelo">🏷️ ${nEan} EAN divergente</span>`:''}
+    ${nCodNum>0?`<span class="fila-stat total">🔢 ${nCodNum} código numérico</span>`:''}
+    ${nSkuAus>0?`<span class="fila-stat total">🔍 ${nSkuAus} SKU ausente</span>`:''}
     <span class="fila-stat vermelho">❌ ${semSkuAtivos.length} sem SKU${truncado?' (parcial — rerun conferência para ver todos)':''}</span>`;
   const slice = pagSlice(todos, _pgSemVinculo);
   const tbody = document.getElementById('sem-vinculo-tbody');
