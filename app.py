@@ -3402,6 +3402,71 @@ def auditoria_amazon_limpar_tudo():
     (DATA_DIR / "fila_amazon.json").write_text("[]", encoding="utf-8")
     return {"ok": True}
 
+@app.get("/amazon/listings")
+def amazon_listings_estoque():
+    """
+    Retorna todos os listings MFN da Amazon com SKU e quantidade disponível.
+    Usa Listings Items API v2021-08-01 com fulfillmentAvailability.
+    Público (sem API key) para uso em scripts de conferência.
+    """
+    try:
+        from amazon_client import AmazonClient
+        c = AmazonClient()
+    except Exception as e:
+        return {"ok": False, "erro": str(e), "itens": []}
+
+    itens = []
+    page_token = None
+    paginas = 0
+    MAX_PAGINAS = 200  # segurança
+
+    while paginas < MAX_PAGINAS:
+        try:
+            resp = c.get_listings(page_token=page_token)
+        except Exception as e:
+            return {"ok": False, "erro": str(e), "itens": itens}
+
+        erros_api = resp.get("errors") or []
+        if erros_api:
+            return {"ok": False, "erro": str(erros_api[:2]), "itens": itens}
+
+        for item in (resp.get("items") or []):
+            sku = item.get("sku", "").strip()
+            if not sku:
+                continue
+
+            # Quantidade: fulfillmentAvailability lista canais (AMAZON_NA = MFN)
+            qty = 0
+            status_listing = ""
+            for fa in (item.get("fulfillmentAvailability") or []):
+                qty += int(fa.get("quantity") or 0)
+
+            # summaries → status e ASIN
+            asin = ""
+            nome = ""
+            for s in (item.get("summaries") or []):
+                if not asin:
+                    asin = s.get("asin", "")
+                if not nome:
+                    nome = s.get("itemName", "")[:60]
+                status_listing = s.get("status", "")
+
+            itens.append({
+                "sku": sku,
+                "asin": asin,
+                "nome": nome,
+                "qty": qty,
+                "status": status_listing,
+            })
+
+        paginas += 1
+        page_token = (resp.get("pagination") or {}).get("nextToken")
+        if not page_token:
+            break
+
+    return {"ok": True, "total": len(itens), "itens": itens}
+
+
 @app.get("/amazon/status")
 def amazon_status():
     try:
