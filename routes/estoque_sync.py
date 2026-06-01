@@ -469,9 +469,11 @@ def _ml_seller_id() -> Optional[str]:
 
 def _ml_build_sku_map() -> dict:
     """
-    Varre todos os anúncios ativos do ML e constrói mapa:
-      SKU → item_id
-    Usa seller_custom_field como SKU (mesmo campo preenchido nas listagens ML).
+    Varre todos os anúncios ativos E pausados do ML e constrói mapa:
+      SKU → {"item_id": str, "status": str}
+    Inclui pausados para que o sync possa reativar listings quando o
+    estoque do Bling subir (correção do bug: cache só cobria "active").
+    Usa seller_custom_field como SKU (campo padrão de barcode/EAN no ML Brasil).
     """
     seller_id = _ml_seller_id()
     if not seller_id:
@@ -479,59 +481,67 @@ def _ml_build_sku_map() -> dict:
         return {}
 
     sku_map: dict = {}
-    offset   = 0
     limit    = 50
 
-    while True:
-        try:
-            r = requests.get(
-                f"https://api.mercadolibre.com/users/{seller_id}/items/search",
-                params={"offset": offset, "limit": limit, "status": "active"},
-                headers=_ml_headers(), timeout=20,
-            )
-            if r.status_code != 200:
-                logger.warning("[SYNC-ML] Erro listing: HTTP %s", r.status_code)
-                break
-
-            data     = r.json()
-            item_ids = data.get("results", [])
-            if not item_ids:
-                break
-
-            # Busca detalhes em batches de 20 para pegar seller_custom_field
-            for i in range(0, len(item_ids), 20):
-                batch   = item_ids[i : i + 20]
-                ids_str = ",".join(batch)
-                r2 = requests.get(
-                    "https://api.mercadolibre.com/items",
-                    params={"ids": ids_str,
-                            "attributes": "id,seller_custom_field,attributes"},
+    for status_busca in ("active", "paused"):
+        offset = 0
+        while True:
+            try:
+                r = requests.get(
+                    f"https://api.mercadolibre.com/users/{seller_id}/items/search",
+                    params={"offset": offset, "limit": limit, "status": status_busca},
                     headers=_ml_headers(), timeout=20,
                 )
-                if r2.status_code == 200:
-                    for raw in r2.json():
-                        item = raw.get("body", raw) if "body" in raw else raw
-                        # seller_custom_field (campo padrão de SKU no ML)
-                        sku = str(item.get("seller_custom_field") or "").strip()
-                        # Fallback: atributo SELLER_SKU
-                        if not sku:
-                            for attr in item.get("attributes", []):
-                                if attr.get("id") == "SELLER_SKU":
-                                    sku = str(attr.get("value_name") or "").strip()
-                                    break
-                        item_id = str(item.get("id") or "").strip()
-                        if sku and item_id:
-                            sku_map[sku] = item_id
-                time.sleep(0.3)
+                if r.status_code != 200:
+                    logger.warning("[SYNC-ML] Erro listing %s: HTTP %s", status_busca, r.status_code)
+                    break
 
-            total  = data.get("paging", {}).get("total", 0)
-            offset += limit
-            if offset >= total:
+                data     = r.json()
+                item_ids = data.get("results", [])
+                if not item_ids:
+                    break
+
+                # Busca detalhes em batches de 20 para pegar seller_custom_field + status
+                for i in range(0, len(item_ids), 20):
+                    batch   = item_ids[i : i + 20]
+                    ids_str = ",".join(batch)
+                    r2 = requests.get(
+                        "https://api.mercadolibre.com/items",
+                        params={"ids": ids_str,
+                                "attributes": "id,status,seller_custom_field,attributes"},
+                        headers=_ml_headers(), timeout=20,
+                    )
+                    if r2.status_code == 200:
+                        for raw in r2.json():
+                            item = raw.get("body", raw) if "body" in raw else raw
+                            # seller_custom_field (campo padrão de SKU no ML)
+                            sku = str(item.get("seller_custom_field") or "").strip()
+                            # Fallback: atributo SELLER_SKU
+                            if not sku:
+                                for attr in item.get("attributes", []):
+                                    if attr.get("id") == "SELLER_SKU":
+                                        sku = str(attr.get("value_name") or "").strip()
+                                        break
+                            item_id     = str(item.get("id") or "").strip()
+                            item_status = str(item.get("status") or status_busca)
+                            if sku and item_id:
+                                # Prefere active sobre paused se mesmo SKU aparece nos dois
+                                existing = sku_map.get(sku)
+                                if not existing or existing.get("status") != "active":
+                                    sku_map[sku] = {"item_id": item_id, "status": item_status}
+                    time.sleep(0.3)
+
+                total  = data.get("paging", {}).get("total", 0)
+                offset += limit
+                if offset >= total:
+                    break
+            except Exception as e:
+                logger.warning("[SYNC-ML] Erro build cache (%s): %s", status_busca, e)
                 break
-        except Exception as e:
-            logger.warning("[SYNC-ML] Erro build cache: %s", e)
-            break
 
+    logger.info("[SYNC-ML] Cache construído: %d SKUs (%d active + paused)",
+                len(sku_map),
+                sum(1 for v in sku_map.values() if v.get("status") == "active"))
     return sku_map
 
 
@@ -560,18 +570,39 @@ def _ml_build_sku_cache() -> dict:
 
 
 def _sync_ml(sku: str, estoque: int) -> dict:
-    """Atualiza estoque de um SKU no Mercado Livre. Retry automático."""
+    """
+    Atualiza estoque de um SKU no Mercado Livre. Retry automático.
+    Inclui reativação de listings pausados quando estoque sobe (Bling→ML).
+    """
     sku_map = _ml_get_sku_map()
-    item_id = sku_map.get(sku)
-    if not item_id:
-        # SKU não está no cache ML — produto não listado no ML ou cache desatualizado
-        # Cache se auto-renova a cada 30min; não forçar rebuild para não travar
+    entry   = sku_map.get(sku)
+    if not entry:
+        # SKU não está no cache ML — produto não listado ou cache desatualizado
         return {"ok": False, "skipped": True, "reason": "sku_nao_encontrado_ml"}
 
-    # ML não aceita estoque=0 diretamente — usa 1 e pausa o anúncio se for o caso
-    payload = {"available_quantity": max(1, estoque)}
+    # Compatibilidade: cache antigo guardava string, novo guarda dict
+    if isinstance(entry, str):
+        item_id     = entry
+        item_status = "active"
+    else:
+        item_id     = entry.get("item_id", "")
+        item_status = entry.get("status", "active")
+
+    if not item_id:
+        return {"ok": False, "skipped": True, "reason": "item_id_vazio"}
+
+    # Monta payload:
+    # - estoque=0 → pausa o anúncio (ML não aceita qty=0 sem pausar)
+    # - estoque>0 + listing pausado → reativa E atualiza qty
+    # - estoque>0 + listing ativo   → só atualiza qty
     if estoque == 0:
         payload = {"available_quantity": 1, "status": "paused"}
+    elif item_status == "paused":
+        # Reativa o listing junto com o novo estoque
+        payload = {"available_quantity": estoque, "status": "active"}
+        logger.info("[SYNC-ML] Reativando listing pausado %s (SKU=%s, estoque=%d)", item_id, sku, estoque)
+    else:
+        payload = {"available_quantity": estoque}
 
     for attempt in range(MAX_RETRY):
         try:
@@ -582,8 +613,12 @@ def _sync_ml(sku: str, estoque: int) -> dict:
                 timeout=15,
             )
             if r.status_code == 200:
+                reativado = estoque > 0 and item_status == "paused"
+                # Atualiza status no cache em memória para evitar reativação dupla
+                entry_updated = {"item_id": item_id, "status": "active" if estoque > 0 else "paused"}
+                sku_map[sku] = entry_updated
                 return {"ok": True, "item_id": item_id, "estoque_set": estoque,
-                        "pausado": estoque == 0}
+                        "pausado": estoque == 0, "reativado": reativado}
             if r.status_code == 429:
                 time.sleep(2 ** attempt)
                 continue
