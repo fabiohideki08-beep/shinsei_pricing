@@ -71,7 +71,7 @@
 <body>
 <div class="wrap">
   <div class="topbar">
-    <div class="brand"><h1>🧮 Simulador multicanal</h1><p>Calcule preços por canal com objetivo, gordura e arredondamento configuráveis.</p></div>
+    <div class="brand"><h1>🧮 Simulador multicanal</h1><p>Calcule preços por canal com objetivo, gordura e arredondamento configuráveis.</p><div id="taxasStatus" style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"></div></div>
     <div class="top-actions">
       <a class="btn secondary" href="/">Início</a>
       <a class="btn secondary" href="/integracao-comercial">⚙️ Config</a>
@@ -192,6 +192,26 @@ async function atualizarContadorFila(){
   catch(e){document.getElementById('filaCount').textContent='0'}
 }
 
+async function carregarStatusTaxas(){
+  const el=document.getElementById('taxasStatus');
+  if(!el)return;
+  const LABELS={ml:'ML',amazon:'Amazon',shopee:'Shopee'};
+  const FONTES={'api':'API real','sp_api':'SP-API','pedidos_reais':'Pedidos reais','tabela_br':'Tabela BR','fallback':'Fallback','regras':'Regras'};
+  try{
+    const d=await fetch('/taxas/status').then(r=>r.json());
+    el.innerHTML=Object.entries(d).map(([canal,info])=>{
+      const ok=info.disponivel;
+      const fonte=FONTES[info.fonte]||info.fonte;
+      return `<span style="font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid ${ok?'rgba(34,197,94,.4)':'rgba(245,179,1,.4)'};background:${ok?'rgba(34,197,94,.1)':'rgba(245,179,1,.08)'};color:${ok?'#22c55e':'#f5b301'}">${ok?'🟢':'🟡'} ${LABELS[canal]||canal}: ${fonte}</span>`;
+    }).join('');
+  }catch(e){
+    el.innerHTML='<span style="font-size:11px;color:var(--muted)">Status de taxas indisponível</span>';
+  }
+}
+
+atualizarContadorFila();
+carregarStatusTaxas();
+
 function obterPayload(){
   return {
     criterio:'sku',
@@ -275,12 +295,15 @@ function renderCheckout(data){
     const lucro=Number(item.lucro||raw.lucro_liquido||raw.lucro||0);
     const margem=Number(item.margem||raw.margem_liquida_percentual||raw.margem||0);
     const frete=Number(item.frete||raw.frete||0);
-    const comissao=Number(item.comissao||raw.comissao||0);
+    const comissaoPct=Number(item.comissao||raw.comissao||0);
+    const comissao=Number(raw.comissao_valor||item.comissao_valor||(promo*comissaoPct/100));
     const taxa_fixa=Number(item.taxa_fixa||raw.taxa_fixa||0);
     const imposto=Number(item.imposto||raw.imposto||0);
     const custo=Number(item.custo_total||raw.custo_total||raw.custo_produto||0);
     const markup=Number(raw.markup_percentual||raw.markup||0);
     const faixa=item.faixa_aplicada||raw.faixa_aplicada||'-';
+    const taxaSource=raw.taxa_source||'regras';
+    const taxaLabel={'api':'🟢 API ML','sp_api':'🟢 SP-API','tabela_br':'🟡 Tabela BR','pedidos_reais':'🟢 Pedidos reais','fallback':'🟡 Fallback','regras':'📋 Regras'}[taxaSource]||(taxaSource);
     const isMelhor=idx===0&&lucro>0;
     const isPrejuizo=lucro<0;
     const ajuste=virt-promo;
@@ -305,9 +328,10 @@ function renderCheckout(data){
             <div class="detail-grid">
               <div class="detail-item"><div class="di-label">Receita líquida</div><div class="di-val">${moeda(raw.receita_liquida||0)}</div></div>
               <div class="detail-item"><div class="di-label">Custo base</div><div class="di-val">${moeda(custo)}</div></div>
+              ${raw.embalagem_usado>0?`<div class="detail-item"><div class="di-label">Embalagem</div><div class="di-val">${moeda(raw.embalagem_usado)}</div></div>`:''}
               <div class="detail-item"><div class="di-label">Custo operacional</div><div class="di-val">${moeda(raw.custo_operacional||0)}</div></div>
               <div class="detail-item"><div class="di-label">Lucro bruto</div><div class="di-val">${moeda(raw.lucro_bruto||0)}</div></div>
-              <div class="detail-item"><div class="di-label">Comissão</div><div class="di-val">${moeda(comissao)}</div></div>
+              <div class="detail-item"><div class="di-label">Comissão</div><div class="di-val">${moeda(comissao)}<span style="color:var(--muted);font-size:11px;margin-left:4px">(${n(comissaoPct)}%)</span></div></div>
               <div class="detail-item"><div class="di-label">Taxa fixa</div><div class="di-val">${moeda(taxa_fixa)}</div></div>
               <div class="detail-item"><div class="di-label">Frete</div><div class="di-val">${moeda(frete)}</div></div>
               <div class="detail-item"><div class="di-label">Imposto</div><div class="di-val">${moeda(imposto)}</div></div>
@@ -315,6 +339,7 @@ function renderCheckout(data){
               <div class="detail-item"><div class="di-label">Margem</div><div class="di-val">${n(margem)}%</div></div>
               <div class="detail-item"><div class="di-label">Faixa aplicada</div><div class="di-val" style="font-size:11px">${faixa}</div></div>
               <div class="detail-item"><div class="di-label">Preço virtual (âncora)</div><div class="di-val" style="color:#f5b301">${moeda(virt)}</div></div>
+              <div class="detail-item"><div class="di-label">Fonte da taxa</div><div class="di-val" style="font-size:11px">${taxaLabel}</div></div>
             </div>
           </td>
         </tr>
@@ -598,7 +623,8 @@ function exportarCSV(){
     const margem=Number(item.margem||raw.margem_liquida_percentual||raw.margem||0);
     const markup=Number(raw.markup_percentual||raw.markup||0);
     const frete=Number(item.frete||raw.frete||0);
-    const comissao=Number(item.comissao||raw.comissao||0);
+    const comissaoPctCsv=Number(item.comissao||raw.comissao||0);
+    const comissao=Number(raw.comissao_valor||item.comissao_valor||(promo*comissaoPctCsv/100));
     const taxa=Number(item.taxa_fixa||raw.taxa_fixa||0);
     const imposto=Number(item.imposto||raw.imposto||0);
     const faixa=item.faixa_aplicada||raw.faixa_aplicada||'-';

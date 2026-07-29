@@ -77,7 +77,8 @@ def conferir_amazon(bling_client=None, max_items: int = 200, tipo: str = "") -> 
                 verificados += 1
 
                 # Busca estoque no Bling
-                estoque_bling = 0
+                estoque_bling = None  # None = não encontrado / erro
+                bling_erro = None
                 if bling_client:
                     try:
                         time.sleep(0.3)
@@ -85,12 +86,19 @@ def conferir_amazon(bling_client=None, max_items: int = 200, tipo: str = "") -> 
                         if busca.get("encontrado"):
                             prod = busca.get("produto", {})
                             estoque_bling = int((prod.get("estoque") or {}).get("saldoVirtualTotal") or 0)
+                        else:
+                            bling_erro = "SKU não encontrado no Bling"
                     except Exception as e:
-                        logger.debug("Erro ao buscar SKU %s no Bling: %s", sku, e)
+                        logger.warning("Erro ao buscar SKU %s no Bling: %s", sku, e)
+                        bling_erro = str(e)
                         erros += 1
-                        continue
 
-                if estoque_bling != estoque_amazon:
+                # Detecta divergência: inclui na fila quando há diferença OU quando Bling não encontrou o SKU
+                divergente = (
+                    (estoque_bling is not None and estoque_bling != estoque_amazon) or
+                    (estoque_bling is None)  # SKU ausente no Bling também é auditável
+                )
+                if divergente:
                     divergencias_estoque += 1
                     chave = (sku, "estoque")
                     if chave not in chaves_pendentes:
@@ -102,13 +110,14 @@ def conferir_amazon(bling_client=None, max_items: int = 200, tipo: str = "") -> 
                             "tipo": "estoque",
                             "estoque_bling": estoque_bling,
                             "estoque_amazon": estoque_amazon,
-                            "diferenca": estoque_bling - estoque_amazon,
+                            "diferenca": (estoque_bling - estoque_amazon) if estoque_bling is not None else None,
+                            "bling_erro": bling_erro,
                             "detectado_em": agora,
                             "status": "pendente"
                         })
                         chaves_pendentes.add(chave)
-                        logger.info("Divergência Amazon estoque: sku=%s bling=%d amazon=%d",
-                                    sku, estoque_bling, estoque_amazon)
+                        logger.info("Divergência Amazon estoque: sku=%s bling=%s amazon=%d erro=%s",
+                                    sku, estoque_bling, estoque_amazon, bling_erro)
 
         except Exception as e:
             logger.error("Erro ao conferir estoque Amazon: %s", e)

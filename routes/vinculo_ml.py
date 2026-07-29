@@ -200,6 +200,42 @@ def _gerar_sugestoes(resultado: dict) -> list[dict]:
     return sugestoes
 
 
+def _atualizar_seller_custom_field(ml_id: str, bling_sku: str, token: str) -> dict:
+    """Aplica seller_custom_field no ML via API. Retorna dict com resultado."""
+    import requests as _req
+    h = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    try:
+        r_item = _req.get(
+            f"https://api.mercadolibre.com/items/{ml_id}",
+            params={"attributes": "id,variations"},
+            headers=h, timeout=15,
+        )
+        if r_item.status_code == 401:
+            return {"ml_id": ml_id, "bling_sku": bling_sku, "ok": False, "erro": "token_expirado"}
+        if r_item.status_code != 200:
+            return {"ml_id": ml_id, "bling_sku": bling_sku, "ok": False, "erro": f"GET {r_item.status_code}"}
+
+        variations = r_item.json().get("variations") or []
+        if variations:
+            payload = {"variations": [{"id": v["id"], "seller_custom_field": bling_sku} for v in variations]}
+        else:
+            payload = {"seller_custom_field": bling_sku}
+
+        r_put = _req.put(f"https://api.mercadolibre.com/items/{ml_id}", json=payload, headers=h, timeout=15)
+        ok = r_put.status_code in (200, 201)
+        if ok:
+            logger.info("ML auto-vínculo: %s → %s", ml_id, bling_sku)
+        else:
+            logger.warning("ML PUT %s falhou (%d): %s", ml_id, r_put.status_code, r_put.text[:200])
+        return {
+            "ml_id": ml_id, "bling_sku": bling_sku, "ok": ok,
+            "status_http": r_put.status_code, "variacoes": len(variations),
+            "erro": "" if ok else r_put.text[:150],
+        }
+    except Exception as e:
+        return {"ml_id": ml_id, "bling_sku": bling_sku, "ok": False, "erro": str(e)[:150]}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Endpoints
 # ─────────────────────────────────────────────────────────────────────────────
@@ -232,6 +268,71 @@ async def get_sugestoes_vinculo():
     except Exception as e:
         logger.exception("Erro ao gerar sugestões de vínculo ML: %s", e)
         return JSONResponse({"ok": False, "erro": str(e)}, status_code=500)
+
+
+@router.post("/conferencia/ml/vincular-variacao")
+async def vincular_variacao(request: Request):
+    """
+    Vincula uma variação específica de um anúncio ML a um SKU Bling.
+    Body: {"ml_id": "MLBU3631020323", "variation_id": 733168645, "bling_sku": "U3631020323"}
+    Atualiza seller_custom_field APENAS na variação indicada.
+    """
+    import requests as _req
+
+    body = await request.json()
+    ml_id       = str(body.get("ml_id", "")).strip()
+    variation_id = body.get("variation_id")
+    bling_sku   = str(body.get("bling_sku", "")).strip()
+
+    if not ml_id or not variation_id or not bling_sku:
+        return JSONResponse({"ok": False, "erro": "ml_id, variation_id e bling_sku são obrigatórios."}, status_code=400)
+
+    tp = DATA_DIR / "ml_tokens.json"
+    if not tp.exists():
+        return JSONResponse({"ok": False, "erro": "Token ML não encontrado."}, status_code=401)
+    tokens = json.loads(tp.read_text(encoding="utf-8"))
+    token = tokens.get("access_token", "")
+    if not token:
+        return JSONResponse({"ok": False, "erro": "access_token ML inválido."}, status_code=401)
+
+    h = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+    # Confirma que a variação existe no item
+    r_item = _req.get(
+        f"https://api.mercadolibre.com/items/{ml_id}",
+        params={"attributes": "id,variations"},
+        headers=h, timeout=15,
+    )
+    if r_item.status_code == 401:
+        return JSONResponse({"ok": False, "erro": "Token ML expirado — acesse /ml/login para renovar."}, status_code=401)
+    if r_item.status_code != 200:
+        return JSONResponse({"ok": False, "erro": f"Erro ao buscar anúncio: {r_item.status_code}"}, status_code=502)
+
+    variations = r_item.json().get("variations") or []
+    ids_existentes = [v["id"] for v in variations]
+    if int(variation_id) not in ids_existentes:
+        return JSONResponse({
+            "ok": False,
+            "erro": f"Variação {variation_id} não encontrada no anúncio {ml_id}. Variações existentes: {ids_existentes}"
+        }, status_code=404)
+
+    # Aplica seller_custom_field só nessa variação
+    payload = {"variations": [{"id": int(variation_id), "seller_custom_field": bling_sku}]}
+    r_put = _req.put(f"https://api.mercadolibre.com/items/{ml_id}", json=payload, headers=h, timeout=15)
+    ok = r_put.status_code in (200, 201)
+    if ok:
+        logger.info("ML vínculo variação: %s[%s] → %s", ml_id, variation_id, bling_sku)
+    else:
+        logger.warning("ML PUT variação %s[%s] falhou (%d): %s", ml_id, variation_id, r_put.status_code, r_put.text[:200])
+
+    return {
+        "ok":          ok,
+        "ml_id":       ml_id,
+        "variation_id": variation_id,
+        "bling_sku":   bling_sku,
+        "status_http": r_put.status_code,
+        "erro":        "" if ok else r_put.text[:200],
+    }
 
 
 @router.post("/conferencia/ml/aplicar-vinculo")
@@ -347,4 +448,302 @@ async def aplicar_vinculo(request: Request):
         "aplicados": ok_count,
         "erros":    err_count,
         "resultados": resultados,
+    }
+
+
+@router.post("/conferencia/ml/aplicar-vinculo-automatico")
+async def aplicar_vinculo_automatico(request: Request):
+    """
+    Aplica automaticamente seller_custom_field no ML para todos os itens sem SKU
+    que tiverem match de ALTA confiança (score >= 0.68) na análise de sugestões.
+
+    Query params:
+      - confianca_minima: float (default 0.68) — threshold mínimo para aplicar
+      - dry_run: bool (default false) — se true, apenas simula sem alterar o ML
+    """
+    import requests as _req
+
+    params = dict(request.query_params)
+    confianca_minima = float(params.get("confianca_minima", 0.68))
+    dry_run = params.get("dry_run", "false").lower() == "true"
+
+    from conferencia_sku import get_resultado
+    res = get_resultado()
+    if not res or not res.get("stats"):
+        return JSONResponse({"ok": False, "erro": "Execute a conferência primeiro."}, status_code=404)
+
+    sugestoes = _gerar_sugestoes(res)
+    candidatos = [s for s in sugestoes if s["confianca"] >= confianca_minima]
+
+    if not candidatos:
+        return {"ok": True, "aplicados": 0, "total_sugestoes": len(sugestoes),
+                "msg": f"Nenhuma sugestão com confiança >= {confianca_minima}"}
+
+    # Carrega token ML
+    tp = DATA_DIR / "ml_tokens.json"
+    if not tp.exists():
+        return JSONResponse({"ok": False, "erro": "Token ML não encontrado."}, status_code=401)
+    tokens = json.loads(tp.read_text(encoding="utf-8"))
+    token = tokens.get("access_token", "")
+    if not token:
+        return JSONResponse({"ok": False, "erro": "access_token ML inválido."}, status_code=401)
+
+    resultados = []
+    ok_count = err_count = 0
+
+    for s in candidatos:
+        if dry_run:
+            resultados.append({**s, "ok": True, "simulado": True})
+            ok_count += 1
+            continue
+
+        r = _atualizar_seller_custom_field(s["ml_id"], s["bling_sku"], token)
+        if r.get("erro") == "token_expirado":
+            return JSONResponse({"ok": False, "erro": "Token ML expirado — acesse /ml/login para renovar."}, status_code=401)
+
+        r["ml_titulo"]   = s["ml_titulo"]
+        r["bling_nome"]  = s["bling_nome"]
+        r["confianca"]   = s["confianca"]
+        r["metodo"]      = s["metodo"]
+        resultados.append(r)
+        if r["ok"]:
+            ok_count += 1
+        else:
+            err_count += 1
+        time.sleep(0.35)
+
+    # Salva log
+    log_path = DATA_DIR / "vinculo_automatico_ml.json"
+    try:
+        log = json.loads(log_path.read_text(encoding="utf-8")) if log_path.exists() else []
+    except Exception:
+        log = []
+    log.append({
+        "ts": __import__("datetime").datetime.utcnow().isoformat(),
+        "dry_run": dry_run,
+        "confianca_minima": confianca_minima,
+        "aplicados": ok_count,
+        "erros": err_count,
+        "resultados": resultados[-500:],
+    })
+    log_path.write_text(json.dumps(log[-10:], ensure_ascii=False, indent=2), encoding="utf-8")
+
+    return {
+        "ok":               err_count == 0,
+        "dry_run":          dry_run,
+        "confianca_minima": confianca_minima,
+        "total_sugestoes":  len(sugestoes),
+        "candidatos":       len(candidatos),
+        "aplicados":        ok_count,
+        "erros":            err_count,
+        "resultados":       resultados,
+    }
+
+
+@router.post("/conferencia/ml/varredura-sem-sku")
+async def varredura_sem_sku(request: Request):
+    """
+    Varredura autônoma: busca TODOS os anúncios ML ativos sem seller_custom_field,
+    tenta match com Bling por GTIN e título, aplica automaticamente os de alta
+    confiança (>= 0.68) e retorna lista completa para revisão.
+
+    Query params:
+      - dry_run: bool (default false) — simula sem alterar
+      - confianca_auto: float (default 0.68) — aplica automaticamente acima desse valor
+    """
+    import requests as _req
+    import unicodedata
+
+    params = dict(request.query_params)
+    dry_run        = params.get("dry_run", "false").lower() == "true"
+    confianca_auto = float(params.get("confianca_auto", 0.68))
+
+    # ── Token ML ──────────────────────────────────────────────────────────────
+    tp = DATA_DIR / "ml_tokens.json"
+    if not tp.exists():
+        return JSONResponse({"ok": False, "erro": "Token ML não encontrado."}, status_code=401)
+    tokens = json.loads(tp.read_text(encoding="utf-8"))
+    ml_token = tokens.get("access_token", "")
+    if not ml_token:
+        return JSONResponse({"ok": False, "erro": "access_token ML inválido."}, status_code=401)
+    ml_h = {"Authorization": f"Bearer {ml_token}"}
+
+    # ── Token Bling via BlingClient (lê Secret Manager se necessário) ────────
+    try:
+        from bling_client import BlingClient
+        _bc = BlingClient()
+        _bc._load_tokens()  # garante refresh se necessário
+        bling_token = (_bc.tokens or {}).get("access_token", "")
+    except Exception as _e:
+        return JSONResponse({"ok": False, "erro": f"Token Bling não disponível: {_e}"}, status_code=401)
+    if not bling_token:
+        return JSONResponse({"ok": False, "erro": "Token Bling vazio — reautentique em /bling/auth."}, status_code=401)
+    bling_h = {"Authorization": f"Bearer {bling_token}", "Accept": "application/json"}
+
+    # ── 1. Busca todos os anúncios ML do vendedor ─────────────────────────────
+    # Primeiro pega o user_id
+    r_me = _req.get("https://api.mercadolibre.com/users/me", headers=ml_h, timeout=15)
+    if r_me.status_code == 401:
+        return JSONResponse({"ok": False, "erro": "Token ML expirado — acesse /ml/login para renovar."}, status_code=401)
+    seller_id = r_me.json().get("id")
+
+    ml_items_sem_sku: list[dict] = []
+    offset = 0
+    limit  = 100
+    logger.info("[VARREDURA] Buscando anúncios ML sem seller_custom_field ...")
+    while True:
+        r = _req.get(
+            f"https://api.mercadolibre.com/users/{seller_id}/items/search",
+            params={"status": "active", "offset": offset, "limit": limit},
+            headers=ml_h, timeout=20,
+        )
+        if r.status_code != 200:
+            break
+        ids = r.json().get("results") or []
+        if not ids:
+            break
+
+        # Busca detalhes em lote (máx 20 por chamada)
+        for i in range(0, len(ids), 20):
+            lote = ids[i:i+20]
+            r2 = _req.get(
+                "https://api.mercadolibre.com/items",
+                params={"ids": ",".join(lote),
+                        "attributes": "id,title,status,seller_custom_field,variations,catalog_product_id"},
+                headers=ml_h, timeout=20,
+            )
+            if r2.status_code != 200:
+                continue
+            for entry in r2.json():
+                item = entry.get("body") or entry
+                if item.get("status") != "active":
+                    continue
+                scf = item.get("seller_custom_field") or ""
+                varis = item.get("variations") or []
+                # Variações também podem ter seller_custom_field vazio
+                varis_sem = [v for v in varis if not (v.get("seller_custom_field") or "").strip()]
+                if not scf.strip() or varis_sem:
+                    ml_items_sem_sku.append({
+                        "ml_id":  item["id"],
+                        "titulo": item.get("title", ""),
+                        "scf_atual": scf,
+                        "variacoes_sem_sku": len(varis_sem),
+                        "total_variacoes": len(varis),
+                    })
+            time.sleep(0.2)
+
+        offset += limit
+        total = r.json().get("paging", {}).get("total", 0)
+        if offset >= total:
+            break
+        time.sleep(0.3)
+
+    logger.info("[VARREDURA] %d anúncios sem SKU encontrados", len(ml_items_sem_sku))
+
+    # ── 2. Busca produtos Bling ───────────────────────────────────────────────
+    bling_prods: list[dict] = []
+    pag = 1
+    while True:
+        r = _req.get("https://api.bling.com.br/Api/v3/produtos",
+                     headers=bling_h,
+                     params={"pagina": pag, "limite": 100, "situacao": "A", "tipo": "P"},
+                     timeout=30)
+        if r.status_code == 401:
+            return JSONResponse({"ok": False, "erro": "Token Bling expirado — reautentique em /bling/auth."}, status_code=401)
+        if r.status_code != 200:
+            break
+        itens = r.json().get("data") or []
+        if not itens:
+            break
+        bling_prods.extend(itens)
+        if len(itens) < 100:
+            break
+        pag += 1
+        time.sleep(0.4)
+
+    logger.info("[VARREDURA] %d produtos Bling carregados", len(bling_prods))
+
+    # ── 3. Índices para matching ──────────────────────────────────────────────
+    gtin_map: dict[str, str] = {}
+    bling_info: dict[str, dict] = {}
+    bling_tokens_idx: dict[str, set] = {}
+
+    for p in bling_prods:
+        sku  = p.get("codigo", "")
+        nome = p.get("nome", "")
+        gtin = p.get("gtin") or p.get("codigoBarras") or ""
+        if not sku:
+            continue
+        if gtin and str(gtin).isdigit() and len(str(gtin)) >= 8:
+            gtin_map[str(gtin)] = sku
+        bling_info[sku] = {"nome": nome, "gtin": gtin}
+        bling_tokens_idx[sku] = _tokenize(nome)
+
+    token_inv: dict[str, set] = defaultdict(set)
+    for sku, toks in bling_tokens_idx.items():
+        for t in toks:
+            token_inv[t].add(sku)
+
+    def _match(titulo: str, codigo: str) -> tuple[str | None, float, str]:
+        if codigo and str(codigo).isdigit() and len(str(codigo)) >= 8:
+            s = gtin_map.get(str(codigo))
+            if s:
+                return s, 0.99, "gtin_exato"
+        ml_tok = _tokenize(titulo)
+        candidatos: set[str] = set()
+        for t in ml_tok:
+            candidatos |= token_inv.get(t, set())
+        best_sku, best_score = None, 0.28
+        for sku in candidatos:
+            b = bling_tokens_idx.get(sku, set())
+            score = max(_jaccard(ml_tok, b), _overlap(ml_tok, b) * 0.85)
+            if score > best_score:
+                best_score, best_sku = score, sku
+        return best_sku, round(best_score, 2), "titulo"
+
+    # ── 4. Gera sugestões e aplica automaticamente as de alta confiança ───────
+    sugestoes: list[dict] = []
+    aplicados = erros = 0
+
+    for item in ml_items_sem_sku:
+        sku, score, metodo = _match(item["titulo"], item.get("scf_atual", ""))
+        nivel = "alta" if score >= 0.68 else "media" if score >= 0.48 else "baixa" if sku else "sem_match"
+        entrada = {
+            "ml_id":     item["ml_id"],
+            "titulo":    item["titulo"],
+            "bling_sku": sku or "",
+            "bling_nome": bling_info.get(sku, {}).get("nome", "") if sku else "",
+            "confianca": score,
+            "nivel":     nivel,
+            "metodo":    metodo,
+            "aplicado":  False,
+            "erro":      "",
+        }
+        if sku and score >= confianca_auto and not dry_run:
+            res = _atualizar_seller_custom_field(item["ml_id"], sku, ml_token)
+            if res.get("erro") == "token_expirado":
+                return JSONResponse({"ok": False, "erro": "Token ML expirado durante varredura."}, status_code=401)
+            entrada["aplicado"] = res["ok"]
+            entrada["erro"]     = res.get("erro", "")
+            if res["ok"]:
+                aplicados += 1
+            else:
+                erros += 1
+            time.sleep(0.4)
+        sugestoes.append(entrada)
+
+    sugestoes.sort(key=lambda x: -x["confianca"])
+
+    return {
+        "ok":             True,
+        "dry_run":        dry_run,
+        "total_sem_sku":  len(ml_items_sem_sku),
+        "total_bling":    len(bling_prods),
+        "aplicados":      aplicados,
+        "erros":          erros,
+        "alta":           sum(1 for s in sugestoes if s["nivel"] == "alta"),
+        "media":          sum(1 for s in sugestoes if s["nivel"] == "media"),
+        "baixa":          sum(1 for s in sugestoes if s["nivel"] == "baixa"),
+        "sem_match":      sum(1 for s in sugestoes if s["nivel"] == "sem_match"),
+        "sugestoes":      sugestoes,
     }

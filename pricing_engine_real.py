@@ -10,16 +10,55 @@ except ImportError:
     _ML_API_DISPONIVEL = False
     _get_ml_taxa_real = None
 
-# Flag global para usar API ML em tempo real
+# Amazon SP-API em tempo real (opcional)
+try:
+    from amazon_pricing_engine import get_amazon_taxa_real as _get_amazon_taxa_real
+    _AMAZON_API_DISPONIVEL = True
+except ImportError:
+    _AMAZON_API_DISPONIVEL = False
+    _get_amazon_taxa_real = None
+
+# Shopee API em tempo real (opcional)
+try:
+    from shopee_pricing_engine import get_shopee_taxa_real as _get_shopee_taxa_real
+    _SHOPEE_API_DISPONIVEL = True
+except ImportError:
+    _SHOPEE_API_DISPONIVEL = False
+    _get_shopee_taxa_real = None
+
+# ── Flags globais de API real-time ────────────────────────────────────────────
 _ML_API_REAL = False
 _ML_PESO_G = 0
 _ML_CATEGORY_ID = ""
+
+_AMAZON_API_REAL = False
+_AMAZON_SKU = ""
+_AMAZON_ASIN = ""
+_AMAZON_CATEGORY = ""
+
+_SHOPEE_API_REAL = False
+_SHOPEE_CATEGORY = ""
+
 
 def configurar_ml_api(usar_api: bool, peso_g: int = 0, category_id: str = ""):
     global _ML_API_REAL, _ML_PESO_G, _ML_CATEGORY_ID
     _ML_API_REAL = usar_api and _ML_API_DISPONIVEL
     _ML_PESO_G = peso_g
     _ML_CATEGORY_ID = category_id
+
+
+def configurar_amazon_api(usar_api: bool, sku: str = "", asin: str = "", category: str = ""):
+    global _AMAZON_API_REAL, _AMAZON_SKU, _AMAZON_ASIN, _AMAZON_CATEGORY
+    _AMAZON_API_REAL = usar_api and _AMAZON_API_DISPONIVEL
+    _AMAZON_SKU = sku
+    _AMAZON_ASIN = asin
+    _AMAZON_CATEGORY = category
+
+
+def configurar_shopee_api(usar_api: bool, category: str = ""):
+    global _SHOPEE_API_REAL, _SHOPEE_CATEGORY
+    _SHOPEE_API_REAL = usar_api and _SHOPEE_API_DISPONIVEL
+    _SHOPEE_CATEGORY = category
 
 
 FORMULA_VERSION = "v3.4.0-composicao"
@@ -132,20 +171,59 @@ def _calcular_um_canal(regras: List[Dict], canal: str, custo_base: float, peso: 
         preco = preco_novo
     if regra is None:
         raise ValueError(f"Sem regra para {canal}")
-    preco_final = _round2(preco)
     frete = _round2(regra["taxa_frete"])
     taxa_fixa = _round2(regra["taxa_fixa"])
     comissao_pct = regra["comissao"]
     frete_op_api = 0.0
-    # Usa taxa ML em tempo real se configurado
-    if _ML_API_REAL and _get_ml_taxa_real and canal in ("Mercado Livre Classico", "Mercado Livre Premium"):
+    taxa_source = "regras"
+
+    # ── Buscar taxa real por canal e reiterar o cálculo de preço ─────────────
+    comissao_api = None
+
+    if _ML_API_REAL and _get_ml_taxa_real and canal in ("Mercado Livre Classico", "Mercado Livre Premium", "Mercado Livre Full Classico", "Mercado Livre Full Premium"):
         _listing = "gold_special" if "Classico" in canal else "gold_pro"
         try:
-            _taxa = _get_ml_taxa_real(_listing, preco_final, _ML_PESO_G or 300, _ML_CATEGORY_ID)
-            comissao_pct = _taxa.get("comissao_pct", comissao_pct)
+            _taxa = _get_ml_taxa_real(_listing, preco, _ML_PESO_G or 300, _ML_CATEGORY_ID)
+            comissao_api = _taxa.get("comissao_pct")
             frete_op_api = _taxa.get("frete_operacional", 0.0)
+            taxa_source  = _taxa.get("source", "api")
         except Exception:
             pass
+
+    elif _AMAZON_API_REAL and _get_amazon_taxa_real and canal == "Amazon":
+        try:
+            _taxa = _get_amazon_taxa_real(preco, sku=_AMAZON_SKU, asin=_AMAZON_ASIN, category_hint=_AMAZON_CATEGORY)
+            comissao_api = _taxa.get("comissao_pct")
+            frete_op_api = _taxa.get("fee_fulfillment", 0.0)
+            taxa_source  = _taxa.get("source", "tabela_br")
+        except Exception:
+            pass
+
+    elif _SHOPEE_API_REAL and _get_shopee_taxa_real and canal == "Shopee":
+        try:
+            _taxa = _get_shopee_taxa_real(preco, category_hint=_SHOPEE_CATEGORY)
+            comissao_api = _taxa.get("total_pct")
+            taxa_source  = _taxa.get("source", "tabela_br")
+        except Exception:
+            pass
+
+    # Se a taxa da API difere das regras, reiterar o preço com a taxa real
+    if comissao_api is not None and abs(comissao_api - comissao_pct) > 0.0005:
+        comissao_pct = comissao_api
+        preco2 = preco
+        for _ in range(15):
+            preco2_novo = _resolver_preco_por_objetivo(
+                custo_base, frete, taxa_fixa, comissao_pct, imposto,
+                objetivo, tipo_alvo, valor_alvo
+            )
+            if abs(preco2_novo - preco2) < 0.01:
+                preco2 = preco2_novo
+                break
+            preco2 = preco2_novo
+        preco = preco2
+
+    preco_final = _round2(preco)
+
     imposto_pct = imposto
     comissao_valor = _round2(preco_final * comissao_pct)
     imposto_valor = _round2(preco_final * imposto_pct)
@@ -170,6 +248,7 @@ def _calcular_um_canal(regras: List[Dict], canal: str, custo_base: float, peso: 
         "custo_total": _round2(custo_base),
         "faixa_aplicada": _faixa_texto(regra),
         "indice_final": round(lucro_liquido, 4),
+        "taxa_source": taxa_source,
     }
 
 def calcular_canais(regras, preco_compra, embalagem, peso, imposto, quantidade, objetivo, tipo_alvo, valor_alvo, intelligence_config=None, historical_data=None, sku=None, score_config=None):
@@ -388,6 +467,8 @@ def gerar_integracao(canais, modo_preco_virtual, acrescimo_percentual, acrescimo
             "custo_total": canal.get("custo_total", 0),
             "indice_final": canal.get("indice_final", 0),
             "faixa_aplicada": canal.get("faixa_aplicada", ""),
+            "taxa_source": canal.get("taxa_source", ""),
+            "comissao_valor": canal.get("comissao_valor", 0),
             "aprovacao_status": "Pendente aprovação manual" if modo_aprovacao == "manual" else "Pronto para enviar",
             "estoque": estoque,
             "regra_estoque_aplicada": regra_aplicada,
@@ -691,18 +772,22 @@ def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto,
         except Exception:
             pass
 
+    _produto_bling = {"id": produto.get("id"), "nome": produto.get("nome"), "codigo": produto.get("codigo"), "preco": produto.get("preco"), "precoCusto": produto.get("precoCusto"), "saldoVirtualTotal": estoque}
+
     if preco_custo <= 0:
         return {
             "erro": "Produto sem custo válido no Bling",
             "erro_codigo": "composicao_sem_custo" if str(custo_resolvido.get("origem") or "").lower() == "componentes_do_anuncio" else "custo_ausente",
             "acao": "Preencha o preço de compra no estoque ou revise a composição do anúncio.",
             "custo_extraido": custo_resolvido,
+            "produto_bling": _produto_bling,
         }
     if peso_usado <= 0:
         return {
             "erro": "Produto sem peso",
             "erro_codigo": "peso_ausente",
             "acao": "Preencha o peso no Bling ou use peso override.",
+            "produto_bling": _produto_bling,
         }
 
     sku = produto.get("codigo") or valor_busca
@@ -718,6 +803,15 @@ def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto,
         except Exception:
             pass
 
+    # ── Ativar APIs de taxa real por canal (respeitando config) ─────────────
+    _peso_g = int(peso_usado * 1000)
+    _usar_ml_api     = intelligence_config.get("ml_api_real", True)     if isinstance(intelligence_config, dict) else True
+    _usar_amazon_api = intelligence_config.get("amazon_api_real", True) if isinstance(intelligence_config, dict) else True
+    _usar_shopee_api = intelligence_config.get("shopee_api_real", True) if isinstance(intelligence_config, dict) else True
+    configurar_ml_api(_usar_ml_api, _peso_g)
+    configurar_amazon_api(_usar_amazon_api, sku=sku)
+    configurar_shopee_api(_usar_shopee_api)
+
     calculo = calcular_canais(regras, preco_custo, embalagem, peso_usado, imposto, quantidade, objetivo, tipo_alvo, valor_alvo, intelligence_config=intelligence_config, historical_data=historical_data, sku=sku, score_config=_score_cfg if _score_cfg.get("ajuste_ativo") else None)
     integracao = gerar_integracao(calculo["canais"], modo_preco_virtual, acrescimo_percentual, acrescimo_nominal, preco_manual, arredondamento, modo_aprovacao=modo_aprovacao, preco_custo_bling=preco_custo, preco_compra_anterior_bling=preco_compra_anterior_bling, estoque=estoque, regra_estoque=regra_estoque)
     melhor_item = integracao["itens"][0] if integracao["itens"] else None
@@ -726,6 +820,7 @@ def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto,
         "sku": sku,
         "tipo_custo": custo_resolvido.get("tipo_custo"),
         "custo_usado": preco_custo,
+        "embalagem_usado": _safe_float(embalagem, 0),
         "origem_custo": custo_resolvido.get("origem"),
         "componentes_custo": custo_resolvido.get("componentes", []),
         "warning_custo": custo_resolvido.get("warning"),
@@ -738,7 +833,7 @@ def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto,
         "criterio": "sku",
         "criterio_usado": "sku",
         "valor_busca": valor_busca,
-        "produto_bling": {"id": produto.get("id"), "nome": produto.get("nome"), "codigo": produto.get("codigo"), "preco": produto.get("preco"), "precoCusto": produto.get("precoCusto"), "saldoVirtualTotal": estoque},
+        "produto_bling": _produto_bling,
         "busca_quantidade": busca.get("quantidade", 1),
         "custo_extraido": custo_resolvido,
         "peso_extraido": peso_extraido,

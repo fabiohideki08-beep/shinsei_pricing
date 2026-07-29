@@ -259,18 +259,56 @@ class BlingClient:
             raise BlingAPIError(response.text)
         raise BlingAPIError("Falha inesperada na requisição GET.")
 
-    def _put(self, path: str, payload: dict, retries: int = 2) -> dict:
+    def _put(self, path: str, payload: dict, retries: int = 4, timeout: int = 90) -> dict:
         url = f"{self.base_url}{path}"
         for attempt in range(retries + 1):
             self._respect_rate_limit()
-            response = requests.put(url, headers=self._get_headers(), json=payload, timeout=30)
+            response = requests.put(url, headers=self._get_headers(), json=payload, timeout=timeout)
             if response.status_code in (200, 201):
                 return response.json()
+            if response.status_code == 401 and attempt < retries:
+                try:
+                    self._refresh_token()
+                except Exception as _re:
+                    raise BlingAuthError(f"Token expirado e refresh falhou: {_re}")
+                continue
+            if response.status_code in (429, 502, 503, 504) and attempt < retries:
+                time.sleep(5 + attempt * 5)
+                continue
+            raise BlingAPIError(f"HTTP {response.status_code}: {response.text[:500]}")
+        raise BlingAPIError("Falha inesperada na requisição PUT.")
+
+    def _post(self, path: str, payload: dict, retries: int = 2) -> dict:
+        url = f"{self.base_url}{path}"
+        for attempt in range(retries + 1):
+            self._respect_rate_limit()
+            response = requests.post(url, headers=self._get_headers(), json=payload, timeout=30)
+            if response.status_code in (200, 201):
+                return response.json()
+            if response.status_code == 401 and attempt < retries:
+                self._refresh_token()
+                continue
             if response.status_code == 429 and attempt < retries:
                 time.sleep(1.2 + attempt * 0.8)
                 continue
             raise BlingAPIError(response.text)
-        raise BlingAPIError("Falha inesperada na requisição PUT.")
+        raise BlingAPIError("Falha inesperada na requisição POST.")
+
+    def criar_produto(self, payload: dict) -> dict:
+        """
+        Cria um produto no Bling.
+        Bling v3 aceita tipo: 'P' (Produto), 'S' (Serviço), 'N' (Serviço fiscal).
+        Para produto com variações: criar o pai com tipo 'P', depois usar criar_variacao().
+        """
+        return self._post("/produtos", payload)
+
+    def criar_variacao(self, produto_id: int, payload: dict) -> dict:
+        """
+        Cria uma variação em um produto existente no Bling.
+        Endpoint: POST /produtos/{id}/variacoes
+        Payload: {nome, codigo, preco, estoque: {saldoInicial}}
+        """
+        return self._post(f"/produtos/{int(produto_id)}/variacoes", payload)
 
     # ── Normalização ──────────────────────────
 

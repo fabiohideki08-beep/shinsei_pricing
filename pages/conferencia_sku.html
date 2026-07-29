@@ -159,7 +159,7 @@ tr:hover td{background:rgba(79,140,255,.04)}
   <div id="tab-matrix" class="tab-content active">
     <!-- Filtros -->
     <div class="filtros-bar">
-      <span class="filtro-label">Filtrar ausente em:</span>
+      <span class="filtro-label">Ausente em:</span>
       <button class="filtro-btn active" id="f-todos" onclick="setFiltro('')">Todos</button>
       <button class="filtro-btn" id="f-ml" onclick="setFiltro('ml')">🟡 ML</button>
       <button class="filtro-btn" id="f-shopify" onclick="setFiltro('shopify')">🟢 Shopify</button>
@@ -171,6 +171,49 @@ tr:hover td{background:rgba(79,140,255,.04)}
       <span id="count-label" style="font-size:12px;color:var(--muted);white-space:nowrap"></span>
       <button class="btn sm secondary" onclick="exportarCSV()">⬇ CSV</button>
     </div>
+    <!-- Filtros de status por canal -->
+    <div class="filtros-bar" style="margin-top:-6px;gap:8px;flex-wrap:wrap">
+      <span class="filtro-label" style="min-width:50px">Status:</span>
+
+      <span style="display:inline-flex;align-items:center;gap:4px">
+        <span style="font-size:11px;color:var(--muted);font-weight:600">Bling</span>
+        <button class="filtro-btn active" id="fb-todos" onclick="setFiltroBling('')">T</button>
+        <button class="filtro-btn" id="fb-ativo" onclick="setFiltroBling('A')" title="Ativo">🟢</button>
+        <button class="filtro-btn" id="fb-inativo" onclick="setFiltroBling('I')" title="Inativo">🔴</button>
+      </span>
+
+      <span id="fg-ml" style="display:none;align-items:center;gap:4px">
+        <span style="color:var(--line)">|</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:600">ML</span>
+        <button class="filtro-btn active" id="fml-todos" onclick="setFiltroML('')">T</button>
+        <button class="filtro-btn" id="fml-ativo" onclick="setFiltroML('active')" title="Ativo">🟢</button>
+        <button class="filtro-btn" id="fml-inativo" onclick="setFiltroML('inactive')" title="Pausado/Fechado">🔴</button>
+      </span>
+
+      <span id="fg-shopify" style="display:none;align-items:center;gap:4px">
+        <span style="color:var(--line)">|</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:600">Shopify</span>
+        <button class="filtro-btn active" id="fs-todos" onclick="setFiltroShopify('')">T</button>
+        <button class="filtro-btn" id="fs-ativo" onclick="setFiltroShopify('active')" title="Ativo">🟢</button>
+        <button class="filtro-btn" id="fs-inativo" onclick="setFiltroShopify('inactive')" title="Arquivado/Rascunho">🔴</button>
+      </span>
+
+      <span id="fg-amazon" style="display:none;align-items:center;gap:4px">
+        <span style="color:var(--line)">|</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:600">Amazon</span>
+        <button class="filtro-btn active" id="famz-todos" onclick="setFiltroAmazon('')">T</button>
+        <button class="filtro-btn" id="famz-ativo" onclick="setFiltroAmazon('active')" title="Ativo (BUYABLE)">🟢</button>
+        <button class="filtro-btn" id="famz-inativo" onclick="setFiltroAmazon('inactive')" title="Inativo">🔴</button>
+      </span>
+
+      <span id="fg-shopee" style="display:none;align-items:center;gap:4px">
+        <span style="color:var(--line)">|</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:600">Shopee</span>
+        <button class="filtro-btn active" id="fsp-todos" onclick="setFiltroShopee('')">T</button>
+        <button class="filtro-btn" id="fsp-ativo" onclick="setFiltroShopee('active')" title="Ativo (NORMAL)">🟢</button>
+        <button class="filtro-btn" id="fsp-inativo" onclick="setFiltroShopee('inactive')" title="Inativo (UNLIST)">🔴</button>
+      </span>
+    </div>
 
     <div class="table-wrap">
       <table id="tabela">
@@ -178,6 +221,7 @@ tr:hover td{background:rgba(79,140,255,.04)}
           <tr>
             <th>SKU</th>
             <th>Nome</th>
+            <th style="text-align:center">Bling</th>
             <th style="text-align:center">Estoque</th>
             <th style="text-align:center">Preço</th>
             <th style="text-align:center" id="th-ml">ML</th>
@@ -188,7 +232,7 @@ tr:hover td{background:rgba(79,140,255,.04)}
           </tr>
         </thead>
         <tbody id="tbody-matrix">
-          <tr><td colspan="9" class="empty">Execute a conferência para visualizar os dados.</td></tr>
+          <tr><td colspan="10" class="empty">Execute a conferência para visualizar os dados.</td></tr>
         </tbody>
       </table>
     </div>
@@ -248,6 +292,12 @@ let _ivPool = null;
 let _canaisConectados = [];
 let _semSkuML = [];
 let _stats = {};
+// Filtros de status por canal
+let _filtroBling   = '';  // '' | 'A' | 'I'
+let _filtroML      = '';  // '' | 'active' | 'inactive'
+let _filtroShopify = '';  // '' | 'active' | 'inactive'
+let _filtroAmazon  = '';  // '' | 'active' | 'inactive'
+let _filtroShopee  = '';  // '' | 'active' | 'inactive'
 
 // ─── Utilitários ─────────────────────────────────────────────────────────────
 function notice(msg, tipo) {
@@ -281,11 +331,14 @@ function mudarTab(id, btn) {
 }
 
 // ─── Filtros ──────────────────────────────────────────────────────────────────
+// IDs dos botões do filtro "ausente em" (não tocar nos de status)
+const FILTRO_AUSENTE_IDS = ['f-todos','f-ml','f-shopify','f-amazon','f-shopee','f-sobling'];
+
 function setFiltro(canal) {
   _filtroAusente = canal;
   _sobling = false;
   _pagina = 0;
-  document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
+  FILTRO_AUSENTE_IDS.forEach(id => { const el=document.getElementById(id); if(el) el.classList.remove('active'); });
   document.getElementById(canal ? 'f-' + canal : 'f-todos').classList.add('active');
   // Marcar stat card ativo
   document.querySelectorAll('.stat').forEach(s => s.classList.remove('active'));
@@ -296,10 +349,26 @@ function setFiltroSoBling() {
   _filtroAusente = '';
   _sobling = true;
   _pagina = 0;
-  document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
+  FILTRO_AUSENTE_IDS.forEach(id => { const el=document.getElementById(id); if(el) el.classList.remove('active'); });
   document.getElementById('f-sobling').classList.add('active');
   renderTabela();
 }
+
+function _setStatusFiltro(variable, val, ids, mapping) {
+  window[variable] = val;
+  _pagina = 0;
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('active'); });
+  const activeId = mapping[val] || ids[0];
+  const el = document.getElementById(activeId);
+  if (el) el.classList.add('active');
+  renderTabela();
+}
+
+function setFiltroBling(val)   { _filtroBling   = val; _pagina=0; _setStatusFiltro('_filtroBling',  val, ['fb-todos','fb-ativo','fb-inativo'],  {'A':'fb-ativo','I':'fb-inativo','':'fb-todos'}); }
+function setFiltroML(val)      { _filtroML      = val; _pagina=0; _setStatusFiltro('_filtroML',     val, ['fml-todos','fml-ativo','fml-inativo'], {'active':'fml-ativo','inactive':'fml-inativo','':'fml-todos'}); }
+function setFiltroShopify(val) { _filtroShopify = val; _pagina=0; _setStatusFiltro('_filtroShopify',val, ['fs-todos','fs-ativo','fs-inativo'],   {'active':'fs-ativo','inactive':'fs-inativo','':'fs-todos'}); }
+function setFiltroAmazon(val)  { _filtroAmazon  = val; _pagina=0; _setStatusFiltro('_filtroAmazon', val, ['famz-todos','famz-ativo','famz-inativo'],{'active':'famz-ativo','inactive':'famz-inativo','':'famz-todos'}); }
+function setFiltroShopee(val)  { _filtroShopee  = val; _pagina=0; _setStatusFiltro('_filtroShopee', val, ['fsp-todos','fsp-ativo','fsp-inativo'], {'active':'fsp-ativo','inactive':'fsp-inativo','':'fsp-todos'}); }
 
 function aplicarBusca() {
   _busca = document.getElementById('busca').value.trim().toLowerCase();
@@ -326,6 +395,26 @@ function filtrarDados() {
       !r.presente_amazon &&
       !r.presente_shopee
     );
+  }
+  // Filtros de status por canal
+  if (_filtroBling) {
+    items = items.filter(r => (r.situacao_bling || '') === _filtroBling);
+  }
+  if (_filtroML) {
+    if (_filtroML === 'active')   items = items.filter(r => r.status_ml === 'active');
+    else                          items = items.filter(r => r.status_ml && r.status_ml !== 'active');
+  }
+  if (_filtroShopify) {
+    if (_filtroShopify === 'active') items = items.filter(r => r.status_shopify === 'active');
+    else                             items = items.filter(r => r.status_shopify && r.status_shopify !== 'active');
+  }
+  if (_filtroAmazon) {
+    if (_filtroAmazon === 'active') items = items.filter(r => r.status_amazon === 'active');
+    else                            items = items.filter(r => r.status_amazon === 'inactive');
+  }
+  if (_filtroShopee) {
+    if (_filtroShopee === 'active') items = items.filter(r => r.status_shopee === 'active');
+    else                            items = items.filter(r => r.status_shopee === 'inactive');
   }
   return items;
 }
@@ -354,22 +443,54 @@ function renderTabela() {
   document.getElementById('th-amazon').style.display = amOk ? '' : 'none';
   document.getElementById('th-shopee').style.display = spOk ? '' : 'none';
 
+  // Mostrar/esconder grupos de filtro de status conforme canais conectados
+  const fg = {ml: 'fg-ml', shopify: 'fg-shopify', amazon: 'fg-amazon', shopee: 'fg-shopee'};
+  Object.entries(fg).forEach(([canal, id]) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = _canaisConectados.includes(canal) ? 'inline-flex' : 'none';
+  });
+
   const tbody = document.getElementById('tbody-matrix');
   if (!pagina.length) {
-    tbody.innerHTML = `<tr><td colspan="9"><div class="empty">Nenhum SKU encontrado com os filtros aplicados.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10"><div class="empty">Nenhum SKU encontrado com os filtros aplicados.</div></td></tr>`;
   } else {
+    // Helper: chip com status embutido
+    function chipStatus(presente, conectado, status) {
+      if (!conectado) return '<span class="chip na">N/A</span>';
+      if (presente !== true) return '<span class="chip no">✗</span>';
+      const cor = !status || status === 'active' ? '#22c55e'
+        : (status === 'paused' || status === 'archived' || status === 'draft') ? '#f59e0b'
+        : '#f87171';
+      const label = !status ? '✓'
+        : status === 'active' ? '✓'
+        : status === 'paused' ? '⏸'
+        : status === 'closed' ? '🔒'
+        : status === 'archived' ? '📦'
+        : status === 'draft' ? '📝'
+        : status === 'inactive' ? '✗'
+        : '✓';
+      const title = status || 'active';
+      return `<span class="chip ok" style="background:rgba(0,0,0,.1);color:${cor}" title="${title}">${label}</span>`;
+    }
+
     tbody.innerHTML = pagina.map(r => {
-      const mlId = r.ml_id ? `<a href="https://produto.mercadolivre.com.br/${r.ml_id}" target="_blank" style="font-size:10px;color:var(--accent);margin-left:4px">↗</a>` : '';
-      const shId = r.shopify_variant_id ? '' : '';
+      const mlId = r.ml_id ? `<a href="https://produto.mercadolivre.com.br/${r.ml_id}" target="_blank" style="font-size:10px;color:var(--accent);margin-left:3px">↗</a>` : '';
+      const bSit = r.situacao_bling || '';
+      const blingBadge = bSit === 'A'
+        ? '<span style="font-size:10px;font-weight:700;color:#22c55e">● Ativo</span>'
+        : bSit === 'I'
+          ? '<span style="font-size:10px;font-weight:700;color:#f87171">● Inativo</span>'
+          : '<span style="font-size:10px;color:var(--muted)">—</span>';
       return `<tr>
         <td><b style="font-family:monospace;font-size:12px">${r.sku}</b></td>
-        <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.nome}">${r.nome || '—'}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.nome}">${r.nome || '—'}</td>
+        <td style="text-align:center">${blingBadge}</td>
         <td style="text-align:center">${r.estoque_bling ?? '—'}</td>
         <td style="text-align:center">${r.preco_bling ? moeda(r.preco_bling) : '—'}</td>
-        ${mlOk ? `<td style="text-align:center">${chipCanal(r.presente_ml, mlOk)}${mlId}</td>` : ''}
-        ${shOk ? `<td style="text-align:center">${chipCanal(r.presente_shopify, shOk)}</td>` : ''}
-        ${amOk ? `<td style="text-align:center">${chipCanal(r.presente_amazon, amOk)}</td>` : ''}
-        ${spOk ? `<td style="text-align:center">${chipCanal(r.presente_shopee, spOk)}</td>` : ''}
+        ${mlOk ? `<td style="text-align:center">${chipStatus(r.presente_ml, mlOk, r.status_ml)}${mlId}</td>` : ''}
+        ${shOk ? `<td style="text-align:center">${chipStatus(r.presente_shopify, shOk, r.status_shopify)}</td>` : ''}
+        ${amOk ? `<td style="text-align:center">${chipStatus(r.presente_amazon, amOk, r.status_amazon)}</td>` : ''}
+        ${spOk ? `<td style="text-align:center">${chipStatus(r.presente_shopee, spOk, r.status_shopee)}</td>` : ''}
         <td style="text-align:center;white-space:nowrap">${coberturaBar(r.cobertura ?? 0)}</td>
       </tr>`;
     }).join('');
@@ -568,13 +689,22 @@ function exportarCSV() {
   const dados = filtrarDados();
   if (!dados.length) { notice('Nenhum dado para exportar.', 'warn'); return; }
   const canais = ['ml','shopify','amazon','shopee'].filter(c => _canaisConectados.includes(c));
-  const header = ['SKU','Nome','Estoque','Preco', ...canais.map(c => c.toUpperCase()), 'Cobertura_%'];
+  const statusField = { ml: 'status_ml', shopify: 'status_shopify', amazon: 'status_amazon', shopee: 'status_shopee' };
+  const header = [
+    'SKU','Nome','Status_Bling','Estoque','Preco',
+    ...canais.flatMap(c => [c.toUpperCase(), `Status_${c.charAt(0).toUpperCase()+c.slice(1)}`]),
+    'Cobertura_%'
+  ];
   const rows = dados.map(r => [
     r.sku,
     `"${(r.nome||'').replace(/"/g,'""')}"`,
+    r.situacao_bling === 'A' ? 'Ativo' : r.situacao_bling === 'I' ? 'Inativo' : '',
     r.estoque_bling ?? '',
     r.preco_bling ?? '',
-    ...canais.map(c => r['presente_' + c] === true ? 'SIM' : r['presente_' + c] === false ? 'NÃO' : 'N/A'),
+    ...canais.flatMap(c => [
+      r['presente_' + c] === true ? 'SIM' : r['presente_' + c] === false ? 'NÃO' : 'N/A',
+      r[statusField[c]] || ''
+    ]),
     Math.round((r.cobertura || 0) * 100)
   ]);
   const csv = [header, ...rows].map(r => r.join(';')).join('\n');

@@ -70,6 +70,16 @@ def _shopify_service_name(option_name: str, is_free: bool) -> str:
 def _shopify_rates_from_result(result: FreightResult) -> list[dict]:
     rates = []
     for opt in result.options:
+        is_same_day = opt.delivery_days == 0
+        # Para entrega no mesmo dia: min = max = hoje
+        # Para entregas normais: max = min + 2 dias de folga
+        max_days = opt.delivery_days if is_same_day else opt.delivery_days + 2
+        if is_same_day:
+            description = "Entrega hoje! Pedidos realizados ate as 12h (seg-sab)."
+        elif opt.is_free:
+            description = "Frete gratis com subsidio Shinsei!"
+        else:
+            description = f"Subsidio R${opt.subsidy:.2f} aplicado"
         rates.append(
             {
                 "service_name": _shopify_service_name(opt.name, opt.is_free),
@@ -77,12 +87,8 @@ def _shopify_rates_from_result(result: FreightResult) -> list[dict]:
                 "total_price": _cents(opt.price_final),
                 "currency": "BRL",
                 "min_delivery_date": _isodate(opt.delivery_days),
-                "max_delivery_date": _isodate(opt.delivery_days + 2),
-                "description": (
-                    "Frete grátis com subsídio Shinsei!"
-                    if opt.is_free
-                    else f"Subsídio R${opt.subsidy:.2f} aplicado"
-                ),
+                "max_delivery_date": _isodate(max_days),
+                "description": description,
             }
         )
     return rates
@@ -242,22 +248,32 @@ async def calcular_frete(
     qty: int = Query(1, ge=1, description="Quantidade de itens no carrinho"),
     peso: float = Query(0.3, ge=0.01, description="Peso total em kg"),
     valor: float = Query(0.0, ge=0.0, description="Valor total do pedido em R$"),
+    product_id: str | None = Query(None, description="ID do produto Shopify (para lookup de peso real via cache)"),
 ) -> FreightResult:
     """
     Chamado pelo widget do carrinho via AJAX.
     Retorna FreightResult JSON completo.
+    Quando 'product_id' é informado, usa o peso real do produto (via cache Shopify/Bling).
     """
     dest_cep = normalize_cep(cep)
     if len(dest_cep) < 8:
         raise HTTPException(status_code=422, detail="CEP inválido. Informe 8 dígitos.")
 
     try:
-        result = await calculate_freight(dest_cep, qty, peso, valor)
+        result = await calculate_freight(dest_cep, qty, peso, valor, product_id=product_id)
     except Exception as exc:
         logger.error("GET /frete/calcular: %s", exc)
         raise HTTPException(status_code=500, detail=f"Erro no cálculo de frete: {exc}")
 
     return result
+
+
+@router.get("/dimensoes")
+async def get_dimensoes(product_id: str = Query(..., description="ID do produto Shopify")) -> dict:
+    """Retorna as dimensões usadas para o cálculo de frete de um produto."""
+    from services.bling_dimensions import get_dims_for_product
+    dims = get_dims_for_product(product_id)
+    return {"product_id": product_id, **dims}
 
 
 # ---------------------------------------------------------------------------
@@ -345,6 +361,7 @@ class FreteConfigPayload(BaseModel):
     subsidio_por_item: float
     frete_real_default: float
     cep_origem: str = "06036003"
+    frete_gratis_minimo: float = 29.90
 
 
 @router.put("/config")
@@ -354,6 +371,7 @@ async def put_frete_config(payload: FreteConfigPayload) -> dict:
         "subsidio_por_item": payload.subsidio_por_item,
         "frete_real_default": payload.frete_real_default,
         "cep_origem": payload.cep_origem,
+        "frete_gratis_minimo": payload.frete_gratis_minimo,
     }
     salvar_config_frete(cfg)
     return {"ok": True, "config": cfg}

@@ -89,7 +89,10 @@ from monitoring import router as monitoring_router
 from routes.gmc import router as gmc_router
 from routes.ads import router as ads_router
 from routes.shopee import router as shopee_router, aplicar_preco_shopee_por_sku
+from routes.amazon import router as amazon_router
 from routes.estoque_sync import router as estoque_sync_router, _rebuild_caches_bg, sync_estoque_bling
+from routes.shopify_webhooks import router as shopify_webhooks_router
+from routes.ml_ads import router as ml_ads_router
 app.include_router(batch_router)
 from routes.mercado_livre import router as ml_page_router
 app.include_router(ml_page_router)
@@ -99,7 +102,10 @@ app.include_router(monitoring_router)
 app.include_router(gmc_router)
 app.include_router(ads_router)
 app.include_router(shopee_router)
+app.include_router(amazon_router)
 app.include_router(estoque_sync_router)
+app.include_router(shopify_webhooks_router)
+app.include_router(ml_ads_router)
 try:
     from routes.frete import router as frete_router
     app.include_router(frete_router)
@@ -197,13 +203,17 @@ def _first_existing(path_options: list[Path]):
 
 def carregar_regras(apenas_ativas: bool = False) -> list[dict]:
     try:
-        return db_listar_regras(apenas_ativas=apenas_ativas)
+        db_regras = db_listar_regras(apenas_ativas=apenas_ativas)
+        if db_regras:
+            return db_regras
     except Exception:
-        regras = _load_json(REGRAS_PATH, [])
-        if not isinstance(regras, list): return []
-        for r in regras:
-            if isinstance(r, dict): r.setdefault("ativo", True)
-        return [r for r in regras if isinstance(r, dict) and (r.get("ativo", True) or not apenas_ativas)]
+        pass
+    # Fallback: JSON (usado no Cloud Run onde o SQLite começa vazio)
+    regras = _load_json(REGRAS_PATH, [])
+    if not isinstance(regras, list): return []
+    for r in regras:
+        if isinstance(r, dict): r.setdefault("ativo", True)
+    return [r for r in regras if isinstance(r, dict) and (r.get("ativo", True) or not apenas_ativas)]
 
 def carregar_cfg() -> dict:
     data = _load_json(CFG_PATH, {})
@@ -320,7 +330,7 @@ def _ja_existe_pendente_semelhante(itens: list[dict], sku: str, auditoria: dict)
 class IntegracaoPayload(BaseModel):
     criterio: str = "sku"
     valor_busca: str = ""
-    embalagem: float = 0
+    embalagem: Optional[float] = None  # None = usa embalagem_padrao da config
     imposto: float = 4
     quantidade: int = 1
     objetivo: str = "lucro_liquido"
@@ -437,6 +447,35 @@ def simulador_page():
     html_file = _first_existing([PAGES_DIR / "simulador.html", BASE_DIR / "index.html"])
     return HTMLResponse(html_file.read_text(encoding="utf-8")) if html_file else HTMLResponse(FALLBACK_HTML)
 
+@app.get("/taxas/status")
+def taxas_status():
+    """Retorna quais fontes de taxa estão ativas (api real vs tabela fallback)."""
+    status = {}
+    # ML
+    try:
+        from ml_pricing_engine import _load_token as _ml_token
+        status["ml"] = {"disponivel": bool(_ml_token()), "fonte": "api" if bool(_ml_token()) else "fallback"}
+    except Exception:
+        status["ml"] = {"disponivel": False, "fonte": "fallback"}
+    # Amazon
+    try:
+        from amazon_client import AmazonClient
+        ac = AmazonClient()
+        ac._get_access_token()
+        status["amazon"] = {"disponivel": True, "fonte": "sp_api"}
+    except Exception:
+        status["amazon"] = {"disponivel": False, "fonte": "tabela_br"}
+    # Shopee
+    try:
+        from shopee_pricing_engine import _load_tokens as _sh_tokens
+        toks = _sh_tokens()
+        import os
+        ok = bool(toks and toks.get("access_token") and os.getenv("SHOPEE_PARTNER_KEY"))
+        status["shopee"] = {"disponivel": ok, "fonte": "pedidos_reais" if ok else "tabela_br"}
+    except Exception:
+        status["shopee"] = {"disponivel": False, "fonte": "tabela_br"}
+    return status
+
 @app.get("/fila", response_class=HTMLResponse)
 def fila_page():
     html_file = PAGES_DIR / "fila.html"
@@ -448,6 +487,81 @@ def fila_page():
 def hub_page():
     html_file = PAGES_DIR / "hub.html"
     return HTMLResponse(html_file.read_text(encoding="utf-8")) if html_file.exists() else HTMLResponse(FALLBACK_HTML)
+
+# ── Produtos ──────────────────────────────────────────────────────────────────
+@app.get("/produtos", response_class=HTMLResponse)
+def produtos_page():
+    return HTMLResponse((PAGES_DIR / "produtos.html").read_text(encoding="utf-8"))
+
+import subprocess, threading, queue as _queue
+
+_bot_processes: dict = {}
+_bot_queues: dict = {}
+
+def _run_bot_background(bot_id: str, script_path: str, q: "_queue.Queue"):
+    try:
+        proc = subprocess.Popen(
+            ["python", script_path],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding="utf-8", errors="replace",
+            cwd=str(BASE_DIR)
+        )
+        _bot_processes[bot_id] = proc
+        for line in proc.stdout:
+            q.put({"line": line.rstrip()})
+        proc.wait()
+        ok = proc.returncode == 0
+        q.put({"done": True, "ok": ok, "summary": {}})
+    except Exception as e:
+        q.put({"line": f"ERRO: {e}"})
+        q.put({"done": True, "ok": False, "summary": {}})
+    finally:
+        _bot_processes.pop(bot_id, None)
+
+from fastapi.responses import StreamingResponse
+import json as _json
+
+@app.get("/produtos/bots/{bot_id}/run")
+def bot_run(bot_id: str):
+    scripts = {
+        "kit":              str(BASE_DIR / "bling_anexar_imagens_kit.py"),
+        "import-shopify":   str(BASE_DIR / "bots" / "importar_shopify_bling.py"),
+        "import-shopee":    str(BASE_DIR / "bots" / "importar_shopee_bling.py"),
+        "import-ml":        str(BASE_DIR / "bots" / "importar_ml_bling.py"),
+        "export-ml":        str(BASE_DIR / "bots" / "exportar_bling_ml.py"),
+        "export-shopify":   str(BASE_DIR / "bots" / "exportar_bling_shopify.py"),
+        "export-shopee":    str(BASE_DIR / "bots" / "exportar_bling_shopee.py"),
+        "sync-estoque":     str(BASE_DIR / "bots" / "sync_estoque_canais.py"),
+        "sync-preco-shopee":str(BASE_DIR / "bots" / "sync_preco_shopee.py"),
+    }
+    if bot_id not in scripts:
+        return HTMLResponse("Bot não encontrado", status_code=404)
+
+    q: _queue.Queue = _queue.Queue()
+    _bot_queues[bot_id] = q
+    t = threading.Thread(target=_run_bot_background, args=(bot_id, scripts[bot_id], q), daemon=True)
+    t.start()
+
+    def event_stream():
+        while True:
+            try:
+                msg = q.get(timeout=120)
+                yield f"data: {_json.dumps(msg, ensure_ascii=False)}\n\n"
+                if msg.get("done"):
+                    break
+            except _queue.Empty:
+                yield "data: {\"line\": \"[timeout]\"}\n\n"
+                break
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+@app.post("/produtos/bots/{bot_id}/stop")
+def bot_stop(bot_id: str):
+    proc = _bot_processes.get(bot_id)
+    if proc:
+        proc.terminate()
+    return {"ok": True}
 
 @app.get("/sistema/bling", response_class=HTMLResponse)
 def sistema_bling():
@@ -917,6 +1031,36 @@ def bling_status():
     except Exception as exc:
         return {"ok":False,"erro":str(exc)}
 
+@app.get("/bling/raw-token")
+def bling_raw_token():
+    """Retorna o access token atual do Bling para debug/uso local."""
+    if not BlingClient: return {"ok": False, "erro": "bling_client.py não encontrado."}
+    try:
+        client = BlingClient()
+        headers = client._get_headers()
+        return {"ok": True, "access_token": headers["Authorization"].replace("Bearer ", "")}
+    except Exception as exc:
+        return {"ok": False, "erro": str(exc)}
+
+@app.get("/shopee/raw-token")
+def shopee_raw_token():
+    """Retorna os tokens atuais da Shopee para sync local."""
+    try:
+        from services.shopee import _carregar_tokens, ShopeeOAuthService, token_expirado
+        if token_expirado():
+            svc = ShopeeOAuthService()
+            res = svc.renovar_token()
+            if not res.get("success"):
+                return {"ok": False, "erro": res.get("error", "Refresh falhou")}
+        t = _carregar_tokens()
+        if not t or not t.get("access_token"):
+            return {"ok": False, "erro": "Shopee não autenticada"}
+        return {"ok": True, "access_token": t["access_token"], "refresh_token": t.get("refresh_token",""),
+                "shop_id": t.get("shop_id", 0), "expires_at": t.get("expires_at", 0)}
+    except Exception as exc:
+        return {"ok": False, "erro": str(exc)}
+
+
 @app.get("/bling/auth")
 def bling_auth():
     if not BlingClient: raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
@@ -1108,6 +1252,67 @@ def bling_produto_variacoes(produto_id: int):
     return {"produto_id": produto_id, "nome": produto.get("nome"), "total": len(result), "variacoes": result, "source": "inline"}
 
 
+@app.get("/bling/produto/variacoes/{produto_id}")
+def bling_listar_variacoes(produto_id: int):
+    """Lista variações de um produto Bling com id e nome. Sem auth."""
+    client = BlingClient()
+    data = client.get_product(produto_id)
+    p = data.get("data", data) if isinstance(data, dict) else {}
+    variacoes = p.get("variacoes", [])
+    return {
+        "produto_id": produto_id,
+        "nome": p.get("nome", ""),
+        "total": len(variacoes),
+        "variacoes": [{"id": v["id"], "nome": v.get("nome", ""), "imagemURL": v.get("imagemURL", "")} for v in variacoes],
+    }
+
+
+class ImagensBatchPayload(BaseModel):
+    produto_id: int
+    imagens: dict  # {variacao_id (str): image_url}
+
+
+@app.post("/bling/produto/atualizar-imagens-batch")
+def bling_atualizar_imagens_batch(payload: ImagensBatchPayload):
+    """Atualiza imagemURL de múltiplas variações num único PATCH. Sem auth."""
+    import requests as _req
+    client = BlingClient()
+    data = client.get_product(payload.produto_id)
+    p = data.get("data", data) if isinstance(data, dict) else {}
+    variacoes = p.get("variacoes", [])
+    if not variacoes:
+        raise HTTPException(status_code=404, detail="Produto não encontrado ou sem variações.")
+
+    id_to_url = {int(k): v for k, v in payload.imagens.items()}
+    vars_payload = []
+    for v in variacoes:
+        vp = {"id": v["id"]}
+        if v.get("estrutura"):
+            vp["estrutura"] = v["estrutura"]
+        if v.get("gtin"):
+            vp["gtin"] = v["gtin"]
+        url = id_to_url.get(int(v["id"]))
+        if url:
+            vp["imagemURL"] = url
+        vars_payload.append(vp)
+
+    patch = {
+        "nome": p.get("nome", ""), "tipo": p.get("tipo", "P"),
+        "situacao": p.get("situacao", "A"), "formato": p.get("formato", "V"),
+        "variacoes": vars_payload,
+    }
+    hdrs = client._get_headers()
+    hdrs["Content-Type"] = "application/json"
+    resp = _req.patch(
+        f"{client.base_url}/produtos/{payload.produto_id}",
+        headers=hdrs, json=patch, timeout=90,
+    )
+    if resp.status_code == 200:
+        aplicadas = sum(1 for v in vars_payload if v.get("imagemURL"))
+        return {"ok": True, "produto_id": payload.produto_id, "imagens_aplicadas": aplicadas}
+    raise HTTPException(status_code=resp.status_code, detail=resp.text[:500])
+
+
 @app.post("/bling/produto/atualizar-imagem-variacao")
 def bling_atualizar_imagem_variacao(payload: ImagemVariacaoPayload):
     """Atualiza a imagem principal de uma variação no Bling. Sem auth."""
@@ -1115,18 +1320,20 @@ def bling_atualizar_imagem_variacao(payload: ImagemVariacaoPayload):
         raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
     client = BlingClient()
     existing = client.get_product(payload.produto_id)
-    patch = _prepare_product_patch(existing)
-    patch["id"] = payload.produto_id
-    variacoes = patch.get("variacoes", [])
-    variacao_encontrada = False
-    for v in variacoes:
-        if int(v.get("id", 0)) == payload.variacao_id:
-            variacao_encontrada = True
-            v["imagens"] = [{"link": payload.image_url}]
-            break
+    existing_data = existing.get("data", existing) if isinstance(existing, dict) else {}
+    # Verifica se a variação existe
+    all_vars = existing_data.get("variacoes") or []
+    variacao_encontrada = any(int(v.get("id", 0)) == payload.variacao_id for v in all_vars)
     if not variacao_encontrada:
         raise HTTPException(status_code=404, detail=f"Variação {payload.variacao_id} não encontrada.")
-    patch["variacoes"] = variacoes
+    # Payload mínimo com campos obrigatórios do Bling v3 + variação alvo
+    patch = {
+        "nome": existing_data.get("nome", ""),
+        "tipo": existing_data.get("tipo", "V"),
+        "situacao": existing_data.get("situacao", "A"),
+        "formato": existing_data.get("formato", "E"),
+        "variacoes": [{"id": payload.variacao_id, "imagens": [{"link": payload.image_url}]}],
+    }
     result = client.update_product(payload.produto_id, patch)
     return {"ok": True, "produto_id": payload.produto_id, "variacao_id": payload.variacao_id, "image_url": payload.image_url, "raw": result}
 
@@ -1382,13 +1589,23 @@ def integracao_preview(payload: IntegracaoPayload):
     if (payload.criterio or "sku").strip().lower() != "sku":
         raise HTTPException(status_code=400, detail="A precificação integrada aceita apenas busca por SKU. Use criterio='sku'.")
     try:
+        # Embalagem: usa valor do payload ou, se não enviado, lê embalagem_padrao da config
+        _cfg_int = carregar_integracao_cfg()
+        embalagem_efetiva = payload.embalagem if payload.embalagem is not None else float(_cfg_int.get("embalagem_padrao") or 0)
+
+        # Flags de API em tempo real — lê do config quando não especificado no payload
+        _intel = dict(payload.score_config or {})
+        for _flag in ("ml_api_real", "amazon_api_real", "shopee_api_real"):
+            if _flag not in _intel:
+                _intel[_flag] = bool(_cfg_int.get(_flag, True))
+
         # Carrega score_config SIE salvo (ajuste automático de margem por score)
         _sie_score_cfg = _load_json(_MOD_DIR / "sie_score_config.json", {})
         _score_config_efetivo = payload.score_config or (_sie_score_cfg if _sie_score_cfg.get("ajuste_ativo") else None)
         resultado = montar_precificacao_bling(
-            regras=regras, criterio="sku", valor_busca=payload.valor_busca, embalagem=payload.embalagem, imposto=payload.imposto,
+            regras=regras, criterio="sku", valor_busca=payload.valor_busca, embalagem=embalagem_efetiva, imposto=payload.imposto,
             quantidade=payload.quantidade, objetivo=payload.objetivo, tipo_alvo=payload.tipo_alvo, valor_alvo=payload.valor_alvo,
-            peso_override=payload.peso_override, intelligence_config=payload.score_config or {}, score_config=_score_config_efetivo,
+            peso_override=payload.peso_override, intelligence_config=_intel, score_config=_score_config_efetivo,
             modo_aprovacao=payload.modo_aprovacao,
             preco_compra_anterior_bling=payload.preco_compra_anterior_bling, modo_preco_virtual=payload.modo_preco_virtual,
             acrescimo_percentual=payload.acrescimo_percentual, acrescimo_nominal=payload.acrescimo_nominal, preco_manual=payload.preco_manual,
@@ -1449,6 +1666,359 @@ def fila_limpar_invalidos():
 def fila_reset_total():
     reset_fila()
     return {"ok":True,"message":"Fila completamente limpa","stats":stats_fila()}
+
+
+_POPULAR_STATE_FILE = DATA_DIR / "popular_estoque_state.json"
+
+def _popular_salvar_estado(state: dict):
+    try:
+        _POPULAR_STATE_FILE.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    except Exception as e:
+        logger.warning("[POPULAR-FILA] erro ao salvar estado: %s", e)
+
+def _popular_carregar_estado() -> dict:
+    try:
+        if _POPULAR_STATE_FILE.exists():
+            return json.loads(_POPULAR_STATE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+@app.post("/fila/popular-estoque")
+def fila_popular_estoque(lote: int = 50):
+    """
+    Processa um lote de produtos simples do Bling e insere na fila de aprovação.
+    Chame repetidamente até status.concluido=true.
+    Persiste progresso em arquivo — sobrevive a reinicializações do Cloud Run.
+    """
+    import time as _time
+    estado = _popular_carregar_estado()
+
+    bc = BlingClient()
+    regras = carregar_regras(apenas_ativas=True)
+    _sie_score_cfg = _load_json(_MOD_DIR / "sie_score_config.json", {})
+    score_cfg = _sie_score_cfg if _sie_score_cfg.get("ajuste_ativo") else None
+
+    # ── Fase 1: coletar SKUs (só na primeira chamada) ──────────────────────────
+    if not estado.get("skus"):
+        estado = {"skus": [], "cursor": 0, "adicionados": 0, "erros": 0, "concluido": False}
+        pagina = 1
+        while True:
+            try:
+                resp = bc.list_products(page=pagina, limit=100)
+                itens = resp.get("data") or []
+                if not itens:
+                    break
+                for item in itens:
+                    if item.get("situacao") not in ("A", None, ""):
+                        continue
+                    if item.get("tipo") not in ("P", None):
+                        continue
+                    if item.get("formato") in ("K",):
+                        continue
+                    estrutura = item.get("estrutura") or {}
+                    if estrutura.get("tipo") in ("M", "K"):
+                        continue
+                    sku = item.get("codigo") or ""
+                    estoque = item.get("estoque") or {}
+                    saldo = float(
+                        estoque.get("fisico") or estoque.get("saldoFisico")
+                        or estoque.get("saldoVirtualTotal") or 0
+                    )
+                    if sku and saldo > 0:
+                        estado["skus"].append({
+                            "sku": sku,
+                            "nome": item.get("nome", "")[:80],
+                            "preco_custo": float(item.get("precoCusto") or 0),
+                        })
+                pagina += 1
+                _time.sleep(0.25)
+            except Exception as e:
+                logger.warning("[POPULAR-FILA] erro coleta pg %s: %s", pagina, e)
+                break
+        _popular_salvar_estado(estado)
+        logger.info("[POPULAR-FILA] Coletados %d produtos simples.", len(estado["skus"]))
+
+    skus      = estado["skus"]
+    cursor    = estado.get("cursor", 0)
+    total     = len(skus)
+    adicionados = estado.get("adicionados", 0)
+    erros     = estado.get("erros", 0)
+
+    if cursor >= total:
+        estado["concluido"] = True
+        _popular_salvar_estado(estado)
+        return {"ok": True, "concluido": True, "total": total,
+                "adicionados": adicionados, "erros": erros,
+                "msg": f"Concluído: {adicionados} adicionados, {erros} erros."}
+
+    # ── Fase 2: processar lote ─────────────────────────────────────────────────
+    fim = min(cursor + lote, total)
+    for item in skus[cursor:fim]:
+        sku = item["sku"]
+        try:
+            if ja_existe_pendente(sku):
+                continue
+            preco_custo = item.get("preco_custo") or None
+            resultado = montar_precificacao_bling(
+                regras=regras, criterio="sku", valor_busca=sku,
+                embalagem="", imposto=0, quantidade=1,
+                objetivo="margem", tipo_alvo="percentual", valor_alvo=0,
+                score_config=score_cfg, regra_estoque=carregar_cfg().get("regra_estoque"),
+                preco_compra_anterior_bling=preco_custo,
+                peso_override=0.3,
+            )
+            if resultado.get("erro"):
+                erros += 1
+                continue
+            itens_prec = (resultado.get("integracao") or {}).get("itens") or resultado.get("itens_precificacao") or resultado.get("itens") or []
+            preview = {
+                "ok": True, "criterio_usado": "sku",
+                "produto": resultado.get("produto_bling") or {},
+                "melhor_canal": resultado.get("melhor_canal") or "",
+                "modo_aprovacao": "manual",
+                "marketplaces": _normalizar_marketplaces(itens_prec),
+                "auditoria": resultado.get("auditoria") or resultado,
+                "raw": resultado,
+            }
+            preview["diagnostico"] = _diagnostico_preview(preview)
+            item_fila = _montar_item_fila(preview, {"valor_busca": sku, "criterio": "sku"})
+            inserir_item_fila(item_fila)
+            adicionados += 1
+        except Exception as exc:
+            logger.warning("[POPULAR-FILA] SKU=%s erro: %s", sku, exc)
+            erros += 1
+
+    estado["cursor"]     = fim
+    estado["adicionados"] = adicionados
+    estado["erros"]      = erros
+    estado["concluido"]  = fim >= total
+    _popular_salvar_estado(estado)
+
+    return {
+        "ok":         True,
+        "concluido":  estado["concluido"],
+        "total":      total,
+        "processados": fim,
+        "adicionados": adicionados,
+        "erros":      erros,
+        "msg":        f"{fim}/{total} processados — {adicionados} na fila",
+    }
+
+
+@app.get("/fila/popular-estoque/status")
+def fila_popular_estoque_status():
+    estado = _popular_carregar_estado()
+    if not estado:
+        return {"concluido": False, "total": 0, "processados": 0, "adicionados": 0, "erros": 0, "msg": "Nenhum processo iniciado."}
+    return {
+        "concluido":   estado.get("concluido", False),
+        "total":       len(estado.get("skus", [])),
+        "processados": estado.get("cursor", 0),
+        "adicionados": estado.get("adicionados", 0),
+        "erros":       estado.get("erros", 0),
+        "msg":         f"{estado.get('cursor',0)}/{len(estado.get('skus',[]))} processados — {estado.get('adicionados',0)} na fila",
+    }
+
+
+@app.post("/fila/popular-estoque/reset")
+def fila_popular_estoque_reset():
+    """Limpa o estado do processo para iniciar do zero."""
+    try:
+        _POPULAR_STATE_FILE.unlink(missing_ok=True)
+    except Exception:
+        pass
+    return {"ok": True, "msg": "Estado resetado."}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FILA DE CONFERÊNCIA DE PREÇO DE CUSTO
+# ══════════════════════════════════════════════════════════════════════════════
+
+_FILA_CUSTO_FILE = DATA_DIR / "fila_custo.json"
+
+
+def _fila_custo_carregar() -> list:
+    try:
+        if _FILA_CUSTO_FILE.exists():
+            return json.loads(_FILA_CUSTO_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return []
+
+
+def _fila_custo_salvar(itens: list):
+    _FILA_CUSTO_FILE.write_text(json.dumps(itens, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+@app.get("/fila-custo", response_class=HTMLResponse)
+def fila_custo_page():
+    html = BASE_DIR / "pages" / "fila_custo.html"
+    if not html.exists():
+        raise HTTPException(status_code=404, detail="fila_custo.html não encontrado.")
+    return HTMLResponse(html.read_text(encoding="utf-8"))
+
+
+@app.post("/fila-custo/popular")
+def fila_custo_popular(lote: int = 100):
+    """
+    Varre o Bling e cria a fila de conferência de preço de custo.
+    Lotes de 100 produtos por chamada — chame até popular=true.
+    """
+    import time as _time
+
+    estado = _popular_carregar_estado()
+    skus_com_estoque = estado.get("skus", [])
+
+    # Se não tem estado ainda, precisa rodar /fila/popular-estoque primeiro
+    if not skus_com_estoque:
+        # Coleta direto do Bling
+        bc = BlingClient()
+        pagina = 1
+        while True:
+            try:
+                resp = bc.list_products(page=pagina, limit=100)
+                itens = resp.get("data") or []
+                if not itens:
+                    break
+                for item in itens:
+                    if item.get("situacao") not in ("A", None, ""):
+                        continue
+                    if item.get("tipo") not in ("P", None):
+                        continue
+                    if item.get("formato") in ("K",):
+                        continue
+                    estrutura = item.get("estrutura") or {}
+                    if estrutura.get("tipo") in ("M", "K"):
+                        continue
+                    estoque_raw = item.get("estoque") or {}
+                    saldo = float(
+                        estoque_raw.get("fisico") or estoque_raw.get("saldoFisico")
+                        or estoque_raw.get("saldoVirtualTotal") or 0
+                    )
+                    sku = item.get("codigo") or ""
+                    if sku and saldo > 0:
+                        skus_com_estoque.append({
+                            "id": item.get("id"),
+                            "sku": sku,
+                            "nome": item.get("nome", "")[:100],
+                            "preco_custo": float(item.get("precoCusto") or 0),
+                            "saldo": saldo,
+                        })
+                pagina += 1
+                _time.sleep(0.25)
+            except Exception as e:
+                logger.warning("[FILA-CUSTO] erro coleta pg %s: %s", pagina, e)
+                break
+    else:
+        skus_com_estoque = [
+            {"id": None, "sku": s["sku"], "nome": s["nome"],
+             "preco_custo": s.get("preco_custo", 0), "saldo": 0}
+            for s in skus_com_estoque
+        ]
+
+    # Monta itens da fila (sem duplicar)
+    existentes = {i["sku"] for i in _fila_custo_carregar()}
+    novos = [s for s in skus_com_estoque if s["sku"] not in existentes]
+    fila = _fila_custo_carregar() + [
+        {
+            "id":          s.get("id"),
+            "sku":         s["sku"],
+            "nome":        s.get("nome", ""),
+            "preco_custo": s.get("preco_custo", 0),
+            "saldo":       s.get("saldo", 0),
+            "status":      "pendente",
+            "novo_custo":  None,
+        }
+        for s in novos
+    ]
+    _fila_custo_salvar(fila)
+    return {"ok": True, "total": len(fila), "novos": len(novos),
+            "msg": f"{len(fila)} produtos na fila de custo."}
+
+
+@app.get("/fila-custo/lista")
+def fila_custo_lista(status: str = "pendente", busca: str = ""):
+    itens = _fila_custo_carregar()
+    if status:
+        itens = [i for i in itens if i.get("status") == status]
+    if busca:
+        b = busca.lower()
+        itens = [i for i in itens if b in i.get("sku", "").lower() or b in i.get("nome", "").lower()]
+    return {"itens": itens, "total": len(itens)}
+
+
+@app.post("/fila-custo/atualizar")
+def fila_custo_atualizar(payload: dict = Body(...)):
+    """Atualiza o preço de custo de um produto no Bling e marca como revisado na fila."""
+    sku        = payload.get("sku", "")
+    novo_custo = float(payload.get("novo_custo") or 0)
+    if not sku:
+        raise HTTPException(status_code=400, detail="SKU obrigatório.")
+    if novo_custo <= 0:
+        raise HTTPException(status_code=400, detail="Novo custo deve ser maior que zero.")
+
+    fila = _fila_custo_carregar()
+    item = next((i for i in fila if i["sku"] == sku), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="SKU não encontrado na fila de custo.")
+
+    # Atualiza no Bling
+    try:
+        bc = BlingClient()
+        # Busca produto pelo SKU para pegar o ID e estrutura completa
+        prod = bc.get_product_by_sku(sku) if hasattr(bc, "get_product_by_sku") else None
+        if not prod:
+            res_busca = bc._get("/produtos", params={"codigo": sku, "limite": 1})
+            prods = (res_busca.get("data") or [])
+            if prods:
+                prod_id = prods[0].get("id")
+                prod = bc.get_product(prod_id) if prod_id else None
+
+        if not prod:
+            raise HTTPException(status_code=404, detail=f"Produto {sku} não encontrado no Bling.")
+
+        prod_id = prod.get("id") or item.get("id")
+        if not prod_id:
+            raise HTTPException(status_code=400, detail="ID do produto não disponível.")
+
+        # Monta patch mínimo com precoCusto
+        patch = {"precoCusto": round(novo_custo, 2)}
+        fornecedor = prod.get("fornecedor")
+        if isinstance(fornecedor, dict) and fornecedor.get("id"):
+            patch["fornecedor"] = {**fornecedor, "precoCusto": round(novo_custo, 2), "precoCompra": round(novo_custo, 2)}
+
+        bc.update_product(int(prod_id), patch)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Erro ao atualizar Bling: {exc}")
+
+    # Atualiza fila
+    item["preco_custo"] = novo_custo
+    item["novo_custo"]  = novo_custo
+    item["status"]      = "revisado"
+    _fila_custo_salvar(fila)
+
+    return {"ok": True, "sku": sku, "novo_custo": novo_custo}
+
+
+@app.post("/fila-custo/pular")
+def fila_custo_pular(payload: dict = Body(...)):
+    sku = payload.get("sku", "")
+    fila = _fila_custo_carregar()
+    item = next((i for i in fila if i["sku"] == sku), None)
+    if item:
+        item["status"] = "pulado"
+        _fila_custo_salvar(fila)
+    return {"ok": True}
+
+
+@app.post("/fila-custo/reset")
+def fila_custo_reset():
+    _FILA_CUSTO_FILE.unlink(missing_ok=True)
+    return {"ok": True, "msg": "Fila de custo limpa."}
 
 
 @app.get("/fila/links/{sku}")
@@ -1621,6 +2191,160 @@ async def fila_completar(item_id: str, request: Request):
         logger.error("Erro ao completar produto %s: %s", sku, e)
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/fila/exportar-sem-dados")
+def fila_exportar_sem_dados():
+    """Varre o Bling e retorna CSV com todos os produtos sem peso ou custo."""
+    from fastapi.responses import StreamingResponse
+    import io as _io, csv as _csv
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="BlingClient não disponível.")
+    client = BlingClient()
+    linhas = [["id_bling","sku","nome","tipo_produto","formato","peso_atual","peso_novo","custo_atual","custo_novo"]]
+    pagina = 1
+    while True:
+        try:
+            resp = client._get("/produtos", params={"situacao": "A", "pagina": pagina, "limite": 100})
+        except Exception:
+            break
+        items = resp.get("data") or []
+        if not items:
+            break
+        for p in items:
+            peso = float(p.get("pesoLiquido") or p.get("pesoBruto") or p.get("peso") or 0)
+            custo = float(p.get("precoCusto") or p.get("precoCompra") or 0)
+            fmt = (p.get("formato") or "").upper()
+            eh_kit = fmt == "E"
+            sem_peso = peso <= 0
+            sem_custo = custo <= 0 and not eh_kit
+            if sem_peso or sem_custo:
+                tipo = "kit_composicao" if eh_kit else "simples"
+                nome = (p.get("nome") or "").replace('"', '""')
+                custo_novo = "(calculado pelos componentes)" if eh_kit else ""
+                linhas.append([
+                    p.get("id", ""), p.get("codigo", ""), f'"{nome}"',
+                    tipo, fmt,
+                    f"{peso:.3f}", "",
+                    f"{custo:.2f}", custo_novo,
+                ])
+        if len(items) < 100:
+            break
+        pagina += 1
+    buf = _io.StringIO()
+    buf.write("sep=;\r\n")
+    writer = _csv.writer(buf, delimiter=";")
+    for row in linhas:
+        writer.writerow(row)
+    content = "﻿" + buf.getvalue()
+    return StreamingResponse(
+        _io.BytesIO(content.encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=produtos_sem_dados_{__import__('datetime').date.today()}.csv"},
+    )
+
+
+_IMPORT_JOB: dict = {"status": "idle", "total": 0, "ok": 0, "erros": 0, "ignorados": 0, "log": []}
+
+def _run_importar_correcoes(linhas: list[dict]):
+    import json as _json, time as _time
+    global _IMPORT_JOB
+    _IMPORT_JOB.update({"status": "running", "total": len(linhas), "ok": 0, "erros": 0, "ignorados": 0, "log": []})
+    peso_path  = BASE_DIR / "data" / "peso_override.json"
+    custo_path = BASE_DIR / "data" / "custo_override.json"
+    peso_ov  = _json.loads(peso_path.read_text(encoding="utf-8"))  if peso_path.exists()  else {}
+    custo_ov = _json.loads(custo_path.read_text(encoding="utf-8")) if custo_path.exists() else {}
+    bling = BlingClient() if BlingClient else None
+
+    for row in linhas:
+        id_bling = (row.get("id_bling") or "").strip()
+        sku      = (row.get("sku") or "").strip()
+        tipo     = (row.get("tipo_produto") or "simples").strip().lower()
+        peso_str = (row.get("peso_novo") or "").strip().replace(",", ".")
+        custo_str= (row.get("custo_novo") or "").strip().replace(",", ".")
+        if not sku:
+            _IMPORT_JOB["ignorados"] += 1
+            continue
+
+        peso_val  = float(peso_str)  if peso_str  and _is_number(peso_str)  else None
+        custo_val = float(custo_str) if custo_str and _is_number(custo_str) and tipo == "simples" else None
+
+        if peso_val is None and custo_val is None:
+            _IMPORT_JOB["ignorados"] += 1
+            continue
+
+        # Atualiza overrides locais
+        if peso_val and peso_val > 0:
+            peso_ov[sku] = peso_val
+        if custo_val and custo_val > 0:
+            custo_ov[sku] = {"custo": custo_val, "origem": "importacao_planilha"}
+
+        # Atualiza no Bling via GET + PUT
+        if bling and id_bling:
+            try:
+                prod = bling.get_product(int(id_bling))
+                if prod:
+                    patch = {}
+                    if peso_val and peso_val > 0:
+                        patch["pesoLiquido"] = peso_val
+                    if custo_val and custo_val > 0:
+                        patch["precoCusto"] = custo_val
+                    if patch:
+                        merged = {**prod, **patch}
+                        # Remover campos que a API rejeita no PUT (padrão bling_update_engine)
+                        for _k in ("camposCustomizados", "customFields", "midias", "anexos", "producao", "tipoEstoque"):
+                            merged.pop(_k, None)
+                        # Corrigir tipoEstoque dentro de estrutura
+                        if isinstance(merged.get("estrutura"), dict):
+                            est = dict(merged["estrutura"])
+                            if est.get("tipoEstoque") not in ("V", "F"):
+                                est["tipoEstoque"] = "V"
+                            merged["estrutura"] = est
+                        bling.update_product(int(id_bling), merged)
+                        _IMPORT_JOB["ok"] += 1
+                        _IMPORT_JOB["log"].append(f"OK {sku}: {patch}")
+                        _time.sleep(0.25)
+                else:
+                    _IMPORT_JOB["erros"] += 1
+            except Exception as _e:
+                logger.warning("Bling update id=%s sku=%s: %s", id_bling, sku, _e)
+                _IMPORT_JOB["erros"] += 1
+                _IMPORT_JOB["log"].append(f"ERRO {sku}: {_e}")
+        else:
+            _IMPORT_JOB["ok"] += 1
+
+    peso_path.write_text(_json.dumps(peso_ov,  ensure_ascii=False, indent=2), encoding="utf-8")
+    custo_path.write_text(_json.dumps(custo_ov, ensure_ascii=False, indent=2), encoding="utf-8")
+    _IMPORT_JOB["status"] = "done"
+    logger.info("Importação concluída: ok=%d erros=%d ignorados=%d", _IMPORT_JOB["ok"], _IMPORT_JOB["erros"], _IMPORT_JOB["ignorados"])
+
+def _is_number(s: str) -> bool:
+    try: float(s); return True
+    except: return False
+
+
+@app.post("/fila/importar-correcoes")
+async def fila_importar_correcoes(request: Request):
+    """Recebe CSV com correções em lote e inicia job em background para atualizar o Bling."""
+    import io as _io, csv as _csv, threading as _thr
+    if _IMPORT_JOB.get("status") == "running":
+        return {"ok": False, "detail": "Já existe um import em andamento. Aguarde."}
+    body = await request.body()
+    text = body.decode("utf-8-sig")
+    # Pular linha sep= se presente
+    if text.startswith("sep="):
+        text = text[text.index("\n")+1:]
+    reader = _csv.DictReader(_io.StringIO(text), delimiter=";")
+    linhas = [row for row in reader if (row.get("peso_novo") or row.get("custo_novo") or "").strip()]
+    if not linhas:
+        return {"ok": False, "detail": "Nenhuma linha com peso_novo ou custo_novo preenchido."}
+    _thr.Thread(target=_run_importar_correcoes, args=(linhas,), daemon=True).start()
+    return {"ok": True, "iniciado": True, "total": len(linhas), "mensagem": f"{len(linhas)} produtos enfileirados. Acompanhe em /fila/importar-correcoes/status"}
+
+
+@app.get("/fila/importar-correcoes/status")
+def fila_importar_status():
+    return _IMPORT_JOB
+
+
 @app.post("/fila/rejeitar/{item_id}")
 def fila_rejeitar(item_id: str, payload: dict = Body(default={})):
     item = buscar_item_fila(item_id)
@@ -1789,7 +2513,7 @@ def _verificar_assinatura_bling(body_bytes: bytes, header: str) -> bool:
 class IntegracaoPayload(BaseModel):
     criterio: str = "sku"
     valor_busca: str = ""
-    embalagem: float = 0
+    embalagem: Optional[float] = None  # None = usa embalagem_padrao da config
     imposto: float = 4
     quantidade: int = 1
     objetivo: str = "lucro_liquido"
@@ -2049,6 +2773,12 @@ def scheduler_status():
     }
 
 
+@app.get("/webhooks/bling")
+async def webhook_bling_verify():
+    """Responde ao ping de verificacao do Bling (GET) para manter o webhook ativo."""
+    return {"ok": True, "status": "ativo"}
+
+
 @app.post("/webhooks/bling")
 async def webhook_bling(request: Request, background_tasks: BackgroundTasks):
     raw = await request.body()
@@ -2222,6 +2952,13 @@ def amazon_page():
     if html_file.exists():
         return HTMLResponse(html_file.read_text(encoding="utf-8"))
     raise HTTPException(status_code=404, detail="amazon.html não encontrado.")
+
+@app.get("/amazon/kits", response_class=HTMLResponse)
+def amazon_kits_page():
+    html_file = PAGES_DIR / "amazon_kits.html"
+    if html_file.exists():
+        return HTMLResponse(html_file.read_text(encoding="utf-8"))
+    raise HTTPException(status_code=404, detail="amazon_kits.html não encontrado.")
 
 @app.get("/shopify", response_class=HTMLResponse)
 def shopify_page():
@@ -2967,7 +3704,7 @@ async def set_integracao_config(request: Request):
             except (TypeError, ValueError):
                 pass
 
-    for campo in ["fila_auto_ao_calcular", "modo_auto", "ml_api_real"]:
+    for campo in ["fila_auto_ao_calcular", "modo_auto", "ml_api_real", "amazon_api_real", "shopee_api_real"]:
         if campo in data:
             cfg_atual[campo] = bool(data[campo])
     for campo in ["embalagem_padrao", "imposto_padrao"]:
@@ -4140,7 +4877,7 @@ async def scbot_executar_endpoint(urls_extras: list[str] = None):
     """Dispara um ciclo manual do SCBOT (ignora agendamento diário)."""
     import asyncio
     loop = asyncio.get_event_loop()
-    resultado = await loop.run_in_executor(None, lambda: scbot_executar(urls_extras or []))
+    resultado = await loop.run_in_executor(None, lambda: scbot_executar(urls_extras or [], force=True))
     # Salva no cache de SEO Health também
     cache = _load_json(SEO_CACHE_PATH, {})
     cache["scbot"] = scbot_status()

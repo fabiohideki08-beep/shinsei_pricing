@@ -62,6 +62,8 @@ PUBLIC_PATHS = {
     "/openapi.json",
     "/redoc",
     "/webhooks/bling",
+    "/webhooks/shopify/produto",
+    "/shopify/webhook/order-paid",
     "/shopify/status",
     "/shopify/callback",
     "/shopify/auth",
@@ -86,6 +88,9 @@ PUBLIC_PATHS = {
     "/auditoria/amazon",
     "/auditoria/ml-sem-sku",
     "/fila/reset-total",
+    "/fila/popular-estoque",
+    "/fila/popular-estoque/status",
+    "/fila/popular-estoque/reset",
     "/auditoria/ml-estoque/limpar-tudo",
     "/auditoria/estoque-negativo/limpar-tudo",
     "/auditoria/shopify/limpar-tudo",
@@ -98,6 +103,10 @@ PUBLIC_PATHS = {
     "/fila/stats-detalhados",
     "/fila/aprovar-lote",
     "/fila/rejeitar-lote",
+    "/fila/exportar-sem-dados",
+    "/fila/importar-correcoes",
+    "/fila/importar-correcoes/status",
+    "/fila/completar",
     "/bling/produto/atualizar-peso",
     "/bling/produto/atualizar-preco",
     "/bling/produto/buscar-por-nome",
@@ -106,6 +115,7 @@ PUBLIC_PATHS = {
     "/bling/produto/buscar-por-sku",
     "/bling/debug/sku",
     "/bling/produto/buscar",
+    "/bling/raw-token",
     "/shopify-flow/pricing-suggestion",
     "/estoque/fila",
     "/conferencia-estoque",
@@ -162,6 +172,8 @@ PUBLIC_PATHS = {
     "/conferencia/ml/vincular",
     "/conferencia/ml/sugestoes-vinculo",
     "/conferencia/ml/aplicar-vinculo",
+    "/conferencia/ml/vincular-variacao",
+    "/conferencia/ml/aplicar-vinculo-automatico",
     "/conferencia/shopify",
     "/conferencia/amazon",
     "/conferencia/shopee",
@@ -172,12 +184,30 @@ PUBLIC_PATHS = {
     "/shopee/item/preview",
     "/shopee/item/importar-bling",
     # Google Ads
+    "/taxas/status",
     "/ads/status",
     "/ads/diagnostico",
     # Shopify deploy
+    "/amazon/exportar-lote/iniciar",
+    "/amazon/exportar-lote/calcular-precos",
+    "/amazon/exportar-lote/confirmar-preco",
+    "/amazon/exportar-lote/processar",
+    "/amazon/exportar-lote/status",
+    "/amazon/exportar-lote/reset",
+    "/amazon/kits",
+    "/amazon/kits/lista",
+    "/amazon/kits/exportar",
+    "/amazon/kits/status",
     "/shopify/deploy-secao-oferta",
     "/shopify/template-homepage",
     "/shopify/substituir-secao",
+    # Fila de conferência de preço de custo
+    "/fila-custo",
+    "/fila-custo/popular",
+    "/fila-custo/lista",
+    "/fila-custo/atualizar",
+    "/fila-custo/pular",
+    "/fila-custo/reset",
 }
 
 
@@ -188,6 +218,7 @@ PUBLIC_PREFIXES = (
     "/fila/completar/",
     "/fila/links/",
     "/auditoria/shopify/",
+    "/ml-ads/",
     "/auditoria/ml-estoque/",
     "/auditoria/estoque-negativo/",
     "/static/",
@@ -195,7 +226,16 @@ PUBLIC_PREFIXES = (
     "/frete/",       # Shopify Carrier Service + widget de frete (sem API key)
     "/amazon/auth",   # Amazon SP-API OAuth (sem API key)
     "/amazon/callback",
+    "/amazon/exportar-produto",
+    "/amazon/listing/",
+    "/amazon/listing/",
+    "/amazon/fees/",
+    "/amazon/product-types",
+    "/amazon/product-type-schema/",
+    "/amazon/catalog/",
     "/shopee/",       # Shopee OAuth e endpoints (sem API key)
+    "/bling/produto/variacoes/",       # Listagem de variações (sem auth)
+    "/bling/produto/atualizar-imagens-batch",  # Batch de imagens (sem auth)
     "/bling/produto/",  # Endpoints de produto Bling (imagens, variações)
     "/bling/debug/",    # Debug endpoints (sem auth)
     "/sistema/",        # Páginas de sistema (sem auth)

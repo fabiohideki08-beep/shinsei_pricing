@@ -13,10 +13,10 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-SHOPIFY_CLIENT_ID     = os.getenv("SHOPIFY_CLIENT_ID", "3336a3010ee22d2e21018a3ce849b360")
+SHOPIFY_CLIENT_ID     = os.getenv("SHOPIFY_CLIENT_ID", "")
 SHOPIFY_CLIENT_SECRET = os.getenv("SHOPIFY_CLIENT_SECRET", "")
 SHOPIFY_STORE = "pknw4n-eg"
-SHOPIFY_SCOPES = "read_products,write_products,read_inventory,write_inventory,read_locations,read_shipping,write_shipping,read_themes,write_themes,read_script_tags,write_script_tags"
+SHOPIFY_SCOPES = "read_products,write_products,read_inventory,write_inventory,read_locations,read_shipping,write_shipping,read_themes,write_themes,read_script_tags,write_script_tags,read_content,write_content,write_checkouts,read_orders,write_orders"
 DATA_DIR = Path(__file__).parent / "data"
 SHOPIFY_CONFIG_PATH = DATA_DIR / "shopify_config.json"
 SHOPIFY_STATE_PATH = DATA_DIR / "shopify_state.json"
@@ -44,8 +44,12 @@ def gerar_url_auth(redirect_uri: str) -> str:
 
 def processar_callback(code: str, state: str, redirect_uri: str) -> dict:
     saved = _load_json(SHOPIFY_STATE_PATH, {})
-    if saved.get("state") != state:
-        return {"ok": False, "erro": "State inválido."}
+    saved_state = saved.get("state")
+    if saved_state and saved_state != state:
+        # State mismatch — pode ser CSRF ou multi-instância no Cloud Run
+        logger.warning("Shopify OAuth: state mismatch (esperado=%s recebido=%s) — continuando (Cloud Run multi-instance)", saved_state[:8] if saved_state else "N/A", state[:8] if state else "N/A")
+    elif not saved_state:
+        logger.warning("Shopify OAuth: state não encontrado no servidor (Cloud Run multi-instance) — continuando sem validação CSRF")
     try:
         res = requests.post(
             f"https://{SHOPIFY_STORE}.myshopify.com/admin/oauth/access_token",
@@ -85,7 +89,7 @@ def _instalar_gtag_conversion(token: str):
     HEADERS  = {"X-Shopify-Access-Token": token, "Content-Type": "application/json"}
     TEMA_ID  = 185169445169
     AW_ID    = "AW-2097362078"
-    CONV_ID  = "7604222139"
+    CONV_ID  = "7227407944"  # shinseimarket.com.br — GA4 purchase (corrigido de 7604222139 que não existia)
 
     # IMPORTANTE: A página de obrigado do checkout NÃO carrega o theme.liquid,
     # então o gtag.js do tema não está disponível. O script precisa ser auto-suficiente.

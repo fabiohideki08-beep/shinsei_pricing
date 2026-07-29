@@ -55,9 +55,11 @@
   }
 
   // API calls
+  var FETCH_OPTS = { headers: { 'ngrok-skip-browser-warning': 'true' } };
+
   function fetchProgresso(qty, callback) {
     var url = API_BASE + '/frete/progresso?qty=' + qty + '&frete_real=' + FRETE_REAL_DEFAULT;
-    fetch(url)
+    fetch(url, FETCH_OPTS)
       .then(function (r) { return r.json(); })
       .then(function (data) { callback(null, data); })
       .catch(function (err) { callback(err, null); });
@@ -68,7 +70,7 @@
       + '&qty=' + qty
       + '&peso=' + peso.toFixed(3)
       + '&valor=' + valor.toFixed(2);
-    fetch(url)
+    fetch(url, FETCH_OPTS)
       .then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();

@@ -25,6 +25,8 @@ details{margin-top:14px} details>summary{cursor:pointer;color:#c9d7ff;font-weigh
       <span class="pill" id="statsRejeitado">Rejeitados: 0</span>
       <div class="busca-wrap"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="busca" type="search" placeholder="Buscar por título, SKU ou EAN..." oninput="aplicarFiltro()"></div>
       <span id="busca-count"></span>
+      <button class="btn secondary" id="btn-planilha" onclick="baixarPlanilha()" title="Exportar produtos sem peso/custo do Bling">⬇ Planilha</button>
+      <label class="btn secondary" style="cursor:pointer" title="Importar planilha corrigida">⬆ Upload <input type="file" accept=".csv" style="display:none" onchange="uploadCorrecoes(this)"></label>
       <a class="btn secondary" href="/simulador">Simulador</a>
       <button class="btn secondary" id="btn-atualizar" onclick="atualizarFila()">Atualizar</button>
     </div>
@@ -229,7 +231,7 @@ async function carregarFila(){
     atualizarBulkBar();
     aplicarFiltro();
     carregarStatsDetalhados();
-    lista.filter(i=>i.status==='incompleto').forEach(i=>setTimeout(()=>carregarLinksCard(i.sku,i.id),100));
+    lista.filter(i=>i.status==='incompleto').forEach((i,idx)=>{setTimeout(()=>carregarLinksCard(i.sku,i.id),100);setTimeout(()=>carregarNomeProduto(i.sku,i.id),idx*50);});
     lista.filter(i=>i.status==='pendente').forEach((i,idx)=>setTimeout(()=>carregarLinksPendente(i.sku,i.id),idx*200));
   }catch(e){
     console.error('Erro ao carregar fila:',e);
@@ -265,6 +267,80 @@ async function carregarLinksPendente(sku, id){
   }catch(e){}
 }
 
+async function baixarPlanilha(){
+  const btn = document.getElementById('btn-planilha');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Gerando...'; }
+  try{
+    const res = await fetch('/fila/exportar-sem-dados');
+    if(!res.ok){ alert('Erro ao gerar planilha: HTTP '+res.status); return; }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'produtos_sem_dados_'+new Date().toISOString().slice(0,10)+'.csv';
+    a.click();
+    return;
+  } catch(e){
+    alert('Erro: '+e.message);
+    return;
+  } finally {
+    if(btn){ btn.disabled=false; btn.textContent='⬇ Planilha'; }
+  }
+}
+
+let _importPoll = null;
+
+async function uploadCorrecoes(input){
+  const file = input.files[0];
+  if(!file) return;
+  const label = input.parentElement;
+  label.childNodes[0].textContent = ' Enviando...';
+  try{
+    const text = await file.text();
+    const res = await fetch('/fila/importar-correcoes', {
+      method:'POST', headers:{'Content-Type':'text/csv'}, body: text
+    });
+    const d = await res.json();
+    if(d.ok && d.iniciado){
+      mostrarProgressoImport(d.total);
+    } else {
+      alert('Erro: '+(d.detail||JSON.stringify(d)));
+    }
+  } catch(e){
+    alert('Erro: '+e.message);
+  } finally {
+    label.childNodes[0].textContent = '⬆ Upload';
+    input.value = '';
+  }
+}
+
+function mostrarProgressoImport(total){
+  let bar = document.getElementById('import-progress-bar');
+  if(!bar){
+    bar = document.createElement('div');
+    bar.id = 'import-progress-bar';
+    bar.style = 'position:fixed;bottom:20px;right:20px;background:#1e2a47;border:1px solid #3b5bdb;border-radius:14px;padding:16px 20px;min-width:280px;z-index:9999;color:#fff;font-size:13px;box-shadow:0 8px 32px rgba(0,0,0,.4)';
+    document.body.appendChild(bar);
+  }
+  bar.innerHTML = `<div style="font-weight:700;margin-bottom:8px">Atualizando Bling...</div>
+    <div id="ip-prog" style="color:#60a5fa">Iniciando... (${total} produtos)</div>
+    <div id="ip-bar-wrap" style="background:#0d1730;border-radius:8px;height:8px;margin-top:8px;overflow:hidden"><div id="ip-bar" style="background:#3b5bdb;height:8px;width:0%;transition:width .4s"></div></div>`;
+  if(_importPoll) clearInterval(_importPoll);
+  _importPoll = setInterval(async ()=>{
+    try{
+      const s = await fetch('/fila/importar-correcoes/status').then(r=>r.json());
+      const pct = s.total > 0 ? Math.round((s.ok+s.erros+s.ignorados)/s.total*100) : 0;
+      document.getElementById('ip-prog').textContent = `OK: ${s.ok} | Erros: ${s.erros} | Ignorados: ${s.ignorados} de ${s.total}`;
+      document.getElementById('ip-bar').style.width = pct+'%';
+      if(s.status === 'done'){
+        clearInterval(_importPoll); _importPoll = null;
+        document.getElementById('ip-prog').textContent = `Concluído! ${s.ok} atualizados no Bling.`;
+        document.getElementById('ip-bar').style.background = '#22c55e';
+        setTimeout(()=>{ bar.remove(); carregarFila(); }, 4000);
+      }
+    }catch(_){}
+  }, 2000);
+}
+
 carregarFila();
 
 function renderItemIncompleto(item){
@@ -285,11 +361,14 @@ function renderItemIncompleto(item){
   const placeholder = campos.includes('peso') ? 'ex: 0.300' : 'ex: 15.90';
   const erro_msg = item.erro_msg || '';
 
-  const nome_produto = item.nome || '';
+  const _nomeErro = ['Preencha','preencha','Dados incompletos','Componente sem custo'];
+  const nome_produto_raw = item.nome || '';
+  const nomeEhMensagem = _nomeErro.some(p => nome_produto_raw.includes(p));
+  const nome_produto = nomeEhMensagem ? '' : nome_produto_raw;
   return `<div class="item" style="border-left:4px solid #7c3aed" id="card-${id}">
     <div class="item-head">
       <div>
-        ${nome_produto ? `<div class="title">${nome_produto}</div>` : ''}
+        <div class="title" id="nome-${id}">${nome_produto || '<span style="color:#64748b;font-size:13px">Carregando nome...</span>'}</div>
         <div style="font-size:13px;color:#f59e0b;margin-bottom:6px">${titulo}</div>
         <div class="meta">
           <span class="pill" style="background:#7c3aed;color:#fff">INCOMPLETO</span>
@@ -371,6 +450,18 @@ async function ignorarIncompleto(id){
     body:JSON.stringify({motivo:'Ignorado manualmente.'})
   });
   carregarFila();
+}
+
+async function carregarNomeProduto(sku, id){
+  const el = document.getElementById('nome-'+id);
+  if(!el || (el.textContent && !el.querySelector('span'))) return;
+  try{
+    const r = await fetch('/bling/produto/buscar-por-sku', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sku})});
+    if(!r.ok) return;
+    const d = await r.json();
+    const nome = ((d.produtos||[])[0]||{}).nome || '';
+    if(el) el.textContent = nome || sku;
+  }catch(e){ if(el) el.textContent = sku; }
 }
 
 async function carregarLinksCard(sku, id){

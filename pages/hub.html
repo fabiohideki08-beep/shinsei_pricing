@@ -64,6 +64,14 @@ footer{text-align:center;padding:24px 0;color:var(--muted);font-size:13px;border
 <script>
 const SISTEMAS = [
   {
+    key:'dashboard', nome:'Dashboard', icon:'📊', desc:'Visão geral de cobertura de SKUs em todos os canais e status das integrações',
+    cor:'#4f8cff', href:'/dashboard',
+    pills:[
+      {label:'Total Bling', id:'dash-total', valor:null},
+      {label:'Sem cobertura', id:'dash-sem', valor:null}
+    ]
+  },
+  {
     key:'bling', nome:'Bling', icon:'🔵', desc:'Gestão de custos, precificação e fila de aprovação',
     cor:'#f97316', href:'/sistema/bling',
     pills:[
@@ -72,32 +80,33 @@ const SISTEMAS = [
     ]
   },
   {
-    key:'shopify', nome:'Shopify', icon:'🟢', desc:'Sincronização de estoque e preços com a loja Shopify',
-    cor:'#22c55e', href:'/sistema/shopify',
+    key:'shopify', nome:'Shopify', icon:'🟢', desc:'Fila de preços, estoque e SKUs ausentes no Shopify',
+    cor:'#22c55e', href:'/conferencia/shopify',
     pills:[
       {label:'Divergências', id:'shopify-pendente', valor:null}
     ]
   },
   {
-    key:'ml', nome:'Mercado Livre', icon:'🟡', desc:'Auditoria de estoque e preços nos anúncios ML',
-    cor:'#eab308', href:'/sistema/ml',
+    key:'ml', nome:'Mercado Livre', icon:'🟡', desc:'Fila de preços, estoque e SKUs ausentes no Mercado Livre',
+    cor:'#eab308', href:'/conferencia/ml',
     pills:[
       {label:'Pendentes', id:'ml-pendente', valor:null},
       {label:'Sem SKU', id:'ml-semsku', valor:null}
     ]
   },
   {
-    key:'amazon', nome:'Amazon', icon:'🟠', desc:'Conferência de estoque e preços na plataforma Amazon',
-    cor:'#3b82f6', href:'/sistema/amazon',
+    key:'amazon', nome:'Amazon', icon:'🔵', desc:'Fila de preços, estoque e SKUs ausentes na Amazon',
+    cor:'#3b82f6', href:'/conferencia/amazon',
     pills:[
       {label:'Pendentes', id:'amazon-pendente', valor:null}
     ]
   },
   {
-    key:'shopee', nome:'Shopee', icon:'🛍️', desc:'Integração com a plataforma Shopee',
-    cor:'#f97316', href:'/sistema/shopee',
+    key:'shopee', nome:'Shopee', icon:'🛍️', desc:'Fila de preços, estoque e SKUs ausentes na Shopee',
+    cor:'#f97316', href:'/conferencia/shopee',
     pills:[
-      {label:'Em configuração', id:'shopee-status', valor:'—', fixed:true}
+      {label:'Mapeados', id:'shopee-mapeados', valor:null},
+      {label:'Sem Bling', id:'shopee-sembling', valor:null}
     ]
   },
   {
@@ -152,10 +161,33 @@ async function carregarStats(){
     fetch('/auditoria/shopify').then(r => r.json()),
     fetch('/auditoria/ml-estoque').then(r => r.json()),
     fetch('/auditoria/amazon').then(r => r.json()),
-    fetch('/gmc/status').then(r => r.json())
+    fetch('/gmc/status').then(r => r.json()),
+    fetch('/conferencia-sku/resultado').then(r => r.json())
   ]);
 
-  const [rBling, rShopify, rML, rAmazon, rGMC] = results;
+  const [rBling, rShopify, rML, rAmazon, rGMC, rConf] = results;
+
+  // Dashboard card — dados da conferência
+  if(rConf.status === 'fulfilled' && rConf.value?.stats){
+    const s = rConf.value.stats;
+    const total = s.total_bling || 0;
+    const semCobertura = Math.max(0,
+      (s.bling_sem_ml||0) + (s.bling_sem_shopify||0) + (s.bling_sem_amazon||0) + (s.bling_sem_shopee||0)
+    );
+    setPill('dash-total', total.toLocaleString('pt-BR'), 'ok');
+    setPill('dash-sem', semCobertura > 0 ? semCobertura.toLocaleString('pt-BR') : '0', semCobertura > 0 ? 'warn' : 'ok');
+
+    // Shopee pills from conference
+    const shopee = s.shopee || {};
+    setPill('shopee-mapeados', (shopee.presentes_em_bling||0).toLocaleString('pt-BR'), 'ok');
+    const semBling = shopee.sem_bling || 0;
+    setPill('shopee-sembling', semBling.toLocaleString('pt-BR'), semBling > 0 ? 'warn' : 'ok');
+  } else {
+    setPill('dash-total', '—', 'muted');
+    setPill('dash-sem', '—', 'muted');
+    setPill('shopee-mapeados', '—', 'muted');
+    setPill('shopee-sembling', '—', 'muted');
+  }
 
   if(rBling.status === 'fulfilled'){
     const s = rBling.value.stats || {};
@@ -192,8 +224,6 @@ async function carregarStats(){
   } else {
     setPill('amazon-pendente', '—', 'muted');
   }
-
-  setPill('shopee-status', 'Em configuração', 'muted');
 
   if(rGMC.status === 'fulfilled'){
     const r = (rGMC.value || {}).resumo || {};

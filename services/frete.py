@@ -48,6 +48,7 @@ def carregar_config_frete() -> dict:
         "subsidio_por_item": _SUBSIDY_PER_ITEM_DEFAULT,
         "frete_real_default": _FRETE_REAL_DEFAULT_DEFAULT,
         "cep_origem": _ORIGIN_CEP_DEFAULT,
+        "frete_gratis_minimo": FRETE_GRATIS_MINIMO,
     }
     try:
         if _FRETE_CONFIG_PATH.exists():
@@ -67,7 +68,7 @@ def salvar_config_frete(cfg: dict) -> None:
 
 # Valor mínimo do pedido para qualificar frete grátis
 # (mesma regra do widget JS — aplicada aqui para cobrir o shopify-callback)
-FRETE_GRATIS_MINIMO: float = float(os.getenv("FRETE_GRATIS_MINIMO", "19.0"))
+FRETE_GRATIS_MINIMO: float = float(os.getenv("FRETE_GRATIS_MINIMO", "29.0"))
 
 MELHOR_ENVIO_TOKEN: str = os.getenv("MELHOR_ENVIO_TOKEN", "")
 MELHOR_ENVIO_SANDBOX: bool = os.getenv("MELHOR_ENVIO_SANDBOX", "true").lower() in ("1", "true", "yes")
@@ -450,24 +451,38 @@ async def calculate_freight(
     subsidy_total = calcular_subsidio_total(qty_items, cfg_frete)
 
     if rmsp:
-        # RMSP: frete_real simbólico = R$8, sempre grátis
+        # RMSP: entrega própria Shinsei — mesmo dia (pedidos até 12h, seg-sáb) ou dia seguinte
+        _now_sp = datetime.now(timezone(timedelta(hours=-3)))  # horário de Brasília
+        _weekday = _now_sp.weekday()   # 0=seg … 5=sáb, 6=dom
+        _hour    = _now_sp.hour
+
+        # Regras de entrega RMSP (entrega própria Shinsei):
+        #   Seg–Sex antes das 12h  → Entrega Hoje       (0 dias)
+        #   Seg–Sex após as 12h    → Receba Amanha       (1 dia)
+        #   Sáb antes das 12h     → Entrega Hoje       (0 dias)
+        #   Sáb após as 12h       → Receba Segunda-Feira (2 dias)
+        #   Dom (qualquer horário) → Receba Segunda-Feira (1 dia)
+        if _weekday <= 5 and _hour < 12:          # seg-sáb até 12h
+            _delivery_days = 0
+            _delivery_name = "Entrega Hoje"
+        elif _weekday == 6:                        # domingo
+            _delivery_days = 1
+            _delivery_name = "Receba Segunda-Feira"
+        elif _weekday == 5:                        # sábado após 12h
+            _delivery_days = 2
+            _delivery_name = "Entrega Segunda-Feira"
+        else:                                      # seg-sex após 12h
+            _delivery_days = 1
+            _delivery_name = "Receba Amanha"
+
         raw_options = [
             FreightOption(
-                name="PAC",
-                carrier="Correios",
+                name=_delivery_name,
+                carrier="Shinsei Market",
                 price_real=RMSP_FREIGHT_VALUE,
                 price_final=0.0,
                 subsidy=subsidy_total,
-                delivery_days=3,
-                is_free=True,
-            ),
-            FreightOption(
-                name="SEDEX",
-                carrier="Correios",
-                price_real=RMSP_FREIGHT_VALUE,
-                price_final=0.0,
-                subsidy=subsidy_total,
-                delivery_days=1,
+                delivery_days=_delivery_days,
                 is_free=True,
             ),
         ]
@@ -522,13 +537,15 @@ async def calculate_freight(
         is_free=is_free_cart,
     )
 
-    # ── Regra de mínimo: pedidos abaixo de FRETE_GRATIS_MINIMO não têm frete grátis ──
+    # ── Regra de mínimo: pedidos abaixo de frete_gratis_minimo não têm frete grátis ──
     # Aplica-se quando order_value é conhecido (> 0), ou seja, vem do shopify-callback.
     # Para chamadas do widget sem valor (order_value=0) a regra é aplicada client-side.
-    if order_value > 0.0 and order_value < FRETE_GRATIS_MINIMO and result.is_free:
+    # RMSP é sempre grátis (entrega própria Shinsei) — não aplica regra de mínimo.
+    minimo_gratis = float(cfg_frete.get("frete_gratis_minimo", FRETE_GRATIS_MINIMO))
+    if not rmsp and order_value > 0.0 and order_value < minimo_gratis and result.is_free:
         logger.info(
             "calculate_freight: valor=R$%.2f < mínimo=R$%.2f — removendo frete grátis.",
-            order_value, FRETE_GRATIS_MINIMO,
+            order_value, minimo_gratis,
         )
         opts_corrigidas = []
         for opt in result.options:

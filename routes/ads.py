@@ -37,9 +37,15 @@ def _load_yaml_creds() -> dict:
 
 
 def _build_client():
-    """Constrói GoogleAdsClient a partir do google-ads.yaml."""
+    """Constrói GoogleAdsClient a partir do google-ads.yaml (env vars sobrepõem o arquivo)."""
+    import os
     from google.ads.googleads.client import GoogleAdsClient
     creds = _load_yaml_creds()
+    # Env vars override the yaml file so tokens can be rotated without rebuild
+    for key in ("refresh_token", "client_id", "client_secret", "developer_token", "login_customer_id"):
+        env_val = os.environ.get(f"GOOGLE_ADS_{key.upper()}")
+        if env_val:
+            creds[key] = env_val
     config = {
         "client_id":         creds["client_id"],
         "client_secret":     creds["client_secret"],

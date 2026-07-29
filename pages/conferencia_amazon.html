@@ -73,6 +73,8 @@ tr:hover td{background:rgba(255,255,255,.025)}
 .ausente-section h3{font-size:14px;font-weight:800;margin:0 0 12px 0;padding-bottom:10px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
 .count-badge{background:var(--card2);border:1px solid var(--line);color:var(--muted);padding:2px 10px;border-radius:999px;font-size:12px;font-weight:700}
 .empty{padding:32px;text-align:center;color:var(--muted);font-size:14px}
+.skel{display:inline-block;width:60px;height:16px;background:rgba(255,255,255,.08);border-radius:4px;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
 .paginacao{display:flex;align-items:center;gap:10px;margin-top:14px;justify-content:flex-end;font-size:13px;color:var(--muted)}
 @media(max-width:900px){.stats-row{grid-template-columns:repeat(2,1fr)}}
 </style>
@@ -97,11 +99,11 @@ tr:hover td{background:rgba(255,255,255,.025)}
   </div>
 
   <div class="stats-row" id="stats-row">
-    <div class="stat"><div class="stat-lbl">Total Bling</div><div class="stat-val">—</div></div>
-    <div class="stat stat-link" onclick="irParaAba('estoque')"><div class="stat-lbl">Mapeados Amazon</div><div class="stat-val" style="color:var(--ok)">—</div></div>
-    <div class="stat stat-link" onclick="irParaAba('ausentes','secao-sem-canal')"><div class="stat-lbl">Bling sem Amazon</div><div class="stat-val" style="color:var(--warn)">—</div></div>
-    <div class="stat stat-link" onclick="irParaAba('estoque',null,'sub-sem-sku')"><div class="stat-lbl">Amazon sem Bling</div><div class="stat-val" style="color:var(--danger)" id="sv-sem-integ">—</div></div>
-    <div class="stat stat-link" style="border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.07)" onclick="irParaAba('sem-vinculo',this)"><div class="stat-lbl" style="color:var(--danger)">⚠️ Ativos sem vínculo</div><div class="stat-val" style="color:var(--danger)" id="sv-ativo-sem-vinculo">—</div><div style="font-size:10px;color:var(--muted);margin-top:2px">vendendo sem sync</div></div>
+    <div class="stat"><div class="stat-lbl">Total Bling</div><div class="stat-val"><span class="skel"></span></div></div>
+    <div class="stat stat-link" onclick="irParaAba('estoque')"><div class="stat-lbl">Mapeados Amazon</div><div class="stat-val"><span class="skel"></span></div></div>
+    <div class="stat stat-link" onclick="irParaAba('ausentes','secao-sem-canal')"><div class="stat-lbl">Bling sem Amazon</div><div class="stat-val"><span class="skel"></span></div></div>
+    <div class="stat stat-link" onclick="irParaAba('estoque');setTimeout(()=>setSubTab('sub-sem-sku'),60)"><div class="stat-lbl">Amazon sem Bling</div><div class="stat-val"><span class="skel"></span></div></div>
+    <div class="stat stat-link" style="border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.07)" onclick="trocarTab('sem-vinculo',[...document.querySelectorAll('.tab')].find(t=>(t.getAttribute('onclick')||'').includes(&quot;sem-vinculo&quot;)))"><div class="stat-lbl" style="color:var(--danger)">⚠️ Ativos sem vínculo</div><div class="stat-val" style="color:var(--danger)" id="sv-ativo-sem-vinculo">—</div><div style="font-size:10px;color:var(--muted);margin-top:2px">vendendo sem sync</div></div>
   </div>
 
   <div class="tabs">
@@ -109,6 +111,7 @@ tr:hover td{background:rgba(255,255,255,.025)}
     <button class="tab" onclick="trocarTab('estoque',this)">📦 Estoque</button>
     <button class="tab" onclick="trocarTab('ausentes',this)">⚠️ SKUs Ausentes</button>
     <button class="tab" id="tab-btn-sem-vinculo" onclick="trocarTab('sem-vinculo',this)" style="border-bottom-color:var(--danger)">🚨 Sem Vínculo <span id="tab-cnt-sem-vinculo" style="font-size:11px;padding:1px 7px;border-radius:999px;background:rgba(239,68,68,.2);color:var(--danger);margin-left:4px"></span></button>
+    <button class="tab" onclick="trocarTab('exportar-lote',this);carregarStatusLote()">🚀 Exportar em Lote</button>
   </div>
 
   <div class="tab-panel active" id="tab-fila">
@@ -211,6 +214,137 @@ tr:hover td{background:rgba(255,255,255,.025)}
       <div class="paginacao" id="sem-canal-pag"></div>
     </div>
   </div>
+
+  <!-- ══ TAB: Exportar em Lote ══ -->
+  <div class="tab-panel" id="tab-exportar-lote">
+
+    <!-- Etapa 1: Configuração -->
+    <div id="lote-etapa-config" style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <span style="background:var(--accent);color:#fff;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">1</span>
+        <h3 style="margin:0;font-size:15px">Configurar e coletar produtos</h3>
+      </div>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:16px">
+        Varre o Bling, cruza com a Amazon e identifica os produtos ausentes. Em seguida, calcula o preço de cada um para revisão antes de exportar.
+      </p>
+      <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap">
+        <div>
+          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:5px">Tipo de produto</label>
+          <select id="lote-product-type" style="background:var(--card2);border:1px solid var(--line);color:var(--text);padding:8px 12px;border-radius:9px;font-size:13px">
+            <option value="BEAUTY">BEAUTY</option>
+            <option value="HAIR_CARE">HAIR_CARE</option>
+            <option value="SKIN_CARE">SKIN_CARE</option>
+            <option value="COSMETIC">COSMETIC</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:5px">Margem alvo (%)</label>
+          <input id="lote-margem" type="number" value="15" min="1" max="60" step="1"
+            style="background:var(--card2);border:1px solid var(--line);color:var(--text);padding:8px 12px;border-radius:9px;font-size:13px;width:90px">
+        </div>
+        <button class="btn" id="btn-lote-iniciar" onclick="loteIniciar()">▶ 1. Coletar produtos</button>
+        <button class="btn secondary" onclick="loteReset()">🗑 Limpar</button>
+      </div>
+      <div id="lote-coleta-status" style="display:none;margin-top:14px;font-size:13px;color:var(--muted)"></div>
+    </div>
+
+    <!-- Etapa 2: Calculando preços -->
+    <div id="lote-etapa-calc" style="display:none;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+        <span style="background:var(--accent);color:#fff;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">2</span>
+        <h3 style="margin:0;font-size:15px">Calculando preços</h3>
+        <span id="lote-calc-pct" style="font-size:13px;color:var(--muted)">0%</span>
+        <button id="btn-retomar-calc" onclick="retomarCalculo()" style="display:none;margin-left:auto;background:var(--warn);color:#000;border:none;padding:6px 14px;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer">⟳ Retomar</button>
+      </div>
+      <div style="background:var(--card2);border-radius:999px;height:8px;overflow:hidden;margin-bottom:10px">
+        <div id="lote-calc-pbar" style="height:100%;background:var(--accent);border-radius:999px;transition:width .4s;width:0%"></div>
+      </div>
+      <div id="lote-calc-log" style="font-size:12px;font-family:monospace;color:var(--muted);max-height:80px;overflow:hidden"></div>
+    </div>
+
+    <!-- Etapa 3: Tabela de revisão de preços -->
+    <div id="lote-etapa-revisao" style="display:none;margin-bottom:16px">
+      <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 20px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="background:var(--ok);color:#fff;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">3</span>
+          <div>
+            <h3 style="margin:0;font-size:15px">Revisar preços antes de exportar</h3>
+            <p style="margin:3px 0 0;font-size:12px;color:var(--muted)">Edite qualquer preço e clique em <b>Confirmar e Exportar</b></p>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span id="lote-rev-stats" style="font-size:13px;color:var(--muted)"></span>
+          <button class="btn" id="btn-lote-exportar" onclick="loteExportar()" style="background:var(--ok)">🚀 Confirmar e Exportar</button>
+        </div>
+      </div>
+
+      <!-- Filtros -->
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <button class="btn secondary btn sm" onclick="filtrarPreview('todos')" id="fprev-todos" style="border-color:var(--accent);color:var(--accent)">Todos</button>
+        <button class="btn secondary btn sm" onclick="filtrarPreview('sem_preco')" id="fprev-sem">Sem preço</button>
+        <button class="btn secondary btn sm" onclick="filtrarPreview('ok')" id="fprev-ok">Com preço</button>
+        <input id="busca-preview" type="search" placeholder="Buscar SKU…" oninput="filtrarPreview()"
+          style="background:var(--card2);border:1px solid var(--line);color:var(--text);padding:6px 12px;border-radius:9px;font-size:13px;width:180px;outline:none">
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:36px;text-align:center"><input type="checkbox" id="chk-all" title="Selecionar todos" onchange="toggleSelecionarTodos(this.checked)" style="width:15px;height:15px;cursor:pointer;accent-color:var(--accent)"></th>
+              <th>SKU</th>
+              <th>Nome</th>
+              <th style="text-align:right">Estoque</th>
+              <th style="text-align:right">Custo</th>
+              <th style="text-align:right">Taxa fixa</th>
+              <th style="text-align:right">Referral %</th>
+              <th style="text-align:right">Preço calculado</th>
+              <th style="text-align:right">Preço final (editável)</th>
+              <th title="EAN/GTIN obrigatório para criar listing na Amazon">EAN</th>
+              <th>Fonte</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-preview"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Etapa 4: Exportando -->
+    <div id="lote-etapa-export" style="display:none;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+        <span style="background:var(--ok);color:#fff;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">4</span>
+        <h3 style="margin:0;font-size:15px">Exportando para Amazon</h3>
+        <span id="lote-exp-concluido" style="display:none;background:rgba(34,197,94,.2);color:var(--ok);border:1px solid rgba(34,197,94,.3);padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700">✓ Concluído</span>
+      </div>
+      <div style="background:var(--card2);border-radius:999px;height:8px;overflow:hidden;margin-bottom:10px">
+        <div id="lote-exp-pbar" style="height:100%;background:var(--ok);border-radius:999px;transition:width .4s;width:0%"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+        <div style="background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:12px">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase">Total</div>
+          <div id="lote-m-total" style="font-size:22px;font-weight:700;margin-top:4px;color:#60a5fa">—</div>
+        </div>
+        <div style="background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:12px">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase">Processados</div>
+          <div id="lote-m-proc" style="font-size:22px;font-weight:700;margin-top:4px">—</div>
+        </div>
+        <div style="background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:12px">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase">Exportados ✓</div>
+          <div id="lote-m-ok" style="font-size:22px;font-weight:700;margin-top:4px;color:var(--ok)">—</div>
+        </div>
+        <div style="background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:12px">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase">Erros</div>
+          <div id="lote-m-err" style="font-size:22px;font-weight:700;margin-top:4px;color:var(--danger)">—</div>
+        </div>
+      </div>
+      <details open>
+        <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:10px">📋 Log de exportações</summary>
+        <div id="lote-log" style="background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:12px;max-height:320px;overflow-y:auto;font-size:12px;font-family:monospace;line-height:1.6"></div>
+      </details>
+    </div>
+
+  </div>
+
 </div>
 <script>
 const CANAL_KEY_FILA = ['amazon'];
@@ -435,7 +569,7 @@ function renderSemVinculo(){
         <td style="font-size:12px">${r.motivo}</td>
       </tr>`).join('')
     : `<tr><td colspan="5" class="empty">✅ Nenhum anúncio ativo sem vínculo com o Bling!</td></tr>`;
-  pagControls('sem-vinculo-pag', total, _pgSemVinculo, 'navSemVinculo');
+  pagControls('sem-vinculo-pag', todos.length, _pgSemVinculo, 'navSemVinculo');
 }
 function navSemVinculo(p){_pgSemVinculo=p;renderSemVinculo();}
 
@@ -448,6 +582,7 @@ function toggleSoAtivos(){
   btn.textContent = _soAtivos ? '☀️ Só Ativos ✓' : '☀️ Só Ativos';
   renderEstoque();
   renderAusentes();
+  renderSemVinculo();
 }
 
 async function carregarConferencia(){
@@ -456,11 +591,13 @@ async function carregarConferencia(){
     if(!res||!res.stats)return;
     _conf=res;
     const s=res.stats, cs=s[CANAL_STAT_KEY]||{};
+    const svAmazon = s.amazon_ativo_sem_vinculo ?? cs.sem_bling ?? 0;
     document.getElementById('stats-row').innerHTML=`
       <div class="stat"><div class="stat-lbl">Total Bling</div><div class="stat-val">${fmt(s.total_bling)}</div></div>
       <div class="stat stat-link" onclick="irParaAba('estoque')"><div class="stat-lbl">Mapeados ${CANAL_NOME}</div><div class="stat-val" style="color:var(--ok)">${fmt(cs.presentes_em_bling)}</div></div>
       <div class="stat stat-link" onclick="irParaAba('ausentes','secao-sem-canal')"><div class="stat-lbl">Bling sem ${CANAL_NOME}</div><div class="stat-val" style="color:var(--warn)">${fmt(s[CANAL_SEM_KEY])}</div></div>
-      <div class="stat stat-link" onclick="irParaAba('estoque','secao-sem-integ')"><div class="stat-lbl">${CANAL_NOME} sem Bling</div><div class="stat-val" style="color:var(--danger)" id="sv-sem-integ">${fmt(cs.sem_bling)}</div></div>`;
+      <div class="stat stat-link" onclick="irParaAba('estoque');setTimeout(()=>setSubTab('sub-sem-sku'),60)"><div class="stat-lbl">${CANAL_NOME} sem Bling</div><div class="stat-val" style="color:var(--danger)">${fmt(cs.sem_bling)}</div></div>
+      <div class="stat stat-link" style="border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.07)" onclick="trocarTab('sem-vinculo',[...document.querySelectorAll('.tab')].find(t=>(t.getAttribute('onclick')||'').includes(&quot;sem-vinculo&quot;)))"><div class="stat-lbl" style="color:var(--danger)">⚠️ Ativos sem vínculo</div><div class="stat-val" style="color:var(--danger)" id="sv-ativo-sem-vinculo">${fmt(svAmazon)}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">vendendo sem sync</div></div>`;
     if(res.executado_em){const dt=new Date(res.executado_em);document.getElementById('meta-ultima').textContent=`Última: ${dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})} ${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;}
     renderEstoque(); renderAusentes(); renderSemVinculo();
   }catch(e){document.getElementById('meta-ultima').textContent='Execute a conferência para ver dados.';}
@@ -487,6 +624,409 @@ function iniciarPolling(){
 
 carregarConferencia(); carregarFila();
 fetch('/conferencia-sku/status').then(r=>r.json()).then(st=>{if(st.status==='rodando')iniciarPolling();});
+
+// ══ EXPORTAÇÃO EM LOTE (4 etapas) ════════════════════════════════════════════
+let _loteRodando = false;
+let _previewFiltro = 'todos';
+let _previewData = [];
+let _selecionados = new Set(); // SKUs selecionados para exportar
+
+function moeda(v){ return 'R$ ' + Number(v||0).toFixed(2).replace('.',','); }
+
+async function carregarStatusLote() {
+  try {
+    const d = await fetch('/amazon/exportar-lote/status').then(r=>r.json());
+    if (!d.iniciado) return;
+
+    // Etapa 4 — exportando ou já concluído
+    if (d.concluido || d.exportados > 0) {
+      mostrarEtapa('export');
+      atualizarUIExport(d);
+      return;
+    }
+
+    // Etapa 3 — preços calculados, aguardando revisão
+    if (d.preview_concluido) {
+      _previewData = d.previews_lista || [];
+      mostrarEtapa('revisao');
+      renderPreview();
+      // Mostra resumo da coleta
+      const cs = document.getElementById('lote-coleta-status');
+      cs.style.display = 'block';
+      cs.textContent = `✓ ${d.total} produtos a exportar (sessão retomada)`;
+      return;
+    }
+
+    // Etapa 2 — cálculo em andamento, retoma o loop
+    const total = d.total || 0;
+    const calculados = (d.previews_lista || []).length;
+    mostrarEtapa('calc');
+    document.getElementById('lote-coleta-status').style.display = 'block';
+    document.getElementById('lote-coleta-status').textContent = `✓ ${total} produtos a exportar (retomando cálculo a partir de ${calculados}…)`;
+    document.getElementById('lote-calc-pct').textContent = `${calculados}/${total} (${total > 0 ? Math.round(calculados/total*100) : 0}%)`;
+    document.getElementById('lote-calc-pbar').style.width = (total > 0 ? Math.round(calculados/total*100) : 0) + '%';
+    _previewData = d.previews_lista || [];
+
+    if (!_loteRodando) {
+      _loteRodando = true;
+      calcularPrecosLoop(total);
+    }
+  } catch(e) {}
+}
+
+function mostrarEtapa(etapa) {
+  // etapa: 'config' | 'calc' | 'revisao' | 'export'
+  document.getElementById('lote-etapa-calc').style.display    = etapa === 'calc'    ? 'block' : 'none';
+  document.getElementById('lote-etapa-revisao').style.display = etapa === 'revisao' ? 'block' : 'none';
+  document.getElementById('lote-etapa-export').style.display  = etapa === 'export'  ? 'block' : 'none';
+}
+
+async function loteIniciar() {
+  const productType = document.getElementById('lote-product-type').value;
+  const margem      = parseFloat(document.getElementById('lote-margem').value) || 15;
+  const btn = document.getElementById('btn-lote-iniciar');
+  btn.disabled = true; btn.textContent = '⏳ Coletando do Bling e Amazon…';
+  document.getElementById('lote-coleta-status').style.display = 'none';
+
+  try {
+    const params = new URLSearchParams({product_type: productType, margem_alvo: margem});
+    const r = await fetch('/amazon/exportar-lote/iniciar?' + params, {method:'POST'});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Erro ao iniciar');
+
+    const msg = `✓ ${d.a_exportar} produtos a exportar · ${d.ja_na_amazon} já na Amazon · ${d.total_bling} no Bling`;
+    const el = document.getElementById('lote-coleta-status');
+    el.style.display = 'block'; el.textContent = msg;
+
+    if (d.a_exportar === 0) {
+      el.textContent = '✅ Todos os produtos Bling já estão na Amazon!';
+      return;
+    }
+
+    // Avança para etapa 2: calcular preços
+    mostrarEtapa('calc');
+    _loteRodando = true;
+    await calcularPrecosLoop(d.a_exportar);
+
+  } catch(e) {
+    alert('Erro: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '▶ 1. Coletar produtos';
+  }
+}
+
+async function calcularPrecosLoop(total) {
+  let errosConsecutivos = 0;
+  while (_loteRodando) {
+    try {
+      const r = await fetch('/amazon/exportar-lote/calcular-precos?lote=3', {method:'POST'});
+      if (!r.ok) {
+        errosConsecutivos++;
+        if (errosConsecutivos >= 5) { _loteRodando = false; break; }
+        await new Promise(res => setTimeout(res, 3000));
+        continue;
+      }
+      errosConsecutivos = 0;
+      const d = await r.json();
+
+      // acumula previews do batch (evita duplicatas por SKU)
+      const skusExistentes = new Set(_previewData.map(p => p.sku));
+      for (const item of (d.batch || [])) {
+        if (!skusExistentes.has(item.sku)) _previewData.push(item);
+      }
+
+      // atualiza barra
+      const calculados = d.calculados || _previewData.length;
+      const pct = total > 0 ? Math.round(calculados / total * 100) : 0;
+      document.getElementById('lote-calc-pbar').style.width = pct + '%';
+      document.getElementById('lote-calc-pct').textContent  = `${calculados}/${total} (${pct}%)`;
+
+      // mini-log
+      const ultimos = (d.batch || []).slice(-3).map(b =>
+        `${b.sku} → ${moeda(b.preco)} [${b.fonte_preco||'—'}]`).join(' · ');
+      if (ultimos) document.getElementById('lote-calc-log').textContent = ultimos;
+
+      if (d.preview_concluido) {
+        _loteRodando = false;
+        const st = await fetch('/amazon/exportar-lote/status').then(x=>x.json());
+        _previewData = st.previews_lista || _previewData;
+        mostrarEtapa('revisao');
+        renderPreview();
+        break;
+      }
+      await new Promise(res => setTimeout(res, 800));
+    } catch(e) {
+      errosConsecutivos++;
+      if (errosConsecutivos >= 5) { _loteRodando = false; break; }
+      await new Promise(res => setTimeout(res, 3000));
+    }
+  }
+  // Se parou sem concluir, mostra botão retomar
+  if (!_loteRodando) {
+    const btn = document.getElementById('btn-retomar-calc');
+    if (btn) btn.style.display = 'inline-flex';
+  }
+}
+
+function renderPreview() {
+  const busca = (document.getElementById('busca-preview')?.value || '').toLowerCase();
+  let dados = _previewData;
+  if (_previewFiltro === 'sem_preco') dados = dados.filter(d => !d.preco || d.preco === 0);
+  if (_previewFiltro === 'ok')        dados = dados.filter(d => d.preco > 0);
+  if (busca) dados = dados.filter(d => d.sku.toLowerCase().includes(busca) || (d.nome||'').toLowerCase().includes(busca));
+
+  const semPreco = _previewData.filter(d => !d.preco || d.preco === 0).length;
+  document.getElementById('lote-rev-stats').textContent =
+    `${_previewData.length} produtos · ${semPreco} sem preço`;
+
+  const tbody = document.getElementById('tbody-preview');
+  if (!dados.length) {
+    tbody.innerHTML = `<tr><td colspan="11" class="empty">Nenhum produto.</td></tr>`;
+    return;
+  }
+
+  // Inicializa seleção com todos os produtos visíveis (na 1ª renderização)
+  if (_selecionados.size === 0 && _previewData.length > 0) {
+    _previewData.forEach(d => _selecionados.add(d.sku));
+  }
+
+  tbody.innerHTML = dados.map(item => {
+    const semP  = !item.preco || item.preco === 0;
+    const preco = item.preco_editado ?? item.preco ?? 0;
+    const isPrecoFallback = item.fonte_preco === 'preco_bling';
+    const isSemCusto = ['sem_custo','erro_bling'].includes(item.fonte_preco);
+    const fonteColor = {
+      'regras+taxas_reais_amazon':   'var(--ok)',
+      'regras+referral_estimado':    'var(--accent)',
+      taxas_reais_amazon:            'var(--ok)',
+      simulador_direto:              'var(--accent)',
+      simulador_regras:              'var(--warn)',
+      preco_bling:                   'var(--warn)',
+      sem_custo:                     'var(--danger)',
+      erro_bling:                    'var(--danger)',
+    }[item.fonte_preco] || 'var(--muted)';
+    const fonteLabel = item.fonte_preco || '—';
+    const fonteAviso = isPrecoFallback
+      ? `<span title="Sem custo cadastrado — preço de venda do Bling usado como fallback. Revise antes de exportar." style="cursor:help">⚠️ ${fonteLabel}</span>`
+      : isSemCusto
+      ? `<span title="Sem custo — não exportar." style="cursor:help">🚫 ${fonteLabel}</span>`
+      : fonteLabel;
+    const rowBg = isPrecoFallback ? 'background:rgba(255,200,0,0.04)' : isSemCusto ? 'background:rgba(255,80,80,0.06)' : '';
+    const sel = _selecionados.has(item.sku);
+    return `<tr id="prev-row-${item.sku}" style="${rowBg}${sel?'':';opacity:.45'}">
+      <td style="text-align:center"><input type="checkbox" ${sel?'checked':''} style="width:15px;height:15px;cursor:pointer;accent-color:var(--accent)" onchange="toggleSelecionar('${item.sku}',this.checked)"></td>
+      <td class="sku-code">${item.sku}</td>
+      <td class="nome-cell" title="${(item.nome||'').replace(/"/g,'')}">${item.nome||'—'}</td>
+      <td style="text-align:right">${item.saldo||0}</td>
+      <td style="text-align:right${!item.custo||item.custo===0?';color:var(--danger)':''}">${moeda(item.custo)}</td>
+      <td style="text-align:right">${moeda(item.taxa_fixa)}</td>
+      <td style="text-align:right">${Number(item.referral_pct||0).toFixed(1)}%</td>
+      <td style="text-align:right;color:${semP?'var(--danger)':'var(--muted)'}">${moeda(item.preco)}</td>
+      <td style="text-align:right">
+        <input type="number" step="0.01" min="0"
+          value="${preco > 0 ? preco.toFixed(2) : ''}"
+          placeholder="0,00"
+          id="pinp-${item.sku}"
+          style="background:var(--card2);border:1px solid ${isPrecoFallback?'var(--warn)':semP?'var(--danger)':'var(--line)'};color:var(--text);padding:5px 8px;border-radius:7px;font-size:12px;width:100px;text-align:right"
+          onchange="salvarPrecoPreview('${item.sku}', this.value)"
+          onkeydown="if(event.key==='Enter'){salvarPrecoPreview('${item.sku}',this.value);focusNextPreview('${item.sku}');}">
+      </td>
+      <td style="font-size:11px;text-align:center">${item.gtin
+        ? `<span style="color:var(--ok)" title="${item.gtin}">✅</span>`
+        : `<span style="color:var(--danger)" title="Sem EAN/GTIN — não pode exportar para Amazon">🚫</span>`
+      }</td>
+      <td style="font-size:11px;color:${fonteColor}">${fonteAviso}</td>
+    </tr>`;
+  }).join('');
+
+  // Atualiza estado do checkbox "Selecionar todos"
+  const chkAll = document.getElementById('chk-all');
+  if (chkAll) {
+    const visiveis = dados.map(d => d.sku);
+    const todosSel = visiveis.every(s => _selecionados.has(s));
+    const algumSel = visiveis.some(s => _selecionados.has(s));
+    chkAll.checked = todosSel;
+    chkAll.indeterminate = !todosSel && algumSel;
+  }
+  _atualizarStatsSel();
+}
+
+function toggleSelecionar(sku, checked) {
+  if (checked) _selecionados.add(sku);
+  else _selecionados.delete(sku);
+  const row = document.getElementById('prev-row-' + sku);
+  if (row) row.style.opacity = checked ? '' : '0.45';
+  const chkAll = document.getElementById('chk-all');
+  if (chkAll) {
+    const todosSel = _previewData.every(d => _selecionados.has(d.sku));
+    const algumSel = _previewData.some(d => _selecionados.has(d.sku));
+    chkAll.checked = todosSel;
+    chkAll.indeterminate = !todosSel && algumSel;
+  }
+  _atualizarStatsSel();
+}
+
+function toggleSelecionarTodos(checked) {
+  const busca = (document.getElementById('busca-preview')?.value || '').toLowerCase();
+  let visiveis = _previewData;
+  if (_previewFiltro === 'sem_preco') visiveis = visiveis.filter(d => !d.preco || d.preco === 0);
+  if (_previewFiltro === 'ok')        visiveis = visiveis.filter(d => d.preco > 0);
+  if (busca) visiveis = visiveis.filter(d => d.sku.toLowerCase().includes(busca) || (d.nome||'').toLowerCase().includes(busca));
+  visiveis.forEach(d => { if (checked) _selecionados.add(d.sku); else _selecionados.delete(d.sku); });
+  renderPreview();
+}
+
+function _atualizarStatsSel() {
+  const total = _previewData.length;
+  const sel = _selecionados.size;
+  const semPreco = _previewData.filter(d => !d.preco && !d.preco_editado).length;
+  document.getElementById('lote-rev-stats').textContent =
+    `${sel} de ${total} selecionados · ${semPreco} sem preço`;
+  const btn = document.getElementById('btn-lote-exportar');
+  if (btn) btn.textContent = sel === total ? '🚀 Confirmar e Exportar' : `🚀 Exportar ${sel} selecionados`;
+}
+
+async function salvarPrecoPreview(sku, valor) {
+  const preco = parseFloat(valor);
+  if (!preco || preco <= 0) return;
+  // Atualiza local
+  const item = _previewData.find(d => d.sku === sku);
+  if (item) item.preco_editado = preco;
+  // Salva no backend
+  await fetch('/amazon/exportar-lote/confirmar-preco', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({sku, preco})
+  });
+  // Feedback visual
+  const inp = document.getElementById('pinp-' + sku);
+  if (inp) { inp.style.borderColor = 'var(--ok)'; setTimeout(() => inp.style.borderColor = 'var(--line)', 1500); }
+}
+
+function focusNextPreview(sku) {
+  const rows = [...document.querySelectorAll('#tbody-preview tr')];
+  const idx = rows.findIndex(r => r.id === 'prev-row-' + sku);
+  const next = rows[idx + 1];
+  if (next) { const inp = next.querySelector('input[type=number]'); if (inp) { inp.focus(); inp.select(); } }
+}
+
+function filtrarPreview(filtro) {
+  if (filtro) _previewFiltro = filtro;
+  ['todos','sem_preco','ok'].forEach(f => {
+    const el = document.getElementById('fprev-' + (f === 'todos' ? 'todos' : f === 'sem_preco' ? 'sem' : 'ok'));
+    if (el) { el.style.borderColor = _previewFiltro === f ? 'var(--accent)' : ''; el.style.color = _previewFiltro === f ? 'var(--accent)' : ''; }
+  });
+  renderPreview();
+}
+
+async function loteExportar() {
+  const paraExportar = _previewData.filter(d => _selecionados.has(d.sku));
+  if (paraExportar.length === 0) {
+    alert('Selecione ao menos um produto para exportar.');
+    return;
+  }
+  const semPreco = paraExportar.filter(d => {
+    const p = d.preco_editado ?? d.preco ?? 0;
+    return p <= 0;
+  });
+  if (semPreco.length > 0) {
+    if (!confirm(`${semPreco.length} produto(s) selecionado(s) sem preço definido serão pulados. Continuar com ${paraExportar.length} produtos?`)) return;
+  }
+  // Se não são todos, confirma seleção parcial
+  if (paraExportar.length < _previewData.length) {
+    if (!confirm(`Exportar apenas ${paraExportar.length} de ${_previewData.length} produtos selecionados?`)) return;
+    // Marca no backend quais SKUs exportar (filtra os não selecionados)
+    await fetch('/amazon/exportar-lote/selecionar', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({skus: [..._selecionados]})
+    }).catch(()=>{});
+  }
+  mostrarEtapa('export');
+  _loteRodando = true;
+  exportarLoop();
+}
+
+async function exportarLoop() {
+  while (_loteRodando) {
+    try {
+      const r = await fetch('/amazon/exportar-lote/processar?lote=3', {method:'POST'});
+      const d = await r.json();
+      if (!r.ok) { _loteRodando = false; break; }
+      atualizarUIExport(await fetch('/amazon/exportar-lote/status').then(x=>x.json()));
+      if (d.concluido) { _loteRodando = false; break; }
+      await new Promise(res => setTimeout(res, 1500));
+    } catch(e) { _loteRodando = false; break; }
+  }
+}
+
+function atualizarUIExport(d) {
+  const total = d.total || 0;
+  const proc  = d.processados || 0;
+  const pct   = total > 0 ? Math.round(proc / total * 100) : 0;
+
+  document.getElementById('lote-m-total').textContent = total;
+  document.getElementById('lote-m-proc').textContent  = proc;
+  document.getElementById('lote-m-ok').textContent    = d.exportados || 0;
+  document.getElementById('lote-m-err').textContent   = d.erros || 0;
+  document.getElementById('lote-exp-pbar').style.width = pct + '%';
+
+  if (d.concluido) document.getElementById('lote-exp-concluido').style.display = 'inline-block';
+
+  const log = document.getElementById('lote-log');
+  const exportados = d.exportados_lista || [];
+  const erros      = d.erros_lista || [];
+  const linhas = [
+    ...exportados.slice(-40).map(e => `<span style="color:var(--ok)">✓ ${e.sku}</span> — ${e.nome} — ${moeda(e.preco)} [${e.fonte||'—'}] <button onclick="verificarListing('${e.sku}',this)" style="font-size:10px;padding:1px 6px;margin-left:6px;background:var(--card2);border:1px solid var(--line);border-radius:4px;color:var(--muted);cursor:pointer">🔍 Verificar</button> <span id="status-${e.sku}" style="font-size:10px;color:var(--muted)"></span>`),
+    ...erros.slice(-20).map(e => `<span style="color:var(--danger)">✗ ${e.sku}</span> — ${e.nome} — ${e.erro} <button onclick="verificarListing('${e.sku}',this)" style="font-size:10px;padding:1px 6px;margin-left:6px;background:var(--card2);border:1px solid var(--line);border-radius:4px;color:var(--muted);cursor:pointer">🔍 Verificar</button> <span id="status-${e.sku}" style="font-size:10px;color:var(--muted)"></span>`),
+  ];
+  log.innerHTML = linhas.join('<br>') || '<span style="color:var(--muted)">Aguardando…</span>';
+  log.scrollTop = log.scrollHeight;
+}
+
+async function verificarListing(sku, btn) {
+  const span = document.getElementById('status-' + sku);
+  if (span) span.textContent = '⏳ consultando…';
+  if (btn) btn.disabled = true;
+  try {
+    const d = await fetch(`/amazon/listing/${encodeURIComponent(sku)}/status`).then(r => r.json());
+    if (!span) return;
+    if (d.existe) {
+      const preco = d.preco ? ` · R$ ${d.preco.toFixed(2).replace('.',',')}` : '';
+      const link  = d.url ? ` <a href="${d.url}" target="_blank" style="color:var(--accent)">ver ↗</a>` : '';
+      span.innerHTML = `<span style="color:var(--ok)">✅ na Amazon · ${d.status}${preco}${link}</span>`;
+    } else {
+      span.innerHTML = `<span style="color:var(--warn)">⚠️ ${d.status === 'nao_encontrado' ? 'não encontrado na Amazon' : d.status}</span>`;
+    }
+  } catch(e) {
+    if (span) span.textContent = '❌ erro';
+  }
+  if (btn) btn.disabled = false;
+}
+
+async function retomarCalculo() {
+  const btn = document.getElementById('btn-retomar-calc');
+  if (btn) btn.style.display = 'none';
+  const st = await fetch('/amazon/exportar-lote/status').then(r=>r.json());
+  if (!st.iniciado) return;
+  _previewData = st.previews_lista || [];
+  const total = st.total || 0;
+  _loteRodando = true;
+  calcularPrecosLoop(total);
+}
+
+async function loteReset() {
+  if (!confirm('Limpar toda a sessão de exportação em lote?')) return;
+  _loteRodando = false;
+  _previewData = [];
+  _selecionados = new Set();
+  await fetch('/amazon/exportar-lote/reset', {method:'POST'});
+  mostrarEtapa('config');
+  document.getElementById('lote-coleta-status').style.display = 'none';
+  document.getElementById('lote-calc-pbar').style.width = '0%';
+  document.getElementById('lote-exp-concluido').style.display = 'none';
+}
+// ═════════════════════════════════════════════════════════════════════════════
 </script>
 </body>
 </html>

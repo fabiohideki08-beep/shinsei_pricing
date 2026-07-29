@@ -235,14 +235,26 @@ def carregar_status() -> dict:
 
 # ── Ciclo principal ────────────────────────────────────────────────────────
 
-def executar_ciclo(urls_extras: list[str] = None) -> dict:
+_ultimo_ciclo_data: Optional[object] = None  # date do último ciclo executado
+
+
+def executar_ciclo(urls_extras: list[str] = None, force: bool = False) -> dict:
     """
     Executa um ciclo completo do SCBOT.
     Pode ser chamado manualmente (endpoint) ou pelo scheduler diário.
+    `force=True` pula a verificação de duplicata do dia.
     """
+    global _ultimo_ciclo_data
+    from datetime import date as _date
+
+    hoje = _date.today()
+    if not force and _ultimo_ciclo_data == hoje:
+        logger.info("SCBOT: ciclo já executado hoje (%s) — ignorado", hoje.isoformat())
+        return {"ok": True, "ignorado": True, "motivo": "já executado hoje"}
+    _ultimo_ciclo_data = hoje
     inicio = datetime.now().isoformat()
-    hoje = date.today().weekday()
-    focus_labels = WEEKDAY_FOCUS.get(hoje, [])
+    weekday = date.today().weekday()
+    focus_labels = WEEKDAY_FOCUS.get(weekday, [])
 
     logger.info("SCBOT: iniciando ciclo — foco do dia: %s", focus_labels)
 

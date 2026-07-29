@@ -1,6 +1,6 @@
 /* Calculo de Frete via backend Shinsei — Shinsei Market */
 (function() {
-  var API_URL = 'https://elegant-encouragement-production-6829.up.railway.app/frete/calcular';
+  var API_URL = 'https://shinsei-pricing.onrender.com/frete/calcular';
   var LS_CEP  = 'shinsei_cep';
   var LS_DATA = 'shinsei_frete_cache';
   var CACHE_TTL = 3600 * 1000; // 1 hora
@@ -8,7 +8,7 @@
   /* Valor minimo para frete gratis (regra de negocio client-side)
      O motor de frete no servidor nao usa o parametro valor,
      entao aplicamos o filtro aqui antes de exibir o resultado. */
-  var FRETE_GRATIS_MINIMO = 19.00;
+  var FRETE_GRATIS_MINIMO = 29.90;
 
   /* Cache — chave: CEP + handle (peso varia por produto) */
   function getCache() {
@@ -243,7 +243,7 @@
       // Auto-submete ao completar 8 digitos (9 chars com traco)
       if (this.value.replace(/\D/g, '').length === 8) verificar();
     });
-    input.addEventListener('keydown', function(e) { if (e.key === 'Enter') verificar(); });
+    input.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); verificar(); } });
 
     wrapper.appendChild(input);
   }

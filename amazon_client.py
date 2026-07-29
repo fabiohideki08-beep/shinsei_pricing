@@ -102,7 +102,7 @@ class AmazonClient:
         # includedData=summaries retorna info básica de cada anúncio
         params = {
             "marketplaceIds": self.config["marketplace_id"],
-            "includedData": "summaries",
+            "includedData": "summaries,fulfillmentAvailability",
             "pageSize": 20,  # máximo suportado pela Listings Items API v2021-08-01
         }
         if page_token:

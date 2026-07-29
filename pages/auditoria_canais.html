@@ -109,6 +109,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
   <!-- Legenda -->
   <div class="legend">
     <div class="legend-item"><div class="legend-dot" style="background:var(--critica)"></div><b style="color:var(--text)">Vende sem estoque</b> — Bling=0 mas canal tem estoque ativo</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--critica)"></div><b style="color:var(--text)">Pausado c/ qty residual</b> — Pausado pelo Bling (=0) mas canal exibe qtd residual</div>
     <div class="legend-item"><div class="legend-dot" style="background:var(--alta)"></div><b style="color:var(--text)">Perde venda</b> — Produto ativo no Bling sem anúncio no canal</div>
     <div class="legend-item"><div class="legend-dot" style="background:var(--alta)"></div><b style="color:var(--text)">Sem estoque no canal</b> — Bling tem estoque mas canal mostra 0</div>
     <div class="legend-item"><div class="legend-dot" style="background:var(--media)"></div><b style="color:var(--text)">Anúncio inativo</b> — Pausado, fechado ou arquivado</div>
@@ -134,6 +135,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
     <label>Tipo:</label>
     <button class="fbtn f-tipo" onclick="setFiltro('tipo','',this)">Todos</button>
     <button class="fbtn f-tipo" onclick="setFiltro('tipo','vende_sem_estoque',this)">Vende sem estoque</button>
+    <button class="fbtn f-tipo" onclick="setFiltro('tipo','pausado_qty_residual',this)">Pausado c/ qty residual</button>
     <button class="fbtn f-tipo" onclick="setFiltro('tipo','sem_estoque_canal',this)">Perde venda (estoque)</button>
     <button class="fbtn f-tipo" onclick="setFiltro('tipo','ausente_ativo',this)">Ausente no canal</button>
     <button class="fbtn f-tipo" onclick="setFiltro('tipo','anuncio_inativo',this)">Anúncio inativo</button>
@@ -163,12 +165,13 @@ let _executado_em = null;
 const fmt = n => (n == null) ? '—' : Number(n).toLocaleString('pt-BR');
 
 const TIPO_LABEL = {
-  vende_sem_estoque: '🔴 Vende sem estoque',
-  sem_estoque_canal: '🟡 Sem estoque no canal',
-  ausente_ativo:     '🟡 Ausente no canal',
-  anuncio_inativo:   '🔵 Anúncio inativo',
-  estoque_divergente:'🔵 Estoque divergente',
-  sem_mapeamento:    '🔵 Sem mapeamento',
+  vende_sem_estoque:    '🔴 Vende sem estoque',
+  pausado_qty_residual: '🔴 Pausado c/ qty residual',
+  sem_estoque_canal:    '🟡 Sem estoque no canal',
+  ausente_ativo:        '🟡 Ausente no canal',
+  anuncio_inativo:      '🔵 Anúncio inativo',
+  estoque_divergente:   '🔵 Estoque divergente',
+  sem_mapeamento:       '🔵 Sem mapeamento',
 };
 
 const CANAL_LABEL = {ml:'ML', shopify:'Shopify', amazon:'Amazon', shopee:'Shopee'};

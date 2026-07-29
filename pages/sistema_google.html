@@ -117,10 +117,19 @@ iframe{border:none;width:100%;height:800px;border-radius:16px;border:1px solid v
         </div>
         <div class="secao-actions">
           <button class="btn warn" id="btnScanGMC" onclick="escanearGMC()">Escanear GMC</button>
+          <button class="btn secondary sm" id="btnDiagGMC" onclick="diagnosticarGMC()">🔍 Diagnóstico</button>
           <button class="btn secondary sm" onclick="carregarGMC()">Atualizar</button>
         </div>
       </div>
       <div id="tabela-gmc"><div class="empty">Carregando dados do GMC...</div></div>
+    </div>
+
+    <!-- Painel de diagnóstico GMC (oculto até clicar) -->
+    <div class="secao" id="painel-diag-gmc" style="display:none">
+      <div class="secao-header">
+        <div class="secao-titulo">🩺 Diagnóstico da Conta GMC</div>
+      </div>
+      <div id="diag-gmc-content"><div class="empty">—</div></div>
     </div>
   </div>
 
@@ -139,11 +148,50 @@ iframe{border:none;width:100%;height:800px;border-radius:16px;border:1px solid v
 
   <!-- ABA ADS -->
   <div id="aba-ads" style="display:none">
-    <div class="placeholder-card">
-      <span class="ico">📢</span>
-      <h3>Google Ads</h3>
-      <p>Integração com Google Ads em configuração.<br>Em breve será possível acompanhar campanhas, conversões e ROAS diretamente por aqui.</p>
+
+    <!-- Stats de resumo Ads -->
+    <div class="stats-grid" id="ads-stats-grid">
+      <div class="stat"><div class="label">Campanhas</div><div class="value" id="ads-stat-campanhas"><span class="skel" style="width:40px;height:24px;display:block"></span></div></div>
+      <div class="stat"><div class="label">Custo 30d</div><div class="value warn" id="ads-stat-custo"><span class="skel" style="width:70px;height:24px;display:block"></span></div></div>
+      <div class="stat"><div class="label">Cliques</div><div class="value" id="ads-stat-cliques"><span class="skel" style="width:60px;height:24px;display:block"></span></div></div>
+      <div class="stat"><div class="label">Conversões</div><div class="value ok" id="ads-stat-conv"><span class="skel" style="width:40px;height:24px;display:block"></span></div></div>
+      <div class="stat"><div class="label">CPC Médio</div><div class="value" id="ads-stat-cpc"><span class="skel" style="width:60px;height:24px;display:block"></span></div></div>
+      <div class="stat"><div class="label">ROAS</div><div class="value ok" id="ads-stat-roas"><span class="skel" style="width:40px;height:24px;display:block"></span></div></div>
+      <div class="stat"><div class="label">Custo/Conv</div><div class="value" id="ads-stat-cpa"><span class="skel" style="width:60px;height:24px;display:block"></span></div></div>
+      <div class="stat"><div class="label">Receita Conv</div><div class="value ok" id="ads-stat-receita"><span class="skel" style="width:60px;height:24px;display:block"></span></div></div>
     </div>
+
+    <!-- Campanhas -->
+    <div class="secao">
+      <div class="secao-header">
+        <div class="secao-titulo">📢 Campanhas — últimos 30 dias</div>
+        <div class="secao-actions">
+          <button class="btn warn sm" id="btn-diag-ads" onclick="diagnosticarAds()">🔍 Diagnosticar</button>
+        </div>
+      </div>
+      <div id="tabela-campanhas"><div class="empty">Clique em "Diagnosticar" para carregar dados das campanhas.</div></div>
+    </div>
+
+    <!-- Top Produtos -->
+    <div class="secao">
+      <div class="secao-header">
+        <div class="secao-titulo">🛒 Top 20 Produtos (Shopping/PMax)</div>
+      </div>
+      <div id="tabela-top-produtos"><div class="empty">—</div></div>
+    </div>
+
+    <!-- Conversões + Grupos -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+      <div class="secao">
+        <div class="secao-header"><div class="secao-titulo">🎯 Ações de Conversão</div></div>
+        <div id="tabela-conversoes"><div class="empty">—</div></div>
+      </div>
+      <div class="secao">
+        <div class="secao-header"><div class="secao-titulo">📦 Grupos de Anúncios (top 20)</div></div>
+        <div id="tabela-grupos"><div class="empty">—</div></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -154,6 +202,7 @@ function mudarAba(aba, btn){
   document.getElementById('aba-gmc').style.display = aba==='gmc' ? 'block' : 'none';
   document.getElementById('aba-seo').style.display = aba==='seo' ? 'block' : 'none';
   document.getElementById('aba-ads').style.display = aba==='ads' ? 'block' : 'none';
+  if(aba==='ads' && !_adsDiagLoaded) diagnosticarAds();
 }
 
 function mostrarNotice(msg, tipo){
@@ -231,7 +280,7 @@ async function escanearGMC(){
   btn.disabled=true;
   btn.innerHTML='<span class="spin">⏳</span> Escaneando...';
   try{
-    const res=await fetch('/gmc/scan',{method:'GET'});
+    const res=await fetch('/gmc/scan',{method:'POST'});
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data=await res.json();
     mostrarNotice(
@@ -250,7 +299,292 @@ async function escanearGMC(){
   }
 }
 
+async function diagnosticarGMC(){
+  const btn = document.getElementById('btnDiagGMC');
+  btn.disabled = true; btn.innerHTML = '<span class="spin">⏳</span>';
+  const painel = document.getElementById('painel-diag-gmc');
+  const content = document.getElementById('diag-gmc-content');
+  painel.style.display = 'block';
+  content.innerHTML = '<div class="empty"><span class="spin">⏳</span> Consultando GMC...</div>';
+  try{
+    const res = await fetch('/gmc/diagnostico');
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const d = await res.json();
+
+    const conta   = d.conta || {};
+    const dest    = d.destinos || {};
+    const prods   = d.produtos || {};
+    const probs   = d.problemas || [];
+    const recs    = d.recomendacoes || [];
+
+    // Conta status
+    const contaOk  = conta.ok !== false;
+    const websiteOk = conta.website_claimed === true;
+
+    // Issues da conta
+    const issuesHtml = (conta.issues||[]).map(i=>{
+      const cor = i.severity==='critical'?'#ef4444':i.severity==='error'?'#f59e0b':'var(--muted)';
+      return `<div style="padding:8px 12px;border-left:3px solid ${cor};margin-bottom:6px;background:rgba(255,255,255,.03);border-radius:0 8px 8px 0">
+        <b style="color:${cor}">[${i.severity||'info'}]</b> ${i.title||''}
+        ${i.detail?`<div style="font-size:11px;color:var(--muted);margin-top:3px">${i.detail}</div>`:''}
+        ${i.country?`<span style="font-size:10px;color:var(--muted)"> — país: ${i.country}</span>`:''}
+      </div>`;
+    }).join('') || '<div style="color:#22c55e;font-size:13px">✅ Sem issues na conta</div>';
+
+    // Destinos (tabela de cobertura por destino — contagem da API)
+    const destRows = Object.entries(dest.stats||{}).map(([k,v])=>`<tr>
+      <td>${k}</td>
+      <td style="text-align:center;color:#22c55e">${v.approved||0}</td>
+      <td style="text-align:center;color:#ef4444">${v.disapproved||0}</td>
+      <td style="text-align:center;color:#f59e0b">${v.pending||0}</td>
+      <td style="text-align:center;color:var(--muted)">${v.excluded||0}</td>
+    </tr>`).join('');
+
+    // Problemas detectados
+    const probsHtml = probs.map(p=>{
+      const cor = p.gravidade==='critico'?'#ef4444':'#f59e0b';
+      return `<div style="padding:10px 14px;border-left:4px solid ${cor};margin-bottom:8px;background:rgba(255,255,255,.03);border-radius:0 10px 10px 0">
+        <b style="color:${cor}">⚠️ ${p.titulo||''}</b>
+        ${p.detalhe?`<div style="font-size:12px;color:var(--muted);margin-top:4px">${p.detalhe}</div>`:''}
+      </div>`;
+    }).join('') || '<div style="color:#22c55e;padding:10px">✅ Nenhum problema crítico detectado</div>';
+
+    // Recomendações
+    const recsHtml = recs.map(r=>`<li style="margin-bottom:8px;color:var(--muted);font-size:13px">${r}</li>`).join('');
+
+    // Top issues (códigos mais frequentes)
+    const topIssuesHtml = (d.top_issues||[]).slice(0,10).map(i=>
+      `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line);font-size:12px">
+        <span style="color:var(--muted)">${i.code||'—'}</span>
+        <b>${i.count}</b>
+      </div>`
+    ).join('');
+
+    // Amostra de bloqueados (verdadeiros reprovados)
+    const blocksHtml = (d.amostra_bloqueados||[]).slice(0,10).map(p=>`<tr>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px" title="${p.title||''}">${p.title||'—'}</td>
+      <td style="font-size:11px;color:var(--muted);max-width:180px">${(p.issues||[]).map(i=>i.code||i.desc).join(', ')||'—'}</td>
+    </tr>`).join('');
+
+    content.innerHTML = `
+      <!-- Contagens por produto único — igual ao GMC Next -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+        <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:14px;padding:14px;text-align:center">
+          <div style="font-size:11px;color:var(--muted);font-weight:600">✅ APROVADO</div>
+          <div style="font-size:28px;font-weight:800;color:#22c55e;margin-top:4px">${(prods.aprovado||0).toLocaleString('pt-BR')}</div>
+        </div>
+        <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:14px;padding:14px;text-align:center">
+          <div style="font-size:11px;color:var(--muted);font-weight:600">⚠️ LIMITADO</div>
+          <div style="font-size:28px;font-weight:800;color:#f59e0b;margin-top:4px">${(prods.limitado||0).toLocaleString('pt-BR')}</div>
+        </div>
+        <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:14px;padding:14px;text-align:center">
+          <div style="font-size:11px;color:var(--muted);font-weight:600">❌ REPROVADO</div>
+          <div style="font-size:28px;font-weight:800;color:#ef4444;margin-top:4px">${(prods.reprovado||0).toLocaleString('pt-BR')}</div>
+        </div>
+        <div style="background:rgba(79,140,255,.08);border:1px solid rgba(79,140,255,.2);border-radius:14px;padding:14px;text-align:center">
+          <div style="font-size:11px;color:var(--muted);font-weight:600">⏳ EM ANÁLISE</div>
+          <div style="font-size:28px;font-weight:800;color:#4f8cff;margin-top:4px">${(prods.em_analise||0).toLocaleString('pt-BR')}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Google em revisão</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:18px;padding:8px 12px;background:rgba(79,140,255,.06);border-radius:8px;border:1px solid rgba(79,140,255,.15)">
+        ℹ️ <b>Alinhado ao GMC Next</b> — contagem por produto único. "Em análise" = sem aprovação mas sem issues bloqueantes (Google atualizando automaticamente). Total na API: <b>${d.total_api||0}</b> produtos. ${d.nota_total||''}
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px">
+        <div>
+          <b style="font-size:13px;color:var(--muted)">Status da Conta</b>
+          <div style="margin-top:8px;font-size:22px;font-weight:800;color:${contaOk?'#22c55e':'#ef4444'}">${contaOk?'✅ OK':'❌ Com problemas'}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">Website verificado: ${websiteOk?'✅ Sim':'⚠️ Não'}</div>
+          <div style="font-size:12px;color:var(--muted)">Merchant ID: ${d.merchant_id||'—'}</div>
+          <div style="font-size:13px;margin-top:8px">🆓 Free Listings aprovados: <b style="color:#4f8cff">${dest.aprovados_free_listings||0}</b></div>
+          <div style="font-size:13px">🛒 Shopping paid aprovados: <b style="color:#22c55e">${dest.aprovados_paid_shopping||0}</b></div>
+        </div>
+        <div>
+          <b style="font-size:13px;color:var(--muted)">Issues da Conta</b>
+          <div style="margin-top:8px">${issuesHtml}</div>
+        </div>
+      </div>
+
+      <b style="font-size:13px;color:var(--muted)">Problemas Detectados</b>
+      <div style="margin:8px 0 16px">${probsHtml}</div>
+
+      ${recsHtml?`<b style="font-size:13px;color:var(--muted)">Recomendações</b><ul style="margin:8px 0 16px;padding-left:20px">${recsHtml}</ul>`:''}
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+        ${topIssuesHtml?`<div>
+          <b style="font-size:13px;color:var(--muted)">Top Issues (todos os produtos)</b>
+          <div style="margin-top:8px">${topIssuesHtml}</div>
+        </div>`:''}
+        ${blocksHtml?`<div>
+          <b style="font-size:13px;color:var(--muted)">Amostra — Produtos Reprovados</b>
+          <div class="table-wrap" style="margin-top:8px"><table>
+            <thead><tr><th>Produto</th><th>Issue</th></tr></thead>
+            <tbody>${blocksHtml}</tbody>
+          </table></div>
+        </div>`:''}
+      </div>
+
+      ${destRows?`<b style="font-size:13px;color:var(--muted);display:block;margin-top:18px">Cobertura por Destino (nível da API)</b>
+      <div class="table-wrap" style="margin-top:8px"><table>
+        <thead><tr><th>Destino</th><th style="text-align:center">Aprovados</th><th style="text-align:center">Reprovados¹</th><th style="text-align:center">Pendentes</th><th style="text-align:center">Excluídos</th></tr></thead>
+        <tbody>${destRows}</tbody>
+      </table>
+      <div style="font-size:10px;color:var(--muted);padding:6px 12px">¹ Inclui produtos "Em análise" — o GMC Next mostra esses separadamente</div>
+      </div>`:''}
+    `;
+    mostrarNotice('Diagnóstico GMC concluído','ok');
+  }catch(e){
+    content.innerHTML = `<div class="empty" style="color:#fca5a5">❌ ${e.message}</div>`;
+    mostrarNotice('Erro no diagnóstico GMC: '+e.message,'err');
+  }finally{
+    btn.disabled=false; btn.innerHTML='🔍 Diagnóstico';
+  }
+}
+
 Promise.all([carregarStats(), carregarGMC()]);
+
+// ── Google Ads Diagnostics ────────────────────────────────────────────────────
+let _adsDiagLoaded = false;
+
+function fmtR(v){ return v!=null?'R$'+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'; }
+function fmtN(v){ return v!=null?Number(v).toLocaleString('pt-BR'):'—'; }
+
+async function diagnosticarAds(){
+  const btn = document.getElementById('btn-diag-ads');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin">⏳</span> Consultando...';
+  ['tabela-campanhas','tabela-top-produtos','tabela-conversoes','tabela-grupos'].forEach(id=>{
+    document.getElementById(id).innerHTML = '<div class="empty"><span class="spin">⏳</span> Carregando...</div>';
+  });
+
+  try{
+    const res = await fetch('/ads/diagnostico');
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const d = await res.json();
+
+    if(!d.ok){
+      mostrarNotice('Erro Google Ads: '+(d.erro||'desconhecido'),'err');
+      ['tabela-campanhas','tabela-top-produtos','tabela-conversoes','tabela-grupos'].forEach(id=>{
+        document.getElementById(id).innerHTML = `<div class="empty" style="color:#fca5a5">❌ ${d.erro||'Credenciais inválidas'}</div>`;
+      });
+      return;
+    }
+
+    _adsDiagLoaded = true;
+
+    // Stats resumo
+    const r = d.resumo || {};
+    document.getElementById('ads-stat-campanhas').textContent = fmtN(r.total_campanhas);
+    document.getElementById('ads-stat-custo').textContent     = fmtR(r.total_custo);
+    document.getElementById('ads-stat-cliques').textContent   = fmtN(r.total_cliques);
+    document.getElementById('ads-stat-conv').textContent      = fmtN(r.total_conversoes);
+    document.getElementById('ads-stat-cpc').textContent       = fmtR(r.cpc_medio);
+    document.getElementById('ads-stat-roas').textContent      = r.roas ? r.roas+'x' : '—';
+    document.getElementById('ads-stat-cpa').textContent       = fmtR(r.custo_por_conv);
+    document.getElementById('ads-stat-receita').textContent   = fmtR(r.total_conv_valor);
+
+    // Campanhas
+    const camp = d.campanhas || [];
+    if(camp.length){
+      const STATUS_COLOR = {ENABLED:'#22c55e',PAUSED:'#f59e0b',REMOVED:'#ef4444'};
+      const rows = camp.map(c=>{
+        const cor = STATUS_COLOR[c.status]||'var(--muted)';
+        const roas = c.conv_valor && c.custo ? (c.conv_valor/c.custo).toFixed(2)+'x' : '—';
+        return `<tr>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.nome}">${c.nome}</td>
+          <td><span style="font-size:11px;font-weight:700;color:${cor}">${c.status}</span></td>
+          <td style="font-size:11px;color:var(--muted)">${c.tipo}</td>
+          <td style="text-align:right">${fmtR(c.orc_dia)}</td>
+          <td style="text-align:right;font-weight:700">${fmtR(c.custo)}</td>
+          <td style="text-align:right">${fmtN(c.impressoes)}</td>
+          <td style="text-align:right">${fmtN(c.cliques)}</td>
+          <td style="text-align:right">${c.ctr}%</td>
+          <td style="text-align:right">${fmtR(c.cpc)}</td>
+          <td style="text-align:right;color:var(--ok)">${c.conversoes}</td>
+          <td style="text-align:right">${roas}</td>
+        </tr>`;
+      }).join('');
+      document.getElementById('tabela-campanhas').innerHTML = `<div class="table-wrap"><table>
+        <thead><tr><th>Campanha</th><th>Status</th><th>Tipo</th><th style="text-align:right">Orç/dia</th><th style="text-align:right">Custo</th><th style="text-align:right">Impr</th><th style="text-align:right">Cliques</th><th style="text-align:right">CTR</th><th style="text-align:right">CPC</th><th style="text-align:right">Conv</th><th style="text-align:right">ROAS</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>`;
+    } else {
+      document.getElementById('tabela-campanhas').innerHTML = '<div class="empty">Nenhuma campanha encontrada.</div>';
+    }
+
+    // Top Produtos
+    const prods = d.top_produtos || [];
+    if(prods.length){
+      const rows2 = prods.map(p=>`<tr>
+        <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.titulo}">${p.titulo||p.item_id||'—'}</td>
+        <td style="font-size:11px;color:var(--muted)">${p.item_id||'—'}</td>
+        <td style="text-align:right;font-weight:700">${fmtR(p.custo)}</td>
+        <td style="text-align:right">${fmtN(p.impressoes)}</td>
+        <td style="text-align:right">${fmtN(p.cliques)}</td>
+        <td style="text-align:right">${p.ctr}%</td>
+        <td style="text-align:right;color:var(--ok)">${p.conversoes}</td>
+      </tr>`).join('');
+      document.getElementById('tabela-top-produtos').innerHTML = `<div class="table-wrap"><table>
+        <thead><tr><th>Produto</th><th>Item ID</th><th style="text-align:right">Custo</th><th style="text-align:right">Impr</th><th style="text-align:right">Cliques</th><th style="text-align:right">CTR</th><th style="text-align:right">Conv</th></tr></thead>
+        <tbody>${rows2}</tbody>
+      </table></div>`;
+    } else {
+      document.getElementById('tabela-top-produtos').innerHTML = '<div class="empty">Nenhum produto com impressões no período.</div>';
+    }
+
+    // Conversões
+    const convs = d.conversoes || [];
+    if(convs.length){
+      const rows3 = convs.map(cv=>{
+        const cor = cv.status==='ENABLED'?'#22c55e':cv.status==='PAUSED'?'#f59e0b':'var(--muted)';
+        return `<tr>
+          <td style="font-weight:600">${cv.nome||'—'}</td>
+          <td><span style="color:${cor};font-size:11px;font-weight:700">${cv.status}</span></td>
+          <td style="font-size:11px;color:var(--muted)">${cv.cat||'—'}</td>
+          <td style="text-align:right;font-size:11px">${cv.janela}d</td>
+        </tr>`;
+      }).join('');
+      document.getElementById('tabela-conversoes').innerHTML = `<div class="table-wrap"><table>
+        <thead><tr><th>Ação</th><th>Status</th><th>Categoria</th><th style="text-align:right">Janela</th></tr></thead>
+        <tbody>${rows3}</tbody>
+      </table></div>`;
+    } else {
+      document.getElementById('tabela-conversoes').innerHTML = '<div class="empty" style="color:#fca5a5">⚠️ Nenhuma conversão configurada!</div>';
+    }
+
+    // Grupos
+    const grupos = d.grupos || [];
+    if(grupos.length){
+      const rows4 = grupos.map(g=>{
+        const cor = g.status==='ENABLED'?'#22c55e':g.status==='PAUSED'?'#f59e0b':'var(--muted)';
+        return `<tr>
+          <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--muted)">${g.campanha||'—'}</td>
+          <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.grupo||'—'}</td>
+          <td><span style="color:${cor};font-size:11px;font-weight:700">${g.status}</span></td>
+          <td style="text-align:right;font-weight:700">${fmtR(g.custo)}</td>
+          <td style="text-align:right">${fmtN(g.cliques)}</td>
+          <td style="text-align:right;color:var(--ok)">${g.conversoes}</td>
+        </tr>`;
+      }).join('');
+      document.getElementById('tabela-grupos').innerHTML = `<div class="table-wrap"><table>
+        <thead><tr><th>Campanha</th><th>Grupo</th><th>Status</th><th style="text-align:right">Custo</th><th style="text-align:right">Cliques</th><th style="text-align:right">Conv</th></tr></thead>
+        <tbody>${rows4}</tbody>
+      </table></div>`;
+    } else {
+      document.getElementById('tabela-grupos').innerHTML = '<div class="empty">Nenhum grupo com impressões.</div>';
+    }
+
+    mostrarNotice(`Google Ads carregado: ${camp.length} campanhas, custo 30d ${fmtR(r.total_custo)}`, 'ok');
+
+  }catch(e){
+    mostrarNotice('Erro ao carregar Google Ads: '+e.message,'err');
+    document.getElementById('tabela-campanhas').innerHTML = `<div class="empty" style="color:#fca5a5">❌ ${e.message}</div>`;
+  }finally{
+    btn.disabled = false;
+    btn.innerHTML = '🔍 Diagnosticar';
+  }
+}
 </script>
 
 <!-- Botão Início -->

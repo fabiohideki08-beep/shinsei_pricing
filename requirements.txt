@@ -14,10 +14,12 @@ python-multipart>=0.0.9  # FastAPI form data / file uploads (UploadFile, File)
 # ── Dados ─────────────────────────────────────────────────────
 openpyxl>=3.1.2          # importação de regras via Excel
 
-# ── Google APIs (GMC — Content API for Shopping) ──────────────
+# ── Google APIs (GMC — Content API for Shopping + Secret Manager + Ads) ──────
 google-api-python-client>=2.130.0
 google-auth>=2.29.0
 google-auth-httplib2>=0.2.0
+google-cloud-secret-manager>=2.20.0
+google-ads>=25.0.0
 
 # ── Dev / Testes ──────────────────────────────────────────────
 # Instale separado em CI: pip install pytest pytest-cov

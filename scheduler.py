@@ -1,4 +1,4 @@
-﻿"""
+"""
 
 scheduler.py — Shinsei Pricing
 
@@ -457,7 +457,7 @@ def _ciclo_atualizacao() -> dict:
                         "status": "incompleto",
                         "campos_faltando": ["peso"] if erro_codigo == "peso_ausente" else ["custo", "composicao"] if erro_codigo == "composicao_sem_custo" else ["custo"] if erro_codigo == "custo_ausente" else [],
                         "sku": sku,
-                        "nome": resultado.get("acao", sku),
+                        "nome": produto.get("nome") or resultado.get("acao", sku),
                         "criado_em": _agora,
                         "atualizado_em": _agora,
                         "marketplaces": {},
@@ -465,10 +465,11 @@ def _ciclo_atualizacao() -> dict:
                         "payload_original": {"origem": "scheduler", "modo_aprovacao": modo_aprovacao},
                         "historico_decisao": [],
                         "resultado_aplicacao": None,
+                        "formato": produto.get("formato", ""),
                         "dados_incompletos": {
                             "peso_ausente": erro_codigo == "peso_ausente",
                             "custo_ausente": erro_codigo in ("custo_ausente", "composicao_sem_custo"),
-                            "composicao": erro_codigo == "composicao_sem_custo",
+                            "composicao": erro_codigo == "composicao_sem_custo" or produto.get("formato") == "E",
                             "erro": resultado.get("erro"),
                             "componentes_sem_custo": resultado.get("custo_extraido", {}).get("componentes", []) if erro_codigo == "composicao_sem_custo" else [],
                         }
@@ -612,6 +613,97 @@ _stop_event = threading.Event()
 _INTERVALO_LIMPEZA_KITS = int(os.getenv("INTERVALO_LIMPEZA_KITS", str(7 * 24 * 3600)))
 _ultima_limpeza_kits: Optional[float] = None
 
+# Intervalo para sync da coleção de descontos (padrão: 1 hora)
+_INTERVALO_SYNC_DESCONTOS = int(os.getenv("INTERVALO_SYNC_DESCONTOS", str(3600)))
+_ultima_sync_descontos: Optional[float] = None
+
+# Intervalo para sync de estoque Amazon (padrão: 2 horas)
+
+# Intervalo para scan GMC (padrão: 15 minutos)
+# Qualquer produto bloqueado no Shopping é removido automaticamente após cada scan.
+# Intervalo curto = janela mínima de exposição de produtos problemáticos.
+_INTERVALO_GMC_SCAN = int(os.getenv("INTERVALO_GMC_SCAN", str(900)))
+_ultima_gmc_scan: Optional[float] = None
+
+# Controle SCBOT (executa às 09:00, via scheduler para sobreviver idle do Cloud Run)
+_ultimo_dia_scbot: Optional[object] = None
+_ultimo_dia_sort: Optional[object] = None
+
+# Controle do refresh do cache de produtos Shopify (executa às 06:00, diário)
+_ultimo_dia_cache_produtos: Optional[object] = None
+
+
+def _ciclo_gmc_scan() -> None:
+    """
+    Scan periódico (15 min) do Google Merchant Center.
+    Todo produto que bloqueia exibição no Shopping é removido imediatamente
+    e enviado à fila de correção (via _auto_delete_after_scan).
+    O resultado é persistido em JSON para que a UI mostre o status mesmo
+    em caso de troca de instância no Cloud Run.
+    """
+    global _ultima_gmc_scan
+
+    agora = time.time()
+    if _ultima_gmc_scan and (agora - _ultima_gmc_scan) < _INTERVALO_GMC_SCAN:
+        return
+
+    logger.info("[GMC] Iniciando scan automático (intervalo=%ds)...", _INTERVALO_GMC_SCAN)
+    try:
+        from routes.gmc import _scan_gmc, _auto_delete_after_scan, _save_scan_status
+        resultado = _scan_gmc()
+        deleted = _auto_delete_after_scan(resultado)
+        ok_count   = sum(1 for d in deleted if d.get("ok"))
+        fail_count = len(deleted) - ok_count
+        blocked    = len(resultado.get("disapproved", [])) + sum(
+            1 for p in resultado.get("limited", [])
+            if any(
+                d.get("destination","") in ("Shopping","Shopping ads","SurfacesAcrossGoogle")
+                and d.get("status") in ("disapproved","excluded")
+                for d in p.get("destinations", [])
+            )
+        )
+        _ultima_gmc_scan = agora
+        logger.info(
+            "[GMC] Scan concluído — %d escaneados | %d bloqueados detectados | %d removidos | %d falhas",
+            resultado.get("total_scanned", 0), blocked, ok_count, fail_count,
+        )
+        # Persiste metadados para a UI ler mesmo em instâncias diferentes
+        _save_scan_status({
+            "last_scan_at":      datetime.utcnow().isoformat(),
+            "next_scan_in_s":    _INTERVALO_GMC_SCAN,
+            "total_scanned":     resultado.get("total_scanned", 0),
+            "blocked_detected":  blocked,
+            "removed_ok":        ok_count,
+            "removed_fail":      fail_count,
+            "interval_s":        _INTERVALO_GMC_SCAN,
+        })
+    except Exception as e:
+        logger.exception("[GMC] Erro no scan automático: %s", e)
+        _ultima_gmc_scan = agora  # evita loop de retentativas
+
+
+def _ciclo_sync_descontos() -> None:
+    """Sincroniza a coleção 'Descontos acima de 50%' a cada hora."""
+    global _ultima_sync_descontos
+
+    agora = time.time()
+    if _ultima_sync_descontos and (agora - _ultima_sync_descontos) < _INTERVALO_SYNC_DESCONTOS:
+        return
+
+    logger.info("[DESCONTOS] Iniciando sync da coleção de descontos...")
+    try:
+        from routes.sync_descontos import sync
+        result = sync()
+        logger.info(
+            "[DESCONTOS] Sync concluído — adicionados: %d | removidos: %d | total: %d",
+            result.get("added", 0), result.get("removed", 0), result.get("total", 0),
+        )
+        _ultima_sync_descontos = agora
+    except Exception as e:
+        logger.exception("[DESCONTOS] Erro no sync: %s", e)
+        _ultima_sync_descontos = agora
+
+
 
 def _ciclo_limpeza_kits() -> None:
     """
@@ -641,12 +733,130 @@ def _ciclo_limpeza_kits() -> None:
 
 
 
+def _ciclo_scbot() -> None:
+    """
+    Executa o SCBOT (Google Indexing API) às 09:00 e ordena coleções às 04:00.
+    Chamado a cada ciclo do scheduler (300s) para compensar idle kills do Cloud Run.
+    """
+    global _ultimo_dia_scbot, _ultimo_dia_sort
+    from datetime import date as _date
+
+    agora = datetime.now()
+    hoje = agora.date()
+
+    # Sort collections às 04:00
+    if agora.hour == 4 and _ultimo_dia_sort != hoje:
+        logger.info("[SCBOT] Disparando sort_collections_by_stock — %s", hoje.isoformat())
+        try:
+            from seo_sort_collections import sort_collections_by_stock
+            sort_collections_by_stock()
+        except Exception as e:
+            logger.error("[SCBOT] Erro no sort_collections: %s", e)
+        _ultimo_dia_sort = hoje
+
+    # Indexação Google às 09:00
+    if agora.hour == 9 and _ultimo_dia_scbot != hoje:
+        logger.info("[SCBOT] Disparando ciclo diário de indexação — %s", hoje.isoformat())
+        try:
+            from scbot import executar_ciclo
+            executar_ciclo()
+        except Exception as e:
+            logger.error("[SCBOT] Erro no ciclo diário: %s", e)
+        _ultimo_dia_scbot = hoje
+
+
+def _ciclo_refresh_cache_produtos() -> None:
+    """
+    Atualiza data/all_products_cache.json às 06:00 diariamente, incluindo o campo handle.
+    Sem handle, o SCBOT só envia 13 URLs (páginas fixas) em vez de até 200.
+    """
+    global _ultimo_dia_cache_produtos
+    from datetime import date as _date
+
+    agora = datetime.now()
+    hoje = agora.date()
+
+    if agora.hour != 6 or _ultimo_dia_cache_produtos == hoje:
+        return
+
+    logger.info("[CACHE-PRODUTOS] Iniciando refresh do cache Shopify (com handle)...")
+    try:
+        import requests as _req
+        import json as _json
+
+        cfg_path = BASE_DIR / "data" / "shopify_config.json"
+        if not cfg_path.exists():
+            logger.warning("[CACHE-PRODUTOS] shopify_config.json não encontrado — skip")
+            return
+
+        cfg = _json.loads(cfg_path.read_text(encoding="utf-8"))
+        token = cfg.get("access_token") or cfg.get("token", "")
+        shop = cfg.get("shop_url") or cfg.get("myshopify_domain") or cfg.get("shop", "")
+        if shop and "." not in shop:
+            shop = f"{shop}.myshopify.com"
+        if not token or not shop:
+            logger.warning("[CACHE-PRODUTOS] Credenciais Shopify ausentes — skip")
+            return
+
+        headers = {"X-Shopify-Access-Token": token, "Content-Type": "application/json"}
+        base_url = f"https://{shop}/admin/api/2024-01/products.json"
+        produtos: list[dict] = []
+        page_info = None
+
+        while True:
+            params: dict = {
+                "limit": 250,
+                "fields": "id,title,handle,vendor,product_type,variants",
+                "status": "active",
+            }
+            if page_info:
+                params = {"limit": 250, "page_info": page_info}
+
+            r = _req.get(base_url, headers=headers, params=params, timeout=60)
+            if r.status_code != 200:
+                logger.error("[CACHE-PRODUTOS] Shopify retornou %d: %s", r.status_code, r.text[:200])
+                break
+
+            batch = r.json().get("products", [])
+            produtos.extend(batch)
+
+            link = r.headers.get("Link", "")
+            page_info = None
+            if 'rel="next"' in link:
+                import re as _re
+                m = _re.search(r'<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"', link)
+                if m:
+                    page_info = m.group(1)
+            if not page_info:
+                break
+
+        cache_path = BASE_DIR / "data" / "all_products_cache.json"
+        cache_path.write_text(
+            _json.dumps(produtos, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        logger.info("[CACHE-PRODUTOS] Cache atualizado: %d produtos com handle", len(produtos))
+        _ultimo_dia_cache_produtos = hoje
+
+    except Exception as e:
+        logger.exception("[CACHE-PRODUTOS] Erro ao atualizar cache: %s", e)
+        _ultimo_dia_cache_produtos = hoje  # evita loop de retentativas
+
+
 def _loop():
 
     logger.info("Scheduler iniciado (intervalo: %ds)", _intervalo())
 
     while not _stop_event.is_set():
 
+        # ── PRIORIDADE 1: GMC scan — roda primeiro para garantir que o catálogo
+        # esteja limpo o mais rápido possível após cada reinicialização/deploy.
+        # Na primeira iteração _ultima_gmc_scan=None → roda imediatamente.
+        try:
+            _ciclo_gmc_scan()
+        except Exception as e:
+            logger.exception("Erro no ciclo de scan GMC: %s", e)
+
+        # ── Atualização de preços (Bling → fila de aprovação)
         try:
 
             _ciclo_atualizacao()
@@ -660,6 +870,24 @@ def _loop():
             _ciclo_limpeza_kits()
         except Exception as e:
             logger.exception("Erro no ciclo de limpeza de kits: %s", e)
+
+        # Sync da coleção "Descontos acima de 50%" (a cada hora)
+        try:
+            _ciclo_sync_descontos()
+        except Exception as e:
+            logger.exception("Erro no sync de descontos: %s", e)
+
+        # Refresh do cache de produtos Shopify às 06:00 (necessário para o SCBOT)
+        try:
+            _ciclo_refresh_cache_produtos()
+        except Exception as e:
+            logger.exception("Erro no refresh do cache de produtos: %s", e)
+
+        # SCBOT: indexação Google às 09:00, sort collections às 04:00
+        try:
+            _ciclo_scbot()
+        except Exception as e:
+            logger.exception("Erro no ciclo SCBOT: %s", e)
 
         # Aguarda o intervalo em fatias de 5s para poder parar rapidamente
 

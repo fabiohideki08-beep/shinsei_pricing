@@ -221,6 +221,20 @@
         </div>
         <label class="switch"><input type="checkbox" id="cfg_ml_api_real"><span class="slider"></span></label>
       </div>
+      <div class="toggle-row" style="border-top:1px solid var(--line);margin-top:4px;padding-top:14px">
+        <div class="toggle-info">
+          <div class="nome">Usar taxas Amazon em tempo real</div>
+          <div class="desc">Busca referral fee e closing fee reais via SP-API (Product Fees API) por produto.</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="cfg_amazon_api_real" checked><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row" style="border-top:1px solid var(--line);margin-top:4px;padding-top:14px">
+        <div class="toggle-info">
+          <div class="nome">Usar taxas Shopee em tempo real</div>
+          <div class="desc">Usa dados de pedidos reais da Shopee para calcular taxa de comissão efetiva.</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="cfg_shopee_api_real" checked><span class="slider"></span></label>
+      </div>
     <!-- TAB: GORDURA POR CANAL -->
   <div id="tab-gordura" class="tab-content" style="display:none">
     <div class="card">
@@ -583,6 +597,8 @@ async function carregarConfig() {
     if (data.fila_auto_ao_calcular !== undefined) document.getElementById('cfg_fila_auto').checked = data.fila_auto_ao_calcular;
     if (data.embalagem_padrao !== undefined) document.getElementById('cfg_embalagem').value = data.embalagem_padrao;
     if (data.ml_api_real !== undefined && document.getElementById('cfg_ml_api_real')) document.getElementById('cfg_ml_api_real').checked = data.ml_api_real;
+    if (data.amazon_api_real !== undefined && document.getElementById('cfg_amazon_api_real')) document.getElementById('cfg_amazon_api_real').checked = data.amazon_api_real;
+    if (data.shopee_api_real !== undefined && document.getElementById('cfg_shopee_api_real')) document.getElementById('cfg_shopee_api_real').checked = data.shopee_api_real;
     if (data.gordura_por_canal) cfg.gordura_por_canal = data.gordura_por_canal;
     if (data.forcas_canais) cfg.forcas_canais = {...cfg.forcas_canais, ...data.forcas_canais};
     if (data.peso_forca !== undefined) { document.getElementById('peso_forca').value = data.peso_forca; cfg.peso_forca = data.peso_forca; }
@@ -629,6 +645,8 @@ function coletarConfig() {
     fila_auto_ao_calcular: document.getElementById('cfg_fila_auto').checked,
     embalagem_padrao: parseFloat(document.getElementById('cfg_embalagem').value) || 0,
     ml_api_real: document.getElementById('cfg_ml_api_real')?.checked || false,
+    amazon_api_real: document.getElementById('cfg_amazon_api_real')?.checked ?? true,
+    shopee_api_real: document.getElementById('cfg_shopee_api_real')?.checked ?? true,
     gordura_por_canal: cfg.gordura_por_canal,
     forcas_canais: cfg.forcas_canais,
     peso_forca: parseFloat(document.getElementById('peso_forca').value)||0.4,

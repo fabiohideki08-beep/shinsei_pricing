@@ -22,5 +22,21 @@
     "estoque": -1,
     "detectado_em": "2026-04-09T03:19:59.624374",
     "status": "pendente"
+  },
+  {
+    "id": "neg_7898357412569_20260501223626",
+    "sku": "7898357412569",
+    "nome": "Triskle Mais Q Onda Crespas - Creme Modelador 300ml",
+    "estoque": -1,
+    "detectado_em": "2026-05-01T22:36:26.426638",
+    "status": "pendente"
+  },
+  {
+    "id": "neg_790848_20260501223704",
+    "sku": "790848",
+    "nome": "Kit Eico Shampoo 800ml + Condicionador 450ml. Escolha o seu. Fragrância:Mandioca",
+    "estoque": -1,
+    "detectado_em": "2026-05-01T22:37:04.837479",
+    "status": "pendente"
   }
 ]

@@ -51,6 +51,16 @@ def _salvar_tokens(tokens: dict) -> None:
     _TOKENS_PATH.write_text(
         json.dumps(tokens, indent=2, ensure_ascii=False), encoding="utf-8"
     )
+    # Persiste no Secret Manager para sobreviver a deploys/reinícios
+    try:
+        from token_persistence import save_shopee_tokens
+        save_shopee_tokens(
+            tokens.get("access_token", ""),
+            tokens.get("refresh_token", ""),
+            int(tokens.get("shop_id", 0)),
+        )
+    except Exception as _e:
+        logger.warning("Shopee: falha ao salvar no Secret Manager: %s", _e)
 
 
 def _carregar_tokens() -> dict | None:
@@ -215,6 +225,20 @@ class ShopeeOAuthService:
         }
 
 
+# ── Auto-refresh do token Shopee ─────────────────────────────────────────────
+
+def obter_token_shopee() -> str:
+    """Retorna access_token Shopee válido, renovando automaticamente se necessário."""
+    if not token_expirado():
+        t = _carregar_tokens()
+        if t and t.get("access_token"):
+            return t["access_token"]
+    result = ShopeeOAuthService().renovar_token()
+    if not result.get("success"):
+        raise RuntimeError(f"Shopee token refresh falhou: {result.get('error')}")
+    return result["data"]["access_token"]
+
+
 # ── Shopee API Service ────────────────────────────────────────────────────────
 
 class ShopeeService:
@@ -237,6 +261,96 @@ class ShopeeService:
             "sign":         _assinar(path, ts, self.access_token, self.shop_id),
             "access_token": self.access_token,
             "shop_id":      self.shop_id,
+        }
+
+    def obter_item_completo(self, item_id: int) -> dict:
+        """
+        Busca detalhes completos de um item + modelos (variações) da Shopee.
+        Retorna estrutura pronta para exibição/importação no Bling.
+        """
+        item_id = int(item_id)
+
+        # ── 1. Informações base do item ───────────────────────────────────────
+        path_info = "/api/v2/product/get_item_base_info"
+        params_info = self._params_auth(path_info)
+        params_info["item_id_list"] = str(item_id)
+        params_info["need_tax_info"] = "false"
+        params_info["need_complaint_policy"] = "false"
+
+        # ── 2. Modelos (variações) ─────────────────────────────────────────────
+        path_models = "/api/v2/product/get_model_list"
+        params_models = self._params_auth(path_models)
+        params_models["item_id"] = item_id
+
+        try:
+            with httpx.Client(timeout=20) as client:
+                r_info   = client.get(f"{API_BASE}/product/get_item_base_info",   params=params_info)
+                r_models = client.get(f"{API_BASE}/product/get_model_list", params=params_models)
+        except Exception as exc:
+            logger.error("Shopee obter_item_completo erro HTTP: %s", exc)
+            return {"error": str(exc)}
+
+        # ── Processa item base ─────────────────────────────────────────────────
+        info_data = r_info.json()
+        if info_data.get("error"):
+            return {"error": info_data.get("message", info_data["error"])}
+
+        item_list = (info_data.get("response") or {}).get("item_list") or []
+        if not item_list:
+            return {"error": f"Item {item_id} não encontrado na Shopee."}
+        item = item_list[0]
+
+        nome      = item.get("item_name", "")
+        sku_pai   = item.get("item_sku", "")
+        has_model = item.get("has_model", False)
+
+        # Preço: pega o current_price da lista price_info
+        preco = 0.0
+        for pi in (item.get("price_info") or []):
+            if pi.get("price_type") in ("NORMAL", ""):
+                preco = float(pi.get("current_price") or pi.get("original_price") or 0)
+                break
+
+        # Estoque total do item (sem variações)
+        estoque_total = 0
+        for si in (item.get("stock_info") or []):
+            if si.get("stock_type") == 1:
+                estoque_total += int(si.get("current_stock") or 0)
+
+        # ── Processa modelos (variações) ───────────────────────────────────────
+        models_data = r_models.json()
+        modelos = []
+        if not models_data.get("error"):
+            for m in ((models_data.get("response") or {}).get("model") or []):
+                m_preco = 0.0
+                for pi in (m.get("price_info") or []):
+                    if pi.get("price_type") in ("NORMAL", ""):
+                        m_preco = float(pi.get("current_price") or pi.get("original_price") or 0)
+                        break
+                if not m_preco:
+                    m_preco = preco
+
+                m_estoque = 0
+                for si in (m.get("stock_info") or []):
+                    if si.get("stock_type") == 1:
+                        m_estoque += int(si.get("current_stock") or 0)
+
+                modelos.append({
+                    "model_id":   m.get("model_id"),
+                    "nome":       m.get("model_name", ""),
+                    "sku":        m.get("model_sku", "") or "",   # vazio = sem SKU
+                    "preco":      round(m_preco, 2),
+                    "estoque":    m_estoque,
+                })
+
+        return {
+            "item_id":    item_id,
+            "nome":       nome,
+            "sku_pai":    sku_pai,
+            "preco":      round(preco, 2),
+            "estoque":    estoque_total,
+            "has_model":  has_model,
+            "modelos":    modelos,
         }
 
     def atualizar_preco(self, item_id: str | int, preco: float) -> dict:
@@ -285,11 +399,11 @@ class ShopeeService:
                 time.sleep(1)
         return {"success": False, "error": f"Falhou após {tentativas} tentativas: {ultimo_erro}"}
 
-    def listar_produtos(self, offset: int = 0, page_size: int = 50) -> dict:
-        """Lista produtos ativos da loja."""
+    def listar_produtos(self, offset: int = 0, page_size: int = 50, item_status: str = "NORMAL") -> dict:
+        """Lista produtos da loja. item_status: NORMAL | UNLIST | BANNED | DELETED"""
         path = "/api/v2/product/get_item_list"
         params = self._params_auth(path)
-        params.update({"offset": offset, "page_size": page_size, "item_status": "NORMAL"})
+        params.update({"offset": offset, "page_size": page_size, "item_status": item_status})
         try:
             with httpx.Client(timeout=20) as client:
                 resp = client.get(f"{API_BASE}/product/get_item_list", params=params)

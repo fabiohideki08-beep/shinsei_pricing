@@ -814,7 +814,7 @@ def executar_conferencia(bling_client) -> dict:
         skus_ml,      sem_sku_ml,     ml_ok      = _get(_fut_ml,      450, ({}, [], False), "ML")
         skus_shopify, shopify_ok               = _get(_fut_shopify, 180, ({}, False),      "Shopify")
         skus_amazon,  amazon_ok               = _get(_fut_amazon,  120, ({}, False),      "Amazon")
-        skus_shopee,  sem_sku_shopee, shopee_ok = _get(_fut_shopee,  480, ({}, [], False), "Shopee")
+        skus_shopee,  sem_sku_shopee, shopee_ok = _get(_fut_shopee,  90, ({}, [], False), "Shopee")
 
         _canais_prontos["done"] = True
         _ex.shutdown(wait=False)
