@@ -238,6 +238,7 @@ PUBLIC_PREFIXES = (
     "/bling/produto/atualizar-imagens-batch",  # Batch de imagens (sem auth)
     "/bling/produto/",  # Endpoints de produto Bling (imagens, variações)
     "/bling/debug/",    # Debug endpoints (sem auth)
+    "/api/produto/",    # Busca de produto pelo simulador (sem auth — leitura pública)
     "/sistema/",        # Páginas de sistema (sem auth)
     "/modulos/",        # APIs dos módulos avançados (sem auth)
     "/config/regras-precificacao/",  # Ativar perfil
