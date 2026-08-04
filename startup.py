@@ -120,7 +120,7 @@ if bling_access and bling_refresh:
                     data=_data,
                     headers={"Authorization": f"Basic {_basic}", "Content-Type": "application/x-www-form-urlencoded"},
                 )
-                with _urllib.urlopen(_req, timeout=20) as _resp:
+                with _urllib.urlopen(_req, timeout=8) as _resp:
                     _new = json.loads(_resp.read())
                     bling_access  = _new.get("access_token", bling_access)
                     bling_refresh = _new.get("refresh_token", bling_refresh)
@@ -205,7 +205,7 @@ if ml_access_token and ml_refresh_token:
                     "refresh_token": _rt,
                 }).encode()
                 _req = _urllib.Request("https://api.mercadolibre.com/oauth/token", data=_data)
-                with _urllib.urlopen(_req, timeout=15) as _resp:
+                with _urllib.urlopen(_req, timeout=8) as _resp:
                     _new = json.loads(_resp.read())
                     ml_access_token  = _new.get("access_token", ml_access_token)
                     ml_refresh_token = _new.get("refresh_token", ml_refresh_token)
@@ -223,7 +223,7 @@ if ml_access_token and ml_refresh_token:
                     "https://api.mercadolibre.com/users/me",
                     headers={"Authorization": f"Bearer {ml_access_token}"}
                 )
-                with _urllib.urlopen(_req, timeout=10) as _resp:
+                with _urllib.urlopen(_req, timeout=8) as _resp:
                     _me = json.loads(_resp.read())
                     ml_user_id = str(_me.get("id", ""))
                     pr(f"user_id obtido via /users/me: {ml_user_id}")
