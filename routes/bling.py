@@ -23,6 +23,28 @@ def bling_api_proxy(endpoint: str, pagina: int = 1, limite: int = 100):
     return r.json()
 
 
+@router.post("/bling/api")
+def bling_api_proxy_post(endpoint: str, body: dict = None):
+    """Proxy genérico POST para qualquer endpoint da API Bling v3."""
+    import requests as _req
+    from routes.amazon import _bling_token
+    from fastapi import HTTPException
+    token = _bling_token()
+    if not token:
+        raise HTTPException(status_code=503, detail="Token Bling indisponível.")
+    ep = endpoint if endpoint.startswith('/') else f'/{endpoint}'
+    r = _req.post(
+        f"https://www.bling.com.br/Api/v3{ep}",
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/json", "Content-Type": "application/json"},
+        json=body or {},
+        timeout=60
+    )
+    try:
+        return r.json()
+    except Exception:
+        return {"status_code": r.status_code, "text": r.text[:500]}
+
+
 @router.get("/bling/produtos")
 def bling_produtos_proxy(pagina: int = 1, limite: int = 100, situacao: str = "A", nome: str = ""):
     """Proxy para GET /produtos do Bling usando token interno."""
