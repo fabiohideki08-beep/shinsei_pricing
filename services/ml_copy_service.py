@@ -166,6 +166,7 @@ def _build_payload(item: dict) -> dict | None:
 
     family_name = item.get("family_name") or ""
     domain_id = item.get("domain_id") or ""
+    is_catalog = bool(family_name)
 
     payload: dict = {
         "category_id": category_id,
@@ -175,20 +176,20 @@ def _build_payload(item: dict) -> dict | None:
         "listing_type_id": LISTING_TYPE,
         "condition": condition,
         "pictures": pictures,
-        "attributes": attributes,
     }
 
-    # Em itens de catálogo, title é gerenciado pelo ML — não enviar
-    if not family_name:
+    if is_catalog:
+        # Itens de catálogo: ML gerencia título e atributos
+        payload["family_name"] = family_name
+        if domain_id:
+            payload["domain_id"] = domain_id
+    else:
+        # Itens normais: title e attributes são livres
         payload["title"] = title
+        payload["attributes"] = attributes
 
     if sku:
         payload["seller_custom_field"] = sku
-
-    if family_name:
-        payload["family_name"] = family_name
-    if domain_id:
-        payload["domain_id"] = domain_id
 
     # Variações
     variations = item.get("variations", [])
