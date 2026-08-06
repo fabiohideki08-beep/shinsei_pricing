@@ -1220,6 +1220,41 @@ def ml_akg_copy_reset():
         PROGRESS_PATH.unlink()
     return {"ok": True, "message": "Progresso resetado."}
 
+@app.post("/ml/akg/copiar-shinsei/teste-real")
+def ml_akg_copy_teste_real():
+    """Publica 1 item real no ML AKG e retorna o ID criado para verificação."""
+    try:
+        from services.ml_copy_service import run_copy
+        result = run_copy(limit=1, dry_run=False, reset=True)
+        return result
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/ml/akg/verificar-item/{item_id}")
+def ml_akg_verificar_item(item_id: str):
+    """Verifica se um item existe no ML AKG e retorna seus dados principais."""
+    import requests as _req
+    from services.ml_copy_service import _akg_token, _headers
+    try:
+        token = _akg_token()
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    r = _req.get(f"https://api.mercadolibre.com/items/{item_id}",
+                 headers=_headers(token), timeout=15)
+    if r.status_code != 200:
+        raise HTTPException(status_code=r.status_code, detail=r.text[:300])
+    d = r.json()
+    return {
+        "id": d.get("id"),
+        "title": d.get("title"),
+        "status": d.get("status"),
+        "listing_type_id": d.get("listing_type_id"),
+        "price": d.get("price"),
+        "seller_custom_field": d.get("seller_custom_field"),
+        "permalink": d.get("permalink"),
+        "thumbnail": d.get("thumbnail"),
+    }
+
 @app.get("/bling/akg/lojas")
 def bling_akg_lojas():
     """Descobre idLoja ML no Bling AKG via anúncios existentes."""

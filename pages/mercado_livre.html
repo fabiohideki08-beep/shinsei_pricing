@@ -64,6 +64,7 @@
       <h3 style="margin:0 0 12px">Publicar anúncios Shinsei → AKG (Grátis)</h3>
       <div class="actions">
         <button onclick="dryRun()" style="background:#f59e0b;color:#fff">🔍 Testar (dry-run 10)</button>
+        <button onclick="testeReal()" style="background:#7c3aed;color:#fff">🧪 Publicar 1 real</button>
         <button onclick="iniciarCopia()" style="background:#16a34a;color:#fff">🚀 Iniciar publicação</button>
         <button onclick="statusCopia()" class="secondary">📊 Ver progresso</button>
         <button onclick="resetarCopia()" style="background:#dc2626;color:#fff">🗑 Resetar progresso</button>
@@ -164,6 +165,31 @@
       const r = await fetch(url);
       if (!r.ok) { const t = await r.text(); throw new Error(`HTTP ${r.status}: ${t.slice(0,200)}`); }
       return r.json();
+    }
+
+    async function testeReal(){
+      const box = document.getElementById('log-copia');
+      if (!confirm('Publicar 1 item REAL no ML AKG? Será criado um anúncio de verdade.')) return;
+      box.textContent = '⏳ Publicando 1 item real...';
+      try {
+        const d = await _post('/ml/akg/copiar-shinsei/teste-real');
+        const criado = d.criados_detalhe?.[0];
+        let txt = `✅ Criados: ${d.criados} | ❌ Falhas: ${d.falhas}\n\n`;
+        if (criado) {
+          txt += `SKU: ${criado.sku}\nShinsei ID: ${criado.shinsei_id}\nAKG ID: ${criado.akg_id}\nTítulo: ${criado.title || '-'}\n`;
+          if (criado.akg_id && criado.akg_id !== 'DRY_RUN') {
+            txt += `\n🔗 Verificando no ML...`;
+            box.textContent = txt;
+            try {
+              const v = await _get(`/ml/akg/verificar-item/${criado.akg_id}`);
+              txt += `\n✅ Item confirmado no ML!\nStatus: ${v.status}\nTipo: ${v.listing_type_id}\nPreço: R$ ${v.price}\nLink: ${v.permalink}`;
+            } catch(e2) { txt += `\n⚠️ Verificação falhou: ${e2.message}`; }
+          }
+        }
+        if (d.falhas_detalhe?.length) txt += `\nFalhas:\n` + d.falhas_detalhe.map(f=>`${f.sku}: ${f.erro}`).join('\n');
+        if (d.log?.length) txt += `\n\nLog:\n` + d.log.join('\n');
+        box.textContent = txt;
+      } catch(e) { box.textContent = '❌ Erro: ' + e.message; }
     }
 
     async function dryRun(){
