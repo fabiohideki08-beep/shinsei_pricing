@@ -222,3 +222,39 @@ def ml_refresh2():
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result.get("error", "Falha ao renovar token AKG"))
     return {"success": True, "message": "Token AKG renovado.", "data": result["data"]}
+
+
+@router.get("/ml/akg/cota-gratis")
+def ml_akg_cota_gratis():
+    """Verifica a cota de anúncios grátis disponíveis na conta AKG do ML."""
+    import requests as _req
+    svc = _get_akg_oauth()
+    tokens = svc._read_json(svc.tokens_file, {})
+    token = tokens.get("access_token", "")
+    seller_id = tokens.get("user_id", "")
+    if not token or not seller_id:
+        raise HTTPException(status_code=400, detail="ML AKG não conectado. Acesse /ml/login2")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Cota de gratuidade do vendedor
+    r = _req.get(f"https://api.mercadolibre.com/users/{seller_id}/available_listing_types",
+                 headers=headers, timeout=15)
+    listing_types = r.json() if r.status_code == 200 else {"erro": r.text[:200]}
+
+    # Info do vendedor (nível, reputação)
+    r2 = _req.get(f"https://api.mercadolibre.com/users/{seller_id}", headers=headers, timeout=15)
+    seller_info = {}
+    if r2.status_code == 200:
+        u = r2.json()
+        seller_info = {
+            "nickname": u.get("nickname"),
+            "country_id": u.get("country_id"),
+            "registration_date": u.get("registration_date"),
+            "seller_reputation": u.get("seller_reputation", {}).get("level_id"),
+        }
+
+    return {
+        "seller_id": seller_id,
+        "seller_info": seller_info,
+        "available_listing_types": listing_types,
+    }
