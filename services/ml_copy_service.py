@@ -76,29 +76,45 @@ def _get_shinsei_seller_id(token: str) -> str:
 
 
 def _iter_shinsei_active_ids(token: str, seller_id: str, offset_start: int = 0) -> Iterator[list[str]]:
-    """Itera todos os IDs de anúncios ativos da Shinsei em batches de BATCH_SIZE."""
-    offset = offset_start
-    limit = 50
+    """Itera todos os IDs de anúncios ativos da Shinsei em batches de BATCH_SIZE.
+    Usa scroll_id para ultrapassar o limite de ~1060 itens do offset-based search.
+    """
+    limit = 100
+    scroll_id: str | None = None
+    first_page = True
+    pages_yielded = 0
+
     while True:
+        params: dict = {"status": "active", "limit": limit, "search_type": "scan"}
+        if scroll_id:
+            params["scroll_id"] = scroll_id
         r = requests.get(
             f"{ML_API}/users/{seller_id}/items/search",
-            params={"status": "active", "offset": offset, "limit": limit},
+            params=params,
             headers=_headers(token),
             timeout=20,
         )
         if r.status_code != 200:
-            logger.error("Erro buscando itens Shinsei offset=%d: %s", offset, r.text[:200])
+            logger.error("Erro buscando itens Shinsei (scroll): %s", r.text[:200])
             break
         data = r.json()
         ids = data.get("results", [])
+        scroll_id = data.get("scroll_id")
         if not ids:
             break
-        # Yield em batches de BATCH_SIZE para multiget
+
+        # Na primeira página, pula as já processadas (offset_start)
+        if first_page and offset_start > 0:
+            skip = min(offset_start, len(ids))
+            ids = ids[skip:]
+            first_page = False
+
+        # Yield em batches de BATCH_SIZE
         for i in range(0, len(ids), BATCH_SIZE):
             yield ids[i:i + BATCH_SIZE]
-        total = data.get("paging", {}).get("total", 0)
-        offset += limit
-        if offset >= total:
+            pages_yielded += 1
+
+        if not scroll_id:
             break
 
 
@@ -365,9 +381,8 @@ def run_copy(
             processados += 1
             time.sleep(RATE_LIMIT_SLEEP)
 
-        progress["ultimo_offset"] = offset_start + (processados * 50 // max(processados, 1))
+        progress["ultimo_offset"] = offset_start + processados
         _save_progress(progress)
-        offset += BATCH_SIZE
 
     _save_progress(progress)
     return _summary(progress)
