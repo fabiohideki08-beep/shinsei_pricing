@@ -239,6 +239,7 @@ PUBLIC_PREFIXES = (
     "/auditoria/shopify/",
     "/ml-ads/",
     "/ml/akg/verificar-item/",
+    "/ml/shinsei/item-raw/",
     "/auditoria/ml-estoque/",
     "/auditoria/estoque-negativo/",
     "/static/",

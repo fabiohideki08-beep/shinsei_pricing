@@ -106,7 +106,7 @@ def _get_items_details(ids: list[str], token: str) -> list[dict]:
     """Busca detalhes de até 20 itens de uma vez."""
     r = requests.get(
         f"{ML_API}/items",
-        params={"ids": ",".join(ids), "attributes": "id,title,category_id,price,currency_id,condition,pictures,attributes,shipping,seller_custom_field,variations,listing_type_id,status"},
+        params={"ids": ",".join(ids), "attributes": "id,title,category_id,price,currency_id,condition,pictures,attributes,shipping,seller_custom_field,variations,listing_type_id,status,family_name,domain_id"},
         headers=_headers(token),
         timeout=20,
     )
@@ -151,10 +151,10 @@ def _build_payload(item: dict) -> dict | None:
             pictures.append({"source": url})
 
     # Atributos — preserva tudo exceto SELLER_SKU (vai no seller_custom_field)
+    # Mantém atributos sem value_name pois podem ter value_id obrigatório
     attributes = [
         a for a in item.get("attributes", [])
         if a.get("id") not in ("SELLER_SKU",)
-           and a.get("value_name")
     ]
 
     payload: dict = {
@@ -171,6 +171,12 @@ def _build_payload(item: dict) -> dict | None:
 
     if sku:
         payload["seller_custom_field"] = sku
+
+    # Campos de catálogo ML — obrigatórios em certas categorias
+    if item.get("family_name"):
+        payload["family_name"] = item["family_name"]
+    if item.get("domain_id"):
+        payload["domain_id"] = item["domain_id"]
 
     # Variações
     variations = item.get("variations", [])

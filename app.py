@@ -1230,6 +1230,21 @@ def ml_akg_copy_teste_real():
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+@app.get("/ml/shinsei/item-raw/{item_id}")
+def ml_shinsei_item_raw(item_id: str):
+    """Retorna o JSON completo de um item da Shinsei no ML (para diagnóstico)."""
+    import requests as _req
+    from services.ml_copy_service import _shinsei_token, _headers
+    try:
+        token = _shinsei_token()
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    r = _req.get(f"https://api.mercadolibre.com/items/{item_id}",
+                 headers=_headers(token), timeout=15)
+    if r.status_code != 200:
+        raise HTTPException(status_code=r.status_code, detail=r.text[:500])
+    return r.json()
+
 @app.get("/ml/akg/verificar-item/{item_id}")
 def ml_akg_verificar_item(item_id: str):
     """Verifica se um item existe no ML AKG e retorna seus dados principais."""
