@@ -1174,6 +1174,49 @@ def bling_status2():
     return {"ok": True, "conectado": True, "expirado": expirado,
             "expires_at": expires_at, "message": "Conta AKG conectada."}
 
+@app.get("/ml/akg/copiar-shinsei/status")
+def ml_akg_copy_status():
+    """Status do job de cópia Shinsei → AKG."""
+    from services.ml_copy_service import _load_progress, _summary
+    progress = _load_progress()
+    return _summary(progress)
+
+@app.post("/ml/akg/copiar-shinsei/dry-run")
+def ml_akg_copy_dry_run(limit: int = Query(default=10)):
+    """Simula a cópia sem publicar nada. Mostra os primeiros `limit` itens que seriam criados."""
+    from services.ml_copy_service import run_copy
+    return run_copy(limit=limit, dry_run=True, reset=True)
+
+@app.post("/ml/akg/copiar-shinsei/iniciar")
+def ml_akg_copy_iniciar(
+    background_tasks: BackgroundTasks,
+    limit: int = Query(default=0, description="0 = sem limite"),
+    reset: bool = Query(default=False, description="Reinicia do zero ignorando progresso"),
+):
+    """Inicia a cópia em background dos anúncios da Shinsei para o ML da AKG."""
+    _log_msgs: list[str] = []
+
+    def _callback(msg: str):
+        _log_msgs.append(msg)
+        if len(_log_msgs) % 50 == 0:
+            import logging
+            logging.getLogger("shinsei.ml_copy").info("progresso: %d mensagens", len(_log_msgs))
+
+    def _run():
+        from services.ml_copy_service import run_copy
+        run_copy(limit=limit, dry_run=False, reset=reset, status_callback=_callback)
+
+    background_tasks.add_task(_run)
+    return {"ok": True, "message": "Job iniciado em background. Acompanhe em /ml/akg/copiar-shinsei/status"}
+
+@app.post("/ml/akg/copiar-shinsei/resetar")
+def ml_akg_copy_reset():
+    """Limpa o progresso salvo para recomeçar do zero."""
+    from services.ml_copy_service import PROGRESS_PATH
+    if PROGRESS_PATH.exists():
+        PROGRESS_PATH.unlink()
+    return {"ok": True, "message": "Progresso resetado."}
+
 @app.get("/bling/akg/lojas")
 def bling_akg_lojas():
     """Descobre idLoja ML no Bling AKG via anúncios existentes."""
