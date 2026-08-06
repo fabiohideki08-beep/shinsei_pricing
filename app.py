@@ -1254,10 +1254,9 @@ def ml_akg_debug_payload(item_id: str):
         token = _shinsei_token()
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    # Busca com todos os campos relevantes
+    # Busca individual sem filtro para receber family_name e todos os campos privados
     r = _req.get(
         f"https://api.mercadolibre.com/items/{item_id}",
-        params={"attributes": "id,title,category_id,price,currency_id,condition,pictures,attributes,shipping,seller_custom_field,variations,listing_type_id,status,family_name,domain_id"},
         headers=_headers(token), timeout=15
     )
     if r.status_code != 200:

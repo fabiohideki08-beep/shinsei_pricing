@@ -103,16 +103,23 @@ def _iter_shinsei_active_ids(token: str, seller_id: str, offset_start: int = 0) 
 
 
 def _get_items_details(ids: list[str], token: str) -> list[dict]:
-    """Busca detalhes de até 20 itens de uma vez (sem filtro de atributos para receber family_name)."""
-    r = requests.get(
-        f"{ML_API}/items",
-        params={"ids": ",".join(ids)},
-        headers=_headers(token),
-        timeout=30,
-    )
-    if r.status_code != 200:
-        return []
-    return [entry.get("body", {}) for entry in r.json() if entry.get("code") == 200]
+    """Busca detalhes individualmente para receber todos os campos (incluindo family_name)."""
+    results = []
+    for item_id in ids:
+        try:
+            r = requests.get(
+                f"{ML_API}/items/{item_id}",
+                headers=_headers(token),
+                timeout=15,
+            )
+            if r.status_code == 200:
+                results.append(r.json())
+            else:
+                logger.warning("Falha ao buscar %s: HTTP %d", item_id, r.status_code)
+        except Exception as e:
+            logger.warning("Erro ao buscar %s: %s", item_id, e)
+        time.sleep(0.1)
+    return results
 
 
 # ── Extrai SKU do item ─────────────────────────────────────────────────────────
