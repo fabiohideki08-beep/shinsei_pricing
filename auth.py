@@ -241,6 +241,7 @@ PUBLIC_PREFIXES = (
     "/ml/akg/verificar-item/",
     "/ml/shinsei/item-raw/",
     "/ml/akg/debug-payload/",
+    "/ml/akg/debug-post/",
     "/auditoria/ml-estoque/",
     "/auditoria/estoque-negativo/",
     "/static/",

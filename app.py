@@ -1245,6 +1245,31 @@ def ml_shinsei_item_raw(item_id: str):
         raise HTTPException(status_code=r.status_code, detail=r.text[:500])
     return r.json()
 
+@app.post("/ml/akg/debug-post/{item_id}")
+def ml_akg_debug_post(item_id: str):
+    """Tenta criar o item no ML AKG e retorna o erro completo (sem truncar)."""
+    import requests as _req
+    from services.ml_copy_service import _shinsei_token, _akg_token, _headers, _get_items_details, _build_payload
+    try:
+        shin_token = _shinsei_token()
+        akg_token = _akg_token()
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    items = _get_items_details([item_id], shin_token)
+    if not items:
+        raise HTTPException(status_code=404, detail=f"Item {item_id} não encontrado na Shinsei")
+    item = items[0]
+    payload = _build_payload(item)
+    if not payload:
+        raise HTTPException(status_code=400, detail="Payload inválido (sem título/categoria/preço)")
+    r = _req.post("https://api.mercadolibre.com/items",
+                  json=payload, headers=_headers(akg_token), timeout=30)
+    return {
+        "status_code": r.status_code,
+        "payload_enviado": payload,
+        "resposta_ml": r.json() if r.headers.get("content-type","").startswith("application/json") else r.text,
+    }
+
 @app.get("/ml/akg/debug-payload/{item_id}")
 def ml_akg_debug_payload(item_id: str):
     """Mostra o item raw da Shinsei e o payload que seria enviado ao ML AKG."""
