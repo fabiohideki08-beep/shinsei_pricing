@@ -154,3 +154,69 @@ def precificar_ml(req: AtualizarPrecoRequest):
         raise HTTPException(status_code=400, detail="Nenhum item informado")
 
     return {"success": True, "atualizacoes": resultados}
+
+
+# ── ML OAuth — conta AKG (segunda empresa) ───────────────────────────────────
+
+import os as _os
+
+class _MercadoLivreOAuthAKG(MercadoLivreOAuthService):
+    """Igual ao serviço principal mas usa credenciais e tokens da conta AKG."""
+    def __init__(self, base_dir):
+        # NÃO chama super().__init__() para evitar carregar config da conta Shinsei
+        from pathlib import Path as _P
+        from services.mercado_livre import MercadoLivreConfigStore, ML_AUTH
+        self.base_dir = _P(base_dir)
+        self.data_dir = self.base_dir / "data"
+        self.data_dir.mkdir(exist_ok=True)
+        self.tokens_file = self.data_dir / "ml_tokens_akg.json"
+        self.state_file  = self.data_dir / "ml_oauth_state_akg.json"
+        self.client_id     = _os.getenv("ML_AKG_CLIENT_ID", "").strip()
+        self.client_secret = _os.getenv("ML_AKG_CLIENT_SECRET", "").strip()
+        self.redirect_uri  = _os.getenv("ML_AKG_REDIRECT_URI",
+                                        "https://shinsei-pricing.onrender.com/ml/callback2").strip()
+
+
+def _get_akg_oauth():
+    return _MercadoLivreOAuthAKG(BASE_DIR)
+
+
+@router.get("/ml/login2")
+def ml_login2():
+    """Inicia OAuth ML para conta AKG (segunda empresa)."""
+    svc = _get_akg_oauth()
+    result = svc.iniciar_login()
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return RedirectResponse(result["auth_url"])
+
+
+@router.get("/ml/callback2")
+async def ml_callback2(request: Request):
+    """Callback OAuth ML conta AKG."""
+    code = request.query_params.get("code")
+    error = request.query_params.get("error")
+    if error:
+        return {"success": False, "error": f"ML retornou erro: {error}"}
+    if not code:
+        return {"success": False, "error": "Code não recebido"}
+    svc = _get_akg_oauth()
+    result = svc.trocar_code_por_token(code)
+    if not result["success"]:
+        return {"success": False, "error": result["error"]}
+    return {"success": True, "message": "ML AKG conectado com sucesso", "data": result["data"]}
+
+
+@router.get("/ml/status2")
+def ml_status2():
+    """Status da conexão ML conta AKG."""
+    return _get_akg_oauth().status()
+
+
+@router.post("/ml/refresh2")
+def ml_refresh2():
+    """Renova o token ML da conta AKG."""
+    result = _get_akg_oauth().refresh_token()
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result.get("error", "Falha ao renovar token AKG"))
+    return {"success": True, "message": "Token AKG renovado.", "data": result["data"]}

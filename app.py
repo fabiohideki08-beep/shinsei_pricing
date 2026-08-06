@@ -93,11 +93,13 @@ from routes.amazon import router as amazon_router
 from routes.estoque_sync import router as estoque_sync_router, _rebuild_caches_bg, sync_estoque_bling
 from routes.shopify_webhooks import router as shopify_webhooks_router
 from routes.ml_ads import router as ml_ads_router
+from routes.bling_upload import router as bling_upload_router
 app.include_router(batch_router)
 from routes.mercado_livre import router as ml_page_router
 app.include_router(ml_page_router)
 app.include_router(ml_router)
 app.include_router(bling_page_router)
+app.include_router(bling_upload_router)
 app.include_router(monitoring_router)
 app.include_router(gmc_router)
 app.include_router(ads_router)
@@ -1081,6 +1083,98 @@ def bling_callback(code: str | None = Query(None), state: str | None = Query(Non
         return {"ok":True,"message":"Conexão com Bling realizada.","expires_in":token.get("expires_in")}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+# ── Bling AKG (segunda conta) ─────────────────────────────────────────────────
+_BLING_AKG_CLIENT_ID     = os.getenv("BLING_AKG_CLIENT_ID",     "bbe24c807ae06b55030d356ee95d152d218c2434")
+_BLING_AKG_CLIENT_SECRET = os.getenv("BLING_AKG_CLIENT_SECRET", "1ede47a4c8bb5f37df837ef7d7e05415546622780808651afc49d65fb3ef")
+_BLING_AKG_REDIRECT_URI  = os.getenv("BLING_AKG_REDIRECT_URI",  "https://shinsei-pricing.onrender.com/bling/callback2")
+_BLING_AKG_TOKEN_PATH    = Path("data/bling_tokens_akg.json")
+_BLING_AKG_STATE_PATH    = Path("data/bling_oauth_state_akg.json")
+
+def _bling_akg_save(data: dict):
+    _BLING_AKG_TOKEN_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+def _bling_akg_load() -> dict:
+    if not _BLING_AKG_TOKEN_PATH.exists():
+        return {}
+    try:
+        return json.loads(_BLING_AKG_TOKEN_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+def _bling_akg_headers() -> dict:
+    import time as _time
+    import requests as _req
+    tokens = _bling_akg_load()
+    access = tokens.get("access_token", "")
+    expires_at = float(tokens.get("expires_at", 0) or 0)
+    if not access or _time.time() >= expires_at:
+        r = _req.post("https://www.bling.com.br/Api/v3/oauth/token",
+            data={"grant_type": "refresh_token",
+                  "client_id": _BLING_AKG_CLIENT_ID,
+                  "client_secret": _BLING_AKG_CLIENT_SECRET,
+                  "refresh_token": tokens.get("refresh_token", "")},
+            timeout=20)
+        if r.status_code == 200:
+            new = r.json()
+            new["expires_at"] = _time.time() + new.get("expires_in", 3600) - 60
+            _bling_akg_save(new)
+            access = new["access_token"]
+    return {"Authorization": f"Bearer {access}", "Content-Type": "application/json"}
+
+@app.get("/bling/auth2")
+def bling_auth2():
+    """Inicia OAuth Bling para conta AKG (segunda empresa)."""
+    import secrets as _sec
+    import time as _time
+    from urllib.parse import urlencode
+    state = _sec.token_urlsafe(32)
+    _BLING_AKG_STATE_PATH.write_text(json.dumps({"state": state, "created_at": int(_time.time())}), encoding="utf-8")
+    params = urlencode({
+        "response_type": "code",
+        "client_id": _BLING_AKG_CLIENT_ID,
+        "redirect_uri": _BLING_AKG_REDIRECT_URI,
+        "state": state,
+    })
+    return RedirectResponse(f"https://www.bling.com.br/Api/v3/oauth/authorize?{params}")
+
+@app.get("/bling/callback2")
+def bling_callback2(code: str | None = Query(None), state: str | None = Query(None),
+                    error: str | None = Query(None), error_description: str | None = Query(None)):
+    """Callback OAuth Bling conta AKG."""
+    if error:
+        raise HTTPException(status_code=400, detail=f"Bling OAuth erro: {error}. {error_description or ''}")
+    if not code:
+        raise HTTPException(status_code=400, detail="Callback sem code de autorização.")
+    import time as _time
+    import requests as _req
+    r = _req.post("https://www.bling.com.br/Api/v3/oauth/token",
+        data={"grant_type": "authorization_code",
+              "client_id": _BLING_AKG_CLIENT_ID,
+              "client_secret": _BLING_AKG_CLIENT_SECRET,
+              "redirect_uri": _BLING_AKG_REDIRECT_URI,
+              "code": code},
+        timeout=20)
+    if r.status_code != 200:
+        raise HTTPException(status_code=400, detail=f"Erro ao trocar code: {r.text[:300]}")
+    tokens = r.json()
+    tokens["expires_at"] = _time.time() + tokens.get("expires_in", 3600) - 60
+    _bling_akg_save(tokens)
+    return {"ok": True, "message": "Conta AKG conectada ao Bling com sucesso.", "expires_in": tokens.get("expires_in")}
+
+@app.get("/bling/status2")
+def bling_status2():
+    """Status da conexão Bling conta AKG."""
+    import time as _time
+    tokens = _bling_akg_load()
+    access = tokens.get("access_token", "")
+    if not access:
+        return {"ok": False, "conectado": False, "message": "Conta AKG não conectada. Acesse /bling/auth2"}
+    expires_at = float(tokens.get("expires_at", 0) or 0)
+    expirado = _time.time() >= expires_at
+    return {"ok": True, "conectado": True, "expirado": expirado,
+            "expires_at": expires_at, "message": "Conta AKG conectada."}
 
 @app.get("/bling/exportar-tokens")
 def bling_exportar_tokens(api_key: str = Query(...)):
