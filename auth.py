@@ -62,6 +62,8 @@ PUBLIC_PATHS = {
     "/ml/callback2",
     "/ml/status2",
     "/ml/akg/cota-gratis",
+    "/bling/akg/lojas",
+    "/bling/akg/anuncios-sem-ml",
     "/mercado-livre",
     "/regras/modelo/download",
     "/regras/importar-excel",

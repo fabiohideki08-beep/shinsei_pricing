@@ -1174,6 +1174,66 @@ def bling_status2():
     return {"ok": True, "conectado": True, "expirado": expirado,
             "expires_at": expires_at, "message": "Conta AKG conectada."}
 
+@app.get("/bling/akg/lojas")
+def bling_akg_lojas():
+    """Lista as lojas (canais de venda) configuradas no Bling AKG."""
+    import requests as _req
+    hdrs = _bling_akg_headers()
+    r = _req.get("https://www.bling.com.br/Api/v3/canaisdevenda", headers=hdrs, timeout=20)
+    if r.status_code != 200:
+        raise HTTPException(status_code=r.status_code, detail=r.text[:300])
+    return r.json()
+
+
+@app.get("/bling/akg/anuncios-sem-ml")
+def bling_akg_anuncios_sem_ml(id_loja: int = Query(..., description="ID da loja ML no Bling AKG")):
+    """Lista produtos do Bling AKG que ainda não têm anúncio no ML."""
+    import requests as _req
+    hdrs = _bling_akg_headers()
+
+    # Busca anúncios já publicados
+    publicados_skus: set[str] = set()
+    pagina = 1
+    while True:
+        r = _req.get("https://www.bling.com.br/Api/v3/anuncios",
+                     params={"idLoja": id_loja, "pagina": pagina, "limite": 100},
+                     headers=hdrs, timeout=20)
+        if r.status_code != 200:
+            break
+        items = r.json().get("data", [])
+        if not items:
+            break
+        for a in items:
+            sku = a.get("produto", {}).get("codigo", "") or a.get("idVendedor", "")
+            if sku:
+                publicados_skus.add(sku)
+        pagina += 1
+
+    # Busca todos os produtos
+    todos: list[dict] = []
+    pagina = 1
+    while True:
+        r = _req.get("https://www.bling.com.br/Api/v3/produtos",
+                     params={"pagina": pagina, "limite": 100, "situacao": "A"},
+                     headers=hdrs, timeout=20)
+        if r.status_code != 200:
+            break
+        items = r.json().get("data", [])
+        if not items:
+            break
+        todos.extend(items)
+        pagina += 1
+
+    sem_ml = [p for p in todos if p.get("codigo", "") not in publicados_skus]
+
+    return {
+        "total_produtos": len(todos),
+        "publicados_no_ml": len(publicados_skus),
+        "sem_anuncio_ml": len(sem_ml),
+        "skus_sem_ml": [{"id": p.get("id"), "codigo": p.get("codigo"), "nome": p.get("nome")} for p in sem_ml[:200]],
+    }
+
+
 @app.get("/bling/exportar-tokens")
 def bling_exportar_tokens(api_key: str = Query(...)):
     """Exporta tokens Bling para configurar como env vars no Cloud Run. Protegido por api_key (middleware)."""
