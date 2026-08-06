@@ -1184,8 +1184,11 @@ def ml_akg_copy_status():
 @app.post("/ml/akg/copiar-shinsei/dry-run")
 def ml_akg_copy_dry_run(limit: int = Query(default=10)):
     """Simula a cópia sem publicar nada. Mostra os primeiros `limit` itens que seriam criados."""
-    from services.ml_copy_service import run_copy
-    return run_copy(limit=limit, dry_run=True, reset=True)
+    try:
+        from services.ml_copy_service import run_copy
+        return run_copy(limit=limit, dry_run=True, reset=True)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/ml/akg/copiar-shinsei/iniciar")
 def ml_akg_copy_iniciar(

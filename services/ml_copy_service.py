@@ -37,7 +37,11 @@ def _load_token(path: Path, label: str) -> str:
 
 
 def _shinsei_token() -> str:
-    return _load_token(DATA_DIR / "ml_tokens.json", "Shinsei ML")
+    try:
+        from services.mercado_livre import obter_token_ml
+        return obter_token_ml()
+    except Exception:
+        return _load_token(DATA_DIR / "ml_tokens.json", "Shinsei ML")
 
 
 def _akg_token() -> str:
