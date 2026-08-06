@@ -47,6 +47,30 @@
       <div id="status" class="status">Carregando status...</div>
     </div>
 
+    <!-- ── Conta AKG ────────────────────────────────────────────────────── -->
+    <div class="card">
+      <h2>Conta AKG — Mercado Livre</h2>
+      <div class="sub" style="margin-bottom:16px">Conexão OAuth e publicação dos anúncios da Shinsei na conta AKG.</div>
+
+      <div class="actions">
+        <a class="btn" href="/ml/login2">Conectar ML AKG</a>
+        <button class="secondary" onclick="renovarTokenAkg()">Renovar token AKG</button>
+        <button class="secondary" onclick="statusAkg()">Atualizar status AKG</button>
+      </div>
+      <div id="status-akg" class="status" style="margin-top:12px">—</div>
+
+      <hr style="margin:20px 0;border:none;border-top:1px solid #e5e7eb">
+
+      <h3 style="margin:0 0 12px">Publicar anúncios Shinsei → AKG (Grátis)</h3>
+      <div class="actions">
+        <button onclick="dryRun()" style="background:#f59e0b;color:#fff">🔍 Testar (dry-run 10)</button>
+        <button onclick="iniciarCopia()" style="background:#16a34a;color:#fff">🚀 Iniciar publicação</button>
+        <button onclick="statusCopia()" class="secondary">📊 Ver progresso</button>
+        <button onclick="resetarCopia()" style="background:#dc2626;color:#fff">🗑 Resetar progresso</button>
+      </div>
+      <div id="log-copia" style="margin-top:12px;padding:14px;border-radius:12px;background:#f3f4f6;font-family:monospace;font-size:13px;min-height:60px;white-space:pre-wrap">—</div>
+    </div>
+
     <div class="card">
       <h2>Como usar</h2>
       <p>1. Preencha o Client ID, Client Secret e o Callback.</p>
@@ -110,8 +134,65 @@
     async function carregarTudo(){
       await carregarConfig();
       await carregarStatus();
+      await statusAkg();
     }
     carregarTudo();
+
+    async function statusAkg(){
+      const box = document.getElementById('status-akg');
+      try {
+        const r = await fetch('/ml/status2');
+        const d = await r.json();
+        box.className = 'status ' + (d.conectado ? 'ok' : 'bad');
+        box.innerHTML = `<strong>AKG ML:</strong> ${d.conectado ? '✅ Conectado' : '❌ Não conectado'} ${d.seller_id ? '| seller_id: ' + d.seller_id : ''}`;
+      } catch(e) { box.textContent = 'Falha ao carregar status AKG.'; }
+    }
+
+    async function renovarTokenAkg(){
+      const r = await fetch('/ml/refresh2', {method:'POST'});
+      const d = await r.json();
+      alert(d.success ? 'Token AKG renovado.' : (d.detail || 'Falha.'));
+      statusAkg();
+    }
+
+    async function dryRun(){
+      const box = document.getElementById('log-copia');
+      box.textContent = '⏳ Testando 10 itens...';
+      try {
+        const r = await fetch('/ml/akg/copiar-shinsei/dry-run?limit=10', {method:'POST'});
+        const d = await r.json();
+        box.textContent = JSON.stringify(d, null, 2);
+      } catch(e) { box.textContent = 'Erro: ' + e.message; }
+    }
+
+    async function iniciarCopia(){
+      if (!confirm('Iniciar a publicação de todos os anúncios da Shinsei na conta AKG como Grátis?')) return;
+      const box = document.getElementById('log-copia');
+      box.textContent = '🚀 Iniciando job em background...';
+      try {
+        const r = await fetch('/ml/akg/copiar-shinsei/iniciar', {method:'POST'});
+        const d = await r.json();
+        box.textContent = d.message || JSON.stringify(d);
+        setTimeout(statusCopia, 3000);
+      } catch(e) { box.textContent = 'Erro: ' + e.message; }
+    }
+
+    async function statusCopia(){
+      const box = document.getElementById('log-copia');
+      try {
+        const r = await fetch('/ml/akg/copiar-shinsei/status');
+        const d = await r.json();
+        box.textContent = `✅ Criados: ${d.criados}\n❌ Falhas: ${d.falhas}\n⏭ Skipped: ${d.skipped}` +
+          (d.falhas_detalhe?.length ? '\n\nÚltimas falhas:\n' + d.falhas_detalhe.slice(0,5).map(f=>f.sku+': '+f.erro).join('\n') : '');
+      } catch(e) { box.textContent = 'Erro: ' + e.message; }
+    }
+
+    async function resetarCopia(){
+      if (!confirm('Resetar o progresso salvo? Isso não desfaz publicações já feitas.')) return;
+      const r = await fetch('/ml/akg/copiar-shinsei/resetar', {method:'POST'});
+      const d = await r.json();
+      document.getElementById('log-copia').textContent = d.message || 'Resetado.';
+    }
   </script>
 
 <!-- Botão Início -->
