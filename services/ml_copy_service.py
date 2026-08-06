@@ -150,11 +150,12 @@ def _build_payload(item: dict) -> dict | None:
     if not title or not category_id or not price:
         return None
 
-    # Fotos — usa source URL para ML fazer o upload na conta AKG
+    # Fotos — usa source URL para ML fazer o upload na conta AKG (força https)
     pictures = []
     for pic in item.get("pictures", []):
-        url = pic.get("url") or pic.get("secure_url") or ""
+        url = pic.get("secure_url") or pic.get("url") or ""
         if url:
+            url = url.replace("http://", "https://", 1)
             pictures.append({"source": url})
 
     # Atributos — preserva tudo exceto SELLER_SKU (vai no seller_custom_field)
@@ -216,10 +217,7 @@ def _build_payload(item: dict) -> dict | None:
         payload.pop("price", None)
         payload.pop("available_quantity", None)
 
-    # Shipping — copia modo de envio se existir
-    shipping = item.get("shipping", {})
-    if shipping.get("mode"):
-        payload["shipping"] = {"mode": shipping["mode"]}
+    # Shipping — não copia (deixa ML usar padrão da conta AKG)
 
     return payload
 
