@@ -252,10 +252,18 @@ def run_copy(
 
     def _log(msg: str):
         logger.info(msg)
+        progress.setdefault("log", []).append(msg)
         if status_callback:
             status_callback(msg)
 
-    _log(f"Iniciando cópia Shinsei→AKG | seller={seller_id} | dry_run={dry_run} | offset_start={offset_start}")
+    _log(f"Iniciando cópia Shinsei→AKG | seller_shinsei={seller_id} | dry_run={dry_run} | offset_start={offset_start}")
+    # Verifica primeiro batch para diagnóstico
+    import requests as _req2
+    _r = _req2.get(f"{ML_API}/users/{seller_id}/items/search",
+                   params={"status": "active", "offset": 0, "limit": 1},
+                   headers=_headers(shin_token), timeout=20)
+    _total = _r.json().get("paging", {}).get("total", "ERR") if _r.status_code == 200 else f"HTTP {_r.status_code}"
+    _log(f"Total de itens ativos na Shinsei: {_total}")
 
     processados = 0
     offset = 0
@@ -287,6 +295,7 @@ def run_copy(
 
             if dry_run:
                 _log(f"[DRY] Publicaria: {item_id} SKU={sku} → {payload.get('title','')[:50]}")
+                progress.setdefault("criados", []).append({"sku": sku, "shinsei_id": item_id, "akg_id": "DRY_RUN", "title": payload.get("title","")[:60]})
                 total_criados += 1
                 processados += 1
                 continue
@@ -317,5 +326,7 @@ def _summary(progress: dict) -> dict:
         "criados": len(progress.get("criados", [])),
         "falhas": len(progress.get("falhas", [])),
         "skipped": len(progress.get("skipped", [])),
+        "criados_detalhe": progress.get("criados", [])[:10],
         "falhas_detalhe": progress.get("falhas", [])[:20],
+        "log": progress.get("log", [])[-20:],
     }
