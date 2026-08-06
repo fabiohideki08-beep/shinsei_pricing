@@ -167,16 +167,12 @@ def _build_payload(item: dict) -> dict | None:
         "condition": condition,
         "pictures": pictures,
         "attributes": attributes,
+        # Desvincula do catálogo ML — evita exigência de family_name
+        "catalog_listing": False,
     }
 
     if sku:
         payload["seller_custom_field"] = sku
-
-    # Campos de catálogo ML — obrigatórios em certas categorias
-    if item.get("family_name"):
-        payload["family_name"] = item["family_name"]
-    if item.get("domain_id"):
-        payload["domain_id"] = item["domain_id"]
 
     # Variações
     variations = item.get("variations", [])
