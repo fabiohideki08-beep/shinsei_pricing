@@ -164,8 +164,10 @@ def _build_payload(item: dict) -> dict | None:
         if a.get("id") not in ("SELLER_SKU",)
     ]
 
+    family_name = item.get("family_name") or ""
+    domain_id = item.get("domain_id") or ""
+
     payload: dict = {
-        "title": title,
         "category_id": category_id,
         "price": price,
         "currency_id": currency_id,
@@ -176,14 +178,17 @@ def _build_payload(item: dict) -> dict | None:
         "attributes": attributes,
     }
 
+    # Em itens de catálogo, title é gerenciado pelo ML — não enviar
+    if not family_name:
+        payload["title"] = title
+
     if sku:
         payload["seller_custom_field"] = sku
 
-    # Campos de catálogo ML — obrigatórios em certas categorias
-    if item.get("family_name"):
-        payload["family_name"] = item["family_name"]
-    if item.get("domain_id"):
-        payload["domain_id"] = item["domain_id"]
+    if family_name:
+        payload["family_name"] = family_name
+    if domain_id:
+        payload["domain_id"] = domain_id
 
     # Variações
     variations = item.get("variations", [])
