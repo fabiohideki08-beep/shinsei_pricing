@@ -103,12 +103,12 @@ def _iter_shinsei_active_ids(token: str, seller_id: str, offset_start: int = 0) 
 
 
 def _get_items_details(ids: list[str], token: str) -> list[dict]:
-    """Busca detalhes de até 20 itens de uma vez."""
+    """Busca detalhes de até 20 itens de uma vez (sem filtro de atributos para receber family_name)."""
     r = requests.get(
         f"{ML_API}/items",
-        params={"ids": ",".join(ids), "attributes": "id,title,category_id,price,currency_id,condition,pictures,attributes,shipping,seller_custom_field,variations,listing_type_id,status,family_name,domain_id"},
+        params={"ids": ",".join(ids)},
         headers=_headers(token),
-        timeout=20,
+        timeout=30,
     )
     if r.status_code != 200:
         return []
@@ -167,12 +167,16 @@ def _build_payload(item: dict) -> dict | None:
         "condition": condition,
         "pictures": pictures,
         "attributes": attributes,
-        # Desvincula do catálogo ML — evita exigência de family_name
-        "catalog_listing": False,
     }
 
     if sku:
         payload["seller_custom_field"] = sku
+
+    # Campos de catálogo ML — obrigatórios em certas categorias
+    if item.get("family_name"):
+        payload["family_name"] = item["family_name"]
+    if item.get("domain_id"):
+        payload["domain_id"] = item["domain_id"]
 
     # Variações
     variations = item.get("variations", [])
