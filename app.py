@@ -1245,6 +1245,37 @@ def ml_shinsei_item_raw(item_id: str):
         raise HTTPException(status_code=r.status_code, detail=r.text[:500])
     return r.json()
 
+@app.get("/ml/akg/debug-payload/{item_id}")
+def ml_akg_debug_payload(item_id: str):
+    """Mostra o item raw da Shinsei e o payload que seria enviado ao ML AKG."""
+    import requests as _req
+    from services.ml_copy_service import _shinsei_token, _headers, _build_payload
+    try:
+        token = _shinsei_token()
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    # Busca com todos os campos relevantes
+    r = _req.get(
+        f"https://api.mercadolibre.com/items/{item_id}",
+        params={"attributes": "id,title,category_id,price,currency_id,condition,pictures,attributes,shipping,seller_custom_field,variations,listing_type_id,status,family_name,domain_id"},
+        headers=_headers(token), timeout=15
+    )
+    if r.status_code != 200:
+        raise HTTPException(status_code=r.status_code, detail=r.text[:500])
+    item = r.json()
+    payload = _build_payload(item)
+    return {
+        "item_raw_fields": {
+            "id": item.get("id"),
+            "family_name": item.get("family_name"),
+            "domain_id": item.get("domain_id"),
+            "category_id": item.get("category_id"),
+            "seller_custom_field": item.get("seller_custom_field"),
+            "attributes_ids": [a.get("id") for a in item.get("attributes", [])],
+        },
+        "payload_enviado": payload,
+    }
+
 @app.get("/ml/akg/verificar-item/{item_id}")
 def ml_akg_verificar_item(item_id: str):
     """Verifica se um item existe no ML AKG e retorna seus dados principais."""
