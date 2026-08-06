@@ -1112,9 +1112,8 @@ def _bling_akg_headers() -> dict:
     if not access or _time.time() >= expires_at:
         r = _req.post("https://www.bling.com.br/Api/v3/oauth/token",
             data={"grant_type": "refresh_token",
-                  "client_id": _BLING_AKG_CLIENT_ID,
-                  "client_secret": _BLING_AKG_CLIENT_SECRET,
                   "refresh_token": tokens.get("refresh_token", "")},
+            auth=(_BLING_AKG_CLIENT_ID, _BLING_AKG_CLIENT_SECRET),
             timeout=20)
         if r.status_code == 200:
             new = r.json()
@@ -1151,10 +1150,9 @@ def bling_callback2(code: str | None = Query(None), state: str | None = Query(No
     import requests as _req
     r = _req.post("https://www.bling.com.br/Api/v3/oauth/token",
         data={"grant_type": "authorization_code",
-              "client_id": _BLING_AKG_CLIENT_ID,
-              "client_secret": _BLING_AKG_CLIENT_SECRET,
-              "redirect_uri": _BLING_AKG_REDIRECT_URI,
-              "code": code},
+              "code": code,
+              "redirect_uri": _BLING_AKG_REDIRECT_URI},
+        auth=(_BLING_AKG_CLIENT_ID, _BLING_AKG_CLIENT_SECRET),
         timeout=20)
     if r.status_code != 200:
         raise HTTPException(status_code=400, detail=f"Erro ao trocar code: {r.text[:300]}")
