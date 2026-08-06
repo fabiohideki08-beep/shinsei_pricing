@@ -1176,13 +1176,19 @@ def bling_status2():
 
 @app.get("/bling/akg/lojas")
 def bling_akg_lojas():
-    """Lista as lojas (canais de venda) configuradas no Bling AKG."""
+    """Descobre idLoja ML no Bling AKG via anúncios existentes."""
     import requests as _req
     hdrs = _bling_akg_headers()
-    r = _req.get("https://www.bling.com.br/Api/v3/canaisdevenda", headers=hdrs, timeout=20)
-    if r.status_code != 200:
-        raise HTTPException(status_code=r.status_code, detail=r.text[:300])
-    return r.json()
+    # Tenta pegar um anúncio existente para extrair o idLoja
+    endpoints_tentados = []
+    for ep in ["/lojas", "/integracoes", "/canais-de-venda", "/canaisdevenda"]:
+        r = _req.get(f"https://www.bling.com.br/Api/v3{ep}", headers=hdrs, timeout=20)
+        endpoints_tentados.append({"endpoint": ep, "status": r.status_code, "body": r.text[:200]})
+    # Tenta /anuncios sem filtro para ver o formato de retorno e extrair idLoja
+    r2 = _req.get("https://www.bling.com.br/Api/v3/anuncios", params={"pagina": 1, "limite": 5},
+                  headers=hdrs, timeout=20)
+    anuncios_sample = r2.json() if r2.status_code == 200 else {"erro": r2.text[:300]}
+    return {"endpoints_testados": endpoints_tentados, "anuncios_sample": anuncios_sample}
 
 
 @app.get("/bling/akg/anuncios-sem-ml")
