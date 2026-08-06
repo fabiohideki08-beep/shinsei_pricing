@@ -1246,7 +1246,7 @@ def ml_shinsei_item_raw(item_id: str):
     return r.json()
 
 @app.post("/ml/akg/debug-post/{item_id}")
-def ml_akg_debug_post(item_id: str):
+def ml_akg_debug_post(item_id: str, listing_type: str = Query(default="free")):
     """Tenta criar o item no ML AKG e retorna o erro completo (sem truncar)."""
     import requests as _req
     from services.ml_copy_service import _shinsei_token, _akg_token, _headers, _get_items_details, _build_payload
@@ -1262,6 +1262,7 @@ def ml_akg_debug_post(item_id: str):
     payload = _build_payload(item)
     if not payload:
         raise HTTPException(status_code=400, detail="Payload inválido (sem título/categoria/preço)")
+    payload["listing_type_id"] = listing_type  # override para teste
     r = _req.post("https://api.mercadolibre.com/items",
                   json=payload, headers=_headers(akg_token), timeout=30)
     return {
