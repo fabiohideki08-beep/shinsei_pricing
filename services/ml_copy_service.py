@@ -18,7 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 PROGRESS_PATH = DATA_DIR / "ml_copy_akg_progress.json"
 
-LISTING_TYPE = "free"
+LISTING_TYPE = "bronze"
 INITIAL_QUANTITY = 1
 RATE_LIMIT_SLEEP = 0.5   # segundos entre criações
 BATCH_SIZE = 20           # multiget ML
@@ -138,7 +138,30 @@ def _extract_sku(item: dict) -> str:
 
 # ── Monta payload para ML AKG ─────────────────────────────────────────────────
 
-def _build_payload(item: dict) -> dict | None:
+def _get_catalog_product_id(family_name: str, category_id: str, token: str) -> str | None:
+    """Busca catalog_product_id via /products/search. Necessário para criar itens de catálogo."""
+    try:
+        r = requests.get(
+            f"{ML_API}/products/search",
+            params={"q": family_name, "site_id": "MLB", "category": category_id},
+            headers=_headers(token),
+            timeout=15,
+        )
+        if r.status_code != 200:
+            return None
+        results = r.json().get("results", [])
+        # Prefere active, aceita qualquer
+        for p in results:
+            if p.get("status") == "active":
+                return p.get("id")
+        if results:
+            return results[0].get("id")
+    except Exception as e:
+        logger.warning("Erro buscando catalog_product_id para '%s': %s", family_name, e)
+    return None
+
+
+def _build_payload(item: dict, catalog_product_id: str | None = None) -> dict | None:
     """Monta o payload para POST /items na conta AKG."""
     title = item.get("title", "")
     category_id = item.get("category_id", "")
@@ -159,7 +182,6 @@ def _build_payload(item: dict) -> dict | None:
             pictures.append({"source": url})
 
     # Atributos — preserva tudo exceto SELLER_SKU (vai no seller_custom_field)
-    # Mantém atributos sem value_name pois podem ter value_id obrigatório
     attributes = [
         a for a in item.get("attributes", [])
         if a.get("id") not in ("SELLER_SKU",)
@@ -180,8 +202,10 @@ def _build_payload(item: dict) -> dict | None:
     }
 
     if is_catalog:
-        # Itens de catálogo: ML gerencia título e atributos
+        # Itens de catálogo: ML exige family_name + catalog_product_id juntos
         payload["family_name"] = family_name
+        if catalog_product_id:
+            payload["catalog_product_id"] = catalog_product_id
         if domain_id:
             payload["domain_id"] = domain_id
     else:
@@ -303,7 +327,17 @@ def run_copy(
                 processados += 1
                 continue
 
-            payload = _build_payload(item)
+            # Para itens de catálogo, busca catalog_product_id antes de montar o payload
+            catalog_pid: str | None = None
+            fn = item.get("family_name") or ""
+            if fn:
+                catalog_pid = _get_catalog_product_id(fn, item.get("category_id", ""), akg_token)
+                if catalog_pid:
+                    _log(f"  catalog_product_id={catalog_pid} para '{fn[:40]}'")
+                else:
+                    _log(f"  Aviso: catalog_product_id não encontrado para '{fn[:40]}' — tentando só com family_name")
+
+            payload = _build_payload(item, catalog_product_id=catalog_pid)
             if not payload:
                 _log(f"Skip {item_id} — payload inválido (sem título/categoria/preço)")
                 total_skipped += 1
