@@ -171,10 +171,12 @@ class _MercadoLivreOAuthAKG(MercadoLivreOAuthService):
         self.data_dir.mkdir(exist_ok=True)
         self.tokens_file = self.data_dir / "ml_tokens_akg.json"
         self.state_file  = self.data_dir / "ml_oauth_state_akg.json"
-        self.client_id     = _os.getenv("ML_AKG_CLIENT_ID", "").strip()
-        self.client_secret = _os.getenv("ML_AKG_CLIENT_SECRET", "").strip()
-        self.redirect_uri  = _os.getenv("ML_AKG_REDIRECT_URI",
-                                        "https://shinsei-pricing.onrender.com/ml/callback2").strip()
+        # Usa credenciais AKG específicas se definidas; caso contrário reutiliza as da conta principal
+        cfg = MercadoLivreConfigStore(base_dir).load()
+        self.client_id     = (_os.getenv("ML_AKG_CLIENT_ID") or cfg.get("client_id") or "").strip()
+        self.client_secret = (_os.getenv("ML_AKG_CLIENT_SECRET") or cfg.get("client_secret") or "").strip()
+        self.redirect_uri  = (_os.getenv("ML_AKG_REDIRECT_URI") or
+                              "https://shinsei-pricing.onrender.com/ml/callback2").strip()
 
 
 def _get_akg_oauth():
