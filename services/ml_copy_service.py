@@ -203,7 +203,8 @@ def _build_payload(item: dict, catalog_product_id: str | None = None) -> dict | 
 
     if is_catalog:
         # Itens de catálogo: ML exige family_name + catalog_product_id juntos
-        payload["family_name"] = family_name
+        # ML limita family_name a 60 caracteres
+        payload["family_name"] = family_name[:60]
         if catalog_product_id:
             payload["catalog_product_id"] = catalog_product_id
         if domain_id:
