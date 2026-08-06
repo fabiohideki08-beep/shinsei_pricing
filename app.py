@@ -1212,6 +1212,26 @@ def ml_akg_copy_iniciar(
     background_tasks.add_task(_run)
     return {"ok": True, "message": "Job iniciado em background. Acompanhe em /ml/akg/copiar-shinsei/status"}
 
+@app.post("/ml/injetar-tokens")
+async def ml_injetar_tokens(request: Request):
+    """Injeta tokens ML diretamente (para renovar sem OAuth quando o servidor reinicia)."""
+    import time as _t
+    body = await request.json()
+    shinsei = body.get("shinsei")
+    akg = body.get("akg")
+    resultado = {}
+    if shinsei:
+        p = DATA_DIR / "ml_tokens.json"
+        shinsei["expires_at"] = _t.time() + shinsei.get("expires_in", 21600) - 300
+        p.write_text(json.dumps(shinsei, indent=2, ensure_ascii=False), encoding="utf-8")
+        resultado["shinsei"] = "ok"
+    if akg:
+        p = DATA_DIR / "ml_tokens_akg.json"
+        akg["expires_at"] = _t.time() + akg.get("expires_in", 21600) - 300
+        p.write_text(json.dumps(akg, indent=2, ensure_ascii=False), encoding="utf-8")
+        resultado["akg"] = "ok"
+    return {"ok": True, "resultado": resultado}
+
 @app.post("/ml/akg/copiar-shinsei/resetar")
 def ml_akg_copy_reset():
     """Limpa o progresso salvo para recomeçar do zero."""
