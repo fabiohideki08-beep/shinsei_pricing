@@ -61,6 +61,7 @@ PUBLIC_PATHS = {
     "/ml/login2",
     "/ml/callback2",
     "/ml/status2",
+    "/ml/akg/cota-gratis",
     "/mercado-livre",
     "/regras/modelo/download",
     "/regras/importar-excel",
