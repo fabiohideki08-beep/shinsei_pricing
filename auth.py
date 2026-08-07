@@ -266,6 +266,7 @@ PUBLIC_PREFIXES = (
     "/sistema/",        # Páginas de sistema (sem auth)
     "/modulos/",        # APIs dos módulos avançados (sem auth)
     "/config/regras-precificacao/",  # Ativar perfil
+    "/config/credenciais",           # Salvar credenciais AKG/Google (chamado pela página de integrações)
     "/gmc/",          # GMC scan, status, blacklist
     "/seo-health/",   # SEO Health análise e pagespeed
     "/marketing/",    # Marketing endpoints
