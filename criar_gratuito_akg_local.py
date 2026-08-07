@@ -21,6 +21,23 @@ COPY_PROGRESS_PATH = DATA_DIR / "ml_copy_akg_progress.json"
 PROGRESS_PATH = DATA_DIR / "ml_gratuito_akg_progress.json"
 TOKEN_AKG = DATA_DIR / "ml_tokens_akg.json"
 TOKEN_SHINSEI = DATA_DIR / "ml_tokens.json"
+RENDER_BASE = "https://shinsei-pricing.onrender.com"
+
+
+def _sync_akg_token():
+    """Baixa o token AKG atualizado do servidor Render e salva localmente."""
+    try:
+        r = requests.get(f"{RENDER_BASE}/ml/tokens2", timeout=15)
+        if r.status_code == 200:
+            data = r.json().get("data", {})
+            if data.get("access_token"):
+                TOKEN_AKG.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+                print(f"Token AKG sincronizado do servidor.", flush=True)
+                return True
+        print(f"Aviso: não foi possível sincronizar token AKG ({r.status_code})", flush=True)
+    except Exception as e:
+        print(f"Aviso: erro ao sincronizar token AKG: {e}", flush=True)
+    return False
 
 LISTING_TYPE = "free"
 RATE_LIMIT_SLEEP = 0.5
@@ -146,6 +163,7 @@ def _post_item(payload: dict, akg_token: str) -> tuple[bool, str]:
 
 
 def run(reset=False, dry_run=False, limit=0):
+    _sync_akg_token()
     akg_token = _load_token(TOKEN_AKG, "AKG")
 
     # Carrega bronze já criados

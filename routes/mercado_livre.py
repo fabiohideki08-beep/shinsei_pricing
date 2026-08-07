@@ -109,6 +109,18 @@ def ml_tokens():
     return result
 
 
+@router.get("/ml/tokens2")
+def ml_tokens2():
+    """Exporta token da conta AKG para uso em scripts locais."""
+    svc = _get_akg_oauth()
+    tokens_path = svc.tokens_file
+    if not tokens_path.exists():
+        raise HTTPException(status_code=404, detail="Token AKG não encontrado. Faça login em /ml/login2")
+    import json as _json
+    data = _json.loads(tokens_path.read_text(encoding="utf-8"))
+    return {"success": True, "data": data}
+
+
 @router.post("/ml/refresh")
 def ml_refresh():
     oauth_service = get_oauth_service()
