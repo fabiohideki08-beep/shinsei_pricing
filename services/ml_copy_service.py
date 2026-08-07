@@ -280,13 +280,64 @@ def _build_variation_payload(items: list[dict]) -> dict | None:
     return payload
 
 
+# ── Catálogo: busca cpid atual ────────────────────────────────────────────────
+
+_cpid_cache: dict[str, str] = {}  # family_name → catalog_product_id atual
+
+
+def _find_current_cpid(family_name: str, category_id: str, token: str) -> str:
+    """Busca o catalog_product_id ATIVO para um family_name quando o cpid do Shinsei dá 500."""
+    key = f"{family_name}|{category_id}"
+    if key in _cpid_cache:
+        return _cpid_cache[key]
+
+    # Pega domain_id via categoria
+    domain_r = requests.get(
+        f"{ML_API}/categories/{category_id}",
+        headers=_headers(token), timeout=10
+    )
+    domain_id = ""
+    if domain_r.status_code == 200:
+        domain_id = (domain_r.json().get("settings", {}).get("catalog_domain") or
+                     domain_r.json().get("domain_id") or "")
+
+    params: dict = {"site_id": "MLB", "q": family_name[:80]}
+    if domain_id:
+        params["domain_id"] = domain_id
+
+    r = requests.get(f"{ML_API}/products/search", params=params,
+                     headers=_headers(token), timeout=15)
+    if r.status_code != 200:
+        return ""
+
+    results = r.json().get("results", [])
+    # Prefere produto ativo; aceita qualquer se não tiver ativo
+    active = [p for p in results if p.get("status") == "active"]
+    candidates = active or results
+    cpid = candidates[0].get("id", "") if candidates else ""
+    _cpid_cache[key] = cpid
+    return cpid
+
+
 # ── Publicação ────────────────────────────────────────────────────────────────
 
-def _post_item_akg(payload: dict, token: str) -> tuple[bool, str, str]:
+def _post_item_akg(payload: dict, token: str, shin_token: str = "") -> tuple[bool, str, str]:
     sku = payload.get("seller_custom_field", "")
     r = requests.post(f"{ML_API}/items", json=payload, headers=_headers(token), timeout=30)
     if r.status_code in (200, 201):
         return True, r.json().get("id", ""), sku
+
+    # Fallback: se 500 e temos family_name, tenta buscar cpid atual no catálogo
+    if r.status_code == 500 and payload.get("family_name") and shin_token:
+        family_name = payload["family_name"]
+        category_id = payload.get("category_id", "")
+        new_cpid = _find_current_cpid(family_name, category_id, shin_token)
+        if new_cpid and new_cpid != payload.get("catalog_product_id"):
+            payload2 = {**payload, "catalog_product_id": new_cpid}
+            r2 = requests.post(f"{ML_API}/items", json=payload2, headers=_headers(token), timeout=30)
+            if r2.status_code in (200, 201):
+                return True, r2.json().get("id", ""), sku
+
     return False, r.text[:400], sku
 
 
@@ -401,7 +452,7 @@ def run_copy(
                     "catalog_product_id": cpid
                 })
             else:
-                ok, result, _ = _post_item_akg(payload, akg_token)
+                ok, result, _ = _post_item_akg(payload, akg_token, shin_token)
                 if ok:
                     _log(f"✓ [single] {item.get('id')} SKU={sku} → {result}")
                     progress.setdefault("criados", []).append({
@@ -437,7 +488,7 @@ def run_copy(
                         "catalog_product_id": cpid
                     })
             else:
-                ok, result, _ = _post_item_akg(payload, akg_token)
+                ok, result, _ = _post_item_akg(payload, akg_token, shin_token)
                 if ok:
                     _log(f"✓ [variation/{len(group_items)}] cpid={cpid} fn='{family_name}' → {result}")
                     for it, sku in zip(group_items, skus):
@@ -454,7 +505,7 @@ def run_copy(
                         p2 = _build_single_payload(it)
                         if not p2:
                             continue
-                        ok2, res2, _ = _post_item_akg(p2, akg_token)
+                        ok2, res2, _ = _post_item_akg(p2, akg_token, shin_token)
                         if ok2:
                             _log(f"  ✓ [fallback] {it.get('id')} SKU={sku} → {res2}")
                             progress.setdefault("criados", []).append({
@@ -497,7 +548,7 @@ def run_copy(
             processados += 1
             continue
 
-        ok, result, sku_used = _post_item_akg(payload, akg_token)
+        ok, result, sku_used = _post_item_akg(payload, akg_token, shin_token)
         if ok:
             _log(f"✓ {item_id} SKU={sku_used} → {result}")
             progress.setdefault("criados", []).append({"sku": sku_used, "shinsei_id": item_id, "akg_id": result})
