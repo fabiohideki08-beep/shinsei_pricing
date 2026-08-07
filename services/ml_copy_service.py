@@ -1,11 +1,15 @@
 """
 Copia anúncios ativos da Shinsei (ML) para a conta AKG (ML) preservando SKU.
-listing_type_id: "free" (Grátis) para todos.
+Estratégia:
+  - Itens de catálogo: usa catalog_product_id direto do item Shinsei (mais preciso que busca por texto)
+  - Itens com mesmo catalog_product_id (mesmo produto, cores diferentes): agrupados em UM anúncio com
+    variações HAIR_TONE (para MLB264861) ou como listas separadas (categorias sem variação)
 """
 from __future__ import annotations
 import json
 import logging
 import time
+from collections import defaultdict
 from pathlib import Path
 from typing import Iterator
 
@@ -20,8 +24,11 @@ PROGRESS_PATH = DATA_DIR / "ml_copy_akg_progress.json"
 
 LISTING_TYPE = "bronze"
 INITIAL_QUANTITY = 1
-RATE_LIMIT_SLEEP = 0.5   # segundos entre criações
-BATCH_SIZE = 20           # multiget ML
+RATE_LIMIT_SLEEP = 0.5
+BATCH_SIZE = 20
+
+# Categorias que suportam variações por HAIR_TONE
+VARIATION_CATEGORIES = {"MLB264861"}
 
 
 # ── Tokens ────────────────────────────────────────────────────────────────────
@@ -75,14 +82,10 @@ def _get_shinsei_seller_id(token: str) -> str:
     return str(r.json()["id"])
 
 
-def _iter_shinsei_active_ids(token: str, seller_id: str, offset_start: int = 0) -> Iterator[list[str]]:
-    """Itera todos os IDs de anúncios ativos da Shinsei em batches de BATCH_SIZE.
-    Usa scroll_id para ultrapassar o limite de ~1060 itens do offset-based search.
-    """
+def _iter_shinsei_active_ids(token: str, seller_id: str) -> Iterator[list[str]]:
+    """Itera todos os IDs de anúncios ativos da Shinsei via scroll (sem limite de offset)."""
     limit = 100
     scroll_id: str | None = None
-    first_page = True
-    pages_yielded = 0
 
     while True:
         params: dict = {"status": "active", "limit": limit, "search_type": "scan"}
@@ -103,31 +106,19 @@ def _iter_shinsei_active_ids(token: str, seller_id: str, offset_start: int = 0) 
         if not ids:
             break
 
-        # Na primeira página, pula as já processadas (offset_start)
-        if first_page and offset_start > 0:
-            skip = min(offset_start, len(ids))
-            ids = ids[skip:]
-            first_page = False
-
-        # Yield em batches de BATCH_SIZE
         for i in range(0, len(ids), BATCH_SIZE):
             yield ids[i:i + BATCH_SIZE]
-            pages_yielded += 1
 
         if not scroll_id:
             break
 
 
 def _get_items_details(ids: list[str], token: str) -> list[dict]:
-    """Busca detalhes individualmente para receber todos os campos (incluindo family_name)."""
+    """Busca detalhes individualmente para receber todos os campos."""
     results = []
     for item_id in ids:
         try:
-            r = requests.get(
-                f"{ML_API}/items/{item_id}",
-                headers=_headers(token),
-                timeout=15,
-            )
+            r = requests.get(f"{ML_API}/items/{item_id}", headers=_headers(token), timeout=15)
             if r.status_code == 200:
                 results.append(r.json())
             else:
@@ -138,127 +129,153 @@ def _get_items_details(ids: list[str], token: str) -> list[dict]:
     return results
 
 
-# ── Extrai SKU do item ─────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _extract_sku(item: dict) -> str:
-    # seller_custom_field é o campo principal
     sku = item.get("seller_custom_field") or ""
     if sku:
         return sku
-    # Fallback: atributo SELLER_SKU
     for attr in item.get("attributes", []):
         if attr.get("id") == "SELLER_SKU":
+            return attr.get("value_name") or ""
+    # fallback: GTIN
+    for attr in item.get("attributes", []):
+        if attr.get("id") == "GTIN":
             return attr.get("value_name") or ""
     return ""
 
 
-# ── Monta payload para ML AKG ─────────────────────────────────────────────────
-
-def _get_catalog_product_id(family_name: str, category_id: str, token: str) -> str | None:
-    """Busca catalog_product_id via /products/search. Necessário para criar itens de catálogo."""
-    try:
-        r = requests.get(
-            f"{ML_API}/products/search",
-            params={"q": family_name, "site_id": "MLB", "category": category_id},
-            headers=_headers(token),
-            timeout=15,
-        )
-        if r.status_code != 200:
-            return None
-        results = r.json().get("results", [])
-        # Prefere active, aceita qualquer
-        for p in results:
-            if p.get("status") == "active":
-                return p.get("id")
-        if results:
-            return results[0].get("id")
-    except Exception as e:
-        logger.warning("Erro buscando catalog_product_id para '%s': %s", family_name, e)
+def _extract_hair_tone(item: dict) -> dict | None:
+    """Extrai atributo HAIR_TONE do item (para variações em MLB264861)."""
+    for attr in item.get("attributes", []):
+        if attr.get("id") == "HAIR_TONE":
+            return {
+                "id": "HAIR_TONE",
+                "value_id": attr.get("value_id"),
+                "value_name": attr.get("value_name") or "",
+            }
     return None
 
 
-def _build_payload(item: dict, catalog_product_id: str | None = None) -> dict | None:
-    """Monta o payload para POST /items na conta AKG."""
-    title = item.get("title", "")
-    category_id = item.get("category_id", "")
-    price = item.get("price")
-    currency_id = item.get("currency_id", "BRL")
-    condition = item.get("condition", "new")
-    sku = _extract_sku(item)
-
-    if not title or not category_id or not price:
-        return None
-
-    # Fotos — usa source URL para ML fazer o upload na conta AKG (força https)
-    pictures = []
+def _pics(item: dict) -> list[dict]:
+    """Extrai fotos do item forçando https."""
+    result = []
     for pic in item.get("pictures", []):
         url = pic.get("secure_url") or pic.get("url") or ""
         if url:
-            url = url.replace("http://", "https://", 1)
-            pictures.append({"source": url})
+            result.append({"source": url.replace("http://", "https://", 1)})
+    return result
 
-    # Atributos — preserva tudo exceto SELLER_SKU (vai no seller_custom_field)
-    attributes = [
-        a for a in item.get("attributes", [])
-        if a.get("id") not in ("SELLER_SKU",)
-    ]
+
+# ── Monta payload ─────────────────────────────────────────────────────────────
+
+def _build_single_payload(item: dict) -> dict | None:
+    """Payload para um item individual (sem variações)."""
+    category_id = item.get("category_id", "")
+    price = item.get("price")
+    if not category_id or not price:
+        return None
 
     family_name = item.get("family_name") or ""
+    catalog_product_id = item.get("catalog_product_id") or ""
     domain_id = item.get("domain_id") or ""
-    is_catalog = bool(family_name)
+    is_catalog = bool(family_name or catalog_product_id)
 
     payload: dict = {
         "category_id": category_id,
         "price": price,
-        "currency_id": currency_id,
+        "currency_id": item.get("currency_id", "BRL"),
         "available_quantity": INITIAL_QUANTITY,
         "listing_type_id": LISTING_TYPE,
-        "condition": condition,
-        "pictures": pictures,
+        "condition": item.get("condition", "new"),
+        "pictures": _pics(item),
     }
 
     if is_catalog:
-        # Itens de catálogo: ML exige family_name + catalog_product_id juntos
-        # ML limita family_name a 60 caracteres
-        payload["family_name"] = family_name[:60]
+        if family_name:
+            payload["family_name"] = family_name[:60]
         if catalog_product_id:
             payload["catalog_product_id"] = catalog_product_id
         if domain_id:
             payload["domain_id"] = domain_id
     else:
-        # Itens normais: title e attributes são livres
+        title = item.get("title", "")
+        if not title:
+            return None
         payload["title"] = title
-        payload["attributes"] = attributes
+        payload["attributes"] = [
+            a for a in item.get("attributes", []) if a.get("id") not in ("SELLER_SKU",)
+        ]
 
+    sku = _extract_sku(item)
     if sku:
         payload["seller_custom_field"] = sku
 
-    # Variações
-    variations = item.get("variations", [])
-    if variations:
-        cleaned_vars = []
-        for v in variations:
-            cv = {
-                "price": v.get("price", price),
-                "available_quantity": INITIAL_QUANTITY,
-                "attribute_combinations": v.get("attribute_combinations", []),
-            }
-            if v.get("seller_custom_field"):
-                cv["seller_custom_field"] = v["seller_custom_field"]
-            # Fotos da variação
-            var_pics = []
-            for pic in v.get("picture_ids", []):
-                # picture_ids são IDs do ML — mantém como referência
-                var_pics.append(pic)
-            if var_pics:
-                cv["picture_ids"] = var_pics
-            cleaned_vars.append(cv)
-        payload["variations"] = cleaned_vars
-        # Remove price/quantity do topo quando tem variações
-        payload.pop("price", None)
-        payload.pop("available_quantity", None)
+    return payload
 
-    # Shipping — não copia (deixa ML usar padrão da conta AKG)
+
+def _build_variation_payload(items: list[dict]) -> dict | None:
+    """
+    Payload para múltiplos itens com mesmo catalog_product_id agrupados como variações.
+    Usa HAIR_TONE como atributo discriminador de variação.
+    Cada item vira uma variation com seu HAIR_TONE + SKU + preço.
+    """
+    if not items:
+        return None
+
+    anchor = items[0]
+    category_id = anchor.get("category_id", "")
+    family_name = anchor.get("family_name") or ""
+    catalog_product_id = anchor.get("catalog_product_id") or ""
+    domain_id = anchor.get("domain_id") or ""
+
+    if not category_id or not (family_name or catalog_product_id):
+        return None
+
+    variations = []
+    for item in items:
+        price = item.get("price")
+        if not price:
+            continue
+        sku = _extract_sku(item)
+        hair_tone = _extract_hair_tone(item)
+
+        var: dict = {
+            "price": price,
+            "available_quantity": INITIAL_QUANTITY,
+        }
+        if sku:
+            var["seller_custom_field"] = sku
+        if hair_tone:
+            var["attribute_combinations"] = [hair_tone]
+        # Fotos da variação
+        pics = _pics(item)
+        if pics:
+            var["picture_ids"] = []  # ML vai fazer upload das fotos pelo source nas pictures do topo
+        variations.append(var)
+
+    if not variations:
+        return None
+
+    # Preço médio como referência de topo (variações sobrescrevem)
+    prices = [v["price"] for v in variations if v.get("price")]
+    avg_price = prices[0] if prices else anchor.get("price", 0)
+
+    payload: dict = {
+        "category_id": category_id,
+        "listing_type_id": LISTING_TYPE,
+        "condition": anchor.get("condition", "new"),
+        "currency_id": anchor.get("currency_id", "BRL"),
+        "pictures": _pics(anchor),
+        "variations": variations,
+    }
+
+    if family_name:
+        payload["family_name"] = family_name[:60]
+    if catalog_product_id:
+        payload["catalog_product_id"] = catalog_product_id
+    if domain_id:
+        payload["domain_id"] = domain_id
 
     return payload
 
@@ -266,13 +283,11 @@ def _build_payload(item: dict, catalog_product_id: str | None = None) -> dict | 
 # ── Publicação ────────────────────────────────────────────────────────────────
 
 def _post_item_akg(payload: dict, token: str) -> tuple[bool, str, str]:
-    """Cria item no ML AKG. Retorna (ok, item_id_ou_erro, sku)."""
     sku = payload.get("seller_custom_field", "")
     r = requests.post(f"{ML_API}/items", json=payload, headers=_headers(token), timeout=30)
     if r.status_code in (200, 201):
-        new_id = r.json().get("id", "")
-        return True, new_id, sku
-    return False, r.text[:300], sku
+        return True, r.json().get("id", ""), sku
+    return False, r.text[:400], sku
 
 
 # ── Job principal ─────────────────────────────────────────────────────────────
@@ -284,29 +299,26 @@ def run_copy(
     status_callback=None,
 ) -> dict:
     """
-    Executa a cópia Shinsei → AKG.
-    limit=0 = sem limite.
-    dry_run=True = não publica, só retorna o que publicaria.
-    reset=True = ignora progresso anterior.
-    status_callback(msg) = função chamada a cada item para log em tempo real.
+    Executa a cópia Shinsei → AKG com agrupamento de variações.
+    1. Coleta TODOS os itens Shinsei via scroll
+    2. Agrupa por catalog_product_id (categorias com HAIR_TONE) ou trata individualmente
+    3. Para grupos com 2+ itens: cria UM anúncio com variações
+    4. Para itens únicos: cria anúncio individual
     """
     shin_token = _shinsei_token()
     akg_token = _akg_token()
-
     seller_id = _get_shinsei_seller_id(shin_token)
 
-    progress = {} if reset else _load_progress()
-    if reset:
-        progress = {"criados": [], "falhas": [], "skipped": [], "ultimo_offset": 0}
+    progress = {"criados": [], "falhas": [], "skipped": [], "ultimo_offset": 0} if reset else _load_progress()
 
-    ja_criados_skus: set[str] = {c["sku"] for c in progress.get("criados", []) if c.get("sku")}
-    ja_falha_skus: set[str] = {f["sku"] for f in progress.get("falhas", []) if f.get("sku")}
-
-    offset_start = progress.get("ultimo_offset", 0)
-
-    total_criados = len(progress.get("criados", []))
-    total_falhas = len(progress.get("falhas", []))
-    total_skipped = len(progress.get("skipped", []))
+    # SKUs já processados (criados ou falhados) — usados para skip
+    ja_processados: set[str] = {
+        c["sku"] for c in progress.get("criados", []) if c.get("sku")
+    } | {
+        f["sku"] for f in progress.get("falhas", []) if f.get("sku")
+    }
+    # catalog_product_ids já publicados como variação agrupada
+    ja_cpids: set[str] = {c.get("catalog_product_id", "") for c in progress.get("criados", []) if c.get("catalog_product_id")}
 
     def _log(msg: str):
         logger.info(msg)
@@ -314,75 +326,189 @@ def run_copy(
         if status_callback:
             status_callback(msg)
 
-    _log(f"Iniciando cópia Shinsei→AKG | seller_shinsei={seller_id} | dry_run={dry_run} | offset_start={offset_start}")
-    # Verifica primeiro batch para diagnóstico
-    import requests as _req2
-    _r = _req2.get(f"{ML_API}/users/{seller_id}/items/search",
-                   params={"status": "active", "offset": 0, "limit": 1},
-                   headers=_headers(shin_token), timeout=20)
-    _total = _r.json().get("paging", {}).get("total", "ERR") if _r.status_code == 200 else f"HTTP {_r.status_code}"
-    _log(f"Total de itens ativos na Shinsei: {_total}")
+    _log(f"Iniciando cópia Shinsei→AKG | seller={seller_id} | dry_run={dry_run}")
+
+    # ── Fase 1: coleta todos os itens Shinsei via scroll ──────────────────────
+    _log("Fase 1: coletando itens Shinsei via scroll...")
+    all_items: list[dict] = []
+    batch_count = 0
+    for batch_ids in _iter_shinsei_active_ids(shin_token, seller_id):
+        details = _get_items_details(batch_ids, shin_token)
+        all_items.extend(details)
+        batch_count += 1
+        if batch_count % 5 == 0:
+            _log(f"  coletados {len(all_items)} itens...")
+        if limit and len(all_items) >= limit * 3:
+            break
+
+    _log(f"Total coletado: {len(all_items)} itens")
+
+    # ── Fase 2: agrupa por catalog_product_id (para variações) ────────────────
+    # Grupos: catalog_product_id → [items] (apenas categorias que suportam variação)
+    variation_groups: dict[str, list[dict]] = defaultdict(list)
+    individual_items: list[dict] = []
+
+    for item in all_items:
+        cpid = item.get("catalog_product_id") or ""
+        cat = item.get("category_id") or ""
+        if cpid and cat in VARIATION_CATEGORIES:
+            variation_groups[cpid].append(item)
+        else:
+            individual_items.append(item)
+
+    _log(f"Grupos de variação: {len(variation_groups)} | Itens individuais: {len(individual_items)}")
 
     processados = 0
-    offset = 0
 
-    for batch_ids in _iter_shinsei_active_ids(shin_token, seller_id, offset_start):
-        items = _get_items_details(batch_ids, shin_token)
+    # ── Fase 3: publica grupos de variação ────────────────────────────────────
+    for cpid, group_items in variation_groups.items():
+        if limit and processados >= limit:
+            break
 
-        for item in items:
-            if limit and processados >= limit:
-                _save_progress(progress)
-                _log(f"Limite de {limit} atingido.")
-                return _summary(progress)
+        # Coleta SKUs do grupo
+        group_skus = [_extract_sku(it) for it in group_items]
 
+        # Skip se TODOS os itens do grupo já foram processados
+        if all(sku and sku in ja_processados for sku in group_skus if sku):
+            total_skipped = len(progress.get("skipped", []))
+            for it, sku in zip(group_items, group_skus):
+                progress.setdefault("skipped", []).append({"sku": sku, "shinsei_id": it.get("id", "")})
+            processados += len(group_items)
+            continue
+
+        # Se já publicamos como variação agrupada, skip
+        if cpid in ja_cpids:
+            for it in group_items:
+                sku = _extract_sku(it)
+                progress.setdefault("skipped", []).append({"sku": sku, "shinsei_id": it.get("id", "")})
+            processados += len(group_items)
+            continue
+
+        family_name = group_items[0].get("family_name", "")[:40]
+
+        if len(group_items) == 1:
+            # Apenas 1 item no grupo → cria individual
+            item = group_items[0]
             sku = _extract_sku(item)
-            item_id = item.get("id", "")
-
-            if sku and sku in ja_criados_skus:
-                total_skipped += 1
-                progress.setdefault("skipped", []).append({"sku": sku, "shinsei_id": item_id})
+            payload = _build_single_payload(item)
+            if not payload:
                 processados += 1
                 continue
-
-            # Para itens de catálogo, busca catalog_product_id antes de montar o payload
-            catalog_pid: str | None = None
-            fn = item.get("family_name") or ""
-            if fn:
-                catalog_pid = _get_catalog_product_id(fn, item.get("category_id", ""), akg_token)
-                if catalog_pid:
-                    _log(f"  catalog_product_id={catalog_pid} para '{fn[:40]}'")
+            if dry_run:
+                _log(f"[DRY/single] cpid={cpid} SKU={sku} fn='{family_name}'")
+                progress.setdefault("criados", []).append({
+                    "sku": sku, "shinsei_id": item.get("id"), "akg_id": "DRY_RUN",
+                    "catalog_product_id": cpid
+                })
+            else:
+                ok, result, _ = _post_item_akg(payload, akg_token)
+                if ok:
+                    _log(f"✓ [single] {item.get('id')} SKU={sku} → {result}")
+                    progress.setdefault("criados", []).append({
+                        "sku": sku, "shinsei_id": item.get("id"), "akg_id": result,
+                        "catalog_product_id": cpid
+                    })
+                    ja_cpids.add(cpid)
                 else:
-                    _log(f"  Aviso: catalog_product_id não encontrado para '{fn[:40]}' — tentando só com family_name")
+                    _log(f"✗ [single] {item.get('id')} SKU={sku} → {result[:80]}")
+                    progress.setdefault("falhas", []).append({
+                        "sku": sku, "shinsei_id": item.get("id"), "erro": result,
+                        "catalog_product_id": cpid
+                    })
+                time.sleep(RATE_LIMIT_SLEEP)
+        else:
+            # 2+ itens → tenta publicar como variações agrupadas
+            skus = [_extract_sku(it) for it in group_items]
+            payload = _build_variation_payload(group_items)
 
-            payload = _build_payload(item, catalog_product_id=catalog_pid)
             if not payload:
-                _log(f"Skip {item_id} — payload inválido (sem título/categoria/preço)")
-                total_skipped += 1
-                processados += 1
+                for it, sku in zip(group_items, skus):
+                    progress.setdefault("falhas", []).append({
+                        "sku": sku, "shinsei_id": it.get("id"), "erro": "payload inválido para variação"
+                    })
+                processados += len(group_items)
                 continue
 
             if dry_run:
-                _log(f"[DRY] Publicaria: {item_id} SKU={sku} → {payload.get('title','')[:50]}")
-                progress.setdefault("criados", []).append({"sku": sku, "shinsei_id": item_id, "akg_id": "DRY_RUN", "title": payload.get("title","")[:60]})
-                total_criados += 1
-                processados += 1
-                continue
-
-            ok, result, sku_used = _post_item_akg(payload, akg_token)
-            if ok:
-                total_criados += 1
-                progress.setdefault("criados", []).append({"sku": sku_used, "shinsei_id": item_id, "akg_id": result})
-                _log(f"✓ {item_id} SKU={sku_used} → {result}")
+                _log(f"[DRY/variation] cpid={cpid} {len(group_items)} itens fn='{family_name}'")
+                for it, sku in zip(group_items, skus):
+                    progress.setdefault("criados", []).append({
+                        "sku": sku, "shinsei_id": it.get("id"), "akg_id": "DRY_RUN_VAR",
+                        "catalog_product_id": cpid
+                    })
             else:
-                total_falhas += 1
-                progress.setdefault("falhas", []).append({"sku": sku_used, "shinsei_id": item_id, "erro": result})
-                _log(f"✗ {item_id} SKU={sku_used} → {result[:100]}")
+                ok, result, _ = _post_item_akg(payload, akg_token)
+                if ok:
+                    _log(f"✓ [variation/{len(group_items)}] cpid={cpid} fn='{family_name}' → {result}")
+                    for it, sku in zip(group_items, skus):
+                        progress.setdefault("criados", []).append({
+                            "sku": sku, "shinsei_id": it.get("id"), "akg_id": result,
+                            "catalog_product_id": cpid
+                        })
+                    ja_cpids.add(cpid)
+                else:
+                    _log(f"✗ [variation] cpid={cpid} → {result[:100]}")
+                    # Fallback: tenta publicar itens individuais do grupo
+                    _log(f"  Tentando itens individuais como fallback...")
+                    for it, sku in zip(group_items, skus):
+                        p2 = _build_single_payload(it)
+                        if not p2:
+                            continue
+                        ok2, res2, _ = _post_item_akg(p2, akg_token)
+                        if ok2:
+                            _log(f"  ✓ [fallback] {it.get('id')} SKU={sku} → {res2}")
+                            progress.setdefault("criados", []).append({
+                                "sku": sku, "shinsei_id": it.get("id"), "akg_id": res2,
+                                "catalog_product_id": cpid
+                            })
+                        else:
+                            progress.setdefault("falhas", []).append({
+                                "sku": sku, "shinsei_id": it.get("id"), "erro": res2,
+                                "catalog_product_id": cpid
+                            })
+                        time.sleep(RATE_LIMIT_SLEEP)
 
-            processados += 1
-            time.sleep(RATE_LIMIT_SLEEP)
-
-        progress["ultimo_offset"] = offset_start + processados
+        processados += len(group_items)
         _save_progress(progress)
+
+    # ── Fase 4: publica itens individuais (não-variation) ─────────────────────
+    for item in individual_items:
+        if limit and processados >= limit:
+            break
+
+        sku = _extract_sku(item)
+        item_id = item.get("id", "")
+
+        if sku and sku in ja_processados:
+            progress.setdefault("skipped", []).append({"sku": sku, "shinsei_id": item_id})
+            processados += 1
+            continue
+
+        payload = _build_single_payload(item)
+        if not payload:
+            _log(f"Skip {item_id} — payload inválido")
+            processados += 1
+            continue
+
+        if dry_run:
+            title = payload.get("title") or item.get("family_name", "")[:50]
+            _log(f"[DRY] {item_id} SKU={sku} → {title[:50]}")
+            progress.setdefault("criados", []).append({"sku": sku, "shinsei_id": item_id, "akg_id": "DRY_RUN"})
+            processados += 1
+            continue
+
+        ok, result, sku_used = _post_item_akg(payload, akg_token)
+        if ok:
+            _log(f"✓ {item_id} SKU={sku_used} → {result}")
+            progress.setdefault("criados", []).append({"sku": sku_used, "shinsei_id": item_id, "akg_id": result})
+        else:
+            _log(f"✗ {item_id} SKU={sku_used} → {result[:80]}")
+            progress.setdefault("falhas", []).append({"sku": sku_used, "shinsei_id": item_id, "erro": result})
+
+        processados += 1
+        if processados % 20 == 0:
+            _save_progress(progress)
+        time.sleep(RATE_LIMIT_SLEEP)
 
     _save_progress(progress)
     return _summary(progress)
@@ -394,6 +520,6 @@ def _summary(progress: dict) -> dict:
         "falhas": len(progress.get("falhas", [])),
         "skipped": len(progress.get("skipped", [])),
         "criados_detalhe": progress.get("criados", [])[:10],
-        "falhas_detalhe": progress.get("falhas", [])[:20],
+        "falhas_detalhe": progress.get("falhas", [])[-20:],
         "log": progress.get("log", [])[-20:],
     }
