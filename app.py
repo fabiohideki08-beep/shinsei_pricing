@@ -1088,12 +1088,21 @@ def bling_callback(code: str | None = Query(None), state: str | None = Query(Non
 
 
 # ── Bling AKG (segunda conta) ─────────────────────────────────────────────────
-_BLING_AKG_CLIENT_ID     = os.getenv("BLING_AKG_CLIENT_ID",     "bbe24c807ae06b55030d356ee95d152d218c2434")
-_BLING_AKG_CLIENT_SECRET = os.getenv("BLING_AKG_CLIENT_SECRET", "1ede47a4c8bb5f37df837ef7d7e05415546622780808651afc49d65fb3ef")
 _BLING_AKG_REDIRECT_URI  = os.getenv("BLING_AKG_REDIRECT_URI",  "https://shinsei-pricing.onrender.com/bling/callback2")
 _BLING_AKG_TOKEN_PATH    = Path("data/bling_tokens_akg.json")
 _BLING_AKG_STATE_PATH    = Path("data/bling_oauth_state_akg.json")
+_CREDENTIALS_PATH        = Path("data/credentials.json")
 
+def _bling_akg_creds() -> tuple[str, str]:
+    """Lê client_id e client_secret do credentials.json (salvo pela página de integrações)."""
+    try:
+        creds = json.loads(_CREDENTIALS_PATH.read_text(encoding="utf-8"))
+        akg = creds.get("bling_akg", {})
+        cid = akg.get("client_id", "") or os.getenv("BLING_AKG_CLIENT_ID", "")
+        sec = akg.get("client_secret", "") or os.getenv("BLING_AKG_CLIENT_SECRET", "")
+        return cid, sec
+    except Exception:
+        return os.getenv("BLING_AKG_CLIENT_ID", ""), os.getenv("BLING_AKG_CLIENT_SECRET", "")
 def _bling_akg_save(data: dict):
     _BLING_AKG_TOKEN_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -1112,10 +1121,11 @@ def _bling_akg_headers() -> dict:
     access = tokens.get("access_token", "")
     expires_at = float(tokens.get("expires_at", 0) or 0)
     if not access or _time.time() >= expires_at:
+        _cid, _csec = _bling_akg_creds()
         r = _req.post("https://www.bling.com.br/Api/v3/oauth/token",
             data={"grant_type": "refresh_token",
                   "refresh_token": tokens.get("refresh_token", "")},
-            auth=(_BLING_AKG_CLIENT_ID, _BLING_AKG_CLIENT_SECRET),
+            auth=(_cid, _csec),
             timeout=20)
         if r.status_code == 200:
             new = r.json()
@@ -1132,9 +1142,10 @@ def bling_auth2():
     from urllib.parse import urlencode
     state = _sec.token_urlsafe(32)
     _BLING_AKG_STATE_PATH.write_text(json.dumps({"state": state, "created_at": int(_time.time())}), encoding="utf-8")
+    _cid, _csec = _bling_akg_creds()
     params = urlencode({
         "response_type": "code",
-        "client_id": _BLING_AKG_CLIENT_ID,
+        "client_id": _cid,
         "redirect_uri": _BLING_AKG_REDIRECT_URI,
         "state": state,
     })
@@ -1150,11 +1161,12 @@ def bling_callback2(code: str | None = Query(None), state: str | None = Query(No
         raise HTTPException(status_code=400, detail="Callback sem code de autorização.")
     import time as _time
     import requests as _req
+    _cid, _csec = _bling_akg_creds()
     r = _req.post("https://www.bling.com.br/Api/v3/oauth/token",
         data={"grant_type": "authorization_code",
               "code": code,
               "redirect_uri": _BLING_AKG_REDIRECT_URI},
-        auth=(_BLING_AKG_CLIENT_ID, _BLING_AKG_CLIENT_SECRET),
+        auth=(_cid, _csec),
         timeout=20)
     if r.status_code != 200:
         raise HTTPException(status_code=400, detail=f"Erro ao trocar code: {r.text[:300]}")

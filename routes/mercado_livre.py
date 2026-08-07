@@ -173,8 +173,16 @@ class _MercadoLivreOAuthAKG(MercadoLivreOAuthService):
         self.state_file  = self.data_dir / "ml_oauth_state_akg.json"
         # Usa credenciais AKG específicas se definidas; caso contrário reutiliza as da conta principal
         cfg = MercadoLivreConfigStore(base_dir).load()
-        self.client_id     = (_os.getenv("ML_AKG_CLIENT_ID") or cfg.get("client_id") or "").strip()
-        self.client_secret = (_os.getenv("ML_AKG_CLIENT_SECRET") or cfg.get("client_secret") or "").strip()
+        # Lê do credentials.json (página de integrações) → env var → config principal
+        _creds_path = self.data_dir / "credentials.json"
+        _saved = {}
+        try:
+            import json as _json
+            _saved = _json.loads(_creds_path.read_text(encoding="utf-8")).get("ml_akg", {})
+        except Exception:
+            pass
+        self.client_id     = (_saved.get("client_id") or _os.getenv("ML_AKG_CLIENT_ID") or cfg.get("client_id") or "").strip()
+        self.client_secret = (_saved.get("client_secret") or _os.getenv("ML_AKG_CLIENT_SECRET") or cfg.get("client_secret") or "").strip()
         self.redirect_uri  = (_os.getenv("ML_AKG_REDIRECT_URI") or
                               "https://shinsei-pricing.onrender.com/ml/callback2").strip()
 
