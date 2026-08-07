@@ -108,6 +108,8 @@ app.include_router(amazon_router)
 app.include_router(estoque_sync_router)
 app.include_router(shopify_webhooks_router)
 app.include_router(ml_ads_router)
+from routes.credentials import router as credentials_router
+app.include_router(credentials_router)
 try:
     from routes.frete import router as frete_router
     app.include_router(frete_router)

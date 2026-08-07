@@ -481,8 +481,40 @@ def _ml_build_sku_map() -> dict:
         return {}
 
     sku_map: dict = {}
-    limit    = 50
+    # ML API caps /items/search at 1000 results regardless of total.
+    # Para cobrir catálogos grandes (>1000 itens), fazemos buscas por scroll
+    # de query terms além do scroll por offset.
+    ML_SEARCH_CAP = 1000
+    limit = 100
 
+    def _process_batch(item_ids: list, status_fallback: str):
+        for i in range(0, len(item_ids), 20):
+            batch   = item_ids[i : i + 20]
+            ids_str = ",".join(batch)
+            r2 = requests.get(
+                "https://api.mercadolibre.com/items",
+                params={"ids": ids_str,
+                        "attributes": "id,status,seller_custom_field,attributes"},
+                headers=_ml_headers(), timeout=20,
+            )
+            if r2.status_code == 200:
+                for raw in r2.json():
+                    item = raw.get("body", raw) if "body" in raw else raw
+                    sku = str(item.get("seller_custom_field") or "").strip()
+                    if not sku:
+                        for attr in item.get("attributes", []):
+                            if attr.get("id") == "SELLER_SKU":
+                                sku = str(attr.get("value_name") or "").strip()
+                                break
+                    item_id     = str(item.get("id") or "").strip()
+                    item_status = str(item.get("status") or status_fallback)
+                    if sku and item_id:
+                        existing = sku_map.get(sku)
+                        if not existing or existing.get("status") != "active":
+                            sku_map[sku] = {"item_id": item_id, "status": item_status}
+            time.sleep(0.3)
+
+    # Busca principal por status (cobre até ML_SEARCH_CAP itens por status)
     for status_busca in ("active", "paused"):
         offset = 0
         while True:
@@ -501,43 +533,52 @@ def _ml_build_sku_map() -> dict:
                 if not item_ids:
                     break
 
-                # Busca detalhes em batches de 20 para pegar seller_custom_field + status
-                for i in range(0, len(item_ids), 20):
-                    batch   = item_ids[i : i + 20]
-                    ids_str = ",".join(batch)
-                    r2 = requests.get(
-                        "https://api.mercadolibre.com/items",
-                        params={"ids": ids_str,
-                                "attributes": "id,status,seller_custom_field,attributes"},
-                        headers=_ml_headers(), timeout=20,
-                    )
-                    if r2.status_code == 200:
-                        for raw in r2.json():
-                            item = raw.get("body", raw) if "body" in raw else raw
-                            # seller_custom_field (campo padrão de SKU no ML)
-                            sku = str(item.get("seller_custom_field") or "").strip()
-                            # Fallback: atributo SELLER_SKU
-                            if not sku:
-                                for attr in item.get("attributes", []):
-                                    if attr.get("id") == "SELLER_SKU":
-                                        sku = str(attr.get("value_name") or "").strip()
-                                        break
-                            item_id     = str(item.get("id") or "").strip()
-                            item_status = str(item.get("status") or status_busca)
-                            if sku and item_id:
-                                # Prefere active sobre paused se mesmo SKU aparece nos dois
-                                existing = sku_map.get(sku)
-                                if not existing or existing.get("status") != "active":
-                                    sku_map[sku] = {"item_id": item_id, "status": item_status}
-                    time.sleep(0.3)
+                _process_batch(item_ids, status_busca)
 
                 total  = data.get("paging", {}).get("total", 0)
                 offset += limit
-                if offset >= total:
+                if offset >= min(total, ML_SEARCH_CAP):
                     break
             except Exception as e:
                 logger.warning("[SYNC-ML] Erro build cache (%s): %s", status_busca, e)
                 break
+
+    # Busca suplementar por query terms para catálogos com >1000 itens.
+    # Cada query retorna até 1000 resultados diferentes, ampliando a cobertura.
+    QUERIES_SUPLEMENTARES = ["alfaparf", "igora", "schwarzkopf", "wella", "loreal",
+                              "tonalizante", "coloracao", "ox 20", "ox 30", "ox 40",
+                              "kit tintura", "ampola", "shampoo", "condicionador"]
+    seen_ids: set = set(v["item_id"] for v in sku_map.values())
+
+    for q in QUERIES_SUPLEMENTARES:
+        try:
+            r = requests.get(
+                f"https://api.mercadolibre.com/users/{seller_id}/items/search",
+                params={"q": q, "limit": 100, "offset": 0},
+                headers=_ml_headers(), timeout=20,
+            )
+            if r.status_code != 200:
+                continue
+            data = r.json()
+            total_q = data.get("paging", {}).get("total", 0)
+            all_ids = data.get("results", [])
+            # Páginas adicionais desta query
+            for off in range(100, min(total_q, ML_SEARCH_CAP), 100):
+                r2 = requests.get(
+                    f"https://api.mercadolibre.com/users/{seller_id}/items/search",
+                    params={"q": q, "limit": 100, "offset": off},
+                    headers=_ml_headers(), timeout=20,
+                )
+                if r2.status_code == 200:
+                    all_ids.extend(r2.json().get("results", []))
+            # Processa apenas IDs ainda não mapeados
+            novos = [i for i in all_ids if i not in seen_ids]
+            if novos:
+                _process_batch(novos, "active")
+                seen_ids.update(novos)
+        except Exception as e:
+            logger.warning("[SYNC-ML] Erro busca suplementar q=%s: %s", q, e)
+            continue
 
     logger.info("[SYNC-ML] Cache construído: %d SKUs (%d active + paused)",
                 len(sku_map),

@@ -239,6 +239,212 @@
 
   </div>
 
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- SEÇÃO: CONTAS AKG                               -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div style="margin:28px 0 14px;display:flex;align-items:center;gap:12px">
+    <div style="flex:1;height:1px;background:var(--line)"></div>
+    <span style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap">🔑 Contas AKG — Credenciais</span>
+    <div style="flex:1;height:1px;background:var(--line)"></div>
+  </div>
+  <p style="font-size:12px;color:var(--muted);margin:0 0 16px">Insira as credenciais das contas AKG. Os campos são salvos de forma segura no servidor. Clique em 💾 para salvar cada integração.</p>
+
+  <div class="grid">
+
+    <!-- BLING AKG -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">📦</div>
+        <div>
+          <div class="card-title">Bling AKG</div>
+          <div class="card-sub">ERP da conta AKG</div>
+        </div>
+        <div style="margin-left:auto" id="status-bling-akg">
+          <span class="status-badge unknown"><span class="dot gray"></span>—</span>
+        </div>
+      </div>
+      <div id="notice-bling-akg" class="notice"></div>
+      <div class="field"><label>Client ID</label><input type="password" id="akg-bling-client-id" placeholder="Client ID do Bling AKG" autocomplete="off"/></div>
+      <div class="field"><label>Client Secret</label><input type="password" id="akg-bling-client-secret" placeholder="Client Secret do Bling AKG" autocomplete="off"/></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn success sm" onclick="salvarCredencial('bling_akg',['akg-bling-client-id','akg-bling-client-secret'],['client_id','client_secret'],'bling-akg')">💾 Salvar</button>
+        <button class="btn secondary sm" onclick="toggleVisible('akg-bling-client-id','akg-bling-client-secret')">👁 Mostrar</button>
+        <a class="btn sm" style="background:#166534" href="/bling/akg/auth" target="_blank">🔐 Conectar OAuth</a>
+      </div>
+    </div>
+
+    <!-- ML AKG -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">🛒</div>
+        <div>
+          <div class="card-title">Mercado Livre AKG</div>
+          <div class="card-sub">Conta AKG no ML</div>
+        </div>
+        <div style="margin-left:auto" id="status-ml-akg">
+          <span class="status-badge unknown"><span class="dot gray"></span>—</span>
+        </div>
+      </div>
+      <div id="notice-ml-akg" class="notice"></div>
+      <div class="field"><label>Client ID (App ID)</label><input type="password" id="akg-ml-client-id" placeholder="App ID do ML AKG" autocomplete="off"/></div>
+      <div class="field"><label>Client Secret</label><input type="password" id="akg-ml-client-secret" placeholder="Client Secret do ML AKG" autocomplete="off"/></div>
+      <div class="field"><label>Access Token</label><input type="password" id="akg-ml-access-token" placeholder="Bearer token atual" autocomplete="off"/></div>
+      <div class="field"><label>Refresh Token</label><input type="password" id="akg-ml-refresh-token" placeholder="Refresh token" autocomplete="off"/></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn success sm" onclick="salvarCredencial('ml_akg',['akg-ml-client-id','akg-ml-client-secret','akg-ml-access-token','akg-ml-refresh-token'],['client_id','client_secret','access_token','refresh_token'],'ml-akg')">💾 Salvar</button>
+        <button class="btn secondary sm" onclick="toggleVisible('akg-ml-client-id','akg-ml-client-secret','akg-ml-access-token','akg-ml-refresh-token')">👁 Mostrar</button>
+        <a class="btn sm" style="background:#166534" href="/ml/akg/login" target="_blank">🔐 Conectar OAuth</a>
+      </div>
+    </div>
+
+    <!-- AMAZON AKG -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">🟡</div>
+        <div>
+          <div class="card-title">Amazon AKG</div>
+          <div class="card-sub">SP-API conta AKG</div>
+        </div>
+        <div style="margin-left:auto" id="status-amazon-akg">
+          <span class="status-badge unknown"><span class="dot gray"></span>—</span>
+        </div>
+      </div>
+      <div id="notice-amazon-akg" class="notice"></div>
+      <div class="field"><label>Seller ID</label><input type="password" id="akg-amz-seller-id" placeholder="AXXXXXXXXX" autocomplete="off"/></div>
+      <div class="field"><label>LWA App ID (Client ID)</label><input type="password" id="akg-amz-client-id" placeholder="amzn1.application-oa2-client.xxx" autocomplete="off"/></div>
+      <div class="field"><label>LWA App Secret</label><input type="password" id="akg-amz-client-secret" placeholder="Client Secret LWA" autocomplete="off"/></div>
+      <div class="field"><label>Refresh Token</label><input type="password" id="akg-amz-refresh-token" placeholder="Atz|IwEB..." autocomplete="off"/></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn success sm" onclick="salvarCredencial('amazon_akg',['akg-amz-seller-id','akg-amz-client-id','akg-amz-client-secret','akg-amz-refresh-token'],['seller_id','lwa_app_id','lwa_client_secret','refresh_token'],'amazon-akg')">💾 Salvar</button>
+        <button class="btn secondary sm" onclick="toggleVisible('akg-amz-seller-id','akg-amz-client-id','akg-amz-client-secret','akg-amz-refresh-token')">👁 Mostrar</button>
+      </div>
+    </div>
+
+    <!-- SHOPEE AKG -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">🟠</div>
+        <div>
+          <div class="card-title">Shopee AKG</div>
+          <div class="card-sub">Open Platform conta AKG</div>
+        </div>
+        <div style="margin-left:auto" id="status-shopee-akg">
+          <span class="status-badge unknown"><span class="dot gray"></span>—</span>
+        </div>
+      </div>
+      <div id="notice-shopee-akg" class="notice"></div>
+      <div class="field"><label>Partner ID</label><input type="password" id="akg-shopee-partner-id" placeholder="Número do parceiro" autocomplete="off"/></div>
+      <div class="field"><label>Partner Key</label><input type="password" id="akg-shopee-partner-key" placeholder="Chave parceiro" autocomplete="off"/></div>
+      <div class="field"><label>Shop ID</label><input type="password" id="akg-shopee-shop-id" placeholder="ID da loja AKG" autocomplete="off"/></div>
+      <div class="field"><label>Access Token</label><input type="password" id="akg-shopee-access-token" placeholder="Token de acesso" autocomplete="off"/></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn success sm" onclick="salvarCredencial('shopee_akg',['akg-shopee-partner-id','akg-shopee-partner-key','akg-shopee-shop-id','akg-shopee-access-token'],['partner_id','partner_key','shop_id','access_token'],'shopee-akg')">💾 Salvar</button>
+        <button class="btn secondary sm" onclick="toggleVisible('akg-shopee-partner-id','akg-shopee-partner-key','akg-shopee-shop-id','akg-shopee-access-token')">👁 Mostrar</button>
+        <a class="btn sm" style="background:#166534" href="/shopee/akg/auth" target="_blank">🔐 Conectar OAuth</a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- SEÇÃO: GOOGLE                                     -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div style="margin:28px 0 14px;display:flex;align-items:center;gap:12px">
+    <div style="flex:1;height:1px;background:var(--line)"></div>
+    <span style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap">🔵 Google — Ferramentas</span>
+    <div style="flex:1;height:1px;background:var(--line)"></div>
+  </div>
+
+  <div class="grid">
+
+    <!-- GOOGLE ADS -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">📢</div>
+        <div>
+          <div class="card-title">Google Ads</div>
+          <div class="card-sub">Campanhas e performance</div>
+        </div>
+        <div style="margin-left:auto" id="status-gads">
+          <span class="status-badge unknown"><span class="dot gray"></span>—</span>
+        </div>
+      </div>
+      <div id="notice-gads" class="notice"></div>
+      <div class="field"><label>Developer Token</label><input type="password" id="g-ads-dev-token" placeholder="Developer Token do Google Ads" autocomplete="off"/></div>
+      <div class="field"><label>Customer ID (MCC)</label><input type="text" id="g-ads-customer-id" placeholder="123-456-7890" autocomplete="off"/></div>
+      <div class="field"><label>Client ID (OAuth)</label><input type="password" id="g-ads-client-id" placeholder="xxxxx.apps.googleusercontent.com" autocomplete="off"/></div>
+      <div class="field"><label>Client Secret</label><input type="password" id="g-ads-client-secret" placeholder="Client Secret" autocomplete="off"/></div>
+      <div class="field"><label>Refresh Token</label><input type="password" id="g-ads-refresh-token" placeholder="Refresh Token OAuth" autocomplete="off"/></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn success sm" onclick="salvarCredencial('google_ads',['g-ads-dev-token','g-ads-customer-id','g-ads-client-id','g-ads-client-secret','g-ads-refresh-token'],['developer_token','customer_id','client_id','client_secret','refresh_token'],'gads')">💾 Salvar</button>
+        <button class="btn secondary sm" onclick="toggleVisible('g-ads-dev-token','g-ads-customer-id','g-ads-client-id','g-ads-client-secret','g-ads-refresh-token')">👁 Mostrar</button>
+      </div>
+    </div>
+
+    <!-- GOOGLE MERCHANT CENTER -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">🛍️</div>
+        <div>
+          <div class="card-title">Google Merchant Center</div>
+          <div class="card-sub">Feed de produtos e Shopping</div>
+        </div>
+        <div style="margin-left:auto" id="status-gmc">
+          <span class="status-badge unknown"><span class="dot gray"></span>—</span>
+        </div>
+      </div>
+      <div id="notice-gmc" class="notice"></div>
+      <div class="field"><label>Merchant ID</label><input type="text" id="g-gmc-merchant-id" placeholder="5071388981" autocomplete="off"/></div>
+      <div class="field"><label>Service Account Email</label><input type="text" id="g-gmc-sa-email" placeholder="xxx@project.iam.gserviceaccount.com" autocomplete="off"/></div>
+      <div class="field"><label>Service Account JSON (chave privada)</label><textarea id="g-gmc-sa-json" rows="3" placeholder='{"type":"service_account","project_id":"...",...}' style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#0d1630;color:#fff;font-size:12px;resize:vertical;font-family:monospace"></textarea></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn success sm" onclick="salvarCredencialGMC()">💾 Salvar</button>
+        <button class="btn secondary sm" onclick="toggleVisible('g-gmc-merchant-id','g-gmc-sa-email')">👁 Mostrar</button>
+      </div>
+    </div>
+
+    <!-- GOOGLE ANALYTICS -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">📊</div>
+        <div>
+          <div class="card-title">Google Analytics 4</div>
+          <div class="card-sub">Métricas de tráfego e conversão</div>
+        </div>
+        <div style="margin-left:auto" id="status-ga4">
+          <span class="status-badge unknown"><span class="dot gray"></span>—</span>
+        </div>
+      </div>
+      <div id="notice-ga4" class="notice"></div>
+      <div class="field"><label>Property ID (GA4)</label><input type="text" id="g-ga4-property-id" placeholder="123456789" autocomplete="off"/></div>
+      <div class="field"><label>Service Account JSON</label><textarea id="g-ga4-sa-json" rows="3" placeholder='{"type":"service_account",...}' style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#0d1630;color:#fff;font-size:12px;resize:vertical;font-family:monospace"></textarea></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn success sm" onclick="salvarCredencial('google_analytics',['g-ga4-property-id','g-ga4-sa-json'],['property_id','service_account_json'],'ga4')">💾 Salvar</button>
+      </div>
+    </div>
+
+    <!-- GOOGLE SEARCH CONSOLE -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">🔍</div>
+        <div>
+          <div class="card-title">Google Search Console</div>
+          <div class="card-sub">SEO e indexação</div>
+        </div>
+        <div style="margin-left:auto" id="status-gsc">
+          <span class="status-badge unknown"><span class="dot gray"></span>—</span>
+        </div>
+      </div>
+      <div id="notice-gsc" class="notice"></div>
+      <div class="field"><label>Site URL</label><input type="text" id="g-gsc-site-url" placeholder="https://shinseiprofissional.com.br/" autocomplete="off"/></div>
+      <div class="field"><label>Service Account JSON</label><textarea id="g-gsc-sa-json" rows="3" placeholder='{"type":"service_account",...}' style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#0d1630;color:#fff;font-size:12px;resize:vertical;font-family:monospace"></textarea></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn success sm" onclick="salvarCredencial('google_search_console',['g-gsc-site-url','g-gsc-sa-json'],['site_url','service_account_json'],'gsc')">💾 Salvar</button>
+      </div>
+    </div>
+
+  </div>
+
   <!-- NGROK / URL PÚBLICA -->
   <div class="card">
     <div class="card-header">
@@ -432,9 +638,91 @@ function verificarTodas(){
   verificarAmazon();
   verificarShopee();
   verificarNgrok();
+  carregarCredenciais();
 }
 
 document.addEventListener('DOMContentLoaded', verificarTodas);
+
+// ── CREDENCIAIS AKG / GOOGLE ──────────────────────────────
+function toggleVisible(...ids){
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.type = (el.type === 'password') ? 'text' : 'password';
+  });
+}
+
+function noticeCard(cardId, msg, tipo){
+  const el = document.getElementById('notice-' + cardId);
+  if(!el) return;
+  el.className = 'notice ' + tipo;
+  el.textContent = msg;
+  if(tipo === 'ok') setTimeout(() => { el.className = 'notice'; }, 4000);
+}
+
+async function salvarCredencial(sistema, inputIds, campos, cardId){
+  const valores = {};
+  for(let i=0; i<inputIds.length; i++){
+    const val = (document.getElementById(inputIds[i])?.value || '').trim();
+    if(val) valores[campos[i]] = val;
+  }
+  if(!Object.keys(valores).length){
+    noticeCard(cardId, 'Preencha ao menos um campo.', 'warn'); return;
+  }
+  try{
+    const res = await fetch('/config/credenciais', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({sistema, ...valores})
+    });
+    const data = await res.json();
+    if(data.ok){
+      noticeCard(cardId, '✅ Credenciais salvas com sucesso!', 'ok');
+      setStatus('status-' + cardId, true, 'Configurado');
+    } else {
+      noticeCard(cardId, '❌ ' + (data.detail || 'Erro ao salvar'), 'err');
+    }
+  }catch(e){ noticeCard(cardId, '❌ Erro de conexão', 'err'); }
+}
+
+async function salvarCredencialGMC(){
+  const merchantId = document.getElementById('g-gmc-merchant-id')?.value.trim();
+  const saEmail = document.getElementById('g-gmc-sa-email')?.value.trim();
+  const saJson = document.getElementById('g-gmc-sa-json')?.value.trim();
+  if(!merchantId && !saJson){ noticeCard('gmc','Preencha ao menos um campo.','warn'); return; }
+  const payload = {sistema:'google_merchant_center'};
+  if(merchantId) payload.merchant_id = merchantId;
+  if(saEmail) payload.service_account_email = saEmail;
+  if(saJson){
+    try{ JSON.parse(saJson); payload.service_account_json = saJson; }
+    catch(e){ noticeCard('gmc','JSON inválido na chave de serviço.','err'); return; }
+  }
+  try{
+    const res = await fetch('/config/credenciais', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    const data = await res.json();
+    noticeCard('gmc', data.ok ? '✅ Salvo!' : '❌ ' + (data.detail||'Erro'), data.ok ? 'ok' : 'err');
+    if(data.ok) setStatus('status-gmc', true, 'Configurado');
+  }catch(e){ noticeCard('gmc','❌ Erro de conexão','err'); }
+}
+
+async function carregarCredenciais(){
+  try{
+    const res = await fetch('/config/credenciais');
+    if(!res.ok) return;
+    const data = await res.json();
+    const sistemas = Object.keys(data);
+    const statusMap = {
+      bling_akg: 'bling-akg', ml_akg: 'ml-akg', amazon_akg: 'amazon-akg',
+      shopee_akg: 'shopee-akg', google_ads: 'gads', google_merchant_center: 'gmc',
+      google_analytics: 'ga4', google_search_console: 'gsc'
+    };
+    for(const [sis, badge] of Object.entries(statusMap)){
+      if(sistemas.includes(sis)){
+        setStatus('status-' + badge, true, 'Configurado');
+      }
+    }
+  }catch(e){ /* silencioso */ }
+}
 </script>
 
 <!-- Botão Início -->
