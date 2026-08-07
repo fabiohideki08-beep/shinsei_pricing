@@ -1188,6 +1188,14 @@ def bling_status2():
     return {"ok": True, "conectado": True, "expirado": expirado,
             "expires_at": expires_at, "message": "Conta AKG conectada."}
 
+@app.get("/bling/tokens2")
+def bling_tokens2():
+    """Exporta token Bling AKG para scripts locais (igual /ml/tokens2)."""
+    tokens = _bling_akg_load()
+    if not tokens.get("access_token"):
+        return {"success": False, "error": "Bling AKG não conectado."}
+    return {"success": True, "data": tokens}
+
 @app.get("/ml/akg/copiar-shinsei/status")
 def ml_akg_copy_status():
     """Status do job de cópia Shinsei → AKG."""
