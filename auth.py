@@ -68,6 +68,7 @@ PUBLIC_PATHS = {
     "/ml/refresh2",
     "/ml/tokens2",
     "/bling/tokens2",
+    "/bling/token",
     "/bling/status2",
     "/ml/akg/cota-gratis",
     "/bling/akg/lojas",
