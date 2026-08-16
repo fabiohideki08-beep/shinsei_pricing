@@ -1,7 +1,78 @@
 from fastapi import APIRouter
-from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.responses import RedirectResponse, HTMLResponse, Response
+import functools, time
 
 router = APIRouter()
+
+# Cache simples: sku+idx → (bytes, content_type, timestamp)
+_img_cache: dict[str, tuple[bytes, str, float]] = {}
+_IMG_TTL = 3600 * 6  # 6 horas
+
+
+@router.get("/bling/produto/{sku}/imagem/{idx}")
+def bling_produto_imagem(sku: str, idx: int = 0):
+    """
+    Serve a imagem de um produto Shinsei como URL pública permanente.
+    Usado para referenciar imagens no Bling AKG via imagensURL.
+    Público — não requer API key.
+    """
+    import requests as _req
+
+    cache_key = f"{sku}:{idx}"
+    cached = _img_cache.get(cache_key)
+    if cached and time.time() - cached[2] < _IMG_TTL:
+        return Response(content=cached[0], media_type=cached[1])
+
+    # Busca token Shinsei
+    try:
+        from bling_client import BlingClient
+        client = BlingClient()
+        token = client.tokens.get("access_token", "") if hasattr(client, "tokens") else ""
+    except Exception:
+        token = ""
+
+    if not token:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=503, detail="Token Shinsei indisponível.")
+
+    hdrs = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    BASE = "https://api.bling.com.br/Api/v3"
+
+    # Busca produto por SKU
+    r = _req.get(f"{BASE}/produtos", params={"codigo": sku, "limite": 1}, headers=hdrs, timeout=15)
+    if r.status_code != 200 or not r.json().get("data"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Produto {sku} não encontrado.")
+
+    prod_id = r.json()["data"][0]["id"]
+
+    # Busca detalhes com imagens
+    r2 = _req.get(f"{BASE}/produtos/{prod_id}", headers=hdrs, timeout=15)
+    if r2.status_code != 200:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Erro ao buscar produto.")
+
+    det = r2.json().get("data", {})
+    internas = det.get("midia", {}).get("imagens", {}).get("internas", [])
+
+    if idx >= len(internas):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Imagem {idx} não existe (total: {len(internas)}).")
+
+    img_url = internas[idx]["link"]
+    r3 = _req.get(img_url, timeout=30)
+    if r3.status_code != 200:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=502, detail="Erro ao baixar imagem do Bling.")
+
+    content_type = r3.headers.get("Content-Type", "image/jpeg")
+    _img_cache[cache_key] = (r3.content, content_type, time.time())
+
+    return Response(
+        content=r3.content,
+        media_type=content_type,
+        headers={"Cache-Control": "public, max-age=21600"},
+    )
 
 
 @router.get("/bling/api")
