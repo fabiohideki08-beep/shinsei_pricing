@@ -1376,10 +1376,10 @@ def bling_akg_lojas():
     # Tenta pegar um anúncio existente para extrair o idLoja
     endpoints_tentados = []
     for ep in ["/lojas", "/integracoes", "/canais-de-venda", "/canaisdevenda"]:
-        r = _req.get(f"https://www.bling.com.br/Api/v3{ep}", headers=hdrs, timeout=20)
+        r = _req.get(f"https://api.bling.com.br/Api/v3{ep}", headers=hdrs, timeout=20)
         endpoints_tentados.append({"endpoint": ep, "status": r.status_code, "body": r.text[:200]})
     # Tenta /anuncios sem filtro para ver o formato de retorno e extrair idLoja
-    r2 = _req.get("https://www.bling.com.br/Api/v3/anuncios", params={"pagina": 1, "limite": 5},
+    r2 = _req.get("https://api.bling.com.br/Api/v3/anuncios", params={"pagina": 1, "limite": 5},
                   headers=hdrs, timeout=20)
     anuncios_sample = r2.json() if r2.status_code == 200 else {"erro": r2.text[:300]}
     return {"endpoints_testados": endpoints_tentados, "anuncios_sample": anuncios_sample}
@@ -1395,7 +1395,7 @@ def bling_akg_anuncios_sem_ml(id_loja: int = Query(..., description="ID da loja 
     publicados_skus: set[str] = set()
     pagina = 1
     while True:
-        r = _req.get("https://www.bling.com.br/Api/v3/anuncios",
+        r = _req.get("https://api.bling.com.br/Api/v3/anuncios",
                      params={"idLoja": id_loja, "pagina": pagina, "limite": 100},
                      headers=hdrs, timeout=20)
         if r.status_code != 200:
@@ -1413,7 +1413,7 @@ def bling_akg_anuncios_sem_ml(id_loja: int = Query(..., description="ID da loja 
     todos: list[dict] = []
     pagina = 1
     while True:
-        r = _req.get("https://www.bling.com.br/Api/v3/produtos",
+        r = _req.get("https://api.bling.com.br/Api/v3/produtos",
                      params={"pagina": pagina, "limite": 100, "situacao": "A"},
                      headers=hdrs, timeout=20)
         if r.status_code != 200:
