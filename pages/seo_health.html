@@ -532,7 +532,7 @@ async function rodarPageSpeed(){
 
   try {
     // Chama o endpoint do servidor (tem a API key configurada como env var)
-    const r = await fetch('/seo-health/pagespeed', {headers: _H, signal: AbortSignal.timeout(120000)});
+    const r = await fetch('/seo-health/pagespeed', {method:'POST', headers: _H, signal: AbortSignal.timeout(120000)});
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
       throw new Error(err.detail || `HTTP ${r.status}`);
