@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kits → Amazon — Shinsei Pricing</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,sans-serif;background:#080f1e;color:#e2e8f0;min-height:100vh}
+.wrap{max-width:1400px;margin:0 auto;padding:24px 16px}
+.topbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:24px}
+.brand h1{font-size:22px;font-weight:800;color:#fff}
+.brand p{font-size:13px;color:#64748b;margin-top:4px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;border:none;cursor:pointer;transition:.15s}
+.btn.primary{background:#e47911;color:#fff}
+.btn.primary:hover{background:#c96a0a}
+.btn.secondary{background:rgba(255,255,255,.07);color:#c9d7ff;border:1px solid rgba(255,255,255,.1)}
+.btn.secondary:hover{background:rgba(255,255,255,.12)}
+.btn.success{background:#16a34a;color:#fff}
+.btn.success:hover{background:#15803d}
+.btn.danger{background:#dc2626;color:#fff}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.filters{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:rgba(18,26,49,.95);border:1px solid #1e2d4a;border-radius:14px;padding:14px 16px;margin-bottom:16px}
+.filters label{font-size:12px;color:#64748b;font-weight:600}
+.filters select,.filters input{background:#0d1730;border:1px solid #1e2d4a;color:#e2e8f0;border-radius:8px;padding:6px 10px;font-size:13px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.stat{background:rgba(18,26,49,.95);border:1px solid #1e2d4a;border-radius:14px;padding:14px 16px}
+.stat .label{font-size:12px;color:#64748b;font-weight:600}
+.stat .val{font-size:24px;font-weight:800;margin-top:6px}
+.grid{display:grid;gap:12px}
+.card{background:rgba(18,26,49,.95);border:1px solid #1e2d4a;border-radius:18px;padding:18px;transition:.15s}
+.card:hover{border-color:#3b5bdb}
+.card.selected{border-color:#e47911;background:rgba(228,121,17,.05)}
+.card-head{display:flex;align-items:flex-start;gap:12px}
+.card-check{margin-top:3px;width:18px;height:18px;cursor:pointer;accent-color:#e47911;flex-shrink:0}
+.card-info{flex:1}
+.card-title{font-size:15px;font-weight:700;color:#fff;margin-bottom:6px}
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;margin-right:4px}
+.badge.novo{background:rgba(59,91,219,.2);color:#93a8ff}
+.badge.ativo{background:rgba(34,197,94,.2);color:#86efac}
+.badge.kit{background:rgba(139,92,246,.2);color:#c4b5fd}
+.comps{margin-top:8px;font-size:12px;color:#64748b}
+.comps span{display:inline-block;background:#0d1730;border:1px solid #1e2d4a;border-radius:6px;padding:2px 8px;margin:2px 4px 2px 0}
+.preco-row{display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap}
+.preco-label{font-size:12px;color:#64748b}
+.preco-val{font-size:16px;font-weight:700;color:#e47911}
+.preco-custo{font-size:12px;color:#64748b}
+.margem{font-size:12px;padding:2px 8px;border-radius:999px;font-weight:700}
+.margem.boa{background:rgba(34,197,94,.15);color:#86efac}
+.margem.media{background:rgba(245,158,11,.15);color:#fcd34d}
+.margem.ruim{background:rgba(239,68,68,.15);color:#fca5a5}
+.preco-edit{display:flex;align-items:center;gap:6px;margin-top:6px}
+.preco-edit input{background:#0d1730;border:1px solid #1e2d4a;color:#e2e8f0;border-radius:8px;padding:5px 10px;font-size:13px;width:110px}
+.bulk-bar{display:none;align-items:center;gap:10px;background:rgba(228,121,17,.1);border:1px solid rgba(228,121,17,.3);border-radius:14px;padding:12px 16px;margin-bottom:14px;flex-wrap:wrap}
+.progress-bar{position:fixed;bottom:20px;right:20px;background:#1e2a47;border:1px solid #e47911;border-radius:14px;padding:16px 20px;min-width:300px;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.pb-title{font-weight:700;margin-bottom:8px;font-size:14px}
+.pb-info{font-size:13px;color:#93a8ff;margin-bottom:8px}
+.pb-track{background:#0d1730;border-radius:8px;height:8px;overflow:hidden}
+.pb-fill{background:#e47911;height:8px;width:0%;transition:width .4s}
+.pb-fill.done{background:#22c55e}
+.empty{background:rgba(18,26,49,.95);border:1px dashed #1e2d4a;border-radius:22px;padding:60px;text-align:center;color:#64748b;font-size:15px}
+.loading{text-align:center;padding:60px;color:#64748b}
+.pager{display:flex;align-items:center;gap:10px;justify-content:center;margin-top:20px}
+select.pt-sel{background:#0d1730;border:1px solid #1e2d4a;color:#e2e8f0;border-radius:8px;padding:6px 10px;font-size:13px}
+@media(max-width:900px){.stats{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.stats{grid-template-columns:1fr}.topbar{flex-direction:column;align-items:flex-start}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1>🛒 Kits → Amazon</h1>
+      <p id="subtitulo">Carregando kits do Bling...</p>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select id="sel-pt" class="pt-sel" title="Product Type Amazon">
+        <option value="BEAUTY">BEAUTY</option>
+        <option value="HAIR_CARE">HAIR_CARE</option>
+        <option value="SKIN_CARE">SKIN_CARE</option>
+        <option value="HEALTH_PERSONAL_CARE">HEALTH_PERSONAL_CARE</option>
+        <option value="COSMETIC">COSMETIC</option>
+      </select>
+      <button class="btn secondary" onclick="carregarKits()">↻ Atualizar</button>
+      <a class="btn secondary" href="/amazon">← Amazon</a>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="label">Total de kits</div><div class="val" id="st-total">—</div></div>
+    <div class="stat"><div class="label">Já na Amazon</div><div class="val" id="st-amazon" style="color:#86efac">—</div></div>
+    <div class="stat"><div class="label">Novos para exportar</div><div class="val" id="st-novos" style="color:#e47911">—</div></div>
+    <div class="stat"><div class="label">Selecionados</div><div class="val" id="st-sel" style="color:#93a8ff">0</div></div>
+  </div>
+
+  <div class="filters">
+    <label>Filtrar:</label>
+    <select id="fil-status" onchange="aplicarFiltro()">
+      <option value="">Todos</option>
+      <option value="novo">Apenas novos</option>
+      <option value="ativo">Já na Amazon</option>
+    </select>
+    <input id="fil-busca" type="search" placeholder="Buscar nome ou SKU..." oninput="aplicarFiltro()" style="min-width:220px">
+    <button class="btn secondary" onclick="selecionarTodos()" style="margin-left:auto">Selecionar todos visíveis</button>
+    <button class="btn secondary" onclick="limparSelecao()">Limpar seleção</button>
+  </div>
+
+  <div class="bulk-bar" id="bulk-bar">
+    <span id="bulk-count" style="font-weight:700;color:#e47911"></span>
+    <button class="btn primary" onclick="exportarSelecionados()">⬆ Exportar selecionados para Amazon</button>
+    <button class="btn secondary" onclick="limparSelecao()">✕ Cancelar</button>
+  </div>
+
+  <div id="lista-kits"><div class="loading">Carregando...</div></div>
+
+  <div class="pager" id="pager" style="display:none">
+    <button class="btn secondary" id="btn-prev" onclick="irPagina(paginaAtual-1)">← Anterior</button>
+    <span id="pager-info" style="color:#64748b;font-size:13px"></span>
+    <button class="btn secondary" id="btn-next" onclick="irPagina(paginaAtual+1)">Próxima →</button>
+  </div>
+</div>
+
+<script>
+let todosKits = [];
+let kitsFiltrados = [];
+let selecionados = new Set();
+let paginaAtual = 1;
+const POR_PAGINA = 30;
+let totalPaginas = 1;
+let totalKits = 0;
+let _pollJob = null;
+
+const moeda = v => 'R$ '+(+v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const pct   = v => v!=null ? (+v).toFixed(1)+'%' : '—';
+
+async function carregarKits(pagina=1) {
+  paginaAtual = pagina;
+  document.getElementById('lista-kits').innerHTML = '<div class="loading">Buscando kits no Bling e verificando Amazon...</div>';
+  try {
+    const r = await fetch(`/amazon/kits/lista?pagina=${pagina}&limite=${POR_PAGINA}`);
+    const d = await r.json();
+    todosKits = d.kits || [];
+    totalKits = d.total || 0;
+    totalPaginas = d.paginas || 1;
+    kitsFiltrados = [...todosKits];
+    atualizarStats();
+    renderizarKits();
+    atualizarPager(pagina, totalPaginas);
+    document.getElementById('subtitulo').textContent =
+      `${totalKits} kits encontrados · página ${pagina} de ${totalPaginas}`;
+  } catch(e) {
+    document.getElementById('lista-kits').innerHTML = `<div class="empty">Erro ao carregar: ${e.message}</div>`;
+  }
+}
+
+function atualizarStats() {
+  const naAmazon = todosKits.filter(k=>k.na_amazon).length;
+  const novos = todosKits.filter(k=>!k.na_amazon).length;
+  document.getElementById('st-total').textContent = totalKits;
+  document.getElementById('st-amazon').textContent = naAmazon;
+  document.getElementById('st-novos').textContent = novos;
+}
+
+function aplicarFiltro() {
+  const status = document.getElementById('fil-status').value;
+  const busca  = document.getElementById('fil-busca').value.toLowerCase();
+  kitsFiltrados = todosKits.filter(k => {
+    if (status && k.status_amazon !== status) return false;
+    if (busca && !k.nome.toLowerCase().includes(busca) && !k.sku.toLowerCase().includes(busca)) return false;
+    return true;
+  });
+  renderizarKits();
+}
+
+function renderizarKits() {
+  const cont = document.getElementById('lista-kits');
+  if (!kitsFiltrados.length) {
+    cont.innerHTML = '<div class="empty">Nenhum kit encontrado.</div>';
+    return;
+  }
+  cont.innerHTML = kitsFiltrados.map(k => {
+    const sel = selecionados.has(k.sku);
+    const margem = k.margem;
+    let mClass = 'media', mLabel = '—';
+    if (margem != null) {
+      mLabel = pct(margem);
+      mClass = margem >= 15 ? 'boa' : margem >= 5 ? 'media' : 'ruim';
+    }
+    const compsHtml = (k.componentes||[]).map(c =>
+      `<span>${c.sku}${c.qty>1?' ×'+c.qty:''}</span>`).join('');
+    const precoEdit = `<div class="preco-edit">
+      <span style="font-size:12px;color:#64748b">Preço manual:</span>
+      <input type="number" step="0.01" min="0" id="preco-${k.sku}"
+        placeholder="${(k.preco_sugerido||0).toFixed(2)}"
+        title="Deixe vazio para usar preço sugerido">
+    </div>`;
+    return `<div class="card${sel?' selected':''}" id="card-${CSS.escape(k.sku)}">
+      <div class="card-head">
+        <input type="checkbox" class="card-check" ${sel?'checked':''} onchange="toggleSel('${k.sku}',this.checked)">
+        <div class="card-info">
+          <div class="card-title">${k.nome}</div>
+          <span class="badge ${k.status_amazon}">${k.status_amazon==='ativo'?'✅ Na Amazon':'🆕 Novo'}</span>
+          <span class="badge kit">${k.formato||'kit'}</span>
+          <span style="font-size:12px;color:#64748b">SKU: ${k.sku}</span>
+          ${k.gtin?`<span style="font-size:12px;color:#64748b;margin-left:8px">EAN: ${k.gtin}</span>`:''}
+          ${compsHtml?`<div class="comps">Componentes: ${compsHtml}</div>`:''}
+          <div class="preco-row">
+            <div><div class="preco-label">Preço sugerido</div><div class="preco-val">${moeda(k.preco_sugerido)}</div></div>
+            <div><div class="preco-label">Fonte</div><div style="font-size:12px;color:#93a8ff">${k.fonte_preco}</div></div>
+            ${k.custo>0?`<div><div class="preco-label">Custo</div><div class="preco-custo">${moeda(k.custo)}</div></div>`:''}
+            ${k.peso>0?`<div><div class="preco-label">Peso</div><div class="preco-custo">${k.peso} kg</div></div>`:''}
+            <div><div class="preco-label">Margem Amazon</div><div class="margem ${mClass}">${mLabel}</div></div>
+          </div>
+          ${precoEdit}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  atualizarBulkBar();
+}
+
+function toggleSel(sku, checked) {
+  if (checked) selecionados.add(sku);
+  else selecionados.delete(sku);
+  const card = document.getElementById('card-'+CSS.escape(sku));
+  if (card) card.classList.toggle('selected', checked);
+  document.getElementById('st-sel').textContent = selecionados.size;
+  atualizarBulkBar();
+}
+
+function selecionarTodos() {
+  kitsFiltrados.forEach(k => selecionados.add(k.sku));
+  renderizarKits();
+  document.getElementById('st-sel').textContent = selecionados.size;
+}
+
+function limparSelecao() {
+  selecionados.clear();
+  renderizarKits();
+  document.getElementById('st-sel').textContent = 0;
+}
+
+function atualizarBulkBar() {
+  const bar = document.getElementById('bulk-bar');
+  const n = selecionados.size;
+  bar.style.display = n > 0 ? 'flex' : 'none';
+  document.getElementById('bulk-count').textContent = `${n} kit(s) selecionado(s)`;
+}
+
+async function exportarSelecionados() {
+  if (!selecionados.size) return;
+  const pt = document.getElementById('sel-pt').value;
+  const kitsPayload = [...selecionados].map(sku => {
+    const k = todosKits.find(x=>x.sku===sku) || {};
+    const inputEl = document.getElementById('preco-'+CSS.escape(sku));
+    const precoMan = inputEl ? parseFloat(inputEl.value||'0') : 0;
+    return {
+      id: k.id,
+      sku,
+      preco_override: precoMan > 0 ? precoMan : (k.preco_sugerido || 0),
+      product_type: pt,
+    };
+  });
+  try {
+    const r = await fetch('/amazon/kits/exportar', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({kits: kitsPayload, product_type: pt, margem_alvo: 15.0})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      mostrarProgresso(kitsPayload.length);
+    } else {
+      alert('Erro: '+JSON.stringify(d));
+    }
+  } catch(e) { alert('Erro: '+e.message); }
+}
+
+function mostrarProgresso(total) {
+  let bar = document.getElementById('export-progress');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'export-progress';
+    bar.className = 'progress-bar';
+    document.body.appendChild(bar);
+  }
+  bar.innerHTML = `<div class="pb-title">Exportando kits para Amazon...</div>
+    <div class="pb-info" id="pb-info">Iniciando (${total} kits)</div>
+    <div class="pb-track"><div class="pb-fill" id="pb-fill"></div></div>`;
+  if (_pollJob) clearInterval(_pollJob);
+  _pollJob = setInterval(async () => {
+    try {
+      const s = await fetch('/amazon/kits/status').then(r=>r.json());
+      const done = s.ok + s.erros;
+      const pct = s.total > 0 ? Math.round(done/s.total*100) : 0;
+      document.getElementById('pb-info').textContent =
+        `OK: ${s.ok} | Erros: ${s.erros} de ${s.total}`;
+      const fill = document.getElementById('pb-fill');
+      if (fill) { fill.style.width = pct+'%'; }
+      if (s.status === 'done') {
+        clearInterval(_pollJob); _pollJob = null;
+        if (fill) fill.classList.add('done');
+        document.getElementById('pb-info').textContent =
+          `Concluído! ${s.ok} exportados, ${s.erros} erros.`;
+        setTimeout(() => { bar.remove(); carregarKits(paginaAtual); }, 5000);
+      }
+    } catch(_) {}
+  }, 2500);
+}
+
+function atualizarPager(pag, total) {
+  const pager = document.getElementById('pager');
+  if (total <= 1) { pager.style.display='none'; return; }
+  pager.style.display='flex';
+  document.getElementById('pager-info').textContent = `Página ${pag} de ${total}`;
+  document.getElementById('btn-prev').disabled = pag <= 1;
+  document.getElementById('btn-next').disabled = pag >= total;
+}
+
+function irPagina(p) {
+  if (p < 1 || p > totalPaginas) return;
+  carregarKits(p);
+}
+
+carregarKits();
+</script>
+</body>
+</html>

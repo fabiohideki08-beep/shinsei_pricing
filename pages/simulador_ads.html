@@ -1,0 +1,1451 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador de ADS — Mercado Livre</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:       #0f1117;
+  --bg2:      #1a1d27;
+  --bg3:      #222638;
+  --border:   #2e3347;
+  --text:     #e8eaf0;
+  --muted:    #7b8099;
+  --accent:   #FFE600;
+  --accent2:  #3d8bff;
+  --green:    #27c97a;
+  --red:      #ff4d6d;
+  --orange:   #ff9f43;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  color: var(--text);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; background: var(--bg); }
+
+/* ── Layout ── */
+.header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 57px;
+}
+.header h1 { font-size: 18px; font-weight: 700; }
+.header .badge {
+  background: var(--accent);
+  color: #000;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: .08em;
+}
+.btn-sync {
+  margin-left: auto;
+  background: var(--accent2);
+  color: #fff;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-sync:hover { opacity: .85; }
+.btn-sync.loading { opacity: .6; pointer-events: none; }
+
+.main {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 0;
+  position: fixed;
+  top: 57px; left: 0; right: 0; bottom: 0;
+  overflow: hidden;
+}
+
+/* ── Sidebar produtos ── */
+.sidebar {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sidebar-search {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-search input {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.sidebar-search input:focus { outline: none; border-color: var(--accent2); }
+.product-list { flex: 1; overflow-y: auto; }
+.product-item {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  transition: background .15s;
+}
+.product-item:hover, .product-item.active { background: var(--bg3); }
+.product-item.active { border-left: 3px solid var(--accent); }
+.product-thumb {
+  width: 40px; height: 40px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: var(--bg3);
+  flex-shrink: 0;
+}
+.product-info { min-width: 0; flex: 1; }
+.product-title { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.product-stats { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.product-revenue { font-size: 12px; font-weight: 700; color: var(--green); white-space: nowrap; }
+
+/* ── Painel principal ── */
+.content { padding: 20px; overflow-y: auto; height: 100%; display: flex; flex-direction: column; gap: 20px; }
+
+/* ── Cards KPI ── */
+.kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.kpi-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.kpi-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.kpi-value { font-size: 22px; font-weight: 800; margin-top: 4px; }
+.kpi-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.green { color: var(--green); }
+.red   { color: #ff6b7a; }
+.orange { color: var(--orange); }
+.blue { color: var(--accent2); }
+.yellow { color: var(--accent); }
+
+/* ── Gráfico histórico ── */
+.chart-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+.chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.chart-title { font-size: 14px; font-weight: 700; }
+.chart-tabs { display: flex; gap: 4px; }
+.chart-tab {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+}
+.chart-tab.active { background: var(--accent2); color: #fff; border-color: var(--accent2); }
+
+/* ── Simulador ── */
+.sim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.sim-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+}
+.sim-title { font-size: 14px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.form-row { margin-bottom: 14px; }
+.form-label { font-size: 12px; color: var(--muted); margin-bottom: 4px; display: flex; justify-content: space-between; }
+.form-label span { color: var(--accent); font-weight: 700; }
+input[type=range] {
+  width: 100%;
+  accent-color: var(--accent2);
+  height: 4px;
+  cursor: pointer;
+}
+.form-input {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.form-input:focus { outline: none; border-color: var(--accent2); }
+.form-row-inline { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.result-box {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 16px;
+}
+.result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.result-row:last-child { border-bottom: none; }
+.result-label { color: var(--muted); }
+.result-value { font-weight: 700; }
+.result-big {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0 4px;
+  font-size: 16px;
+}
+.result-big .result-value { font-size: 24px; }
+.btn-sim {
+  width: 100%;
+  background: linear-gradient(90deg, var(--accent2), #5b6bff);
+  color: #fff;
+  border: none;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 16px;
+}
+.btn-sim:hover { opacity: .9; }
+
+/* ── Investimentos ── */
+.inv-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+}
+.inv-form { display: grid; grid-template-columns: 1fr 1fr 1fr auto auto; gap: 8px; align-items: end; margin-bottom: 16px; }
+.btn-add {
+  background: var(--green);
+  color: #000;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-add:hover { opacity: .85; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+td { padding: 8px 8px; border-bottom: 1px solid var(--border); }
+tr:last-child td { border-bottom: none; }
+.btn-del { background: none; border: none; color: var(--red); cursor: pointer; font-size: 16px; padding: 2px 6px; }
+.btn-del:hover { opacity: .7; }
+
+/* ── Estado vazio / loading ── */
+.empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+.empty h3 { font-size: 16px; margin-bottom: 8px; }
+.pulse { animation: pulse 1.5s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.progress-bar-wrap { background: var(--bg3); border-radius: 4px; height: 6px; overflow: hidden; margin-top: 8px; }
+.progress-bar { height: 100%; background: var(--accent2); border-radius: 4px; transition: width .3s; }
+
+/* ── Toast ── */
+#toast {
+  position: fixed; bottom: 24px; right: 24px;
+  background: var(--bg3); border: 1px solid var(--border);
+  padding: 12px 18px; border-radius: 8px;
+  font-size: 13px; font-weight: 600;
+  opacity: 0; transition: opacity .3s;
+  pointer-events: none; z-index: 9999;
+}
+#toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>📊 Simulador de ADS — Mercado Livre</h1>
+  </div>
+  <span class="badge">BETA</span>
+  <button class="btn-consolidado" onclick="carregarConsolidado()" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px">
+    📦 Consolidado
+  </button>
+  <button onclick="carregarRankingROI()" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px">
+    🏆 Ranking ROI
+  </button>
+  <button class="btn-sync" id="btnSync" onclick="iniciarSync()">
+    <span>⟳</span> Sincronizar Histórico
+  </button>
+</div>
+
+<div class="main">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-search">
+      <input type="text" id="searchInput" placeholder="🔍 Buscar produto..." oninput="filtrarProdutos()">
+    </div>
+    <div class="product-list" id="productList">
+      <div class="empty">
+        <div class="pulse">Carregando produtos...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Conteúdo -->
+  <div class="content" id="content">
+    <div class="empty">
+      <h3>Selecione um produto</h3>
+      <p>ou visualize o <a href="#" onclick="carregarGlobal()" style="color:var(--accent2)">histórico global</a></p>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = '';
+let produtos = [];
+let produtoAtual = null;
+let chartHistorico = null;
+let chartMetrica = 'units_sold';
+let syncInterval = null;
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  await carregarProdutos();
+}
+
+// ── Produtos ──────────────────────────────────────────────────────────────────
+async function carregarProdutos() {
+  try {
+    const r = await fetch(`${API}/ml-ads/produtos`);
+    const d = await r.json();
+    produtos = d.produtos || [];
+    renderizarProdutos(produtos);
+  } catch(e) {
+    document.getElementById('productList').innerHTML =
+      `<div class="empty"><h3>Sem dados</h3><p>Clique em "Sincronizar Histórico" para importar</p></div>`;
+  }
+}
+
+function renderizarProdutos(lista) {
+  const el = document.getElementById('productList');
+  if (!lista.length) {
+    el.innerHTML = `<div class="empty"><h3>Sem dados</h3><p>Clique em "Sincronizar Histórico"</p></div>`;
+    return;
+  }
+  el.innerHTML = lista.map(p => `
+    <div class="product-item ${produtoAtual?.item_id === p.item_id ? 'active' : ''}"
+         onclick="selecionarProduto(${JSON.stringify(p).replace(/"/g,'&quot;')})">
+      ${p.thumbnail ? `<img class="product-thumb" src="${p.thumbnail}" onerror="this.style.display='none'">` : '<div class="product-thumb"></div>'}
+      <div class="product-info">
+        <div class="product-title">${p.title || p.item_id}</div>
+        <div class="product-stats">${p.total_units || 0} un · ${p.total_orders || 0} pedidos</div>
+      </div>
+      <div class="product-revenue">R$${fmt(p.total_revenue)}</div>
+    </div>
+  `).join('');
+}
+
+function filtrarProdutos() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  renderizarProdutos(q ? produtos.filter(p => (p.title||'').toLowerCase().includes(q) || p.item_id.toLowerCase().includes(q)) : produtos);
+}
+
+// ── Produto selecionado ───────────────────────────────────────────────────────
+async function selecionarProduto(p) {
+  produtoAtual = p;
+  // Atualizar seleção visual na sidebar
+  document.querySelectorAll('.product-item').forEach(el => el.classList.remove('active'));
+  event.currentTarget?.classList.add('active');
+
+  const content = document.getElementById('content');
+  content.innerHTML = `<div class="empty pulse">Carregando histórico...</div>`;
+
+  try {
+    const [histR, invR] = await Promise.all([
+      fetch(`${API}/ml-ads/produto/${p.item_id}/historico`),
+      fetch(`${API}/ml-ads/investimentos?item_id=${p.item_id}`)
+    ]);
+    const hist = await histR.json();
+    const inv  = await invR.json();
+    renderProduto(p, hist.semanas || [], inv.investimentos || []);
+  } catch(e) {
+    content.innerHTML = `<div class="empty"><h3>Erro ao carregar dados</h3></div>`;
+  }
+}
+
+function renderProduto(p, semanas, investimentos) {
+  const totalUnits   = semanas.reduce((a,s) => a + s.units_sold, 0);
+  const totalRev     = semanas.reduce((a,s) => a + s.revenue, 0);
+  const totalInvest  = investimentos.reduce((a,i) => a + i.investment, 0);
+  const avgPrice     = semanas.filter(s=>s.units_sold>0).reduce((a,s) => a + s.avg_price, 0) / (semanas.filter(s=>s.units_sold>0).length || 1);
+  const velBase      = semanas.filter(s=>s.units_sold>0).slice(-8).reduce((a,s)=>a+s.units_sold,0) / Math.max(1, Math.min(8, semanas.filter(s=>s.units_sold>0).length));
+  const roi          = totalInvest > 0 ? ((totalRev - totalInvest) / totalInvest * 100) : null;
+
+  document.getElementById('content').innerHTML = `
+    <!-- KPIs -->
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">Faturamento Total</div>
+        <div class="kpi-value green">R$${fmt(totalRev)}</div>
+        <div class="kpi-sub">${semanas.length} semanas</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Unidades Vendidas</div>
+        <div class="kpi-value blue">${totalUnits}</div>
+        <div class="kpi-sub">Vel. base: ${velBase.toFixed(1)}/sem</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Preço Médio</div>
+        <div class="kpi-value yellow">R$${fmt(avgPrice)}</div>
+        <div class="kpi-sub">Atual: R$${fmt(p.current_price || 0)}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Invest. Registrado</div>
+        <div class="kpi-value orange">R$${fmt(totalInvest)}</div>
+        <div class="kpi-sub">${roi !== null ? `ROI: ${roi.toFixed(0)}%` : 'Sem dados'}</div>
+      </div>
+    </div>
+
+    <!-- Gráfico histórico -->
+    <div class="chart-card">
+      <div class="chart-header">
+        <div class="chart-title">📈 Histórico Semanal — ${p.title || p.item_id}</div>
+        <div class="chart-tabs">
+          <button class="chart-tab ${chartMetrica==='units_sold'?'active':''}" onclick="trocarMetrica('units_sold')">Unidades</button>
+          <button class="chart-tab ${chartMetrica==='revenue'?'active':''}" onclick="trocarMetrica('revenue')">Faturamento</button>
+          <button class="chart-tab ${chartMetrica==='avg_price'?'active':''}" onclick="trocarMetrica('avg_price')">Preço Médio</button>
+        </div>
+      </div>
+      <canvas id="chartHist" height="80"></canvas>
+    </div>
+
+    <!-- Calculadora de Metas -->
+    <div class="chart-card" id="painelMetas">
+      <div class="chart-header" style="margin-bottom:16px">
+        <div class="chart-title">🎯 Calculadora de Metas</div>
+        <span style="font-size:11px;color:var(--muted)">Informe uma meta — o sistema calcula preço e investimento necessários</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;align-items:end;margin-bottom:8px">
+        <div>
+          <div class="form-label">Meta de unidades</div>
+          <input type="number" class="form-input" id="metaUnidades" placeholder="ex: 200" min="0" step="1">
+        </div>
+        <div>
+          <div class="form-label">Meta de faturamento (R$)</div>
+          <input type="number" class="form-input" id="metaFaturamento" placeholder="ex: 15000" min="0" step="0.01">
+        </div>
+        <div>
+          <div class="form-label">Meta de lucro (R$)</div>
+          <input type="number" class="form-input" id="metaLucro" placeholder="ex: 5000" min="0" step="0.01">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;align-items:end;margin-bottom:12px">
+        <div>
+          <div class="form-label">Margem bruta % <small style="color:var(--muted)">(limita desconto)</small></div>
+          <input type="number" class="form-input" id="metaMargem" placeholder="ex: 35" min="0" max="100" step="0.1">
+        </div>
+        <div>
+          <div class="form-label">Custo unitário (R$) <small style="color:var(--muted)">(opcional)</small></div>
+          <input type="number" class="form-input" id="metaCusto" placeholder="ex: 22,00" min="0" step="0.01">
+        </div>
+        <div>
+          <div class="form-label">Preço atual (R$) <small style="color:var(--muted)">(opcional)</small></div>
+          <input type="number" class="form-input" id="metaPrecoAtual" placeholder="ex: 33,90" min="0" step="0.01">
+        </div>
+        <div>
+          <div class="form-label">Período</div>
+          <select class="form-input" id="metaWeeks">
+            <option value="4">4 semanas</option>
+            <option value="8">8 semanas</option>
+            <option value="12">12 semanas</option>
+            <option value="26">26 semanas</option>
+            <option value="52">52 semanas</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:20px;align-items:center">
+        <button class="btn-sim" style="width:auto;padding:10px 24px" onclick="calcularMeta()">▶ Calcular</button>
+        <span style="font-size:12px;color:var(--muted)">Preencha pelo menos um campo de meta</span>
+      </div>
+
+      <div id="resultadoMeta" style="display:none">
+        <div style="background:var(--bg3);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;display:flex;flex-wrap:wrap;gap:16px;align-items:center">
+          <span><span style="color:var(--muted)">Crescimento necessário:</span> <span id="metaCrescimento" style="font-weight:700;color:var(--orange)"></span></span>
+          <span><span style="color:var(--muted)">Vel. histórica:</span> <span id="metaVelBase" style="font-weight:700"></span></span>
+          <span><span style="color:var(--muted)">Vel. necessária:</span> <span id="metaVelNeed" style="font-weight:700;color:var(--accent2)"></span></span>
+          <span id="metaPrecoHistSpan" style="display:none"><span style="color:var(--muted)">Preço médio histórico:</span> <span id="metaPrecoHist" style="font-weight:700;color:var(--yellow)"></span></span>
+          <span id="metaAjusteSpan" style="display:none;font-size:11px;background:#ff9f4322;color:var(--orange);border:1px solid var(--orange);border-radius:4px;padding:3px 8px">⚠ Vel. ajustada pela diferença de preço</span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+          <!-- Cenário 1: Só desconto -->
+          <div class="sim-card" style="border:1px solid var(--accent)">
+            <div class="sim-title" style="color:var(--accent)">🏷️ Só com Desconto</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Sem investimento em ADS — reduz o preço para aumentar volume</div>
+            <div id="c1AvisoMargem" style="display:none;font-size:11px;background:#ff9f4322;color:var(--orange);border:1px solid var(--orange);border-radius:5px;padding:5px 8px;margin-bottom:8px">
+              ⚠️ Desconto limitado pela margem mínima — não é possível descontar mais sem prejuízo
+            </div>
+            <div class="result-box" style="margin-top:0">
+              <div class="result-row"><span class="result-label">Desconto sugerido</span><span class="result-value yellow" id="c1Desconto">—</span></div>
+              <div class="result-row"><span class="result-label">Preço sugerido</span><span class="result-value" id="c1Preco">—</span></div>
+              <div class="result-row" id="c1MargemVendaRow" style="display:none"><span class="result-label">Margem sobre venda</span><span class="result-value" id="c1MargemVenda">—</span></div>
+              <div class="result-row"><span class="result-label">Unidades projetadas</span><span class="result-value" id="c1Unidades">—</span></div>
+              <div class="result-row"><span class="result-label">Faturamento proj.</span><span class="result-value green" id="c1Fat">—</span></div>
+              <div class="result-row" id="c1LucroRow" style="display:none"><span class="result-label">Lucro estimado</span><span class="result-value green" id="c1Lucro">—</span></div>
+              <div class="result-row" id="c1MargemRow" style="display:none"><span class="result-label">Margem líquida</span><span class="result-value" id="c1Margem">—</span></div>
+              <div class="result-row"><span class="result-label">Investimento ADS</span><span class="result-value orange">R$ 0,00</span></div>
+              <div id="c1Badge" style="margin-top:10px;padding:6px 10px;border-radius:6px;font-size:12px;font-weight:700;text-align:center"></div>
+            </div>
+          </div>
+
+          <!-- Cenário 2: Só investimento -->
+          <div class="sim-card" style="border:1px solid var(--accent2)">
+            <div class="sim-title" style="color:var(--accent2)">📣 Só com Investimento ADS</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Mantém o preço — investe em ADS para aumentar visibilidade</div>
+            <div style="height:32px;margin-bottom:8px"></div>
+            <div class="result-box" style="margin-top:0">
+              <div class="result-row"><span class="result-label">Desconto sugerido</span><span class="result-value">0%</span></div>
+              <div class="result-row"><span class="result-label">Preço sugerido</span><span class="result-value" id="c2Preco">—</span></div>
+              <div class="result-row" id="c2MargemVendaRow" style="display:none"><span class="result-label">Margem sobre venda</span><span class="result-value" id="c2MargemVenda">—</span></div>
+              <div class="result-row"><span class="result-label">Unidades projetadas</span><span class="result-value" id="c2Unidades">—</span></div>
+              <div class="result-row"><span class="result-label">Faturamento proj.</span><span class="result-value green" id="c2Fat">—</span></div>
+              <div class="result-row" id="c2LucroRow" style="display:none"><span class="result-label">Lucro estimado</span><span class="result-value green" id="c2Lucro">—</span></div>
+              <div class="result-row" id="c2MargemRow" style="display:none"><span class="result-label">Margem líquida</span><span class="result-value" id="c2Margem">—</span></div>
+              <div class="result-row"><span class="result-label">Invest./semana</span><span class="result-value orange" id="c2InvSem">—</span></div>
+              <div class="result-row"><span class="result-label">Invest. total</span><span class="result-value orange" id="c2InvTot">—</span></div>
+              <div class="result-row"><span class="result-label">ROAS</span><span class="result-value" id="c2ROAS">—</span></div>
+              <div id="c2Badge" style="margin-top:10px;padding:6px 10px;border-radius:6px;font-size:12px;font-weight:700;text-align:center"></div>
+            </div>
+          </div>
+
+          <!-- Cenário 3: Mix -->
+          <div class="sim-card" style="border:1px solid var(--green)">
+            <div class="sim-title" style="color:var(--green)">⚖️ Mix Equilibrado</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Máximo de desconto que preserva a margem + ADS para cobrir o restante</div>
+            <div style="height:32px;margin-bottom:8px"></div>
+            <div class="result-box" style="margin-top:0">
+              <div class="result-row"><span class="result-label">Desconto sugerido</span><span class="result-value yellow" id="c3Desconto">—</span></div>
+              <div class="result-row"><span class="result-label">Preço sugerido</span><span class="result-value" id="c3Preco">—</span></div>
+              <div class="result-row" id="c3MargemVendaRow" style="display:none"><span class="result-label">Margem sobre venda</span><span class="result-value" id="c3MargemVenda">—</span></div>
+              <div class="result-row"><span class="result-label">Unidades projetadas</span><span class="result-value" id="c3Unidades">—</span></div>
+              <div class="result-row"><span class="result-label">Faturamento proj.</span><span class="result-value green" id="c3Fat">—</span></div>
+              <div class="result-row" id="c3LucroRow" style="display:none"><span class="result-label">Lucro estimado</span><span class="result-value green" id="c3Lucro">—</span></div>
+              <div class="result-row" id="c3MargemRow" style="display:none"><span class="result-label">Margem líquida</span><span class="result-value" id="c3Margem">—</span></div>
+              <div class="result-row"><span class="result-label">Invest./semana</span><span class="result-value orange" id="c3InvSem">—</span></div>
+              <div class="result-row"><span class="result-label">Invest. total</span><span class="result-value orange" id="c3InvTot">—</span></div>
+              <div class="result-row"><span class="result-label">ROAS</span><span class="result-value" id="c3ROAS">—</span></div>
+              <div id="c3Badge" style="margin-top:10px;padding:6px 10px;border-radius:6px;font-size:12px;font-weight:700;text-align:center"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Simulador + Investimentos -->
+    <div class="sim-grid">
+      <!-- Simulador -->
+      <div class="sim-card">
+        <div class="sim-title">🎯 Simulador de Projeção</div>
+
+        <div class="form-row">
+          <div class="form-label">Investimento por semana <span id="lblInvest">R$ 0</span></div>
+          <input type="range" id="sliderInvest" min="0" max="5000" step="50" value="0"
+                 oninput="atualizarSlider('invest')">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:2px">
+            <span>R$ 0</span><span>R$ 5.000</span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-label">Preço de venda <span id="lblPrice">R$ ${fmt(avgPrice)}</span></div>
+          <input type="range" id="sliderPrice" min="${Math.max(1,(avgPrice*0.5).toFixed(0))}"
+                 max="${(avgPrice*2).toFixed(0)}" step="1" value="${avgPrice.toFixed(0)}"
+                 oninput="atualizarSlider('price')">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:2px">
+            <span>R$ ${fmt(avgPrice*0.5)}</span><span>R$ ${fmt(avgPrice*2)}</span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-label">Desconto adicional <span id="lblDesc">0%</span></div>
+          <input type="range" id="sliderDesc" min="0" max="50" step="1" value="0"
+                 oninput="atualizarSlider('desc')">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:2px">
+            <span>0%</span><span>50%</span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-label">Período de simulação <span id="lblWeeks">4 semanas</span></div>
+          <input type="range" id="sliderWeeks" min="1" max="52" step="1" value="4"
+                 oninput="atualizarSlider('weeks')">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:2px">
+            <span>1 sem</span><span>52 sem</span>
+          </div>
+        </div>
+
+        <button class="btn-sim" onclick="executarSimulacao()">▶ Calcular Projeção</button>
+
+        <div class="result-box" id="resultBox" style="display:none">
+          <div class="result-big">
+            <span class="result-label">Faturamento projetado</span>
+            <span class="result-value green" id="rFaturamento">—</span>
+          </div>
+          <div class="result-row">
+            <span class="result-label">Unidades estimadas</span>
+            <span class="result-value" id="rUnidades">—</span>
+          </div>
+          <div class="result-row">
+            <span class="result-label">Velocidade projetada</span>
+            <span class="result-value" id="rVel">—</span>
+          </div>
+          <div class="result-row">
+            <span class="result-label">Preço efetivo</span>
+            <span class="result-value" id="rPreco">—</span>
+          </div>
+          <div class="result-row">
+            <span class="result-label">Investimento total</span>
+            <span class="result-value orange" id="rInvest">—</span>
+          </div>
+          <div class="result-row">
+            <span class="result-label">ROI estimado</span>
+            <span class="result-value" id="rROI">—</span>
+          </div>
+          <div class="result-row">
+            <span class="result-label">ROAS</span>
+            <span class="result-value" id="rROAS">—</span>
+          </div>
+          <div id="rAlertaRoi" style="display:none;margin-top:10px;padding:8px 12px;border-radius:6px;font-size:12px;font-weight:600;background:rgba(220,53,69,0.15);border:1px solid rgba(220,53,69,0.4);color:#ff6b7a">
+            ⚠️ Investimento superior ao faturamento gerado — operação no prejuízo.
+          </div>
+        </div>
+      </div>
+
+      <!-- Registro de Investimentos -->
+      <div class="sim-card">
+        <div class="sim-title">💰 Histórico de Investimentos em ADS</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+          Registre quanto foi investido em cada período para melhorar a precisão da simulação.
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div>
+            <div class="form-label">Data início</div>
+            <input type="date" class="form-input" id="invFrom" value="${new Date(Date.now()-30*86400000).toISOString().split('T')[0]}">
+          </div>
+          <div>
+            <div class="form-label">Data fim</div>
+            <input type="date" class="form-input" id="invTo" value="${new Date().toISOString().split('T')[0]}">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div>
+            <div class="form-label">Investimento (R$)</div>
+            <input type="number" class="form-input" id="invValue" placeholder="0,00" min="0" step="0.01">
+          </div>
+          <div>
+            <div class="form-label">Nome da campanha</div>
+            <input type="text" class="form-input" id="invName" placeholder="(opcional)">
+          </div>
+        </div>
+        <div style="margin-bottom:12px">
+          <div class="form-label">Escopo</div>
+          <select class="form-input" id="invScope">
+            <option value="produto">Apenas este produto (${p.item_id})</option>
+            <option value="global">Campanha global (todos os produtos)</option>
+          </select>
+        </div>
+        <button class="btn-add" onclick="adicionarInvestimento('${p.item_id}')">+ Registrar</button>
+
+        <div style="margin-top:16px;overflow-x:auto" id="tabelaInvestimentos">
+          ${renderTabelaInvestimentos(investimentos)}
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Inicializar gráfico
+  renderGrafico(semanas);
+}
+
+// ── Gráfico ───────────────────────────────────────────────────────────────────
+function renderGrafico(semanas) {
+  if (chartHistorico) chartHistorico.destroy();
+  const ctx = document.getElementById('chartHist');
+  if (!ctx || !semanas.length) return;
+
+  const labels = semanas.map(s => s.week);
+  const dados  = semanas.map(s => s[chartMetrica] || 0);
+  const investData = semanas.map(s => s.investment || 0);
+
+  const color = chartMetrica === 'revenue' ? '#27c97a' :
+                chartMetrica === 'avg_price' ? '#FFE600' : '#3d8bff';
+
+  chartHistorico = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: chartMetrica === 'units_sold' ? 'Unidades' : chartMetrica === 'revenue' ? 'Faturamento (R$)' : 'Preço médio (R$)',
+          data: dados,
+          backgroundColor: color + '99',
+          borderColor: color,
+          borderWidth: 1,
+          borderRadius: 3,
+          yAxisID: 'y',
+        },
+        {
+          label: 'Investimento ADS (R$)',
+          data: investData,
+          type: 'line',
+          borderColor: '#ff9f43',
+          backgroundColor: '#ff9f4322',
+          borderWidth: 2,
+          pointRadius: 3,
+          tension: 0.3,
+          yAxisID: 'y2',
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#7b8099', font: { size: 11 } } },
+        tooltip: { backgroundColor: '#222638', titleColor: '#e8eaf0', bodyColor: '#7b8099' }
+      },
+      scales: {
+        x: { ticks: { color: '#7b8099', font: { size: 10 }, maxTicksLimit: 12 }, grid: { color: '#2e3347' } },
+        y: { ticks: { color: '#7b8099' }, grid: { color: '#2e3347' }, position: 'left' },
+        y2: { ticks: { color: '#ff9f43' }, grid: { display: false }, position: 'right' }
+      }
+    }
+  });
+}
+
+function trocarMetrica(m) {
+  chartMetrica = m;
+  document.querySelectorAll('.chart-tab').forEach(t => {
+    t.classList.toggle('active', t.textContent.toLowerCase().includes(
+      m === 'units_sold' ? 'unid' : m === 'revenue' ? 'fatur' : 'preço'
+    ));
+  });
+  if (produtoAtual) selecionarProduto(produtoAtual);
+}
+
+// ── Sliders ───────────────────────────────────────────────────────────────────
+function atualizarSlider(tipo) {
+  if (tipo === 'invest') {
+    const v = document.getElementById('sliderInvest').value;
+    document.getElementById('lblInvest').textContent = `R$ ${fmt(v)}`;
+  } else if (tipo === 'price') {
+    const v = document.getElementById('sliderPrice').value;
+    document.getElementById('lblPrice').textContent = `R$ ${fmt(v)}`;
+  } else if (tipo === 'desc') {
+    const v = document.getElementById('sliderDesc').value;
+    document.getElementById('lblDesc').textContent = `${v}%`;
+  } else if (tipo === 'weeks') {
+    const v = document.getElementById('sliderWeeks').value;
+    document.getElementById('lblWeeks').textContent = `${v} semana${v>1?'s':''}`;
+  }
+}
+
+// ── Simulação ─────────────────────────────────────────────────────────────────
+async function executarSimulacao() {
+  if (!produtoAtual) return;
+  const investment   = parseFloat(document.getElementById('sliderInvest').value);
+  const price        = parseFloat(document.getElementById('sliderPrice').value);
+  const discount_pct = parseFloat(document.getElementById('sliderDesc').value);
+  const weeks        = parseInt(document.getElementById('sliderWeeks').value);
+
+  try {
+    const r = await fetch(`${API}/ml-ads/simular?item_id=${produtoAtual.item_id}&investment=${investment}&price=${price}&discount_pct=${discount_pct}&weeks=${weeks}`);
+    const d = await r.json();
+
+    document.getElementById('resultBox').style.display = 'block';
+    document.getElementById('rFaturamento').textContent = `R$ ${fmt(d.faturamento_proj)}`;
+    document.getElementById('rUnidades').textContent    = `${d.unidades_proj} un`;
+    document.getElementById('rVel').textContent         = `${d.velocidade_proj_semana}/semana`;
+    document.getElementById('rPreco').textContent       = `R$ ${fmt(d.preco_efetivo)}`;
+    document.getElementById('rInvest').textContent      = `R$ ${fmt(d.investimento_total)}`;
+    document.getElementById('rROI').textContent         = d.roi_pct !== null ? `${d.roi_pct}%` : '—';
+    document.getElementById('rROAS').textContent        = d.roas !== null ? `${d.roas}x` : '—';
+
+    const roiEl = document.getElementById('rROI');
+    roiEl.className = 'result-value ' + (d.roi_pct > 0 ? 'green' : d.roi_pct < 0 ? 'red' : '');
+    document.getElementById('rAlertaRoi').style.display =
+      (d.roi_pct !== null && d.roi_pct < 0) ? 'block' : 'none';
+  } catch(e) {
+    toast('Erro ao simular: ' + e.message, true);
+  }
+}
+
+// ── Investimentos ─────────────────────────────────────────────────────────────
+async function adicionarInvestimento(item_id) {
+  const from    = document.getElementById('invFrom').value;
+  const to      = document.getElementById('invTo').value;
+  const value   = parseFloat(document.getElementById('invValue').value);
+  const name    = document.getElementById('invName').value;
+  const scope   = document.getElementById('invScope').value;
+
+  if (!from || !to || !value || value <= 0) {
+    toast('Preencha todas as datas e o valor', true); return;
+  }
+
+  const body = {
+    item_id: scope === 'produto' ? item_id : null,
+    date_from: from, date_to: to,
+    investment: value, campaign_name: name
+  };
+
+  const r = await fetch(`${API}/ml-ads/investimentos`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  const d = await r.json();
+  if (d.ok) {
+    toast('Investimento registrado!');
+    // Recarregar
+    const invR = await fetch(`${API}/ml-ads/investimentos?item_id=${item_id}`);
+    const inv  = await invR.json();
+    document.getElementById('tabelaInvestimentos').innerHTML = renderTabelaInvestimentos(inv.investimentos || []);
+  } else {
+    toast('Erro ao registrar', true);
+  }
+}
+
+async function deletarInvestimento(id, item_id) {
+  await fetch(`${API}/ml-ads/investimentos/${id}`, { method: 'DELETE' });
+  const invR = await fetch(`${API}/ml-ads/investimentos?item_id=${item_id}`);
+  const inv  = await invR.json();
+  document.getElementById('tabelaInvestimentos').innerHTML = renderTabelaInvestimentos(inv.investimentos || []);
+  toast('Removido');
+}
+
+function renderTabelaInvestimentos(lista) {
+  if (!lista.length) return `<div style="color:var(--muted);font-size:12px;padding:12px 0">Nenhum investimento registrado ainda.</div>`;
+  return `<table>
+    <tr><th>Período</th><th>Campanha</th><th>Investimento</th><th></th></tr>
+    ${lista.map(i => `
+      <tr>
+        <td style="font-size:12px">${i.date_from} → ${i.date_to}</td>
+        <td style="font-size:12px;color:var(--muted)">${i.campaign_name || (i.item_id ? 'Produto' : 'Global')}</td>
+        <td style="font-weight:700;color:var(--orange)">R$ ${fmt(i.investment)}</td>
+        <td><button class="btn-del" onclick="deletarInvestimento(${i.id},'${i.item_id||''}')">✕</button></td>
+      </tr>
+    `).join('')}
+  </table>`;
+}
+
+// ── Calculadora de Metas ──────────────────────────────────────────────────────
+async function calcularMeta() {
+  if (!produtoAtual) { toast('Selecione um produto primeiro', true); return; }
+
+  const metaUnidades    = parseFloat(document.getElementById('metaUnidades').value) || null;
+  const metaFaturamento = parseFloat(document.getElementById('metaFaturamento').value) || null;
+  const metaLucro       = parseFloat(document.getElementById('metaLucro').value) || null;
+  const margem          = parseFloat(document.getElementById('metaMargem').value) || null;
+  const weeks           = parseInt(document.getElementById('metaWeeks').value);
+
+  if (!metaUnidades && !metaFaturamento && !metaLucro) {
+    toast('Preencha pelo menos uma meta', true); return;
+  }
+  if (metaLucro && !margem) {
+    toast('Para meta de lucro, informe a margem bruta %', true); return;
+  }
+
+  const custo      = parseFloat(document.getElementById('metaCusto').value) || null;
+  const precoAtual = parseFloat(document.getElementById('metaPrecoAtual').value) || produtoAtual.current_price || null;
+
+  const body = {
+    item_id:          produtoAtual.item_id,
+    meta_unidades:    metaUnidades,
+    meta_faturamento: metaFaturamento,
+    meta_lucro:       metaLucro,
+    margem_pct:       margem,
+    custo_unitario:   custo,
+    weeks,
+    preco_atual:      precoAtual,
+  };
+
+  try {
+    const r = await fetch(`${API}/ml-ads/calcular-meta`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (!r.ok) { toast(d.detail || 'Erro ao calcular', true); return; }
+
+    const c = d.cenarios;
+    const temLucro = c.so_desconto.lucro_proj !== undefined && c.so_desconto.lucro_proj !== null;
+
+    // Info geral
+    document.getElementById('metaCrescimento').textContent = `${d.crescimento_necessario_pct >= 0 ? '+' : ''}${d.crescimento_necessario_pct}%`;
+    document.getElementById('metaVelBase').textContent = `${d.velocidade_base} un/sem`;
+    document.getElementById('metaVelNeed').textContent = `${(d.meta_unidades / weeks).toFixed(1)} un/sem`;
+
+    // Preço histórico vs atual
+    const precoHistSpan = document.getElementById('metaPrecoHistSpan');
+    const ajusteSpan = document.getElementById('metaAjusteSpan');
+    if (d.preco_medio_historico) {
+      precoHistSpan.style.display = '';
+      document.getElementById('metaPrecoHist').textContent = `R$ ${fmt(d.preco_medio_historico)}`;
+      // Mostrar aviso se velocidade foi ajustada (preço atual difere do histórico)
+      const difPreco = Math.abs(d.preco_atual - d.preco_medio_historico);
+      if (ajusteSpan) ajusteSpan.style.display = difPreco > 0.5 ? '' : 'none';
+      if (d.velocidade_base_raw && d.velocidade_base !== d.velocidade_base_raw) {
+        document.getElementById('metaVelBase').textContent =
+          `${d.velocidade_base_raw} un/sem → ${d.velocidade_base} un/sem (ajustado)`;
+      }
+    }
+
+    // Preencher cenários
+    function preencherCenario(prefix, cn) {
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+      // Cenário impossível
+      if (cn.impossivel) {
+        const badge = document.getElementById(`${prefix}Badge`);
+        if (badge) {
+          badge.style.background = '#ff4d6d22';
+          badge.style.color = 'var(--red)';
+          badge.style.border = '1px solid var(--red)';
+          badge.textContent = '✗ ' + (cn.msg_impossivel || 'Não é possível atingir esta meta com este cenário');
+        }
+        set(`${prefix}Desconto`, '—');
+        set(`${prefix}Preco`, '—');
+        set(`${prefix}Unidades`, '—');
+        set(`${prefix}Fat`, '—');
+        return;
+      }
+
+      set(`${prefix}Desconto`, `${cn.desconto_pct}%`);
+      set(`${prefix}Preco`, `R$ ${fmt(cn.preco_sugerido)}`);
+      set(`${prefix}Unidades`, `${cn.unidades_proj} un`);
+      set(`${prefix}Fat`, `R$ ${fmt(cn.faturamento_proj)}`);
+      set(`${prefix}InvSem`, cn.investment_semana > 0 ? `R$ ${fmt(cn.investment_semana)}/sem` : 'R$ 0,00');
+      set(`${prefix}InvTot`, cn.investment_total > 0 ? `R$ ${fmt(cn.investment_total)}` : 'R$ 0,00');
+      set(`${prefix}ROI`, cn.roi_pct !== null && cn.roi_pct !== undefined ? `${cn.roi_pct}%` : '—');
+      set(`${prefix}ROAS`, cn.roas ? `${cn.roas}x` : '—');
+
+      // Margem sobre venda
+      const margemVendaRow = document.getElementById(`${prefix}MargemVendaRow`);
+      if (cn.margem_sobre_venda_pct != null && margemVendaRow) {
+        margemVendaRow.style.display = '';
+        const mv = cn.margem_sobre_venda_pct;
+        const mvEl = document.getElementById(`${prefix}MargemVenda`);
+        if (mvEl) { mvEl.textContent = `${mv}%`; mvEl.className = `result-value ${mv >= 20 ? 'green' : mv >= 10 ? 'yellow' : 'red'}`; }
+      }
+
+      // Aviso desconto limitado por margem
+      const avisoMargem = document.getElementById(`${prefix}AvisoMargem`);
+      if (avisoMargem) avisoMargem.style.display = cn.desconto_limitado_margem ? '' : 'none';
+
+      // Lucro projetado (vem do backend diretamente)
+      const lucroRow = document.getElementById(`${prefix}LucroRow`);
+      if (cn.lucro_proj !== null && cn.lucro_proj !== undefined && lucroRow) {
+        lucroRow.style.display = '';
+        const lv = cn.lucro_proj;
+        const lucroEl = document.getElementById(`${prefix}Lucro`);
+        if (lucroEl) {
+          lucroEl.textContent = `R$ ${fmt(lv)}`;
+          lucroEl.className = `result-value ${lv >= 0 ? 'green' : 'red'}`;
+        }
+        // Margem líquida = lucro / fat
+        const margemRow = document.getElementById(`${prefix}MargemRow`);
+        if (margemRow) {
+          margemRow.style.display = '';
+          const fat = cn.faturamento_proj;
+          const ml = fat > 0 ? (lv / fat * 100).toFixed(1) : null;
+          set(`${prefix}Margem`, ml !== null ? `${ml}%` : '—');
+        }
+      }
+
+      // Badge: atingiu meta ou prazo alternativo
+      const badge = document.getElementById(`${prefix}Badge`);
+      if (badge) {
+        const ok = cn.atinge_meta_principal;
+        if (ok) {
+          badge.style.background = '#27c97a22';
+          badge.style.color = 'var(--green)';
+          badge.style.border = '1px solid var(--green)';
+          badge.textContent = '✓ Atinge a meta no período';
+        } else {
+          const semanas = cn.semanas_para_atingir;
+          badge.style.background = '#ff9f4322';
+          badge.style.color = 'var(--orange)';
+          badge.style.border = '1px solid var(--orange)';
+          if (semanas && semanas < 520) {
+            const meses = semanas >= 8 ? ` (~${(semanas/4.3).toFixed(1)} meses)` : '';
+            badge.textContent = `⏱ Atingirá em ~${semanas} semanas${meses}`;
+          } else {
+            badge.textContent = '⚠ Meta não atingível neste cenário';
+          }
+        }
+      }
+    }
+
+    preencherCenario('c1', c.so_desconto);
+    preencherCenario('c2', c.so_investimento);
+    preencherCenario('c3', c.mix_equilibrado);
+
+    document.getElementById('resultadoMeta').style.display = 'block';
+    document.getElementById('painelMetas').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  } catch(e) {
+    toast('Erro: ' + e.message, true);
+  }
+}
+
+// ── Sync ──────────────────────────────────────────────────────────────────────
+async function iniciarSync() {
+  const btn = document.getElementById('btnSync');
+  btn.classList.add('loading');
+  btn.innerHTML = '<span class="pulse">⟳</span> Sincronizando...';
+
+  try {
+    const r = await fetch(`${API}/ml-ads/sync`, { method: 'POST' });
+    const d = await r.json();
+    if (!d.ok && d.msg?.includes('andamento')) {
+      toast('Já em andamento...');
+    } else {
+      toast('Sincronização iniciada! Aguarde...');
+    }
+    // Polling do status
+    syncInterval = setInterval(async () => {
+      const sr = await fetch(`${API}/ml-ads/sync/status`);
+      const sd = await sr.json();
+      if (sd.running) {
+        btn.innerHTML = `<span class="pulse">⟳</span> ${sd.msg || 'Sincronizando...'} (${sd.progress}/${sd.total || '?'})`;
+      } else {
+        clearInterval(syncInterval);
+        btn.classList.remove('loading');
+        btn.innerHTML = '<span>⟳</span> Sincronizar Histórico';
+        await carregarProdutos();
+        toast(sd.msg?.includes('Erro') ? sd.msg : '✓ Sincronização concluída!', sd.msg?.includes('Erro'));
+      }
+    }, 2000);
+  } catch(e) {
+    btn.classList.remove('loading');
+    btn.innerHTML = '<span>⟳</span> Sincronizar Histórico';
+    toast('Erro ao iniciar sync', true);
+  }
+}
+
+// ── Consolidado ───────────────────────────────────────────────────────────────
+async function carregarConsolidado() {
+  produtoAtual = null;
+  document.querySelectorAll('.product-item').forEach(el => el.classList.remove('active'));
+  const content = document.getElementById('content');
+  content.innerHTML = `<div class="empty pulse">Carregando visão consolidada...</div>`;
+
+  try {
+    const r = await fetch(`${API}/ml-ads/consolidado`);
+    const d = await r.json();
+    const semanas = d.semanas || [];
+
+    const roiColor = d.pct_investido > 0
+      ? (d.total_revenue > d.total_investimento ? 'green' : 'red')
+      : '';
+
+    content.innerHTML = `
+      <!-- KPIs Consolidados -->
+      <div class="kpi-row" style="grid-template-columns:repeat(6,1fr)">
+        <div class="kpi-card">
+          <div class="kpi-label">Faturamento Total</div>
+          <div class="kpi-value green">R$${fmt(d.total_revenue)}</div>
+          <div class="kpi-sub">${d.semana_inicio} → ${d.semana_fim}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Unidades Vendidas</div>
+          <div class="kpi-value blue">${(d.total_units||0).toLocaleString('pt-BR')}</div>
+          <div class="kpi-sub">${d.total_pedidos||d.total_orders||0} pedidos</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Invest. Total ADS</div>
+          <div class="kpi-value orange">R$${fmt(d.total_investimento)}</div>
+          <div class="kpi-sub">${d.pct_investido}% do faturamento</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Desconto Médio</div>
+          <div class="kpi-value yellow">${fmt(d.avg_discount_pct)}%</div>
+          <div class="kpi-sub">Sobre preço cheio</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Ticket Médio</div>
+          <div class="kpi-value">${d.total_units > 0 ? 'R$'+fmt(d.total_revenue/d.total_units) : '—'}</div>
+          <div class="kpi-sub">Por unidade</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Produtos</div>
+          <div class="kpi-value">${d.total_produtos}</div>
+          <div class="kpi-sub">com histórico</div>
+        </div>
+      </div>
+
+      <!-- Gráfico consolidado -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <div class="chart-title">📈 Faturamento Semanal Consolidado</div>
+          <div class="chart-tabs">
+            <button class="chart-tab active" onclick="trocarMetricaConsolidado('revenue', this)">Faturamento</button>
+            <button class="chart-tab" onclick="trocarMetricaConsolidado('units_sold', this)">Unidades</button>
+            <button class="chart-tab" onclick="trocarMetricaConsolidado('pct_investido', this)">% Investido</button>
+            <button class="chart-tab" onclick="trocarMetricaConsolidado('avg_discount_pct', this)">% Desconto</button>
+          </div>
+        </div>
+        <canvas id="chartConsolidado" height="80"></canvas>
+      </div>
+
+      <!-- Gráfico de correlação: desconto x velocidade -->
+      <div class="sim-grid">
+        <div class="chart-card">
+          <div class="chart-header"><div class="chart-title">🔗 Desconto % × Faturamento Semanal</div></div>
+          <canvas id="chartScatter" height="180"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header"><div class="chart-title">💰 Investimento × Faturamento Semanal</div></div>
+          <canvas id="chartScatter2" height="180"></canvas>
+        </div>
+      </div>
+
+      <!-- Tabela semanal -->
+      <div class="inv-card">
+        <div class="sim-title">📋 Série Semanal Consolidada</div>
+        <div style="overflow-x:auto">
+          <table>
+            <tr>
+              <th>Semana</th>
+              <th style="text-align:right">Faturamento</th>
+              <th style="text-align:right">Unidades</th>
+              <th style="text-align:right">Preço médio</th>
+              <th style="text-align:right">Desconto %</th>
+              <th style="text-align:right">Investimento</th>
+              <th style="text-align:right">% Investido</th>
+            </tr>
+            ${semanas.slice().reverse().map(s => `
+              <tr>
+                <td>${s.week}</td>
+                <td style="text-align:right;font-weight:700;color:var(--green)">R$${fmt(s.revenue)}</td>
+                <td style="text-align:right">${s.units_sold}</td>
+                <td style="text-align:right">R$${fmt(s.avg_price)}</td>
+                <td style="text-align:right;color:${s.avg_discount_pct>10?'var(--orange)':'var(--muted)'}">${fmt(s.avg_discount_pct)}%</td>
+                <td style="text-align:right;color:var(--orange)">${s.investment>0?'R$'+fmt(s.investment):'—'}</td>
+                <td style="text-align:right;color:${s.pct_investido>5?'var(--accent2)':'var(--muted)'}">${s.pct_investido>0?s.pct_investido+'%':'—'}</td>
+              </tr>
+            `).join('')}
+          </table>
+        </div>
+      </div>
+    `;
+
+    // Gráfico principal
+    renderConsolidadoChart(semanas, 'revenue');
+
+    // Scatter: desconto x faturamento
+    renderScatter('chartScatter', semanas,
+      s => s.avg_discount_pct, s => s.revenue,
+      '% Desconto', 'Faturamento (R$)', '#FFE600');
+
+    // Scatter: investimento x faturamento
+    renderScatter('chartScatter2', semanas,
+      s => s.investment, s => s.revenue,
+      'Investimento (R$)', 'Faturamento (R$)', '#3d8bff');
+
+  } catch(e) {
+    content.innerHTML = `<div class="empty"><h3>Sem dados consolidados</h3><p>Sincronize o histórico primeiro</p></div>`;
+  }
+}
+
+let _consolidadoSemanas = [];
+let _consolidadoChart = null;
+
+function renderConsolidadoChart(semanas, metrica) {
+  _consolidadoSemanas = semanas;
+  if (_consolidadoChart) _consolidadoChart.destroy();
+  const ctx = document.getElementById('chartConsolidado');
+  if (!ctx) return;
+
+  const colorMap = { revenue:'#27c97a', units_sold:'#3d8bff', pct_investido:'#ff9f43', avg_discount_pct:'#FFE600' };
+  const labelMap = { revenue:'Faturamento (R$)', units_sold:'Unidades', pct_investido:'% Investido', avg_discount_pct:'% Desconto' };
+  const color = colorMap[metrica];
+
+  _consolidadoChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: semanas.map(s => s.week),
+      datasets: [{
+        label: labelMap[metrica],
+        data: semanas.map(s => s[metrica] || 0),
+        backgroundColor: color + '99',
+        borderColor: color,
+        borderWidth: 1,
+        borderRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { labels: { color: '#7b8099', font: { size: 11 } } },
+        tooltip: { backgroundColor: '#222638', titleColor: '#e8eaf0', bodyColor: '#7b8099' }
+      },
+      scales: {
+        x: { ticks: { color: '#7b8099', font: { size: 10 }, maxTicksLimit: 16 }, grid: { color: '#2e3347' } },
+        y: { ticks: { color: '#7b8099' }, grid: { color: '#2e3347' } }
+      }
+    }
+  });
+}
+
+function trocarMetricaConsolidado(metrica, btn) {
+  document.querySelectorAll('#chartConsolidado').forEach(() => {});
+  document.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderConsolidadoChart(_consolidadoSemanas, metrica);
+}
+
+function renderScatter(canvasId, semanas, xFn, yFn, xLabel, yLabel, color) {
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  const pontos = semanas
+    .filter(s => xFn(s) > 0 && yFn(s) > 0)
+    .map(s => ({ x: xFn(s), y: yFn(s), label: s.week }));
+
+  new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: `${xLabel} × ${yLabel}`,
+        data: pontos,
+        backgroundColor: color + 'bb',
+        borderColor: color,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#222638',
+          titleColor: '#e8eaf0',
+          bodyColor: '#7b8099',
+          callbacks: {
+            label: ctx => `${ctx.raw.label}: ${xLabel}=${fmt(ctx.raw.x)} / ${yLabel}=R$${fmt(ctx.raw.y)}`
+          }
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: xLabel, color: '#7b8099' }, ticks: { color: '#7b8099' }, grid: { color: '#2e3347' } },
+        y: { title: { display: true, text: yLabel, color: '#7b8099' }, ticks: { color: '#7b8099' }, grid: { color: '#2e3347' } }
+      }
+    }
+  });
+}
+
+// ── Global ────────────────────────────────────────────────────────────────────
+async function carregarGlobal() {
+  produtoAtual = null;
+  document.querySelectorAll('.product-item').forEach(el => el.classList.remove('active'));
+  const content = document.getElementById('content');
+  content.innerHTML = `<div class="empty pulse">Carregando...</div>`;
+
+  try {
+    const r = await fetch(`${API}/ml-ads/historico-global`);
+    const d = await r.json();
+    const semanas = d.semanas || [];
+    const totalRev   = semanas.reduce((a,s)=>a+s.revenue,0);
+    const totalUnits = semanas.reduce((a,s)=>a+s.units_sold,0);
+
+    content.innerHTML = `
+      <div class="kpi-row">
+        <div class="kpi-card"><div class="kpi-label">Faturamento Total</div><div class="kpi-value green">R$${fmt(totalRev)}</div><div class="kpi-sub">${semanas.length} semanas</div></div>
+        <div class="kpi-card"><div class="kpi-label">Unidades Vendidas</div><div class="kpi-value blue">${totalUnits}</div></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header"><div class="chart-title">📈 Faturamento Semanal — Todos os Produtos</div></div>
+        <canvas id="chartHist" height="80"></canvas>
+      </div>`;
+
+    if (chartHistorico) chartHistorico.destroy();
+    const ctx = document.getElementById('chartHist');
+    chartHistorico = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: semanas.map(s=>s.week),
+        datasets: [{
+          label: 'Faturamento (R$)',
+          data: semanas.map(s=>s.revenue),
+          backgroundColor: '#27c97a99',
+          borderColor: '#27c97a',
+          borderWidth:1, borderRadius:3
+        }]
+      },
+      options: {
+        responsive:true,
+        plugins:{ legend:{labels:{color:'#7b8099'}}, tooltip:{backgroundColor:'#222638',titleColor:'#e8eaf0',bodyColor:'#7b8099'} },
+        scales:{
+          x:{ticks:{color:'#7b8099',font:{size:10},maxTicksLimit:12},grid:{color:'#2e3347'}},
+          y:{ticks:{color:'#7b8099'},grid:{color:'#2e3347'}}
+        }
+      }
+    });
+  } catch(e) {
+    content.innerHTML = `<div class="empty"><h3>Sem dados globais</h3><p>Sincronize o histórico primeiro</p></div>`;
+  }
+}
+
+// ── Ranking ROI ───────────────────────────────────────────────────────────────
+async function carregarRankingROI() {
+  produtoAtual = null;
+  document.querySelectorAll('.product-item').forEach(el => el.classList.remove('active'));
+  const content = document.getElementById('content');
+  content.innerHTML = `<div class="empty pulse">Calculando ranking de ROI histórico...</div>`;
+
+  try {
+    const r = await fetch('/ml-ads/ranking-roi');
+    const d = await r.json();
+
+    if (d.sem_dados) {
+      content.innerHTML = `
+        <div class="empty">
+          <h3>Sem dados de investimento por produto</h3>
+          <p>${d.msg}</p>
+        </div>`;
+      return;
+    }
+
+    const produtos = d.produtos;
+    if (!produtos.length) {
+      content.innerHTML = `<div class="empty"><h3>Nenhum produto com histórico de ADS suficiente</h3></div>`;
+      return;
+    }
+
+    const roasMax = Math.max(...produtos.map(p => p.roas || 0));
+
+    const linhas = produtos.map((p, i) => {
+      const roas = p.roas ?? 0;
+      const uplift = p.uplift_velocidade_pct;
+      const roi = p.roi_incremental_pct;
+      const barW = roasMax > 0 ? Math.round(roas / roasMax * 100) : 0;
+      const roasColor = roas >= 3 ? 'var(--green)' : roas >= 1.5 ? '#f59e0b' : 'var(--red,#ff6b7a)';
+      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`;
+
+      return `
+        <div class="sim-card" style="padding:14px 16px;cursor:pointer" onclick="selecionarProdutoId('${p.item_id}')">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="font-size:18px;min-width:30px;text-align:center">${medal}</div>
+            ${p.thumbnail ? `<img src="${p.thumbnail}" style="width:40px;height:40px;object-fit:contain;border-radius:4px;background:var(--bg3)">` : ''}
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.title}</div>
+              <div style="font-size:11px;color:var(--muted)">${p.item_id}</div>
+            </div>
+            <div style="text-align:right;min-width:80px">
+              <div style="font-size:18px;font-weight:700;color:${roasColor}">${roas.toFixed(2)}x</div>
+              <div style="font-size:11px;color:var(--muted)">ROAS</div>
+            </div>
+          </div>
+          <!-- Barra de ROAS -->
+          <div style="margin:10px 0 6px;background:var(--bg3);border-radius:4px;height:6px;overflow:hidden">
+            <div style="width:${barW}%;height:100%;background:${roasColor};border-radius:4px;transition:width .4s"></div>
+          </div>
+          <!-- Métricas secundárias -->
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:12px">
+            <div>
+              <div style="color:var(--muted)">Investido</div>
+              <div style="font-weight:600">R$${fmt(p.total_invest)}</div>
+            </div>
+            <div>
+              <div style="color:var(--muted)">Receita (c/ ADS)</div>
+              <div style="font-weight:600;color:var(--green)">R$${fmt(p.receita_com_ads)}</div>
+            </div>
+            <div>
+              <div style="color:var(--muted)">Uplift velocidade</div>
+              <div style="font-weight:600;color:${uplift > 0 ? 'var(--green)' : 'var(--muted)'}">
+                ${uplift !== null ? (uplift > 0 ? '+' : '') + uplift.toFixed(1) + '%' : '—'}
+              </div>
+            </div>
+            <div>
+              <div style="color:var(--muted)">ROI incremental</div>
+              <div style="font-weight:600;color:${roi > 0 ? 'var(--green)' : 'var(--red,#ff6b7a)'}">
+                ${roi !== null ? (roi > 0 ? '+' : '') + roi.toFixed(1) + '%' : '—'}
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:8px;font-size:11px;color:var(--muted)">
+            ${p.semanas_com_ads} sem. c/ ADS • vel. ${p.vel_com_ads}/sem com ads vs ${p.vel_sem_ads}/sem sem ads
+          </div>
+        </div>`;
+    }).join('');
+
+    content.innerHTML = `
+      <div style="margin-bottom:16px">
+        <div style="font-size:18px;font-weight:700;margin-bottom:4px">🏆 Ranking de ROI em ADS</div>
+        <div style="font-size:13px;color:var(--muted)">${produtos.length} produtos com histórico de investimento — clique para simular</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">${linhas}</div>`;
+
+  } catch(e) {
+    content.innerHTML = `<div class="empty"><h3>Erro ao carregar ranking</h3><p>${e.message}</p></div>`;
+  }
+}
+
+function selecionarProdutoId(itemId) {
+  const el = document.querySelector(`.product-item[data-id="${itemId}"]`);
+  if (el) {
+    el.click();
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } else {
+    toast(`Produto ${itemId} não encontrado na lista — sincronize o histórico`, true);
+  }
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function fmt(n) {
+  const v = parseFloat(n) || 0;
+  return v.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function toast(msg, err=false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.borderColor = err ? 'var(--red)' : 'var(--green)';
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

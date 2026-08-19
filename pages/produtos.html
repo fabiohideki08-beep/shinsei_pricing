@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Shinsei Pricing — Produtos</title>
+<style>
+:root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--ok:#16a34a;--danger:#ef4444;--warn:#f59e0b;--purple:#7c3aed}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text);min-height:100vh}
+.wrap{max-width:1300px;margin:0 auto;padding:22px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 22px}
+.brand h1{margin:0;font-size:24px;font-weight:700}.brand p{margin:4px 0 0;color:var(--muted);font-size:14px}
+.btn{border:none;background:var(--accent);color:#fff;padding:10px 16px;border-radius:10px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:7px;font-size:13px;text-decoration:none;transition:opacity .2s}
+.btn:hover{opacity:.85}.btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+.btn.success{background:var(--ok)}.btn.danger{background:var(--danger)}.btn.warn{background:var(--warn);color:#000}
+.btn.purple{background:var(--purple)}.btn:disabled{opacity:.4;cursor:not-allowed}
+.section-title{font-size:17px;font-weight:700;margin:24px 0 12px;display:flex;align-items:center;gap:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line);padding-bottom:8px}
+.bots-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;margin-bottom:8px}
+.bot-card{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:12px;position:relative}
+.bot-card.disabled{opacity:.6}
+.bot-card.disabled::after{content:"EM BREVE";position:absolute;top:14px;right:14px;font-size:10px;font-weight:700;background:rgba(79,140,255,.2);border:1px solid rgba(79,140,255,.4);color:#7db2ff;padding:2px 8px;border-radius:999px}
+.bot-header{display:flex;align-items:flex-start;gap:12px}
+.bot-icon{font-size:28px;line-height:1;flex-shrink:0;margin-top:2px}
+.bot-info h2{margin:0;font-size:16px;font-weight:700}
+.bot-info p{margin:4px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
+.bot-meta{display:flex;gap:6px;flex-wrap:wrap}
+.tag{font-size:10px;padding:2px 8px;border-radius:999px;background:var(--card2);border:1px solid var(--line);color:var(--muted);font-weight:600}
+.tag.blue{background:rgba(79,140,255,.15);border-color:rgba(79,140,255,.4);color:#7db2ff}
+.tag.green{background:rgba(22,163,74,.15);border-color:rgba(22,163,74,.4);color:#4ade80}
+.tag.yellow{background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.4);color:#fcd34d}
+.tag.purple{background:rgba(124,58,237,.15);border-color:rgba(124,58,237,.4);color:#c4b5fd}
+.tag.red{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.4);color:#fca5a5}
+.bot-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
+.status-bar{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0}
+.dot.running{background:#f59e0b;animation:pulse 1s infinite}.dot.ok{background:var(--ok)}.dot.err{background:var(--danger)}.dot.idle{background:var(--muted)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.log-area{background:#060b18;border:1px solid var(--line);border-radius:10px;padding:12px;font-family:monospace;font-size:11px;line-height:1.6;color:#a0c4ff;max-height:200px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;display:none}
+.log-area.visible{display:block}
+.divider{border:none;border-top:1px solid var(--line);margin:8px 0}
+</style>
+</head><body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="brand">
+      <h1>📦 Produtos</h1>
+      <p>Bots de cadastro, importação, exportação e sincronização com marketplaces</p>
+    </div>
+    <a href="/hub" class="btn secondary">← Hub</a>
+  </div>
+
+  <!-- ── CADASTROS ── -->
+  <div class="section-title">🖼️ Cadastros & Imagens</div>
+  <div class="bots-grid">
+
+    <div class="bot-card" id="card-kit">
+      <div class="bot-header">
+        <div class="bot-icon">🖼️</div>
+        <div class="bot-info">
+          <h2>Bot de cadastros — Imagens Kit Alfaparf</h2>
+          <p>Anexa imagens em todas as 106 variações do Kit Coloração + Ox 20 Vol no Bling via upload automatizado.</p>
+        </div>
+      </div>
+      <div class="bot-meta">
+        <span class="tag blue">Playwright</span><span class="tag blue">Bling</span>
+        <span class="tag">106 variações</span><span class="tag green">Kit Alfaparf Ev.</span>
+      </div>
+      <div class="status-bar"><div class="dot idle" id="dot-kit"></div><span id="status-kit">Pronto</span></div>
+      <div class="bot-actions">
+        <button class="btn success" id="btn-run-kit" onclick="runBot('kit')">▶ Executar</button>
+        <button class="btn secondary" onclick="toggleLog('kit')">📋 Log</button>
+        <button class="btn danger" id="btn-stop-kit" style="display:none" onclick="stopBot('kit')">⏹ Parar</button>
+      </div>
+      <div class="log-area" id="log-kit"></div>
+    </div>
+
+    <div class="bot-card disabled" id="card-imagens-massa">
+      <div class="bot-header">
+        <div class="bot-icon">📸</div>
+        <div class="bot-info">
+          <h2>Upload de Imagens em Massa</h2>
+          <p>Faz upload de imagens para múltiplos produtos do Bling de uma vez, combinando por SKU ou nome de arquivo.</p>
+        </div>
+      </div>
+      <div class="bot-meta">
+        <span class="tag blue">Playwright</span><span class="tag blue">Bling</span><span class="tag yellow">Todos os produtos</span>
+      </div>
+      <div class="status-bar"><div class="dot idle"></div><span>Em desenvolvimento</span></div>
+      <div class="bot-actions">
+        <button class="btn success" disabled>▶ Executar</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── IMPORTAÇÃO ── -->
+  <div class="section-title">📥 Importação → Bling</div>
+  <div class="bots-grid">
+
+    <div class="bot-card" id="card-import-shopify">
+      <div class="bot-header">
+        <div class="bot-icon">🛍️</div>
+        <div class="bot-info">
+          <h2>Importar Produtos — Shopify → Bling</h2>
+          <p>Importa produtos da Shopify para o Bling via "Importar produtos multiloja". Sincroniza SKU, título, preço, estoque e variações.</p>
+        </div>
+      </div>
+      <div class="bot-meta">
+        <span class="tag blue">Playwright</span><span class="tag purple">Shopify</span><span class="tag blue">Bling</span>
+      </div>
+      <div class="status-bar"><div class="dot idle" id="dot-import-shopify"></div><span id="status-import-shopify">Pronto</span></div>
+      <div class="bot-actions">
+        <button class="btn success" id="btn-run-import-shopify" onclick="runBot('import-shopify')">▶ Executar</button>
+        <button class="btn secondary" onclick="toggleLog('import-shopify')">📋 Log</button>
+        <button class="btn danger" id="btn-stop-import-shopify" style="display:none" onclick="stopBot('import-shopify')">⏹ Parar</button>
+      </div>
+      <div class="log-area" id="log-import-shopify"></div>
+    </div>
+
+    <div class="bot-card" id="card-import-shopee">
+      <div class="bot-header">
+        <div class="bot-icon">🛒</div>
+        <div class="bot-info">
+          <h2>Importar Produtos — Shopee → Bling</h2>
+          <p>Importa produtos da Shopee para o Bling. Mapeia item_id, SKU, título, preço e estoque automaticamente.</p>
+        </div>
+      </div>
+      <div class="bot-meta">
+        <span class="tag blue">Playwright</span><span class="tag red">Shopee</span><span class="tag blue">Bling</span>
+      </div>
+      <div class="status-bar"><div class="dot idle" id="dot-import-shopee"></div><span id="status-import-shopee">Pronto</span></div>
+      <div class="bot-actions">
+        <button class="btn success" id="btn-run-import-shopee" onclick="runBot('import-shopee')">▶ Executar</button>
+        <button class="btn secondary" onclick="toggleLog('import-shopee')">📋 Log</button>
+        <button class="btn danger" id="btn-stop-import-shopee" style="display:none" onclick="stopBot('import-shopee')">⏹ Parar</button>
+      </div>
+      <div class="log-area" id="log-import-shopee"></div>
+    </div>
+
+    <div class="bot-card" id="card-import-ml">
+      <div class="bot-header">
+        <div class="bot-icon">🛍️</div>
+        <div class="bot-info">
+          <h2>Importar Anúncios — ML → Bling</h2>
+          <p>Importa anúncios ativos do Mercado Livre para o Bling, criando produtos com MLB ID, título, SKU e variações.</p>
+        </div>
+      </div>
+      <div class="bot-meta">
+        <span class="tag blue">API ML</span><span class="tag yellow">Mercado Livre</span><span class="tag blue">Bling</span>
+      </div>
+      <div class="status-bar"><div class="dot idle" id="dot-import-ml"></div><span id="status-import-ml">Pronto</span></div>
+      <div class="bot-actions">
+        <button class="btn success" id="btn-run-import-ml" onclick="runBot('import-ml')">▶ Executar</button>
+        <button class="btn secondary" onclick="toggleLog('import-ml')">📋 Log</button>
+        <button class="btn danger" id="btn-stop-import-ml" style="display:none" onclick="stopBot('import-ml')">⏹ Parar</button>
+      </div>
+      <div class="log-area" id="log-import-ml"></div>
+    </div>
+
+    <div class="bot-card disabled">
+      <div class="bot-header">
+        <div class="bot-icon">📦</div>
+        <div class="bot-info">
+          <h2>Importar Produtos — Amazon → Bling</h2>
+          <p>Importa listagens ativas da Amazon (MFN/FBM) para o Bling via API SP-API, incluindo ASIN, SKU e estoque.</p>
+        </div>
+      </div>
+      <div class="bot-meta">
+        <span class="tag blue">SP-API</span><span class="tag yellow">Amazon</span><span class="tag blue">Bling</span>
+      </div>
+      <div class="status-bar"><div class="dot idle"></div><span>Em desenvolvimento</span></div>
+      <div class="bot-actions"><button class="btn success" disabled>▶ Executar</button></div>
+    </div>
+
+  </div>
+
+  <!-- ── EXPORTAÇÃO ── -->
+  <div class="section-title">📤 Exportação Bling →</div>
+  <div class="bots-grid">
+
+    <div class="bot-card" id="card-export-ml">
+      <div class="bot-header">
+        <div class="bot-icon">🟡</div>
+        <div class="bot-info">
+          <h2>Exportar Produtos → Mercado Livre</h2>
+          <p>Publica produtos do Bling no ML via browser. Preenche título, categoria, atributos, preço, estoque e variações.</p>
+        </div>
+      </div>
+      <div class="bot-meta">
+        <span class="tag blue">Playwright</span><span class="tag yellow">ML</span><span class="tag blue">Bling</span>
+      </div>
+      <div class="status-bar"><div class="dot idle" id="dot-export-ml"></div><span id="status-export-ml">Pronto</span></div>
+      <div class="bot-actions">
+        <button class="btn success" id="btn-run-export-ml" onclick="runBot('export-ml')">▶ Executar</button>
+        <button class="btn secondary" onclick="toggleLog('export-ml')">📋 Log</button>
+        <button class="btn danger" id="btn-stop-export-ml" style="display:none" onclick="stopBot('export-ml')">⏹ Parar</button>
+      </div>
+      <div class="log-area" id="log-export-ml"></div>
+    </div>
+
+    <div class="bot-card" id="card-export-shopify">
+      <div class="bot-header">
+        <div class="bot-icon">🟢</div>
+        <div class="bot-info">
+          <h2>Exportar Produtos → Shopify</h2>
+          <p>Exporta produtos cadastrados no Bling para a Shopify via "Exportar produtos multiloja". Sincroniza SKU, preço e variações.</p>
+        </div>
+      </div>
+      <div class="bot-meta">
+        <span class="tag blue">Playwright</span><span class="tag purple">Shopify</span><span class="tag blue">Bling</span>
+      </div>
+      <div class="status-bar"><div class="dot idle" id="dot-export-shopify"></div><span id="status-export-shopify">Pronto</span></div>
+      <div class="bot-actions">
+        <button class="btn success" id="btn-run-export-shopify" onclick="runBot('export-shopify')">▶ Executar</button>
+        <button class="btn secondary" onclick="toggleLog('export-shopify')">📋 Log</button>
+        <button class="btn danger" id="btn-stop-export-shopify" style="display:none" onclick="stopBot('export-shopify')">⏹ Parar</button>
+      </div>
+      <div class="log-area" id="log-export-shopify"></div>
+    </div>
+
+    <div class="bot-card" id="card-export-shopee">
+      <div class="bot-header">
+        <div class="bot-icon">🔴</div>
+        <div class="bot-info">
+          <h2>Exportar Produtos → Shopee</h2>
+          <p>Exporta produtos do Bling para a Shopee. Mapeia categorias, atributos obrigatórios e cria listing com variações.</p>
+        </div>
+      </div>
+      <div class="bot-meta">
+        <span class="tag blue">Playwright</span><span class="tag red">Shopee</span><span class="tag blue">Bling</span>
+      </div>
+      <div class="status-bar"><div class="dot idle" id="dot-export-shopee"></div><span id="status-export-shopee">Pronto</span></div>
+      <div class="bot-actions">
+        <button class="btn success" id="btn-run-export-shopee" onclick="runBot('export-shopee')">▶ Executar</button>
+        <button class="btn secondary" onclick="toggleLog('export-shopee')">📋 Log</button>
+        <button class="btn danger" id="btn-stop-export-shopee" style="display:none" onclick="stopBot('export-shopee')">⏹ Parar</button>
+      </div>
+      <div class="log-area" id="log-export-shopee"></div>
+    </div>
+
+    <div class="bot-card disabled">
+      <div class="bot-header">
+        <div class="bot-icon">📦</div>
+        <div class="bot-info">
+          <h2>Exportar Produtos → Amazon</h2>
+          <p>Cria listagens na Amazon a partir do Bling via SP-API. Preenche ASIN, título, descrição, bullet points e preço.</p>
+        </div>
+      </div>
+      <div class="bot-meta">
+        <span class="tag blue">SP-API</span><span class="tag yellow">Amazon</span><span class="tag blue">Bling</span>
+      </div>
+      <div class="status-bar"><div class="dot idle"></div><span>Em desenvolvimento</span></div>
+      <div class="bot-actions"><button class="btn success" disabled>▶ Executar</button></div>
+    </div>
+
+  </div>
+
+  <!-- ── SINCRONIZAÇÃO ── -->
+  <div class="section-title">🔄 Sincronização</div>
+  <div class="bots-grid">
+
+    <div class="bot-card" id="card-sync-estoque">
+      <div class="bot-header">
+        <div class="bot-icon">📊</div>
+        <div class="bot-info">
+          <h2>Sincronizar Estoque — Todos os Canais</h2>
+          <p>Atualiza estoque do Bling para ML, Shopee, Shopify e Amazon simultaneamente via SKU. Reativa anúncios pausados.</p>
+        </div>
+      </div>
+      <div class="bot-meta">
+        <span class="tag blue">API</span><span class="tag yellow">ML</span><span class="tag red">Shopee</span>
+        <span class="tag purple">Shopify</span><span class="tag green">Automático</span>
+      </div>
+      <div class="status-bar"><div class="dot idle" id="dot-sync-estoque"></div><span id="status-sync-estoque">Pronto</span></div>
+      <div class="bot-actions">
+        <button class="btn success" id="btn-run-sync-estoque" onclick="runBot('sync-estoque')">▶ Executar</button>
+        <button class="btn secondary" onclick="toggleLog('sync-estoque')">📋 Log</button>
+        <button class="btn danger" id="btn-stop-sync-estoque" style="display:none" onclick="stopBot('sync-estoque')">⏹ Parar</button>
+      </div>
+      <div class="log-area" id="log-sync-estoque"></div>
+    </div>
+
+    <div class="bot-card" id="card-sync-preco-shopee">
+      <div class="bot-header">
+        <div class="bot-icon">💰</div>
+        <div class="bot-info">
+          <h2>Sincronizar Preços — Shopee</h2>
+          <p>Atualiza preços dos produtos mapeados na Shopee com base nos preços do Bling (com margem configurável).</p>
+        </div>
+      </div>
+      <div class="bot-meta">
+        <span class="tag blue">API Shopee</span><span class="tag red">Shopee</span><span class="tag blue">Bling</span>
+      </div>
+      <div class="status-bar"><div class="dot idle" id="dot-sync-preco-shopee"></div><span id="status-sync-preco-shopee">Pronto</span></div>
+      <div class="bot-actions">
+        <button class="btn success" id="btn-run-sync-preco-shopee" onclick="runBot('sync-preco-shopee')">▶ Executar</button>
+        <button class="btn secondary" onclick="toggleLog('sync-preco-shopee')">📋 Log</button>
+        <button class="btn danger" id="btn-stop-sync-preco-shopee" style="display:none" onclick="stopBot('sync-preco-shopee')">⏹ Parar</button>
+      </div>
+      <div class="log-area" id="log-sync-preco-shopee"></div>
+    </div>
+
+    <div class="bot-card" id="card-vinculo-ml">
+      <div class="bot-header">
+        <div class="bot-icon">🔗</div>
+        <div class="bot-info">
+          <h2>Vincular SKUs — ML ↔ Bling</h2>
+          <p>Sugere e aplica vínculos entre anúncios do ML e produtos do Bling por GTIN e similaridade de título.</p>
+        </div>
+      </div>
+      <div class="bot-meta">
+        <span class="tag blue">API ML</span><span class="tag yellow">ML</span><span class="tag blue">Bling</span><span class="tag green">IA</span>
+      </div>
+      <div class="status-bar"><div class="dot idle" id="dot-vinculo-ml"></div><span id="status-vinculo-ml">Pronto</span></div>
+      <div class="bot-actions">
+        <a href="/conferencia/ml/vincular" class="btn success" target="_blank">🔗 Abrir Painel</a>
+      </div>
+    </div>
+
+    <div class="bot-card disabled">
+      <div class="bot-header">
+        <div class="bot-icon">💲</div>
+        <div class="bot-info">
+          <h2>Sincronizar Preços — ML</h2>
+          <p>Atualiza preços dos anúncios do ML com base no preço de venda do Bling acrescido da margem do canal.</p>
+        </div>
+      </div>
+      <div class="bot-meta">
+        <span class="tag blue">API ML</span><span class="tag yellow">ML</span><span class="tag blue">Bling</span>
+      </div>
+      <div class="status-bar"><div class="dot idle"></div><span>Em desenvolvimento</span></div>
+      <div class="bot-actions"><button class="btn success" disabled>▶ Executar</button></div>
+    </div>
+
+  </div>
+
+  <!-- ── CONFERÊNCIA ── -->
+  <div class="section-title">✅ Conferência & Auditoria</div>
+  <div class="bots-grid">
+
+    <div class="bot-card" id="card-conf-shopee">
+      <div class="bot-header">
+        <div class="bot-icon">🔍</div>
+        <div class="bot-info">
+          <h2>Conferência de Produtos — Shopee</h2>
+          <p>Compara produtos Shopee vs Bling: detecta divergências de preço, estoque, título e produtos sem mapeamento.</p>
+        </div>
+      </div>
+      <div class="bot-meta">
+        <span class="tag red">Shopee</span><span class="tag blue">Bling</span>
+      </div>
+      <div class="status-bar"><div class="dot idle"></div></div>
+      <div class="bot-actions">
+        <a href="/conferencia/shopee" class="btn success" target="_blank">🔍 Abrir Painel</a>
+      </div>
+    </div>
+
+    <div class="bot-card disabled">
+      <div class="bot-header">
+        <div class="bot-icon">🔍</div>
+        <div class="bot-info">
+          <h2>Conferência de Produtos — Shopify</h2>
+          <p>Compara produtos Shopify vs Bling: detecta SKUs divergentes, produtos sem correspondência e variações órfãs.</p>
+        </div>
+      </div>
+      <div class="bot-meta"><span class="tag purple">Shopify</span><span class="tag blue">Bling</span></div>
+      <div class="status-bar"><div class="dot idle"></div><span>Em desenvolvimento</span></div>
+      <div class="bot-actions"><button class="btn success" disabled>▶ Executar</button></div>
+    </div>
+
+    <div class="bot-card disabled">
+      <div class="bot-header">
+        <div class="bot-icon">🔍</div>
+        <div class="bot-info">
+          <h2>Auditoria de Catálogo Bling</h2>
+          <p>Verifica produtos sem SKU, sem EAN, sem NCM, sem imagem, sem preço ou sem estoque no Bling e gera relatório.</p>
+        </div>
+      </div>
+      <div class="bot-meta"><span class="tag blue">Bling API</span><span class="tag yellow">Relatório</span></div>
+      <div class="status-bar"><div class="dot idle"></div><span>Em desenvolvimento</span></div>
+      <div class="bot-actions"><button class="btn success" disabled>▶ Executar</button></div>
+    </div>
+
+  </div>
+
+</div><!-- /wrap -->
+
+<script>
+const bots = {};
+
+function toggleLog(id) {
+  document.getElementById('log-' + id)?.classList.toggle('visible');
+}
+
+function setStatus(id, dot, msg) {
+  const d = document.getElementById('dot-' + id);
+  const s = document.getElementById('status-' + id);
+  if (d) d.className = 'dot ' + dot;
+  if (s) s.textContent = msg;
+}
+
+function appendLog(id, txt) {
+  const el = document.getElementById('log-' + id);
+  if (!el) return;
+  el.classList.add('visible');
+  el.textContent += txt + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+
+function runBot(id) {
+  if (bots[id]?.running) return;
+  if (!bots[id]) bots[id] = {};
+  bots[id].running = true;
+  const logEl = document.getElementById('log-' + id);
+  if (logEl) logEl.textContent = '';
+  const runBtn = document.getElementById('btn-run-' + id);
+  const stopBtn = document.getElementById('btn-stop-' + id);
+  if (runBtn) runBtn.disabled = true;
+  if (stopBtn) stopBtn.style.display = '';
+  setStatus(id, 'running', 'Executando...');
+
+  const es = new EventSource('/produtos/bots/' + id + '/run');
+  bots[id].es = es;
+
+  es.onmessage = e => {
+    try {
+      const d = JSON.parse(e.data);
+      if (d.line !== undefined) appendLog(id, d.line);
+      if (d.done) {
+        bots[id].running = false;
+        es.close();
+        if (runBtn) runBtn.disabled = false;
+        if (stopBtn) stopBtn.style.display = 'none';
+        const s = d.summary || {};
+        setStatus(id, d.ok ? 'ok' : 'err',
+          d.ok ? `Concluído — OK=${s.ok||'?'} SKIP=${s.skip||'?'} ERR=${s.err||'?'}` : 'Encerrado com erro');
+      }
+    } catch(ex) {}
+  };
+
+  es.onerror = () => {
+    if (!bots[id]?.running) return;
+    bots[id].running = false;
+    es.close();
+    if (runBtn) runBtn.disabled = false;
+    if (stopBtn) stopBtn.style.display = 'none';
+    setStatus(id, 'err', 'Erro na conexão SSE');
+  };
+}
+
+function stopBot(id) {
+  if (bots[id]?.es) bots[id].es.close();
+  if (bots[id]) bots[id].running = false;
+  const runBtn = document.getElementById('btn-run-' + id);
+  const stopBtn = document.getElementById('btn-stop-' + id);
+  if (runBtn) runBtn.disabled = false;
+  if (stopBtn) stopBtn.style.display = 'none';
+  setStatus(id, 'err', 'Interrompido');
+  fetch('/produtos/bots/' + id + '/stop', {method:'POST'}).catch(()=>{});
+}
+</script>
+</body></html>
