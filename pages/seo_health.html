@@ -540,7 +540,11 @@ async function rodarPageSpeed(){
     const body = await r.json();
     const pagespeed = body.pagespeed || body;
     if (_dados) { _dados.pagespeed = pagespeed; render(_dados); }
-    toast('✅ PageSpeed concluído!', 'ok');
+    toast('✅ PageSpeed concluído! Recalculando score...', 'ok');
+    // Recarrega análise completa para atualizar score com pontos do PageSpeed
+    const res2 = await fetch('/seo-health/analisar', {method:'POST', headers:_H});
+    if (res2.ok) { _dados = await res2.json(); render(_dados); }
+    toast('✅ Score atualizado!', 'ok');
   } catch(e){
     // Fallback manual se servidor falhar
     if (e.message.includes('429') || e.message.includes('quota') || e.name === 'TimeoutError') {
