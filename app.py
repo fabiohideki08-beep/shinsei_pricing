@@ -5014,6 +5014,18 @@ async def seo_health_analisar():
     try:
         loop = asyncio.get_event_loop()
         resultado = await loop.run_in_executor(None, _run)
+        # Preserva pagespeed do cache anterior (não é recalculado aqui)
+        cache_anterior = _load_json(SEO_CACHE_PATH, {})
+        if "pagespeed" in cache_anterior and "pagespeed" not in resultado:
+            resultado["pagespeed"] = cache_anterior["pagespeed"]
+            # Recalcula pontos de pagespeed no score_detalhes
+            ps = cache_anterior["pagespeed"]
+            if "score_detalhes" in resultado:
+                mob = (ps.get("mobile") or {}).get("performance", 0)
+                desk = (ps.get("desktop") or {}).get("performance", 0)
+                resultado["score_detalhes"]["E_ps_mobile"] = round(mob / 100 * 20)
+                resultado["score_detalhes"]["F_ps_desktop"] = round(desk / 100 * 10)
+                resultado["score"] = sum(resultado["score_detalhes"].values())
         _save_json(SEO_CACHE_PATH, resultado)
         return {"ok": True, **resultado}
     except HTTPException:
