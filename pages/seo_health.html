@@ -537,7 +537,8 @@ async function rodarPageSpeed(){
       const err = await r.json().catch(() => ({}));
       throw new Error(err.detail || `HTTP ${r.status}`);
     }
-    const pagespeed = await r.json();
+    const body = await r.json();
+    const pagespeed = body.pagespeed || body;
     if (_dados) { _dados.pagespeed = pagespeed; render(_dados); }
     toast('✅ PageSpeed concluído!', 'ok');
   } catch(e){
