@@ -530,58 +530,19 @@ async function rodarPageSpeed(){
   btn.innerHTML = '<span class="spin">⏳</span> Aguarde ~60s...';
   toast('📊 Rodando PageSpeed Insights (mobile + desktop)...', 'warn');
 
-  const PS_URL = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
-  const LOJA   = 'https://www.shinseimarket.com.br';
-  const CATS   = ['performance','seo','accessibility','best-practices'];
-
-  async function fetchPS(strategy) {
-    const params = new URLSearchParams({url: LOJA, strategy});
-    CATS.forEach(c => params.append('category', c));
-    const r = await fetch(`${PS_URL}?${params}`);
-    if (!r.ok) throw new Error(`PageSpeed ${strategy}: HTTP ${r.status}`);
-    const d = await r.json();
-    const cats   = d.lighthouseResult?.categories || {};
-    const audits = d.lighthouseResult?.audits || {};
-    const score  = k => Math.round((cats[k]?.score || 0) * 100);
-    const display = k => audits[k]?.displayValue || '—';
-    const opps = Object.values(audits)
-      .filter(v => v?.score != null && parseFloat(v.score) < 0.9 && v.title &&
-                   v.details?.type !== 'table')
-      .map(v => v.title).slice(0, 10);
-    return {
-      performance:    score('performance'),
-      seo:            score('seo'),
-      accessibility:  score('accessibility'),
-      best_practices: score('best-practices'),
-      lcp:   display('largest-contentful-paint'),
-      cls:   display('cumulative-layout-shift'),
-      tbt:   display('total-blocking-time'),
-      fcp:   display('first-contentful-paint'),
-      ttfb:  display('server-response-time'),
-      oportunidades: opps,
-    };
-  }
-
   try {
-    toast('📱 Analisando mobile...', 'warn');
-    const mobile = await fetchPS('mobile');
-    toast('🖥 Analisando desktop...', 'warn');
-    const desktop = await fetchPS('desktop');
-    const pagespeed = {mobile, desktop};
-
-    // Salva no servidor
-    const save = await fetch('/seo-health/pagespeed/salvar', {
-      method: 'POST',
-      headers: {..._H, 'Content-Type': 'application/json'},
-      body: JSON.stringify({pagespeed}),
-    });
-    if (!save.ok) throw new Error('Erro ao salvar no servidor');
-
+    // Chama o endpoint do servidor (tem a API key configurada como env var)
+    const r = await fetch('/seo-health/pagespeed', {headers: _H, signal: AbortSignal.timeout(120000)});
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${r.status}`);
+    }
+    const pagespeed = await r.json();
     if (_dados) { _dados.pagespeed = pagespeed; render(_dados); }
     toast('✅ PageSpeed concluído!', 'ok');
   } catch(e){
-    // Cota esgotada (429) → abre o site do PageSpeed e mostra formulário manual
-    if (e.message.includes('429')) {
+    // Fallback manual se servidor falhar
+    if (e.message.includes('429') || e.message.includes('quota') || e.name === 'TimeoutError') {
       abrirManualPageSpeed();
     } else {
       toast('Erro PageSpeed: ' + e.message, 'err');
