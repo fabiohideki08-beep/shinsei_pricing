@@ -5087,6 +5087,25 @@ async def seo_health_pagespeed():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/seo-health/pagespeed/salvar")
+async def seo_health_pagespeed_salvar(body: dict):
+    """Recebe resultado PageSpeed do frontend e salva no cache."""
+    pagespeed = body.get("pagespeed")
+    if not pagespeed:
+        raise HTTPException(status_code=400, detail="Campo 'pagespeed' ausente.")
+    cache = _load_json(SEO_CACHE_PATH, {})
+    cache["pagespeed"] = pagespeed
+    # Recalcula pontuações de pagespeed no score_detalhes
+    if "score_detalhes" in cache:
+        mob = (pagespeed.get("mobile") or {}).get("performance", 0)
+        desk = (pagespeed.get("desktop") or {}).get("performance", 0)
+        cache["score_detalhes"]["E_ps_mobile"] = round(mob / 100 * 20)
+        cache["score_detalhes"]["F_ps_desktop"] = round(desk / 100 * 10)
+        cache["score"] = sum(cache["score_detalhes"].values())
+    _save_json(SEO_CACHE_PATH, cache)
+    return {"ok": True, "pagespeed": pagespeed}
+
+
 @app.post("/seo-health/merchant")
 async def seo_health_merchant():
     """Audita cobertura do feed Google Merchant Center via Shopify API."""
