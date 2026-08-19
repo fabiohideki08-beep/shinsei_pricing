@@ -580,10 +580,66 @@ async function rodarPageSpeed(){
     if (_dados) { _dados.pagespeed = pagespeed; render(_dados); }
     toast('✅ PageSpeed concluído!', 'ok');
   } catch(e){
-    toast('Erro PageSpeed: ' + e.message, 'err');
+    // Cota esgotada (429) → abre o site do PageSpeed e mostra formulário manual
+    if (e.message.includes('429')) {
+      abrirManualPageSpeed();
+    } else {
+      toast('Erro PageSpeed: ' + e.message, 'err');
+    }
   } finally {
     btn.disabled = false;
     btn.innerHTML = '📊 PageSpeed';
+  }
+}
+
+function abrirManualPageSpeed() {
+  window.open('https://pagespeed.web.dev/report?url=https%3A%2F%2Fwww.shinseimarket.com.br', '_blank');
+  // Modal para inserir scores manualmente
+  const overlay = document.createElement('div');
+  overlay.id = 'ps-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="background:var(--card,#1e2130);border:1px solid var(--line,#2d3452);border-radius:16px;padding:28px;max-width:420px;width:90%;color:var(--fg,#e2e8f0)">
+      <h3 style="margin:0 0 8px;font-size:16px">📊 Insira os scores do PageSpeed</h3>
+      <p style="font-size:12px;color:var(--muted,#94a3b8);margin:0 0 20px">
+        A API Google atingiu o limite diário. Cole os scores da aba que foi aberta em <b>pagespeed.web.dev</b>.<br>
+        Procure o número grande de <b>Performance</b> para cada dispositivo.
+      </p>
+      <label style="font-size:13px;display:block;margin-bottom:4px">📱 Performance Mobile (0–100)</label>
+      <input id="ps-mob" type="number" min="0" max="100" placeholder="ex: 67"
+        style="width:100%;box-sizing:border-box;padding:8px 12px;border-radius:8px;border:1px solid var(--line,#2d3452);background:var(--bg,#131929);color:inherit;font-size:14px;margin-bottom:12px">
+      <label style="font-size:13px;display:block;margin-bottom:4px">🖥 Performance Desktop (0–100)</label>
+      <input id="ps-desk" type="number" min="0" max="100" placeholder="ex: 92"
+        style="width:100%;box-sizing:border-box;padding:8px 12px;border-radius:8px;border:1px solid var(--line,#2d3452);background:var(--bg,#131929);color:inherit;font-size:14px;margin-bottom:20px">
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button onclick="document.getElementById('ps-overlay').remove()"
+          style="padding:8px 16px;border-radius:8px;border:1px solid var(--line,#2d3452);background:transparent;color:inherit;cursor:pointer">Cancelar</button>
+        <button onclick="salvarPSManual()"
+          style="padding:8px 20px;border-radius:8px;border:none;background:#4f6ef7;color:#fff;cursor:pointer;font-weight:600">Salvar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+async function salvarPSManual() {
+  const mob  = parseInt(document.getElementById('ps-mob').value) || 0;
+  const desk = parseInt(document.getElementById('ps-desk').value) || 0;
+  const pagespeed = {
+    mobile:  { performance: mob,  seo: null, accessibility: null, best_practices: null, lcp:'—',cls:'—',tbt:'—',fcp:'—',ttfb:'—', oportunidades:[], manual: true },
+    desktop: { performance: desk, seo: null, accessibility: null, best_practices: null, lcp:'—',cls:'—',tbt:'—',fcp:'—',ttfb:'—', oportunidades:[], manual: true },
+  };
+  try {
+    const save = await fetch('/seo-health/pagespeed/salvar', {
+      method: 'POST',
+      headers: {..._H, 'Content-Type': 'application/json'},
+      body: JSON.stringify({pagespeed}),
+    });
+    if (!save.ok) throw new Error('Falha ao salvar');
+    document.getElementById('ps-overlay').remove();
+    if (_dados) { _dados.pagespeed = pagespeed; render(_dados); }
+    toast('✅ Scores PageSpeed salvos!', 'ok');
+  } catch(e) {
+    toast('Erro ao salvar: ' + e.message, 'err');
   }
 }
 
