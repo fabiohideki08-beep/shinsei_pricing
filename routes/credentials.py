@@ -4,9 +4,9 @@ Armazena em data/credentials.json — GET retorna apenas quais sistemas estão c
 """
 from pathlib import Path
 import json
+import os
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 from typing import Any
 
 router = APIRouter()
@@ -17,6 +17,7 @@ CREDS_PATH = DATA_DIR / "credentials.json"
 ALLOWED_SISTEMAS = {
     "bling_akg", "ml_akg", "amazon_akg", "shopee_akg",
     "google_ads", "google_merchant_center", "google_analytics", "google_search_console",
+    "shopee", "amazon",
 }
 
 ALLOWED_CAMPOS: dict[str, set] = {
@@ -28,7 +29,13 @@ ALLOWED_CAMPOS: dict[str, set] = {
     "google_merchant_center": {"merchant_id", "service_account_email", "service_account_json"},
     "google_analytics": {"property_id", "service_account_json"},
     "google_search_console": {"site_url", "service_account_json"},
+    # Shinsei main account — env var names used as keys
+    "shopee": {"SHOPEE_PARTNER_ID", "SHOPEE_PARTNER_KEY", "SHOPEE_SHOP_ID", "SHOPEE_ACCESS_TOKEN", "SHOPEE_REFRESH_TOKEN"},
+    "amazon": {"AMAZON_CLIENT_ID", "AMAZON_CLIENT_SECRET", "AMAZON_REFRESH_TOKEN", "AMAZON_SELLER_ID", "AMAZON_MARKETPLACE_ID"},
 }
+
+# Sistemas cujas chaves são env vars — serão injetadas em os.environ diretamente
+ENV_VAR_SISTEMAS = {"shopee", "amazon"}
 
 
 def _load() -> dict:
@@ -69,4 +76,10 @@ async def post_credenciais(body: dict[str, Any]):
         data[sistema] = {}
     data[sistema].update(campos)
     _save(data)
+
+    # Para sistemas baseados em env vars, injeta imediatamente no processo
+    if sistema in ENV_VAR_SISTEMAS:
+        for k, v in campos.items():
+            os.environ[k] = v
+
     return {"ok": True, "sistema": sistema, "campos_salvos": list(campos.keys())}

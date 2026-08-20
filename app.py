@@ -135,8 +135,28 @@ except Exception as _vml_exc:
 async def auth_middleware(request: Request, call_next):
     return await verificar_api_key(request, call_next)
 
+def _carregar_credenciais_salvas():
+    """Carrega credenciais salvas em data/credentials.json para os.environ na inicialização."""
+    import json, os
+    from pathlib import Path
+    creds_path = Path(__file__).resolve().parent / "data" / "credentials.json"
+    if not creds_path.exists():
+        return
+    ENV_VAR_SISTEMAS = {"shopee", "amazon"}
+    try:
+        data = json.loads(creds_path.read_text(encoding="utf-8"))
+        for sistema, campos in data.items():
+            if sistema in ENV_VAR_SISTEMAS:
+                for k, v in campos.items():
+                    if k and v and k not in os.environ:
+                        os.environ[k] = v
+    except Exception:
+        pass
+
+
 @app.on_event("startup")
 def startup():
+    _carregar_credenciais_salvas()
     init_db()
     migrar_json_legado()
     iniciar_scheduler_background()

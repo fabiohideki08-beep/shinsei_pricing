@@ -171,8 +171,28 @@
       </div>
 
       <hr class="divider"/>
+      <div class="section-title">Credenciais do App Shopee</div>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 10px">Obtenha no <a href="https://open.shopee.com/developer-guide/app-management" target="_blank" style="color:var(--accent)">Shopee Open Platform</a>. Necessário antes de conectar via OAuth.</p>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="font-size:12px;color:var(--muted);width:100px;flex-shrink:0">Partner ID</label>
+          <input id="shopee-cred-partner-id" type="text" placeholder="ex: 2033902" style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);color:var(--text);font-size:13px"/>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="font-size:12px;color:var(--muted);width:100px;flex-shrink:0">Partner Key</label>
+          <input id="shopee-cred-partner-key" type="password" placeholder="chave secreta do app" style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);color:var(--text);font-size:13px"/>
+          <button class="btn secondary sm" onclick="toggleVer('shopee-cred-partner-key',this)">👁</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="font-size:12px;color:var(--muted);width:100px;flex-shrink:0">Shop ID</label>
+          <input id="shopee-cred-shop-id" type="text" placeholder="ex: 1049565924" style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);color:var(--text);font-size:13px"/>
+        </div>
+      </div>
+      <button class="btn primary sm" onclick="salvarCredsShopee()">💾 Salvar credenciais</button>
+      <div id="notice-shopee-creds" class="notice" style="margin-top:8px"></div>
+      <hr class="divider"/>
       <div class="section-title">Conectar / Reconectar</div>
-      <p style="font-size:12px;color:var(--muted);margin:0 0 12px">Clique para autorizar a loja Shinsei na Shopee via OAuth.</p>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 12px">Após salvar as credenciais, clique para autorizar a loja via OAuth.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <a class="btn success" href="/shopee/auth" target="_blank">🔐 Conectar Shopee</a>
         <button class="btn secondary sm" onclick="renovarShopee()">🔄 Renovar token</button>
@@ -199,6 +219,31 @@
         <div class="info-row"><span class="info-label">Autenticação</span><span class="info-value" id="amazon-auth-text">—</span></div>
         <div class="info-row"><span class="info-label">Seller ID</span><span class="info-value" id="amazon-seller-id">—</span></div>
       </div>
+      <hr class="divider"/>
+      <div class="section-title">Credenciais SP-API</div>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 10px">Obtenha no <a href="https://sellercentral.amazon.com.br/apps/manage" target="_blank" style="color:var(--accent)">Seller Central → Apps</a>. Necessário para taxas em tempo real.</p>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="font-size:12px;color:var(--muted);width:110px;flex-shrink:0">Client ID</label>
+          <input id="amazon-cred-client-id" type="text" placeholder="amzn1.application-oa2-client...." style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);color:var(--text);font-size:12px"/>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="font-size:12px;color:var(--muted);width:110px;flex-shrink:0">Client Secret</label>
+          <input id="amazon-cred-client-secret" type="password" placeholder="segredo da aplicação" style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);color:var(--text);font-size:12px"/>
+          <button class="btn secondary sm" onclick="toggleVer('amazon-cred-client-secret',this)">👁</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="font-size:12px;color:var(--muted);width:110px;flex-shrink:0">Refresh Token</label>
+          <input id="amazon-cred-refresh-token" type="password" placeholder="Atch|..." style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);color:var(--text);font-size:12px"/>
+          <button class="btn secondary sm" onclick="toggleVer('amazon-cred-refresh-token',this)">👁</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="font-size:12px;color:var(--muted);width:110px;flex-shrink:0">Seller ID</label>
+          <input id="amazon-cred-seller-id" type="text" placeholder="ex: A3UJCKHASNKX9H" style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);color:var(--text);font-size:13px"/>
+        </div>
+      </div>
+      <button class="btn primary sm" onclick="salvarCredsAmazon()">💾 Salvar credenciais</button>
+      <div id="notice-amazon-creds" class="notice" style="margin-top:8px"></div>
       <hr class="divider"/>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <a class="btn success sm" href="/amazon/auth" target="_blank">🔐 Conectar Amazon</a>
@@ -658,6 +703,29 @@ function noticeCard(cardId, msg, tipo){
   el.className = 'notice ' + tipo;
   el.textContent = msg;
   if(tipo === 'ok') setTimeout(() => { el.className = 'notice'; }, 4000);
+}
+
+function toggleVer(id, btn){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.type = el.type === 'password' ? 'text' : 'password';
+  btn.textContent = el.type === 'password' ? '👁' : '🙈';
+}
+
+function salvarCredsShopee(){
+  salvarCredencial('shopee',
+    ['shopee-cred-partner-id','shopee-cred-partner-key','shopee-cred-shop-id'],
+    ['SHOPEE_PARTNER_ID','SHOPEE_PARTNER_KEY','SHOPEE_SHOP_ID'],
+    'shopee-creds'
+  );
+}
+
+function salvarCredsAmazon(){
+  salvarCredencial('amazon',
+    ['amazon-cred-client-id','amazon-cred-client-secret','amazon-cred-refresh-token','amazon-cred-seller-id'],
+    ['AMAZON_CLIENT_ID','AMAZON_CLIENT_SECRET','AMAZON_REFRESH_TOKEN','AMAZON_SELLER_ID'],
+    'amazon-creds'
+  );
 }
 
 async function salvarCredencial(sistema, inputIds, campos, cardId){
