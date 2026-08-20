@@ -451,7 +451,7 @@ def get_consolidado() -> dict:
             SUM(revenue)                 AS total_revenue,
             SUM(orders_count)            AS total_orders,
             AVG(avg_price)               AS avg_price_geral,
-            AVG(avg_discount_pct)        AS avg_discount_pct,
+            AVG(avg_discount)            AS avg_discount_pct,
             MIN(week)                    AS semana_inicio,
             MAX(week)                    AS semana_fim,
             COUNT(DISTINCT item_id)      AS total_produtos
@@ -472,7 +472,7 @@ def get_consolidado() -> dict:
             SUM(w.revenue)             AS revenue,
             SUM(w.orders_count)        AS orders_count,
             AVG(w.avg_price)           AS avg_price,
-            AVG(w.avg_discount_pct)    AS avg_discount_pct
+            AVG(w.avg_discount)        AS avg_discount_pct
         FROM ml_product_weekly w
         GROUP BY w.week
         ORDER BY w.week ASC
