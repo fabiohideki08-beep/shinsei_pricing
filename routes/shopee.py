@@ -118,9 +118,15 @@ def shopee_callback(request: Request):
 
 @router.get("/shopee/akg/auth")
 def shopee_akg_auth(request: Request):
-    """Redireciona para autorização Shopee da conta AKG (salva em shopee_tokens_akg.json)."""
-    if not _config_ok():
-        raise HTTPException(status_code=400, detail="Credenciais Shopee não configuradas.")
+    """Redireciona para autorização Shopee da conta AKG (salva em shopee_tokens_akg.json).
+    Só exige Partner ID + Partner Key — Shop ID da AKG chega no callback."""
+    from services.shopee import _get_creds
+    pid, pkey, _ = _get_creds()
+    if not pid or not pkey:
+        raise HTTPException(
+            status_code=400,
+            detail="Credenciais Shopee não configuradas. Preencha SHOPEE_PARTNER_ID e SHOPEE_PARTNER_KEY em /integracoes.",
+        )
     redirect_uri = str(request.base_url).rstrip("/") + "/shopee/akg/callback"
     url = ShopeeOAuthService(akg=True).url_autorizacao(redirect_uri)
     return RedirectResponse(url)
