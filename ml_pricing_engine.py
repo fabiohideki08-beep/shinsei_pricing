@@ -18,8 +18,9 @@ ML_API = "https://api.mercadolibre.com"
 CACHE_TTL = 86400  # 24h
 
 
-def _load_token() -> Optional[str]:
-    path = BASE_DIR / "data" / "ml_tokens.json"
+def _load_token(akg: bool = False) -> Optional[str]:
+    fname = "ml_tokens_akg.json" if akg else "ml_tokens.json"
+    path = BASE_DIR / "data" / fname
     if not path.exists():
         return None
     return json.loads(path.read_text(encoding="utf-8")).get("access_token")
@@ -49,14 +50,16 @@ def get_ml_taxa_real(
     price: float,
     weight_g: int,
     category_id: str = "",
-    force_refresh: bool = False
+    force_refresh: bool = False,
+    akg: bool = False,
 ) -> dict:
     """
     Busca taxa real do ML via API com cache de 24h.
     Retorna: {comissao_pct, frete_operacional, total_ml, voce_recebe}
     """
     cache = _load_cache()
-    key = _cache_key(listing_type, price, weight_g, category_id)
+    account_suffix = "_akg" if akg else ""
+    key = _cache_key(listing_type, price, weight_g, category_id) + account_suffix
 
     # Verifica cache
     if not force_refresh and key in cache:
@@ -65,7 +68,7 @@ def get_ml_taxa_real(
             return entry["data"]
 
     # Busca da API
-    token = _load_token()
+    token = _load_token(akg=akg)
     if not token:
         logger.warning("Token ML não disponível, usando fallback")
         return _fallback_taxa(listing_type, price)

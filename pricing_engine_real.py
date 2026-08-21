@@ -180,10 +180,14 @@ def _calcular_um_canal(regras: List[Dict], canal: str, custo_base: float, peso: 
     # ── Buscar taxa real por canal e reiterar o cálculo de preço ─────────────
     comissao_api = None
 
-    if _ML_API_REAL and _get_ml_taxa_real and canal in ("Mercado Livre Classico", "Mercado Livre Premium", "Mercado Livre Full Classico", "Mercado Livre Full Premium"):
+    _ML_CANAIS_SHINSEI = {"Mercado Livre Classico", "Mercado Livre Premium", "Mercado Livre Full Classico", "Mercado Livre Full Premium"}
+    _ML_CANAIS_AKG     = {"Mercado Livre AKG Classico", "Mercado Livre AKG Premium", "Mercado Livre AKG Full Classico", "Mercado Livre AKG Full Premium"}
+
+    if _ML_API_REAL and _get_ml_taxa_real and canal in (_ML_CANAIS_SHINSEI | _ML_CANAIS_AKG):
         _listing = "gold_special" if "Classico" in canal else "gold_pro"
+        _is_akg  = canal in _ML_CANAIS_AKG
         try:
-            _taxa = _get_ml_taxa_real(_listing, preco, _ML_PESO_G or 300, _ML_CATEGORY_ID)
+            _taxa = _get_ml_taxa_real(_listing, preco, _ML_PESO_G or 300, _ML_CATEGORY_ID, akg=_is_akg)
             comissao_api = _taxa.get("comissao_pct")
             frete_op_api = _taxa.get("frete_operacional", 0.0)
             taxa_source  = _taxa.get("source", "api")
@@ -199,9 +203,10 @@ def _calcular_um_canal(regras: List[Dict], canal: str, custo_base: float, peso: 
         except Exception:
             pass
 
-    elif _SHOPEE_API_REAL and _get_shopee_taxa_real and canal == "Shopee":
+    elif _SHOPEE_API_REAL and _get_shopee_taxa_real and canal in ("Shopee", "Shopee AKG"):
+        _is_akg_shopee = canal == "Shopee AKG"
         try:
-            _taxa = _get_shopee_taxa_real(preco, category_hint=_SHOPEE_CATEGORY)
+            _taxa = _get_shopee_taxa_real(preco, category_hint=_SHOPEE_CATEGORY, akg=_is_akg_shopee)
             comissao_api = _taxa.get("total_pct")
             taxa_source  = _taxa.get("source", "tabela_br")
         except Exception:
