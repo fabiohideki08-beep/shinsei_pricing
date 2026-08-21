@@ -97,16 +97,23 @@ def _bling_get_detail(hdrs: dict, produto_id: int | str, rate: float = 0.1) -> d
 
 # ── Lógica de comparação ──────────────────────────────────────────────────────
 
+def _as_dict(val) -> dict:
+    """Garante que o valor é um dict; retorna {} se for string, lista, None etc."""
+    return val if isinstance(val, dict) else {}
+
+
 def _imgs(det: dict) -> list[str]:
-    midia = det.get("midia") or {}
-    imgs  = midia.get("imagens") or {}
-    return [i.get("link", "") for i in (imgs.get("internas") or []) if i.get("link")]
+    midia = _as_dict(det.get("midia"))
+    imgs  = _as_dict(midia.get("imagens"))
+    return [i.get("link", "") for i in (imgs.get("internas") or []) if isinstance(i, dict) and i.get("link")]
 
 
 def _variacoes(det: dict) -> list[dict]:
     """Retorna lista de variações com SKU, nome e preço para comparação completa."""
     result = []
     for v in (det.get("variacoes") or []):
+        if not isinstance(v, dict):
+            continue
         result.append({
             "sku":   (v.get("codigo") or "").strip(),
             "nome":  (v.get("nome") or "").strip(),
@@ -116,40 +123,48 @@ def _variacoes(det: dict) -> list[dict]:
 
 
 def _composicao(det: dict) -> list[dict]:
-    est = det.get("estrutura") or {}
+    est = _as_dict(det.get("estrutura"))
     return [
-        {"sku": (c.get("produto") or {}).get("codigo", ""), "qtd": c.get("quantidade", 1)}
+        {"sku": _as_dict(c.get("produto")).get("codigo", ""), "qtd": c.get("quantidade", 1)}
         for c in (est.get("componentes") or [])
+        if isinstance(c, dict)
     ]
 
 
 def _atributos(det: dict) -> dict[str, str]:
     """Retorna dicionário de características/atributos do produto."""
-    return {
-        (c.get("descricao") or c.get("nome") or "").strip(): str(c.get("resposta") or c.get("valor") or "").strip()
-        for c in (det.get("caracteristicas") or [])
-        if c.get("descricao") or c.get("nome")
-    }
+    result = {}
+    for c in (det.get("caracteristicas") or []):
+        if not isinstance(c, dict):
+            continue
+        key = (c.get("descricao") or c.get("nome") or "").strip()
+        val = str(c.get("resposta") or c.get("valor") or "").strip()
+        if key:
+            result[key] = val
+    return result
 
 
 def _fornecedores(det: dict) -> list[dict]:
     """Retorna lista normalizada de fornecedores para comparação."""
     result = []
     for f in (det.get("fornecedores") or []):
-        cnpj = str((f.get("contato") or {}).get("numeroDocumento") or f.get("cnpj") or "").strip()
+        if not isinstance(f, dict):
+            continue
+        contato = _as_dict(f.get("contato"))
+        cnpj = str(contato.get("numeroDocumento") or f.get("cnpj") or "").strip()
         result.append({
-            "cnpj":       cnpj,
-            "codigo_fab": (f.get("codigoProdutoFornecedor") or "").strip(),
+            "cnpj":        cnpj,
+            "codigo_fab":  (f.get("codigoProdutoFornecedor") or "").strip(),
             "preco_custo": float(f.get("precoCusto") or 0),
         })
     return sorted(result, key=lambda x: x["cnpj"])
 
 
 def _campos_basicos(det: dict) -> dict:
-    cat  = det.get("categoria") or {}
-    marc = det.get("marca") or {}
-    trib = det.get("tributacao") or {}
-    dim  = det.get("dimensoes") or {}
+    cat  = _as_dict(det.get("categoria"))
+    marc = _as_dict(det.get("marca"))
+    trib = _as_dict(det.get("tributacao"))
+    dim  = _as_dict(det.get("dimensoes"))
     return {
         "nome":         (det.get("nome") or "").strip(),
         "tipo":         det.get("tipo") or "",
