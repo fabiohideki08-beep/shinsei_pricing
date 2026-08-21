@@ -411,49 +411,59 @@ def _run_auditoria():
         s_det: dict = {}
         a_det: dict = {}
 
-        if not s_resumo:
-            status_vinculo = "so_akg"
-            sem_shinsei += 1
-        elif not a_resumo:
-            status_vinculo = "sem_akg"
-            sem_akg += 1
-        else:
-            # Busca detalhes para comparação profunda
-            s_det = _bling_get_detail(hdrs_s, s_resumo["id"], rate=0.1)
-            a_det = _bling_get_detail(hdrs_a, a_resumo["id"], rate=0.1)
-            divergencias = _comparar(s_det, a_det)
-            if divergencias:
-                status_vinculo = "divergente"
-                com_divergencia += 1
+        try:
+            if not s_resumo:
+                status_vinculo = "so_akg"
+                sem_shinsei += 1
+            elif not a_resumo:
+                status_vinculo = "sem_akg"
+                sem_akg += 1
             else:
-                ok += 1
+                # Busca detalhes para comparação profunda
+                s_det = _bling_get_detail(hdrs_s, s_resumo["id"], rate=0.1)
+                a_det = _bling_get_detail(hdrs_a, a_resumo["id"], rate=0.1)
+                divergencias = _comparar(s_det, a_det)
+                if divergencias:
+                    status_vinculo = "divergente"
+                    com_divergencia += 1
+                else:
+                    ok += 1
 
-        if not anuncios and a_resumo:
-            sem_anuncio_akg += 1
+            if not anuncios and a_resumo:
+                sem_anuncio_akg += 1
 
-        resultados.append({
-            "sku":            sku,
-            "nome":           (s_resumo or a_resumo or {}).get("nome", "")[:80],
-            "status":         status_vinculo,
-            "divergencias":   divergencias,
-            "shinsei": {
-                "id":      (s_resumo or {}).get("id"),
-                "estoque": _estoque(s_det) if s_det else float((s_resumo or {}).get("saldoVirtualTotal") or 0),
-                "preco":   float((s_resumo or {}).get("preco") or 0),
-                "imagens": len(_imgs(s_det)) if s_det else 0,
-                "variacoes": len(_variacoes(s_det)) if s_det else 0,
-                "composicao": len(_composicao(s_det)) if s_det else 0,
-            },
-            "akg": {
-                "id":      (a_resumo or {}).get("id"),
-                "estoque": _estoque(a_det) if a_det else float((a_resumo or {}).get("saldoVirtualTotal") or 0),
-                "preco":   float((a_resumo or {}).get("preco") or 0),
-                "imagens": len(_imgs(a_det)) if a_det else 0,
-                "variacoes": len(_variacoes(a_det)) if a_det else 0,
-                "composicao": len(_composicao(a_det)) if a_det else 0,
-            },
-            "anuncios_akg": anuncios,
-        })
+            resultados.append({
+                "sku":          sku,
+                "nome":         (s_resumo or a_resumo or {}).get("nome", "")[:80],
+                "status":       status_vinculo,
+                "divergencias": divergencias,
+                "shinsei": {
+                    "id":        (s_resumo or {}).get("id"),
+                    "estoque":   _estoque(s_det) if s_det else float((s_resumo or {}).get("saldoVirtualTotal") or 0),
+                    "preco":     float((s_resumo or {}).get("preco") or 0),
+                    "imagens":   len(_imgs(s_det)) if s_det else 0,
+                    "variacoes": len(_variacoes(s_det)) if s_det else 0,
+                    "composicao": len(_composicao(s_det)) if s_det else 0,
+                },
+                "akg": {
+                    "id":        (a_resumo or {}).get("id"),
+                    "estoque":   _estoque(a_det) if a_det else float((a_resumo or {}).get("saldoVirtualTotal") or 0),
+                    "preco":     float((a_resumo or {}).get("preco") or 0),
+                    "imagens":   len(_imgs(a_det)) if a_det else 0,
+                    "variacoes": len(_variacoes(a_det)) if a_det else 0,
+                    "composicao": len(_composicao(a_det)) if a_det else 0,
+                },
+                "anuncios_akg": anuncios,
+            })
+
+        except Exception as _exc:
+            with _JOB_LOCK:
+                _JOB["erros_log"].append(f"SKU {sku}: {_exc}")
+            resultados.append({
+                "sku": sku, "nome": (s_resumo or a_resumo or {}).get("nome", "")[:80],
+                "status": "erro", "divergencias": [f"Erro interno: {_exc}"],
+                "shinsei": {}, "akg": {}, "anuncios_akg": [],
+            })
 
         time.sleep(0.05)
 
