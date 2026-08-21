@@ -29,17 +29,39 @@ AMAZON_MARKETPLACE = os.getenv("AMAZON_MARKETPLACE_ID", "A2Q3Y263D00KWC")  # BR
 
 # ── Auth LWA ──────────────────────────────────────────────────────────────────
 _lwa_cache: dict = {}
+_CREDS_PATH = Path(__file__).resolve().parent.parent / "data" / "credentials.json"
+
+
+def _get_amazon_creds() -> tuple[str, str, str]:
+    """Retorna (client_id, client_secret, refresh_token) — env vars têm prioridade, fallback em credentials.json."""
+    cid  = os.getenv("AMAZON_CLIENT_ID", "").strip()
+    csec = os.getenv("AMAZON_CLIENT_SECRET", "").strip()
+    rtok = os.getenv("AMAZON_REFRESH_TOKEN", "").strip()
+    if not (cid and csec and rtok):
+        try:
+            saved = json.loads(_CREDS_PATH.read_text(encoding="utf-8")).get("amazon", {})
+            cid  = cid  or saved.get("AMAZON_CLIENT_ID", "").strip()
+            csec = csec or saved.get("AMAZON_CLIENT_SECRET", "").strip()
+            rtok = rtok or saved.get("AMAZON_REFRESH_TOKEN", "").strip()
+        except Exception:
+            pass
+    return cid, csec, rtok
+
 
 def _lwa_token() -> str:
     now = time.time()
     if _lwa_cache.get("token") and now < _lwa_cache.get("expires", 0) - 60:
         return _lwa_cache["token"]
 
+    cid, csec, rtok = _get_amazon_creds()
+    if not (cid and csec and rtok):
+        raise HTTPException(status_code=400, detail="Credenciais Amazon não configuradas. Preencha na página de Integrações.")
+
     r = requests.post(AMAZON_LWA_URL, data={
         "grant_type":    "refresh_token",
-        "refresh_token": os.getenv("AMAZON_REFRESH_TOKEN", ""),
-        "client_id":     os.getenv("AMAZON_CLIENT_ID", ""),
-        "client_secret": os.getenv("AMAZON_CLIENT_SECRET", ""),
+        "refresh_token": rtok,
+        "client_id":     cid,
+        "client_secret": csec,
     }, timeout=20)
     if r.status_code != 200:
         raise HTTPException(status_code=502, detail=f"Amazon LWA erro {r.status_code}: {r.text[:200]}")
@@ -47,6 +69,41 @@ def _lwa_token() -> str:
     _lwa_cache["token"]   = d["access_token"]
     _lwa_cache["expires"] = now + int(d.get("expires_in", 3600))
     return _lwa_cache["token"]
+
+
+@router.get("/amazon/status")
+async def amazon_status():
+    """Verifica se as credenciais Amazon estão configuradas e funcionando."""
+    cid, csec, rtok = _get_amazon_creds()
+    seller_id = os.getenv("AMAZON_SELLER_ID", "") or ""
+    try:
+        saved = json.loads(_CREDS_PATH.read_text(encoding="utf-8")).get("amazon", {})
+        seller_id = seller_id or saved.get("AMAZON_SELLER_ID", "")
+    except Exception:
+        pass
+
+    if not (cid and csec and rtok):
+        return {"connected": False, "status": "not_configured",
+                "message": "Preencha as credenciais SP-API na página de Integrações."}
+    try:
+        token = _lwa_token()
+        return {"connected": True, "status": "connected", "seller_id": seller_id,
+                "message": "Token LWA obtido com sucesso."}
+    except Exception as e:
+        return {"connected": False, "status": "error", "message": str(e)}
+
+
+@router.get("/amazon/auth")
+async def amazon_auth():
+    """Testa a conexão Amazon (LWA não usa redirect OAuth — basta ter as credenciais)."""
+    cid, csec, rtok = _get_amazon_creds()
+    if not (cid and csec and rtok):
+        return {"ok": False, "detail": "Credenciais Amazon não configuradas. Preencha na página de Integrações."}
+    try:
+        _lwa_token()
+        return {"ok": True, "message": "Amazon SP-API conectada com sucesso."}
+    except HTTPException as e:
+        return {"ok": False, "detail": e.detail}
 
 
 def _amz_headers() -> dict:
