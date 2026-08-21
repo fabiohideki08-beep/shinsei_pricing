@@ -112,6 +112,9 @@ from routes.credentials import router as credentials_router
 app.include_router(credentials_router)
 from routes.multiempresas import router as multiempresas_router
 app.include_router(multiempresas_router)
+
+from routes.copiar_ml import router as copiar_ml_router
+app.include_router(copiar_ml_router)
 try:
     from routes.frete import router as frete_router
     app.include_router(frete_router)

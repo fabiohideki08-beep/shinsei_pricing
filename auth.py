@@ -238,6 +238,9 @@ PUBLIC_PATHS = {
     "/multiempresas/auditoria/status",
     "/multiempresas/auditoria/produtos",
     "/multiempresas/auditoria/resumo-divergencias",
+    "/copiar-ml",
+    "/copiar-ml/preview",
+    "/copiar-ml/copiar",
 }
 
 
@@ -255,6 +258,7 @@ PUBLIC_PREFIXES = (
     "/ml/akg/debug-payload/",
     "/ml/akg/debug-post/",
     "/ml/injetar-tokens",
+    "/copiar-ml/",
     "/auditoria/ml-estoque/",
     "/auditoria/estoque-negativo/",
     "/static/",

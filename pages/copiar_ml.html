@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Copiar Anúncios ML — Shinsei → AKG</title>
+<style>
+  :root {
+    --bg:       #0d1117;
+    --surface:  #161b22;
+    --border:   #30363d;
+    --text:     #e6edf3;
+    --muted:    #8b949e;
+    --accent:   #f9a825;
+    --green:    #3fb950;
+    --red:      #f85149;
+    --blue:     #58a6ff;
+    --yellow:   #d29922;
+    --radius:   8px;
+    --mono:     'JetBrains Mono', 'Fira Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-logo { font-size: 18px; font-weight: 700; color: var(--text); }
+  .header-logo span { color: var(--accent); }
+  .header-sub { color: var(--muted); font-size: 13px; }
+  .header-divider { width: 1px; height: 20px; background: var(--border); }
+
+  /* ── Layout ── */
+  .container { max-width: 900px; margin: 0 auto; padding: 28px 20px; }
+
+  /* ── Card ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  /* ── Textarea ── */
+  textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 12px;
+    resize: vertical;
+    min-height: 130px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  textarea:focus { border-color: var(--accent); }
+  textarea::placeholder { color: var(--muted); }
+
+  /* ── Hint ── */
+  .hint {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+
+  /* ── Botões ── */
+  .btn-row { display: flex; gap: 10px; margin-top: 14px; }
+  button {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 18px;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .15s;
+  }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:hover:not(:disabled) { opacity: .85; }
+
+  .btn-preview { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+  .btn-copiar  { background: var(--accent); color: #000; }
+  .btn-limpar  { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+
+  /* ── Preview grid ── */
+  #preview-area { display: none; }
+  .preview-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  @media (max-width: 600px) { .preview-grid { grid-template-columns: 1fr; } }
+
+  .preview-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+  }
+  .preview-card.ok    { border-left: 3px solid var(--green); }
+  .preview-card.error { border-left: 3px solid var(--red); }
+
+  .preview-id   { font-family: var(--mono); font-size: 12px; color: var(--accent); font-weight: 600; }
+  .preview-title { font-size: 13px; font-weight: 600; margin: 4px 0 8px; }
+  .preview-row  { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  .preview-row strong { color: var(--text); }
+  .preview-skus { font-family: var(--mono); font-size: 11px; color: var(--blue); margin-top: 6px; word-break: break-all; }
+  .preview-error { font-size: 12px; color: var(--red); margin-top: 6px; }
+  .badge-status {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 20px;
+    margin-top: 4px;
+  }
+  .badge-active  { background: #1a3a1a; color: var(--green); }
+  .badge-paused  { background: #2a2a1a; color: var(--yellow); }
+  .badge-closed  { background: #2a1a1a; color: var(--red); }
+
+  /* ── Resultados ── */
+  #resultado-area { display: none; }
+  .resultado-summary {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .r-stat { text-align: center; }
+  .r-stat .num { font-size: 28px; font-weight: 700; }
+  .r-stat .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .num-green { color: var(--green); }
+  .num-red   { color: var(--red); }
+  .num-muted { color: var(--muted); }
+
+  .result-table { width: 100%; border-collapse: collapse; }
+  .result-table th {
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--muted);
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .result-table td {
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    vertical-align: top;
+  }
+  .result-table tr:last-child td { border-bottom: none; }
+  .cell-mono { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+  .cell-id-akg { font-family: var(--mono); font-size: 12px; color: var(--blue); }
+  .cell-title  { max-width: 280px; }
+  .cell-erro   { color: var(--red); font-size: 12px; }
+  .cell-causes { color: var(--yellow); font-size: 11px; margin-top: 3px; }
+  .chip-ok     { display: inline-block; background: #1a3a1a; color: var(--green); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+  .chip-err    { display: inline-block; background: #2a1a1a; color: var(--red); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+
+  /* ── Spinner ── */
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,.2);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Alerta ── */
+  .alert {
+    padding: 12px 14px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    margin-bottom: 16px;
+    display: none;
+  }
+  .alert-warn { background: #2a2200; border: 1px solid var(--yellow); color: var(--yellow); }
+  .alert-info { background: #0d2038; border: 1px solid var(--blue); color: var(--blue); }
+
+  .overflow-x { overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-logo">SHN <span>→</span> AKG</div>
+  <div class="header-divider"></div>
+  <div class="header-sub">Copiar Anúncios ML</div>
+</header>
+
+<div class="container">
+
+  <!-- Alerta -->
+  <div class="alert alert-warn" id="alert-warn"></div>
+  <div class="alert alert-info" id="alert-info"></div>
+
+  <!-- Input -->
+  <div class="card">
+    <div class="card-title">IDs dos anúncios Shinsei</div>
+    <textarea id="ids-input"
+      placeholder="Cole os IDs ou URLs, um por linha:&#10;MLB3843109174&#10;MLB4127865432&#10;https://www.mercadolivre.com.br/p/MLB123456789"></textarea>
+    <div class="hint">Aceita: ID (MLB...), URL completa do ML ou só o número. Um por linha.</div>
+    <div class="btn-row">
+      <button class="btn-preview" id="btn-preview">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        Visualizar
+      </button>
+      <button class="btn-copiar" id="btn-copiar" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 17H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/><rect x="8" y="9" width="13" height="13" rx="2"/></svg>
+        Copiar para AKG
+      </button>
+      <button class="btn-limpar" id="btn-limpar">Limpar</button>
+    </div>
+  </div>
+
+  <!-- Preview -->
+  <div id="preview-area">
+    <div class="card">
+      <div class="card-title" id="preview-title">Preview</div>
+      <div class="preview-grid" id="preview-grid"></div>
+    </div>
+  </div>
+
+  <!-- Resultados -->
+  <div id="resultado-area">
+    <div class="card">
+      <div class="card-title">Resultado da cópia</div>
+      <div class="resultado-summary" id="resultado-summary"></div>
+      <div class="overflow-x">
+        <table class="result-table">
+          <thead>
+            <tr>
+              <th>ID Shinsei</th>
+              <th>Título</th>
+              <th>SKU</th>
+              <th>ID AKG</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="result-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+function parseIds() {
+  return $('ids-input').value
+    .split('\n')
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function showAlert(type, msg) {
+  const el = $('alert-' + type);
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 6000);
+}
+
+function badgeStatus(s) {
+  if (!s) return '';
+  const cls = s === 'active' ? 'active' : s === 'paused' ? 'paused' : 'closed';
+  return `<span class="badge-status badge-${cls}">${s}</span>`;
+}
+
+// ── Preview ──────────────────────────────────────────────────────────────────
+$('btn-preview').addEventListener('click', async () => {
+  const ids = parseIds();
+  if (!ids.length) { showAlert('warn', 'Cole pelo menos um ID.'); return; }
+
+  const btn = $('btn-preview');
+  btn.innerHTML = '<span class="spinner"></span> Buscando...';
+  btn.disabled = true;
+  $('preview-area').style.display = 'none';
+  $('resultado-area').style.display = 'none';
+  $('btn-copiar').disabled = true;
+
+  const grid = $('preview-grid');
+  grid.innerHTML = '';
+
+  let algumOk = false;
+
+  for (const raw of ids) {
+    const id = raw.replace(/^https?:\/\/[^\s]*\/p\//i, '').replace(/\?.*/,'').trim();
+    try {
+      const r = await fetch(`/copiar-ml/preview/${encodeURIComponent(id)}`);
+      const d = await r.json();
+
+      if (d.ok) {
+        algumOk = true;
+        const skusHtml = d.skus_variacoes.length
+          ? `<div class="preview-skus">SKUs vars: ${d.skus_variacoes.join(', ')}</div>`
+          : (d.sku_raiz ? `<div class="preview-skus">SKU: ${d.sku_raiz}</div>` : '');
+
+        grid.innerHTML += `
+          <div class="preview-card ok">
+            <div class="preview-id">${d.item_id}</div>
+            ${badgeStatus(d.status)}
+            <div class="preview-title">${d.titulo || '—'}</div>
+            <div class="preview-row"><span>Categoria</span><strong>${d.categoria}</strong></div>
+            <div class="preview-row"><span>Preço</span><strong>R$ ${(d.preco||0).toFixed(2)}</strong></div>
+            <div class="preview-row"><span>Tipo</span><strong>${d.tipo_anuncio}</strong></div>
+            <div class="preview-row"><span>Condição</span><strong>${d.condicao}</strong></div>
+            <div class="preview-row"><span>Estoque</span><strong>${d.quantidade}</strong></div>
+            <div class="preview-row"><span>Fotos</span><strong>${d.fotos}</strong></div>
+            <div class="preview-row"><span>Variações</span><strong>${d.variacoes}</strong></div>
+            <div class="preview-row"><span>Atributos</span><strong>${d.atributos}</strong></div>
+            ${skusHtml}
+          </div>`;
+      } else {
+        grid.innerHTML += `
+          <div class="preview-card error">
+            <div class="preview-id">${id}</div>
+            <div class="preview-error">${d.erro}</div>
+          </div>`;
+      }
+    } catch (e) {
+      grid.innerHTML += `
+        <div class="preview-card error">
+          <div class="preview-id">${id}</div>
+          <div class="preview-error">Erro de rede: ${e.message}</div>
+        </div>`;
+    }
+  }
+
+  btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Visualizar`;
+  btn.disabled = false;
+  $('preview-area').style.display = 'block';
+  $('preview-title').textContent = `Preview — ${ids.length} anúncio(s)`;
+  if (algumOk) $('btn-copiar').disabled = false;
+});
+
+// ── Copiar ───────────────────────────────────────────────────────────────────
+$('btn-copiar').addEventListener('click', async () => {
+  const ids = parseIds();
+  if (!ids.length) return;
+
+  if (!confirm(`Confirma a cópia de ${ids.length} anúncio(s) do ML Shinsei para o ML AKG?\n\nOs anúncios serão criados com SKU idêntico ao original.`)) return;
+
+  const btn = $('btn-copiar');
+  btn.innerHTML = '<span class="spinner"></span> Copiando...';
+  btn.disabled = true;
+  $('btn-preview').disabled = true;
+  $('resultado-area').style.display = 'none';
+
+  try {
+    const r = await fetch('/copiar-ml/copiar', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ ids }),
+    });
+    const d = await r.json();
+
+    // Summary
+    $('resultado-summary').innerHTML = `
+      <div class="r-stat"><div class="num num-muted">${d.total}</div><div class="lbl">Total</div></div>
+      <div class="r-stat"><div class="num num-green">${d.criados}</div><div class="lbl">Criados</div></div>
+      <div class="r-stat"><div class="num num-red">${d.erros}</div><div class="lbl">Erros</div></div>
+    `;
+
+    // Tabela
+    const tbody = $('result-tbody');
+    tbody.innerHTML = '';
+    for (const res of (d.resultados || [])) {
+      const causas = (res.causes || []).map(c => `<div>• ${c}</div>`).join('');
+      tbody.innerHTML += `
+        <tr>
+          <td class="cell-mono">${res.id_shinsei}</td>
+          <td class="cell-title">${res.titulo || '—'}</td>
+          <td class="cell-mono" style="font-size:11px;color:var(--blue)">${res.sku_raiz || '—'}</td>
+          <td class="cell-id-akg">${res.id_akg || '—'}</td>
+          <td>
+            ${res.ok
+              ? '<span class="chip-ok">✓ Criado</span>'
+              : `<span class="chip-err">✗ Erro</span><div class="cell-erro">${res.erro || ''}</div>${causas ? `<div class="cell-causes">${causas}</div>` : ''}`
+            }
+          </td>
+        </tr>`;
+    }
+
+    $('resultado-area').style.display = 'block';
+  } catch (e) {
+    showAlert('warn', `Erro: ${e.message}`);
+  }
+
+  btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 17H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/><rect x="8" y="9" width="13" height="13" rx="2"/></svg> Copiar para AKG`;
+  btn.disabled = false;
+  $('btn-preview').disabled = false;
+});
+
+// ── Limpar ───────────────────────────────────────────────────────────────────
+$('btn-limpar').addEventListener('click', () => {
+  $('ids-input').value = '';
+  $('preview-area').style.display = 'none';
+  $('resultado-area').style.display = 'none';
+  $('btn-copiar').disabled = true;
+});
+</script>
+
+</body>
+</html>
