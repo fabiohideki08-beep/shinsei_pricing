@@ -234,9 +234,14 @@ def _run_auditoria():
         if sku:
             shinsei_map[sku] = p
 
-    # 2. Produtos AKG (ativos)
+    # 2. Produtos AKG (ativos) — tenta sem filtro se situacao=A retornar vazio
     _JOB["progresso"]["etapa"] = "Buscando produtos AKG..."
     akg_raw = _bling_get_all(hdrs_a, "produtos", {"situacao": "A"}, "AKG", rate=0.2)
+    if not akg_raw:
+        logger.warning("AKG situacao=A retornou vazio — tentando sem filtro")
+        akg_raw = _bling_get_all(hdrs_a, "produtos", {}, "AKG-sem-filtro", rate=0.2)
+        with _JOB_LOCK:
+            _JOB["erros_log"].append(f"AKG situacao=A vazio — buscou sem filtro, encontrou {len(akg_raw)} produtos")
     akg_map: dict[str, dict] = {}
     for p in akg_raw:
         sku = (p.get("codigo") or "").strip()
@@ -342,6 +347,50 @@ def _run_auditoria():
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@router.get("/multiempresas/diagnostico")
+def diagnostico():
+    """Testa conexões Bling Shinsei e AKG — mostra quantos produtos cada conta retorna."""
+    import traceback
+    result = {"shinsei": {}, "akg": {}}
+
+    # Shinsei
+    try:
+        hdrs_s = _hdrs_shinsei()
+        r = _req.get(f"{BLING_API}/produtos", headers=hdrs_s,
+                     params={"situacao": "A", "pagina": 1, "limite": 5}, timeout=15)
+        result["shinsei"] = {
+            "status_http": r.status_code,
+            "total_pagina1": len((r.json().get("data") or [])),
+            "sample": [(p.get("codigo"), p.get("nome","")[:40]) for p in (r.json().get("data") or [])[:3]],
+            "error": r.json().get("error"),
+        }
+    except Exception as e:
+        result["shinsei"] = {"erro": str(e), "trace": traceback.format_exc()[-500:]}
+
+    # AKG
+    try:
+        hdrs_a = _hdrs_akg()
+        # Testa sem filtro de situação primeiro
+        r2 = _req.get(f"{BLING_API}/produtos", headers=hdrs_a,
+                      params={"pagina": 1, "limite": 5}, timeout=15)
+        r2_sit = _req.get(f"{BLING_API}/produtos", headers=hdrs_a,
+                          params={"situacao": "A", "pagina": 1, "limite": 5}, timeout=15)
+        result["akg"] = {
+            "status_http_sem_filtro": r2.status_code,
+            "total_sem_filtro": len((r2.json().get("data") or [])),
+            "status_http_com_situacaoA": r2_sit.status_code,
+            "total_situacaoA": len((r2_sit.json().get("data") or [])),
+            "sample_sem_filtro": [(p.get("codigo"), p.get("nome","")[:40], p.get("situacao")) for p in (r2.json().get("data") or [])[:3]],
+            "error_sem_filtro": r2.json().get("error"),
+            "error_situacaoA": r2_sit.json().get("error"),
+            "headers_ok": bool(hdrs_a.get("Authorization")),
+        }
+    except Exception as e:
+        result["akg"] = {"erro": str(e), "trace": traceback.format_exc()[-500:]}
+
+    return result
+
 
 @router.get("/multiempresas", response_class=HTMLResponse)
 def multiempresas_page():
