@@ -458,4 +458,7 @@ function stopBot(id) {
   fetch('/produtos/bots/' + id + '/stop', {method:'POST'}).catch(()=>{});
 }
 </script>
+
+<!-- Botão Início -->
+<a href="/" id="btn-inicio" title="Voltar para o início" style="position:fixed;bottom:24px;left:24px;z-index:9999;background:#4f8cff;color:#fff;padding:10px 20px;border-radius:14px;font-weight:700;text-decoration:none;font-family:Arial,sans-serif;font-size:14px;box-shadow:0 4px 20px rgba(79,140,255,.45);display:inline-flex;align-items:center;gap:8px;transition:background .2s,transform .15s" onmouseover="this.style.background='#2563eb';this.style.transform='scale(1.05)'" onmouseout="this.style.background='#4f8cff';this.style.transform='scale(1)'">🏠 Início</a>
 </body></html>
