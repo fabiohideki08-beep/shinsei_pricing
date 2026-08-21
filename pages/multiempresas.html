@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multiempresas — Auditoria Shinsei × AKG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* ── Tokens ────────────────────────────────────────────── */
+:root {
+  --bg:        #f1f4fb;
+  --surface:   #ffffff;
+  --raised:    #e8ecf5;
+  --border:    #d0d7eb;
+  --text:      #0f1623;
+  --muted:     #5a6480;
+  --accent:    #2558f0;
+  --accent-lo: #dce6ff;
+  --ok:        #16a34a;
+  --ok-lo:     #dcfce7;
+  --warn:      #b45309;
+  --warn-lo:   #fef3c7;
+  --danger:    #dc2626;
+  --danger-lo: #fee2e2;
+  --info:      #475569;
+  --info-lo:   #f1f5f9;
+  --progress-h: 3px;
+  --radius:    6px;
+  --shadow:    0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:        #0d1117;
+    --surface:   #161b27;
+    --raised:    #1f2640;
+    --border:    #2a3150;
+    --text:      #dde3f5;
+    --muted:     #7b87a8;
+    --accent:    #3d6fff;
+    --accent-lo: #1a2a5e;
+    --ok:        #22c55e;
+    --ok-lo:     #052e16;
+    --warn:      #f59e0b;
+    --warn-lo:   #2d1f02;
+    --danger:    #ef4444;
+    --danger-lo: #2d0808;
+    --info:      #94a3b8;
+    --info-lo:   #1a1f2e;
+    --shadow:    0 1px 4px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#0d1117; --surface:#161b27; --raised:#1f2640; --border:#2a3150;
+  --text:#dde3f5; --muted:#7b87a8; --accent:#3d6fff; --accent-lo:#1a2a5e;
+  --ok:#22c55e; --ok-lo:#052e16; --warn:#f59e0b; --warn-lo:#2d1f02;
+  --danger:#ef4444; --danger-lo:#2d0808; --info:#94a3b8; --info-lo:#1a1f2e;
+  --shadow:0 1px 4px rgba(0,0,0,.4);
+}
+:root[data-theme="light"] {
+  --bg:#f1f4fb; --surface:#ffffff; --raised:#e8ecf5; --border:#d0d7eb;
+  --text:#0f1623; --muted:#5a6480; --accent:#2558f0; --accent-lo:#dce6ff;
+  --ok:#16a34a; --ok-lo:#dcfce7; --warn:#b45309; --warn-lo:#fef3c7;
+  --danger:#dc2626; --danger-lo:#fee2e2; --info:#475569; --info-lo:#f1f5f9;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06);
+}
+
+/* ── Reset ─────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:14px;-webkit-font-smoothing:antialiased}
+body{
+  font-family:'DM Sans',system-ui,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  line-height:1.5;
+}
+button{cursor:pointer;font-family:inherit;font-size:inherit}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ── Progress bar ──────────────────────────────────────── */
+#top-progress{
+  position:fixed;top:0;left:0;right:0;
+  height:var(--progress-h);
+  background:var(--border);
+  z-index:100;
+}
+#top-progress-bar{
+  height:100%;
+  background:var(--accent);
+  width:0%;
+  transition:width .4s ease;
+}
+
+/* ── Header ────────────────────────────────────────────── */
+header{
+  position:sticky;top:var(--progress-h);
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  z-index:90;
+  padding:0 24px;
+  display:flex;
+  align-items:center;
+  gap:16px;
+  height:56px;
+  box-shadow:var(--shadow);
+}
+.logo{
+  font-family:'JetBrains Mono',monospace;
+  font-weight:500;
+  font-size:.85rem;
+  color:var(--muted);
+  letter-spacing:.05em;
+  white-space:nowrap;
+}
+.logo span{color:var(--accent)}
+h1{
+  font-size:1rem;
+  font-weight:600;
+  color:var(--text);
+  white-space:nowrap;
+}
+.header-gap{flex:1}
+#status-badge{
+  font-size:.75rem;
+  font-weight:500;
+  padding:3px 10px;
+  border-radius:20px;
+  background:var(--info-lo);
+  color:var(--info);
+  white-space:nowrap;
+}
+#status-badge.running{background:var(--accent-lo);color:var(--accent)}
+#status-badge.done{background:var(--ok-lo);color:var(--ok)}
+#status-badge.error{background:var(--danger-lo);color:var(--danger)}
+
+.btn-primary{
+  background:var(--accent);
+  color:#fff;
+  border:none;
+  padding:7px 16px;
+  border-radius:var(--radius);
+  font-weight:600;
+  font-size:.82rem;
+  white-space:nowrap;
+  transition:opacity .15s;
+}
+.btn-primary:hover{opacity:.88}
+.btn-primary:disabled{opacity:.45;cursor:not-allowed}
+
+.btn-ghost{
+  background:transparent;
+  color:var(--muted);
+  border:1px solid var(--border);
+  padding:6px 12px;
+  border-radius:var(--radius);
+  font-size:.8rem;
+  white-space:nowrap;
+  transition:background .15s;
+}
+.btn-ghost:hover{background:var(--raised)}
+
+/* ── Main layout ───────────────────────────────────────── */
+main{padding:24px;max-width:1600px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+
+/* ── Progress detail (running) ─────────────────────────── */
+#progress-detail{
+  display:none;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:16px 20px;
+  gap:12px;
+  flex-direction:column;
+  box-shadow:var(--shadow);
+}
+#progress-detail.visible{display:flex}
+.prog-label{font-size:.8rem;color:var(--muted)}
+.prog-bar-wrap{height:8px;background:var(--raised);border-radius:4px;overflow:hidden}
+.prog-bar-fill{height:100%;background:var(--accent);border-radius:4px;transition:width .5s ease}
+.prog-text{font-size:.75rem;color:var(--muted);text-align:right;font-family:'JetBrains Mono',monospace}
+
+/* ── KPI strip ─────────────────────────────────────────── */
+#kpi-strip{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+  gap:12px;
+}
+.kpi-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:14px 16px;
+  box-shadow:var(--shadow);
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+.kpi-label{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.kpi-value{
+  font-size:1.6rem;
+  font-weight:600;
+  font-variant-numeric:tabular-nums;
+  line-height:1.1;
+}
+.kpi-sub{font-size:.72rem;color:var(--muted)}
+.kpi-card.ok   .kpi-value{color:var(--ok)}
+.kpi-card.warn .kpi-value{color:var(--warn)}
+.kpi-card.danger .kpi-value{color:var(--danger)}
+.kpi-card.accent .kpi-value{color:var(--accent)}
+
+/* ── Filter bar ────────────────────────────────────────── */
+#filter-bar{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.tab-group{display:flex;gap:2px;background:var(--raised);padding:3px;border-radius:var(--radius);border:1px solid var(--border)}
+.tab{
+  background:transparent;
+  border:none;
+  padding:5px 14px;
+  border-radius:4px;
+  font-size:.8rem;
+  font-weight:500;
+  color:var(--muted);
+  transition:background .15s,color .15s;
+}
+.tab.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
+.tab:hover:not(.active){background:var(--surface);color:var(--text)}
+
+#search-input{
+  flex:1;
+  min-width:200px;
+  max-width:340px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  color:var(--text);
+  padding:7px 12px;
+  font-family:inherit;
+  font-size:.85rem;
+}
+#search-input:focus{outline:2px solid var(--accent);outline-offset:1px}
+#search-input::placeholder{color:var(--muted)}
+
+.filter-gap{flex:1}
+.count-label{font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}
+
+/* ── Table ─────────────────────────────────────────────── */
+.table-wrap{overflow-x:auto;border-radius:var(--radius);box-shadow:var(--shadow)}
+table{
+  width:100%;
+  border-collapse:collapse;
+  background:var(--surface);
+  font-size:.82rem;
+}
+thead th{
+  background:var(--raised);
+  color:var(--muted);
+  font-weight:600;
+  font-size:.7rem;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  padding:10px 14px;
+  text-align:left;
+  border-bottom:1px solid var(--border);
+  white-space:nowrap;
+}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+tbody tr:hover{background:var(--raised)}
+tbody tr:last-child{border-bottom:none}
+td{padding:10px 14px;vertical-align:middle}
+
+/* SKU column */
+.sku-cell{font-family:'JetBrains Mono',monospace;font-size:.78rem;font-weight:500;color:var(--accent)}
+.nome-cell{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+
+/* Status chip */
+.chip{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:.7rem;font-weight:600;
+  padding:2px 9px;border-radius:20px;
+  white-space:nowrap;
+}
+.chip.ok{background:var(--ok-lo);color:var(--ok)}
+.chip.divergente{background:var(--warn-lo);color:var(--warn)}
+.chip.sem_akg{background:var(--danger-lo);color:var(--danger)}
+.chip.so_akg{background:var(--info-lo);color:var(--info)}
+
+/* Numeric cells */
+.num{font-variant-numeric:tabular-nums;text-align:right;font-family:'JetBrains Mono',monospace;font-size:.78rem}
+.num.diff{color:var(--danger)}
+
+/* Anúncios chips */
+.anuncio-chips{display:flex;flex-wrap:wrap;gap:4px}
+.anuncio-chip{
+  font-size:.65rem;padding:2px 7px;border-radius:3px;
+  background:var(--accent-lo);color:var(--accent);
+  font-family:'JetBrains Mono',monospace;
+}
+
+/* Divergências expand */
+.div-toggle{
+  background:none;border:none;color:var(--warn);
+  font-size:.75rem;font-weight:600;cursor:pointer;
+  text-decoration:underline;padding:0;
+}
+.div-list{
+  display:none;margin-top:6px;
+  list-style:none;
+  display:none;
+}
+.div-list.open{display:block}
+.div-list li{
+  font-size:.72rem;color:var(--warn);
+  padding:2px 0;font-family:'JetBrains Mono',monospace;
+}
+.div-list li::before{content:"⚠ ";opacity:.7}
+
+/* Empty state */
+.empty{
+  text-align:center;padding:60px 24px;
+  color:var(--muted);
+  background:var(--surface);
+  border-radius:var(--radius);
+  border:1px solid var(--border);
+}
+.empty-icon{font-size:2.5rem;margin-bottom:12px}
+.empty h3{font-size:1rem;margin-bottom:6px;color:var(--text)}
+.empty p{font-size:.85rem;max-width:360px;margin:0 auto}
+
+/* Pagination */
+#pagination{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  font-size:.8rem;color:var(--muted);
+}
+.page-btn{
+  background:var(--surface);border:1px solid var(--border);
+  color:var(--text);padding:5px 12px;border-radius:var(--radius);
+  font-size:.8rem;transition:background .1s;
+}
+.page-btn:hover:not(:disabled){background:var(--raised)}
+.page-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* Last updated */
+#last-updated{font-size:.72rem;color:var(--muted);text-align:right}
+
+/* Responsive */
+@media(max-width:900px){
+  header{padding:0 16px}
+  main{padding:16px}
+  .logo{display:none}
+}
+</style>
+</head>
+<body>
+
+<div id="top-progress"><div id="top-progress-bar"></div></div>
+
+<header>
+  <div class="logo">SHN × <span>AKG</span></div>
+  <h1>Auditoria Multiempresas</h1>
+  <div class="header-gap"></div>
+  <span id="status-badge">Aguardando</span>
+  <button class="btn-ghost" onclick="toggleTheme()">☀/☾</button>
+  <button class="btn-primary" id="btn-auditar" onclick="iniciarAuditoria()">▶ Iniciar Auditoria</button>
+</header>
+
+<main>
+
+  <!-- Progress detail -->
+  <div id="progress-detail">
+    <div>
+      <div class="prog-label" id="prog-etapa">Preparando…</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
+        <div class="prog-bar-wrap" style="flex:1"><div class="prog-bar-fill" id="prog-bar" style="width:0%"></div></div>
+        <div class="prog-text" id="prog-text">0 / 0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI strip -->
+  <div id="kpi-strip">
+    <div class="kpi-card">
+      <div class="kpi-label">Shinsei</div>
+      <div class="kpi-value" id="k-shinsei">—</div>
+      <div class="kpi-sub">produtos ativos</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">AKG</div>
+      <div class="kpi-value" id="k-akg">—</div>
+      <div class="kpi-sub">produtos ativos</div>
+    </div>
+    <div class="kpi-card accent">
+      <div class="kpi-label">Vinculados</div>
+      <div class="kpi-value" id="k-pct">—</div>
+      <div class="kpi-sub">do catálogo Shinsei</div>
+    </div>
+    <div class="kpi-card ok">
+      <div class="kpi-label">Idênticos</div>
+      <div class="kpi-value" id="k-ok">—</div>
+      <div class="kpi-sub">sem divergência</div>
+    </div>
+    <div class="kpi-card warn">
+      <div class="kpi-label">Divergentes</div>
+      <div class="kpi-value" id="k-div">—</div>
+      <div class="kpi-sub">campos diferentes</div>
+    </div>
+    <div class="kpi-card danger">
+      <div class="kpi-label">Faltam no AKG</div>
+      <div class="kpi-value" id="k-falta">—</div>
+      <div class="kpi-sub">não exportados</div>
+    </div>
+    <div class="kpi-card warn">
+      <div class="kpi-label">Sem Anúncio</div>
+      <div class="kpi-value" id="k-anuncio">—</div>
+      <div class="kpi-sub">no AKG / sem marketplace</div>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div id="filter-bar">
+    <div class="tab-group">
+      <button class="tab active" data-filter="" onclick="setFilter('')">Todos</button>
+      <button class="tab" data-filter="ok" onclick="setFilter('ok')">✓ OK</button>
+      <button class="tab" data-filter="divergente" onclick="setFilter('divergente')">⚠ Divergente</button>
+      <button class="tab" data-filter="sem_akg" onclick="setFilter('sem_akg')">✗ Falta AKG</button>
+      <button class="tab" data-filter="so_akg" onclick="setFilter('so_akg')">↳ Só AKG</button>
+    </div>
+    <input id="search-input" type="search" placeholder="Buscar SKU ou nome…" oninput="buscar(this.value)">
+    <div class="filter-gap"></div>
+    <span class="count-label" id="count-label"></span>
+  </div>
+
+  <!-- Table -->
+  <div id="table-container">
+    <div class="empty">
+      <div class="empty-icon">🔍</div>
+      <h3>Nenhuma auditoria executada</h3>
+      <p>Clique em <strong>Iniciar Auditoria</strong> para cruzar os dados de Shinsei e AKG em todos os campos.</p>
+    </div>
+  </div>
+
+  <!-- Pagination -->
+  <div id="pagination" style="display:none">
+    <button class="page-btn" id="btn-prev" onclick="mudaPagina(-1)">← Anterior</button>
+    <span id="pag-label"></span>
+    <button class="page-btn" id="btn-next" onclick="mudaPagina(1)">Próxima →</button>
+  </div>
+
+  <div id="last-updated"></div>
+
+</main>
+
+<script>
+// ── Estado global ─────────────────────────────────────────
+let _produtos    = [];
+let _filtrados   = [];
+let _filtro      = '';
+let _busca       = '';
+let _pagina      = 1;
+const _LIMITE    = 100;
+let _polling     = null;
+
+// ── Tema ──────────────────────────────────────────────────
+function toggleTheme() {
+  const r = document.documentElement;
+  const cur = r.getAttribute('data-theme');
+  r.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+}
+
+// ── Auditoria ─────────────────────────────────────────────
+async function iniciarAuditoria() {
+  const btn = document.getElementById('btn-auditar');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/multiempresas/auditoria/iniciar', { method: 'POST' });
+    const d = await r.json();
+    if (!d.ok) { alert(d.msg); btn.disabled = false; return; }
+  } catch(e) { alert('Erro ao iniciar: ' + e); btn.disabled = false; return; }
+  iniciarPolling();
+}
+
+function iniciarPolling() {
+  if (_polling) clearInterval(_polling);
+  _polling = setInterval(pollStatus, 2000);
+  pollStatus();
+}
+
+async function pollStatus() {
+  try {
+    const r = await fetch('/multiempresas/auditoria/status');
+    const d = await r.json();
+    atualizarStatus(d);
+    if (d.status === 'done' || d.status === 'error') {
+      clearInterval(_polling);
+      _polling = null;
+      document.getElementById('btn-auditar').disabled = false;
+      if (d.status === 'done') carregarProdutos();
+    }
+  } catch(e) {
+    console.warn('poll erro:', e);
+  }
+}
+
+function atualizarStatus(d) {
+  const badge = document.getElementById('status-badge');
+  const labels = { idle:'Aguardando', running:'Executando…', done:'Concluído', error:'Erro' };
+  badge.textContent = labels[d.status] || d.status;
+  badge.className = '';
+  if (d.status === 'running') badge.classList.add('running');
+  if (d.status === 'done')    badge.classList.add('done');
+  if (d.status === 'error')   badge.classList.add('error');
+
+  const detail = document.getElementById('progress-detail');
+  if (d.status === 'running') {
+    detail.classList.add('visible');
+    const prog = d.progresso || {};
+    document.getElementById('prog-etapa').textContent = prog.etapa || '…';
+    const pct = prog.total > 0 ? Math.round(prog.atual / prog.total * 100) : 0;
+    document.getElementById('prog-bar').style.width = pct + '%';
+    document.getElementById('top-progress-bar').style.width = pct + '%';
+    document.getElementById('prog-text').textContent = `${prog.atual} / ${prog.total}`;
+  } else {
+    detail.classList.remove('visible');
+    document.getElementById('top-progress-bar').style.width = d.status === 'done' ? '100%' : '0%';
+  }
+
+  if (d.resumo && Object.keys(d.resumo).length) {
+    const rs = d.resumo;
+    document.getElementById('k-shinsei').textContent = fmt(rs.total_shinsei);
+    document.getElementById('k-akg').textContent     = fmt(rs.total_akg);
+    document.getElementById('k-pct').textContent     = (rs.pct_vinculados ?? '—') + (rs.pct_vinculados != null ? '%' : '');
+    document.getElementById('k-ok').textContent      = fmt(rs.ok);
+    document.getElementById('k-div').textContent     = fmt(rs.divergentes);
+    document.getElementById('k-falta').textContent   = fmt(rs.sem_akg);
+    document.getElementById('k-anuncio').textContent = fmt(rs.sem_anuncio_akg);
+  }
+
+  if (d.concluido_em) {
+    document.getElementById('last-updated').textContent = 'Última auditoria: ' + d.concluido_em.replace('T',' ');
+  }
+}
+
+async function carregarProdutos() {
+  // Busca em batches — começa com página 1 de 1000 itens
+  let todos = [];
+  let pagina = 1;
+  while (true) {
+    const r = await fetch(`/multiempresas/auditoria/produtos?pagina=${pagina}&limite=500`);
+    const d = await r.json();
+    todos = todos.concat(d.produtos || []);
+    if (pagina >= d.paginas || d.total <= todos.length) break;
+    pagina++;
+  }
+  _produtos = todos;
+  aplicarFiltro();
+}
+
+// ── Filtro / busca ────────────────────────────────────────
+function setFilter(f) {
+  _filtro = f;
+  _pagina = 1;
+  document.querySelectorAll('.tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.filter === f)
+  );
+  aplicarFiltro();
+}
+
+let _buscarTimer = null;
+function buscar(v) {
+  clearTimeout(_buscarTimer);
+  _buscarTimer = setTimeout(() => {
+    _busca  = v.toLowerCase();
+    _pagina = 1;
+    aplicarFiltro();
+  }, 200);
+}
+
+function aplicarFiltro() {
+  _filtrados = _produtos.filter(p => {
+    if (_filtro && p.status !== _filtro) return false;
+    if (_busca && !p.sku.toLowerCase().includes(_busca) && !p.nome.toLowerCase().includes(_busca)) return false;
+    return true;
+  });
+  renderTabela();
+}
+
+// ── Render ────────────────────────────────────────────────
+function fmt(n) { return n == null ? '—' : n.toLocaleString('pt-BR'); }
+function fmtBrl(n) { return n == null || n === 0 ? '—' : 'R$ ' + (+n).toFixed(2).replace('.',','); }
+
+const STATUS_LABELS = {
+  ok:         '✓ Idêntico',
+  divergente: '⚠ Divergente',
+  sem_akg:    '✗ Falta AKG',
+  so_akg:     '↳ Só AKG',
+};
+
+function renderTabela() {
+  const total = _filtrados.length;
+  document.getElementById('count-label').textContent = total > 0 ? `${total.toLocaleString('pt-BR')} produtos` : '';
+
+  const pagTot = Math.max(1, Math.ceil(total / _LIMITE));
+  _pagina = Math.min(_pagina, pagTot);
+  const inicio = (_pagina - 1) * _LIMITE;
+  const pagina = _filtrados.slice(inicio, inicio + _LIMITE);
+
+  const pag = document.getElementById('pagination');
+  const pagLabel = document.getElementById('pag-label');
+  if (pagTot > 1) {
+    pag.style.display = 'flex';
+    pagLabel.textContent = `Pág. ${_pagina} / ${pagTot}`;
+    document.getElementById('btn-prev').disabled = _pagina === 1;
+    document.getElementById('btn-next').disabled = _pagina === pagTot;
+  } else {
+    pag.style.display = 'none';
+  }
+
+  const container = document.getElementById('table-container');
+
+  if (!pagina.length) {
+    container.innerHTML = `<div class="empty">
+      <div class="empty-icon">🔍</div>
+      <h3>${_produtos.length === 0 ? 'Nenhuma auditoria executada' : 'Nenhum resultado'}</h3>
+      <p>${_produtos.length === 0
+        ? 'Clique em <strong>Iniciar Auditoria</strong> para cruzar os dados.'
+        : 'Tente ajustar os filtros ou a busca.'}</p>
+    </div>`;
+    return;
+  }
+
+  const rows = pagina.map((p, idx) => {
+    const globalIdx = inicio + idx;
+    const divCount  = p.divergencias ? p.divergencias.length : 0;
+    const anCount   = p.anuncios_akg ? p.anuncios_akg.length : 0;
+
+    const anChips = anCount > 0
+      ? p.anuncios_akg.map(a => `<span class="anuncio-chip" title="${a.titulo || ''}">${a.canal || 'Canal'}</span>`).join('')
+      : '<span style="color:var(--danger);font-size:.72rem">Nenhum</span>';
+
+    const s = p.shinsei || {};
+    const a = p.akg     || {};
+
+    const estDiff  = s.estoque  !== a.estoque  && p.status !== 'sem_akg' && p.status !== 'so_akg';
+    const imgDiff  = s.imagens  !== a.imagens  && p.status !== 'sem_akg' && p.status !== 'so_akg';
+    const varDiff  = s.variacoes!== a.variacoes && p.status !== 'sem_akg' && p.status !== 'so_akg';
+    const compDiff = s.composicao!==a.composicao && p.status !== 'sem_akg' && p.status !== 'so_akg';
+
+    const divBlock = divCount > 0 ? `
+      <button class="div-toggle" onclick="toggleDiv(${globalIdx})">⚠ ${divCount} diferença${divCount>1?'s':''}</button>
+      <ul class="div-list" id="div-${globalIdx}">
+        ${p.divergencias.map(d => `<li>${d}</li>`).join('')}
+      </ul>` : '';
+
+    return `<tr>
+      <td class="sku-cell">${p.sku}</td>
+      <td class="nome-cell" title="${p.nome}">${p.nome}</td>
+      <td><span class="chip ${p.status}">${STATUS_LABELS[p.status] || p.status}</span></td>
+      <td class="num">${fmt(s.estoque)}</td>
+      <td class="num ${estDiff?'diff':''}">${a.estoque != null ? fmt(a.estoque) : '—'}</td>
+      <td class="num">${fmtBrl(s.preco)}</td>
+      <td class="num">${fmtBrl(a.preco)}</td>
+      <td class="num ${imgDiff?'diff':''}">${fmt(s.imagens)} / ${a.imagens != null ? fmt(a.imagens) : '—'}</td>
+      <td class="num ${varDiff?'diff':''}">${fmt(s.variacoes)} / ${a.variacoes != null ? fmt(a.variacoes) : '—'}</td>
+      <td class="num ${compDiff?'diff':''}">${fmt(s.composicao)} / ${a.composicao != null ? fmt(a.composicao) : '—'}</td>
+      <td><div class="anuncio-chips">${anChips}</div></td>
+      <td>${divBlock}</td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr>
+      <th>SKU</th>
+      <th>Nome</th>
+      <th>Status</th>
+      <th>Est. SHN</th>
+      <th>Est. AKG</th>
+      <th>Preço SHN</th>
+      <th>Preço AKG</th>
+      <th>Imgs (SHN/AKG)</th>
+      <th>Var. (SHN/AKG)</th>
+      <th>Comp. (SHN/AKG)</th>
+      <th>Anúncios AKG</th>
+      <th>Divergências</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function toggleDiv(idx) {
+  const el = document.getElementById('div-' + idx);
+  if (el) el.classList.toggle('open');
+}
+
+function mudaPagina(delta) {
+  _pagina += delta;
+  renderTabela();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── Init ──────────────────────────────────────────────────
+(async function init() {
+  try {
+    const r = await fetch('/multiempresas/auditoria/status');
+    const d = await r.json();
+    atualizarStatus(d);
+    if (d.status === 'running') {
+      document.getElementById('btn-auditar').disabled = true;
+      iniciarPolling();
+    } else if (d.status === 'done' && d.resumo && Object.keys(d.resumo).length) {
+      await carregarProdutos();
+    }
+  } catch(e) { /* servidor ainda subindo */ }
+})();
+</script>
+</body>
+</html>
