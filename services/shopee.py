@@ -19,9 +19,14 @@ import httpx
 logger = logging.getLogger("shinsei.shopee")
 
 # ── Caminhos ──────────────────────────────────────────────────────────────────
-_BASE_DIR    = Path(__file__).parent.parent
-_DATA_DIR    = _BASE_DIR / "data"
-_TOKENS_PATH = _DATA_DIR / "shopee_tokens.json"
+_BASE_DIR         = Path(__file__).parent.parent
+_DATA_DIR         = _BASE_DIR / "data"
+_TOKENS_PATH      = _DATA_DIR / "shopee_tokens.json"
+_TOKENS_PATH_AKG  = _DATA_DIR / "shopee_tokens_akg.json"
+
+
+def _tokens_path(akg: bool = False) -> Path:
+    return _TOKENS_PATH_AKG if akg else _TOKENS_PATH
 
 # ── Configuração (env vars) ───────────────────────────────────────────────────
 IS_SANDBOX  : bool = os.getenv("SHOPEE_SANDBOX", "false").lower() in ("1", "true", "yes")
@@ -69,34 +74,35 @@ def _assinar(path: str, ts: int, access_token: str = "", shop_id: int = 0) -> st
     return hmac.new(pkey.encode(), base.encode(), hashlib.sha256).hexdigest()
 
 
-def _salvar_tokens(tokens: dict) -> None:
+def _salvar_tokens(tokens: dict, akg: bool = False) -> None:
+    path = _tokens_path(akg)
     _DATA_DIR.mkdir(exist_ok=True)
-    _TOKENS_PATH.write_text(
-        json.dumps(tokens, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
-    # Persiste no Secret Manager para sobreviver a deploys/reinícios
-    try:
-        from token_persistence import save_shopee_tokens
-        save_shopee_tokens(
-            tokens.get("access_token", ""),
-            tokens.get("refresh_token", ""),
-            int(tokens.get("shop_id", 0)),
-        )
-    except Exception as _e:
-        logger.warning("Shopee: falha ao salvar no Secret Manager: %s", _e)
+    path.write_text(json.dumps(tokens, indent=2, ensure_ascii=False), encoding="utf-8")
+    # Secret Manager só para conta Shinsei
+    if not akg:
+        try:
+            from token_persistence import save_shopee_tokens
+            save_shopee_tokens(
+                tokens.get("access_token", ""),
+                tokens.get("refresh_token", ""),
+                int(tokens.get("shop_id", 0)),
+            )
+        except Exception as _e:
+            logger.warning("Shopee: falha ao salvar no Secret Manager: %s", _e)
 
 
-def _carregar_tokens() -> dict | None:
+def _carregar_tokens(akg: bool = False) -> dict | None:
+    path = _tokens_path(akg)
     try:
-        if _TOKENS_PATH.exists():
-            return json.loads(_TOKENS_PATH.read_text(encoding="utf-8"))
+        if path.exists():
+            return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         pass
     return None
 
 
-def tem_tokens() -> bool:
-    t = _carregar_tokens()
+def tem_tokens(akg: bool = False) -> bool:
+    t = _carregar_tokens(akg=akg)
     return bool(t and t.get("access_token"))
 
 
@@ -111,10 +117,11 @@ def token_expirado() -> bool:
 # ── OAuth Service ─────────────────────────────────────────────────────────────
 
 class ShopeeOAuthService:
-    """Gerencia o fluxo OAuth da Shopee."""
+    """Gerencia o fluxo OAuth da Shopee. akg=True usa shopee_tokens_akg.json."""
 
-    def __init__(self) -> None:
+    def __init__(self, akg: bool = False) -> None:
         self._pid, self._pkey, self._sid = _get_creds()
+        self._akg = akg
 
     def url_autorizacao(self, redirect_uri: str) -> str:
         """Gera a URL de autorização para redirecionar o usuário."""
@@ -167,13 +174,13 @@ class ShopeeOAuthService:
             "partner_id":    self._pid,
             "obtido_em":     time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
-        _salvar_tokens(tokens)
-        logger.info("Shopee tokens obtidos com sucesso para shop_id=%d", shop_id)
+        _salvar_tokens(tokens, akg=self._akg)
+        logger.info("Shopee tokens obtidos para shop_id=%d (akg=%s)", shop_id, self._akg)
         return {"success": True, "data": tokens}
 
     def renovar_token(self) -> dict:
         """Renova o access_token usando o refresh_token."""
-        t = _carregar_tokens()
+        t = _carregar_tokens(akg=self._akg)
         if not t:
             return {"success": False, "error": "Nenhum token encontrado. Faça a autorização primeiro."}
 
@@ -217,8 +224,8 @@ class ShopeeOAuthService:
             "shop_id":       shop_id,
             "renovado_em":   time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
-        _salvar_tokens(tokens)
-        logger.info("Shopee token renovado para shop_id=%d", shop_id)
+        _salvar_tokens(tokens, akg=self._akg)
+        logger.info("Shopee token renovado para shop_id=%d (akg=%s)", shop_id, self._akg)
         return {"success": True, "data": tokens}
 
     def status(self) -> dict:
@@ -270,10 +277,12 @@ def obter_token_shopee() -> str:
 class ShopeeService:
     """Chamadas autenticadas à Shopee API v2."""
 
-    def __init__(self) -> None:
-        t = _carregar_tokens()
+    def __init__(self, akg: bool = False) -> None:
+        self._akg = akg
+        t = _carregar_tokens(akg=akg)
+        auth_url = "/shopee/akg/auth" if akg else "/shopee/auth"
         if not t or not t.get("access_token"):
-            raise RuntimeError("Shopee não autenticada. Faça a autorização em /shopee/auth.")
+            raise RuntimeError(f"Shopee {'AKG ' if akg else ''}não autenticada. Faça a autorização em {auth_url}.")
         self.access_token = t["access_token"]
         _, _, sid = _get_creds()
         self.shop_id = int(t.get("shop_id") or sid or 0)
