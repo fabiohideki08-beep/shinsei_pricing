@@ -426,6 +426,96 @@ def auditoria_status():
         }
 
 
+@router.get("/multiempresas/auditoria/resumo-divergencias")
+def resumo_divergencias():
+    """
+    Agrega e categoriza todas as divergências encontradas nos 4.197+ produtos divergentes.
+    Retorna contagem por tipo de campo, exemplos e distribuição.
+    """
+    import re
+    from collections import Counter
+
+    with _JOB_LOCK:
+        prods = [p for p in _JOB["produtos"] if p["status"] == "divergente"]
+
+    if not prods:
+        return {"total_divergentes": 0, "categorias": []}
+
+    # Contadores por categoria
+    categorias: dict[str, dict] = {}
+
+    def _cat(div: str) -> str:
+        """Normaliza o texto de divergência para uma categoria canônica."""
+        d = div.lower()
+        if "imagem" in d:       return "imagens"
+        if "estoque" in d:      return "estoque"
+        if "variacao" in d or "variação" in d: return "variacoes"
+        if "composicao" in d or "composição" in d or "comp." in d: return "composicao"
+        if "descricao" in d or "descrição" in d: return "descricao"
+        if "nome" in d:         return "nome"
+        if "peso" in d:         return "peso_dimensoes"
+        if "largura" in d or "altura" in d or "profundidade" in d: return "peso_dimensoes"
+        if "gtin" in d or "ean" in d: return "gtin_ean"
+        if "tipo" in d:         return "tipo_formato"
+        if "formato" in d:      return "tipo_formato"
+        return "outros"
+
+    cat_labels = {
+        "imagens":      "Imagens (quantidade diferente)",
+        "estoque":      "Estoque (saldo divergente)",
+        "variacoes":    "Variações (faltando ou extras)",
+        "composicao":   "Composição / Estrutura",
+        "descricao":    "Descrição",
+        "nome":         "Nome do produto",
+        "peso_dimensoes": "Peso / Dimensões",
+        "gtin_ean":     "GTIN / EAN / Código de barras",
+        "tipo_formato": "Tipo ou Formato do produto",
+        "outros":       "Outros campos",
+    }
+
+    contagem: Counter = Counter()
+    exemplos_raw: dict[str, list[dict]] = {k: [] for k in cat_labels}
+    detalhes_raw: dict[str, list[str]] = {k: [] for k in cat_labels}
+
+    for p in prods:
+        cats_vistas = set()
+        for div in (p.get("divergencias") or []):
+            cat = _cat(div)
+            if cat not in cats_vistas:
+                contagem[cat] += 1
+                cats_vistas.add(cat)
+            if len(exemplos_raw[cat]) < 5:
+                exemplos_raw[cat].append({
+                    "sku":  p["sku"],
+                    "nome": p["nome"][:50],
+                    "detalhe": div,
+                })
+            if div not in detalhes_raw[cat]:
+                detalhes_raw[cat].append(div)
+
+    # Montar resposta ordenada por frequência
+    total_divs = len(prods)
+    resultado = []
+    for cat, cnt in contagem.most_common():
+        resultado.append({
+            "categoria":  cat,
+            "label":      cat_labels.get(cat, cat),
+            "quantidade": cnt,
+            "pct_dos_divergentes": round(cnt / total_divs * 100, 1),
+            "exemplos_de_divergencia": detalhes_raw[cat][:8],
+            "exemplos_produtos": exemplos_raw[cat],
+        })
+
+    # Produtos com múltiplas divergências
+    multi = [p for p in prods if len(p.get("divergencias", [])) > 1]
+
+    return {
+        "total_divergentes": total_divs,
+        "com_multiplas_divergencias": len(multi),
+        "categorias": resultado,
+    }
+
+
 @router.get("/multiempresas/auditoria/produtos")
 def auditoria_produtos(
     status: str = "",

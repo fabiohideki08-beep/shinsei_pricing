@@ -237,6 +237,7 @@ PUBLIC_PATHS = {
     "/multiempresas/auditoria/iniciar",
     "/multiempresas/auditoria/status",
     "/multiempresas/auditoria/produtos",
+    "/multiempresas/auditoria/resumo-divergencias",
 }
 
 
