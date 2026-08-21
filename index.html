@@ -340,6 +340,63 @@
 
   </div><!-- /g2 filas+seo -->
 
+  <!-- ══ MULTIEMPRESAS ══ -->
+  <div style="margin-top:10px">
+    <div class="card" style="border-color:rgba(139,92,246,.35)">
+      <div class="card-head">
+        <div class="card-title">
+          <span class="card-ico">🏢</span>
+          <div>
+            <div class="card-name">Auditoria Multiempresas</div>
+            <div class="card-desc">Sincronização Shinsei ↔ AKG — produtos, anúncios, imagens, fiscal</div>
+          </div>
+        </div>
+        <div id="me-badge" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(139,92,246,.15);color:#a78bfa">carregando...</div>
+      </div>
+      <div class="conf-row">
+        <div class="conf-cell">
+          <div class="conf-label">Shinsei</div>
+          <div class="conf-val" id="me-shinsei">—</div>
+          <div class="conf-sub">produtos ativos</div>
+        </div>
+        <div class="conf-cell">
+          <div class="conf-label">AKG</div>
+          <div class="conf-val" id="me-akg">—</div>
+          <div class="conf-sub">produtos ativos</div>
+        </div>
+        <div class="conf-cell">
+          <div class="conf-label">Vinculados</div>
+          <div class="conf-val ok" id="me-vinc">—</div>
+          <div class="conf-sub">% do catálogo</div>
+        </div>
+        <div class="conf-cell">
+          <div class="conf-label">Idênticos</div>
+          <div class="conf-val ok" id="me-ok">—</div>
+          <div class="conf-sub">sem divergência</div>
+        </div>
+        <div class="conf-cell">
+          <div class="conf-label">Divergentes</div>
+          <div class="conf-val warn" id="me-div">—</div>
+          <div class="conf-sub">campos diferentes</div>
+        </div>
+        <div class="conf-cell">
+          <div class="conf-label">Faltam AKG</div>
+          <div class="conf-val danger" id="me-falta">—</div>
+          <div class="conf-sub">não exportados</div>
+        </div>
+        <div class="conf-cell">
+          <div class="conf-label">Sem Anúncio</div>
+          <div class="conf-val warn" id="me-sem-anuncio">—</div>
+          <div class="conf-sub">sem marketplace</div>
+        </div>
+      </div>
+      <div class="lnks">
+        <a href="/multiempresas" class="lnk primary">🔍 Abrir Auditoria</a>
+        <a href="/copiar-ml" class="lnk" style="background:rgba(139,92,246,.2);color:#c4b5fd;border:1px solid rgba(139,92,246,.4)">📋 Copiar ML → AKG</a>
+      </div>
+    </div>
+  </div>
+
   <!-- ══ LINHA 3: MÓDULOS AVANÇADOS ══ -->
   <div style="margin-top:16px">
     <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;padding:0 2px">⚡ Módulos Avançados</div>
@@ -557,6 +614,36 @@ document.addEventListener('DOMContentLoaded', () => {
     sv('gmc-repr', rep, rep>0?'danger':'ok');
     sv('gmc-lim',  lim, lim>0?'warn':'ok');
   }).catch(()=>{});
+
+  /* ── Multiempresas ── */
+  fetch('/multiempresas/auditoria/status').then(r=>r.json()).then(d=>{
+    const r=d.resumo||{};
+    const badge=document.getElementById('me-badge');
+    if(d.status==='done'){
+      badge.textContent='Concluído';
+      badge.style.background='rgba(63,185,80,.15)';
+      badge.style.color='#3fb950';
+      sv('me-shinsei', r.total_shinsei??'—');
+      sv('me-akg',     r.total_akg??'—');
+      sv('me-vinc',    r.pct_vinculados!=null?r.pct_vinculados+'%':'—', r.pct_vinculados>=95?'ok':'warn');
+      sv('me-ok',      r.ok??'—',    'ok');
+      sv('me-div',     r.divergentes??'—', (r.divergentes||0)>0?'warn':'ok');
+      sv('me-falta',   r.sem_akg??'—',    (r.sem_akg||0)>0?'danger':'ok');
+      sv('me-sem-anuncio', r.sem_anuncio_akg??'—', (r.sem_anuncio_akg||0)>0?'warn':'ok');
+    } else if(d.status==='running'){
+      const p=d.progresso||{};
+      badge.textContent=`Executando ${p.atual||0}/${p.total||'…'}`;
+      badge.style.background='rgba(249,168,37,.15)';
+      badge.style.color='#f9a825';
+    } else {
+      badge.textContent='Não executada';
+      badge.style.background='rgba(139,92,246,.15)';
+      badge.style.color='#a78bfa';
+    }
+  }).catch(()=>{
+    const badge=document.getElementById('me-badge');
+    if(badge) badge.textContent='Indisponível';
+  });
 
 });
 </script>
