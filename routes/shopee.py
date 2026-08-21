@@ -113,6 +113,59 @@ def shopee_callback(request: Request):
 
 
 # ─────────────────────────────────────────────
+# OAuth AKG — auth + callback separados
+# ─────────────────────────────────────────────
+
+@router.get("/shopee/akg/auth")
+def shopee_akg_auth(request: Request):
+    """Redireciona para autorização Shopee da conta AKG (salva em shopee_tokens_akg.json)."""
+    if not _config_ok():
+        raise HTTPException(status_code=400, detail="Credenciais Shopee não configuradas.")
+    redirect_uri = str(request.base_url).rstrip("/") + "/shopee/akg/callback"
+    url = ShopeeOAuthService().url_autorizacao(redirect_uri)
+    return RedirectResponse(url)
+
+
+@router.get("/shopee/akg/callback")
+def shopee_akg_callback(request: Request):
+    """Callback OAuth AKG — salva tokens em shopee_tokens_akg.json."""
+    from pathlib import Path
+    import json, time
+    code        = request.query_params.get("code")
+    shop_id_str = request.query_params.get("shop_id")
+    error       = request.query_params.get("error")
+
+    if error:
+        raise HTTPException(status_code=400, detail=f"Shopee AKG retornou erro: {error}")
+    if not code:
+        raise HTTPException(status_code=400, detail="Callback sem 'code'.")
+    if not shop_id_str:
+        raise HTTPException(status_code=400, detail="Callback sem 'shop_id'.")
+
+    try:
+        shop_id = int(shop_id_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"shop_id inválido: {shop_id_str}")
+
+    result = ShopeeOAuthService().trocar_code(code, shop_id)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result.get("error", "Falha ao trocar code."))
+
+    # Salvar em arquivo separado AKG (não sobrescreve tokens Shinsei)
+    data_dir = Path(__file__).resolve().parent.parent / "data"
+    data_dir.mkdir(exist_ok=True)
+    (data_dir / "shopee_tokens_akg.json").write_text(
+        json.dumps(result["data"], indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+    return {
+        "success": True,
+        "message": "Shopee AKG conectada com sucesso! Tokens salvos em shopee_tokens_akg.json.",
+        "data": {"shop_id": result["data"]["shop_id"], "expires_at": result["data"]["expires_at"]},
+    }
+
+
+# ─────────────────────────────────────────────
 # Renovar token
 # ─────────────────────────────────────────────
 
