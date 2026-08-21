@@ -24,26 +24,49 @@ _DATA_DIR    = _BASE_DIR / "data"
 _TOKENS_PATH = _DATA_DIR / "shopee_tokens.json"
 
 # ── Configuração (env vars) ───────────────────────────────────────────────────
-PARTNER_ID  : int  = int(os.getenv("SHOPEE_PARTNER_ID", "0"))
-PARTNER_KEY : str  = os.getenv("SHOPEE_PARTNER_KEY", "").strip()
-SHOP_ID     : int  = int(os.getenv("SHOPEE_SHOP_ID", "0"))
 IS_SANDBOX  : bool = os.getenv("SHOPEE_SANDBOX", "false").lower() in ("1", "true", "yes")
 
 _API_PROD    = "https://partner.shopeemobile.com/api/v2"
 _API_SANDBOX = "https://openplatform.sandbox.test-stable.shopee.com/api/v2"
 API_BASE     = _API_SANDBOX if IS_SANDBOX else _API_PROD
 
+_CREDS_PATH = _BASE_DIR / "data" / "credentials.json"
+
+
+def _get_creds() -> tuple[int, str, int]:
+    """Retorna (partner_id, partner_key, shop_id) — env vars têm prioridade, fallback em credentials.json."""
+    pid  = int(os.getenv("SHOPEE_PARTNER_ID", "0"))
+    pkey = os.getenv("SHOPEE_PARTNER_KEY", "").strip()
+    sid  = int(os.getenv("SHOPEE_SHOP_ID", "0"))
+    if not pid or not pkey:
+        try:
+            saved = json.loads(_CREDS_PATH.read_text(encoding="utf-8")).get("shopee", {})
+            pid  = pid  or int(saved.get("SHOPEE_PARTNER_ID", 0) or 0)
+            pkey = pkey or saved.get("SHOPEE_PARTNER_KEY", "").strip()
+            sid  = sid  or int(saved.get("SHOPEE_SHOP_ID", 0) or 0)
+        except Exception:
+            pass
+    return pid, pkey, sid
+
+
+# Compat: módulos que importam PARTNER_ID/PARTNER_KEY/SHOP_ID diretamente
+PARTNER_ID  : int  = int(os.getenv("SHOPEE_PARTNER_ID", "0"))
+PARTNER_KEY : str  = os.getenv("SHOPEE_PARTNER_KEY", "").strip()
+SHOP_ID     : int  = int(os.getenv("SHOPEE_SHOP_ID", "0"))
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _config_ok() -> bool:
-    return bool(PARTNER_ID and PARTNER_KEY)
+    pid, pkey, _ = _get_creds()
+    return bool(pid and pkey)
 
 
 def _assinar(path: str, ts: int, access_token: str = "", shop_id: int = 0) -> str:
     """Gera a assinatura HMAC-SHA256 conforme Shopee API v2."""
-    base = f"{PARTNER_ID}{path}{ts}{access_token}{shop_id if shop_id else ''}"
-    return hmac.new(PARTNER_KEY.encode(), base.encode(), hashlib.sha256).hexdigest()
+    pid, pkey, _ = _get_creds()
+    base = f"{pid}{path}{ts}{access_token}{shop_id if shop_id else ''}"
+    return hmac.new(pkey.encode(), base.encode(), hashlib.sha256).hexdigest()
 
 
 def _salvar_tokens(tokens: dict) -> None:
@@ -90,6 +113,9 @@ def token_expirado() -> bool:
 class ShopeeOAuthService:
     """Gerencia o fluxo OAuth da Shopee."""
 
+    def __init__(self) -> None:
+        self._pid, self._pkey, self._sid = _get_creds()
+
     def url_autorizacao(self, redirect_uri: str) -> str:
         """Gera a URL de autorização para redirecionar o usuário."""
         ts   = int(time.time())
@@ -97,7 +123,7 @@ class ShopeeOAuthService:
         sign = _assinar(path, ts)
         from urllib.parse import urlencode
         params = {
-            "partner_id": PARTNER_ID,
+            "partner_id": self._pid,
             "timestamp":  ts,
             "sign":       sign,
             "redirect":   redirect_uri,
@@ -115,8 +141,8 @@ class ShopeeOAuthService:
             with httpx.Client(timeout=30) as client:
                 resp = client.post(
                     f"{API_BASE}/auth/token/get",
-                    json={"code": code, "shop_id": shop_id, "partner_id": PARTNER_ID},
-                    params={"partner_id": PARTNER_ID, "timestamp": ts, "sign": sign},
+                    json={"code": code, "shop_id": shop_id, "partner_id": self._pid},
+                    params={"partner_id": self._pid, "timestamp": ts, "sign": sign},
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -138,7 +164,7 @@ class ShopeeOAuthService:
             "refresh_token": data["refresh_token"],
             "expires_at":    time.time() + int(data.get("expire_in", 14400)),
             "shop_id":       shop_id,
-            "partner_id":    PARTNER_ID,
+            "partner_id":    self._pid,
             "obtido_em":     time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
         _salvar_tokens(tokens)
@@ -168,9 +194,9 @@ class ShopeeOAuthService:
                     json={
                         "refresh_token": refresh_token,
                         "shop_id":       shop_id,
-                        "partner_id":    PARTNER_ID,
+                        "partner_id":    self._pid,
                     },
-                    params={"partner_id": PARTNER_ID, "timestamp": ts, "sign": sign},
+                    params={"partner_id": self._pid, "timestamp": ts, "sign": sign},
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -217,7 +243,7 @@ class ShopeeOAuthService:
             "connected":  not expirado,
             "status":     "expired" if expirado else "connected",
             "shop_id":    t.get("shop_id"),
-            "partner_id": PARTNER_ID,
+            "partner_id": self._pid,
             "expires_at": t.get("expires_at", 0),
             "expirado":   expirado,
             "sandbox":    IS_SANDBOX,
@@ -249,14 +275,16 @@ class ShopeeService:
         if not t or not t.get("access_token"):
             raise RuntimeError("Shopee não autenticada. Faça a autorização em /shopee/auth.")
         self.access_token = t["access_token"]
-        self.shop_id      = int(t.get("shop_id", SHOP_ID or 0))
+        _, _, sid = _get_creds()
+        self.shop_id = int(t.get("shop_id") or sid or 0)
         if not self.shop_id:
             raise RuntimeError("shop_id não configurado nos tokens Shopee.")
+        self._pid, self._pkey, _ = _get_creds()
 
     def _params_auth(self, path: str) -> dict:
         ts = int(time.time())
         return {
-            "partner_id":   PARTNER_ID,
+            "partner_id":   self._pid,
             "timestamp":    ts,
             "sign":         _assinar(path, ts, self.access_token, self.shop_id),
             "access_token": self.access_token,
