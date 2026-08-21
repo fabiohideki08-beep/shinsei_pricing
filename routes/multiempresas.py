@@ -103,8 +103,16 @@ def _imgs(det: dict) -> list[str]:
     return [i.get("link", "") for i in (imgs.get("internas") or []) if i.get("link")]
 
 
-def _variacoes(det: dict) -> list[str]:
-    return sorted([v.get("codigo", "") or v.get("nome", "") for v in (det.get("variacoes") or [])])
+def _variacoes(det: dict) -> list[dict]:
+    """Retorna lista de variações com SKU, nome e preço para comparação completa."""
+    result = []
+    for v in (det.get("variacoes") or []):
+        result.append({
+            "sku":   (v.get("codigo") or "").strip(),
+            "nome":  (v.get("nome") or "").strip(),
+            "preco": float(v.get("preco") or 0),
+        })
+    return sorted(result, key=lambda x: x["sku"])
 
 
 def _composicao(det: dict) -> list[dict]:
@@ -115,18 +123,61 @@ def _composicao(det: dict) -> list[dict]:
     ]
 
 
-def _campos_basicos(det: dict) -> dict:
+def _atributos(det: dict) -> dict[str, str]:
+    """Retorna dicionário de características/atributos do produto."""
     return {
-        "nome":      (det.get("nome") or "").strip(),
-        "descricao": (det.get("descricaoCurta") or det.get("descricao") or "").strip()[:300],
-        "preco":     float(det.get("preco") or 0),
-        "tipo":      det.get("tipo") or "",
-        "formato":   det.get("formato") or "",
-        "gtin":      det.get("gtin") or "",
-        "peso":      float(det.get("pesoBruto") or det.get("pesoLiquido") or 0),
-        "largura":   float((det.get("dimensoes") or {}).get("largura") or 0),
-        "altura":    float((det.get("dimensoes") or {}).get("altura") or 0),
-        "profundidade": float((det.get("dimensoes") or {}).get("profundidade") or 0),
+        (c.get("descricao") or c.get("nome") or "").strip(): str(c.get("resposta") or c.get("valor") or "").strip()
+        for c in (det.get("caracteristicas") or [])
+        if c.get("descricao") or c.get("nome")
+    }
+
+
+def _fornecedores(det: dict) -> list[dict]:
+    """Retorna lista normalizada de fornecedores para comparação."""
+    result = []
+    for f in (det.get("fornecedores") or []):
+        cnpj = str((f.get("contato") or {}).get("numeroDocumento") or f.get("cnpj") or "").strip()
+        result.append({
+            "cnpj":       cnpj,
+            "codigo_fab": (f.get("codigoProdutoFornecedor") or "").strip(),
+            "preco_custo": float(f.get("precoCusto") or 0),
+        })
+    return sorted(result, key=lambda x: x["cnpj"])
+
+
+def _campos_basicos(det: dict) -> dict:
+    cat  = det.get("categoria") or {}
+    marc = det.get("marca") or {}
+    trib = det.get("tributacao") or {}
+    dim  = det.get("dimensoes") or {}
+    return {
+        "nome":         (det.get("nome") or "").strip(),
+        "tipo":         det.get("tipo") or "",
+        "formato":      det.get("formato") or "",
+        "gtin":         det.get("gtin") or "",
+        "peso_bruto":   float(det.get("pesoBruto") or 0),
+        "peso_liquido": float(det.get("pesoLiquido") or 0),
+        "largura":      float(dim.get("largura") or 0),
+        "altura":       float(dim.get("altura") or 0),
+        "profundidade": float(dim.get("profundidade") or 0),
+        "categoria_id": str(cat.get("id") or ""),
+        "categoria":    (cat.get("descricao") or "").strip(),
+        "marca":        (marc.get("descricao") or "").strip(),
+        # Fiscal
+        "ncm":          (trib.get("ncm") or "").strip(),
+        "origem":       str(trib.get("origem") or ""),
+        "cst_ipi":      str(trib.get("cstIpi") or ""),
+        "csosn":        str(trib.get("csosn") or ""),
+        "cst":          str(trib.get("cst") or ""),
+        "cest":         (trib.get("cest") or "").strip(),
+        "ipi_aliquota": float(trib.get("ipiAliquota") or 0),
+        "pis_aliquota": float(trib.get("pisAliquota") or 0),
+        "cofins_aliquota": float(trib.get("cofinsAliquota") or 0),
+        # Preços
+        "preco_custo":  float(det.get("precoCusto") or 0),
+        # Descrições
+        "descricao_curta": (det.get("descricaoCurta") or "").strip(),
+        "descricao_completa": (det.get("descricao") or "").strip(),
     }
 
 
@@ -135,68 +186,151 @@ def _estoque(det: dict) -> float:
 
 
 def _anuncios_akg(hdrs_akg: dict) -> dict[str, list[dict]]:
-    """
-    Retorna mapa SKU → lista de anúncios AKG em todos os canais.
-    Busca via /anuncios sem filtro de loja (captura todos os canais).
-    """
+    """Retorna mapa SKU → lista de anúncios AKG em todos os canais."""
     anuncios_raw = _bling_get_all(hdrs_akg, "anuncios", label="AKG anuncios")
     mapa: dict[str, list[dict]] = defaultdict(list)
     for a in anuncios_raw:
         sku = (a.get("produto") or {}).get("codigo", "") or a.get("idVendedor", "")
         if sku:
             mapa[sku].append({
-                "id":     a.get("id"),
-                "canal":  (a.get("loja") or {}).get("descricao") or a.get("canal") or "",
-                "titulo": a.get("titulo") or "",
-                "url":    a.get("urlAnuncio") or a.get("url") or "",
+                "id":       a.get("id"),
+                "canal":    (a.get("loja") or {}).get("descricao") or a.get("canal") or "",
+                "titulo":   a.get("titulo") or "",
+                "url":      a.get("urlAnuncio") or a.get("url") or "",
                 "situacao": (a.get("situacao") or {}).get("valor") or "",
             })
     return dict(mapa)
 
 
 def _comparar(s: dict, a: dict) -> list[str]:
-    """Retorna lista de divergências entre produto Shinsei e AKG."""
+    """Compara 100% dos campos entre produto Shinsei e AKG. Retorna lista de divergências."""
     divs = []
-
-    # Campos básicos (exceto preço — é esperado divergir)
     s_bas, a_bas = _campos_basicos(s), _campos_basicos(a)
-    for campo in ("nome", "tipo", "formato", "gtin", "peso", "largura", "altura", "profundidade"):
-        sv, av = s_bas.get(campo), a_bas.get(campo)
+
+    # ── Campos de identidade ──────────────────────────────
+    for campo in ("nome", "tipo", "formato", "gtin", "ncm", "origem"):
+        sv, av = s_bas.get(campo, ""), a_bas.get(campo, "")
         if sv and av and sv != av:
-            divs.append(f"{campo}: Shinsei={sv!r} | AKG={av!r}")
+            divs.append(f"{campo}: SHN={sv!r} | AKG={av!r}")
 
-    if s_bas["descricao"] and a_bas["descricao"]:
-        if s_bas["descricao"][:100] != a_bas["descricao"][:100]:
-            divs.append("descricao_diverge")
+    # ── Dimensões e peso ──────────────────────────────────
+    for campo in ("peso_bruto", "peso_liquido", "largura", "altura", "profundidade"):
+        sv, av = float(s_bas.get(campo) or 0), float(a_bas.get(campo) or 0)
+        if sv and av and abs(sv - av) > 0.01:
+            divs.append(f"{campo}: SHN={sv} | AKG={av}")
 
-    # Imagens
+    # ── Categoria ─────────────────────────────────────────
+    sc, ac = s_bas.get("categoria", ""), a_bas.get("categoria", "")
+    if sc and ac and sc != ac:
+        divs.append(f"categoria: SHN={sc!r} | AKG={ac!r}")
+
+    # ── Marca ─────────────────────────────────────────────
+    sm, am = s_bas.get("marca", ""), a_bas.get("marca", "")
+    if sm and am and sm != am:
+        divs.append(f"marca: SHN={sm!r} | AKG={am!r}")
+
+    # ── Preço de custo ────────────────────────────────────
+    sc_p, ac_p = float(s_bas.get("preco_custo") or 0), float(a_bas.get("preco_custo") or 0)
+    if sc_p and ac_p and abs(sc_p - ac_p) > 0.01:
+        divs.append(f"preco_custo: SHN=R${sc_p:.2f} | AKG=R${ac_p:.2f}")
+
+    # ── Descrição curta ───────────────────────────────────
+    sd, ad = s_bas.get("descricao_curta", ""), a_bas.get("descricao_curta", "")
+    if sd and ad and sd != ad:
+        divs.append("descricao_curta_diverge")
+
+    # ── Descrição completa ────────────────────────────────
+    sd2, ad2 = s_bas.get("descricao_completa", ""), a_bas.get("descricao_completa", "")
+    if sd2 and ad2 and sd2 != ad2:
+        divs.append("descricao_completa_diverge")
+
+    # ── Imagens ───────────────────────────────────────────
     s_imgs = _imgs(s)
     a_imgs = _imgs(a)
     if len(s_imgs) != len(a_imgs):
-        divs.append(f"imagens: Shinsei={len(s_imgs)} | AKG={len(a_imgs)}")
+        divs.append(f"imagens_qtd: SHN={len(s_imgs)} | AKG={len(a_imgs)}")
+    # Compara nomes de arquivo (ignora domínio CDN)
+    def _fname(url: str) -> str:
+        return url.split("/")[-1].split("?")[0]
+    s_fnames = sorted([_fname(u) for u in s_imgs])
+    a_fnames = sorted([_fname(u) for u in a_imgs])
+    if s_fnames != a_fnames:
+        missing = set(s_fnames) - set(a_fnames)
+        extra   = set(a_fnames) - set(s_fnames)
+        if missing:
+            divs.append(f"imagens_faltando_akg: {len(missing)} arquivo(s)")
+        if extra:
+            divs.append(f"imagens_extra_akg: {len(extra)} arquivo(s)")
 
-    # Variações
+    # ── Variações ─────────────────────────────────────────
     s_vars = _variacoes(s)
     a_vars = _variacoes(a)
-    if s_vars != a_vars:
-        extra_s = set(s_vars) - set(a_vars)
-        extra_a = set(a_vars) - set(s_vars)
-        if extra_s:
-            divs.append(f"variacoes_faltando_akg: {len(extra_s)}")
-        if extra_a:
-            divs.append(f"variacoes_extra_akg: {len(extra_a)}")
+    s_skus_var = {v["sku"] for v in s_vars}
+    a_skus_var = {v["sku"] for v in a_vars}
+    missing_var = s_skus_var - a_skus_var
+    extra_var   = a_skus_var - s_skus_var
+    if missing_var:
+        divs.append(f"variacoes_faltando_akg: {len(missing_var)}")
+    if extra_var:
+        divs.append(f"variacoes_extra_akg: {len(extra_var)}")
+    # Compara preços individuais das variações em comum
+    a_var_map = {v["sku"]: v for v in a_vars}
+    for sv in s_vars:
+        av = a_var_map.get(sv["sku"])
+        if av and sv["preco"] and av["preco"] and abs(sv["preco"] - av["preco"]) > 0.01:
+            divs.append(f"preco_variacao_{sv['sku']}: SHN=R${sv['preco']:.2f} | AKG=R${av['preco']:.2f}")
 
-    # Composição (estrutura)
+    # ── Composição / Estrutura ────────────────────────────
     s_comp = sorted(_composicao(s), key=lambda x: x["sku"])
     a_comp = sorted(_composicao(a), key=lambda x: x["sku"])
     if s_comp != a_comp:
-        divs.append(f"composicao_diverge: Shinsei={len(s_comp)} comp | AKG={len(a_comp)} comp")
+        divs.append(f"composicao: SHN={len(s_comp)} comp | AKG={len(a_comp)} comp")
 
-    # Estoque
+    # ── Atributos / Características ───────────────────────
+    s_attr = _atributos(s)
+    a_attr = _atributos(a)
+    for key, sval in s_attr.items():
+        aval = a_attr.get(key)
+        if aval is not None and sval != aval:
+            divs.append(f"atributo_{key!r}: SHN={sval!r} | AKG={aval!r}")
+    atrib_faltando = set(s_attr.keys()) - set(a_attr.keys())
+    if atrib_faltando:
+        divs.append(f"atributos_faltando_akg: {', '.join(sorted(atrib_faltando)[:5])}")
+
+    # ── Fiscal ────────────────────────────────────────────
+    for campo in ("ncm", "origem", "cst_ipi", "csosn", "cst", "cest"):
+        sv, av = s_bas.get(campo, ""), a_bas.get(campo, "")
+        if sv and av and sv != av:
+            divs.append(f"{campo}: SHN={sv!r} | AKG={av!r}")
+    for campo in ("ipi_aliquota", "pis_aliquota", "cofins_aliquota"):
+        sv, av = float(s_bas.get(campo) or 0), float(a_bas.get(campo) or 0)
+        if sv and av and abs(sv - av) > 0.001:
+            divs.append(f"{campo}: SHN={sv} | AKG={av}")
+
+    # ── Fornecedores ──────────────────────────────────────
+    s_forn = _fornecedores(s)
+    a_forn = _fornecedores(a)
+    if s_forn != a_forn:
+        s_cnpjs = {f["cnpj"] for f in s_forn}
+        a_cnpjs = {f["cnpj"] for f in a_forn}
+        faltando = s_cnpjs - a_cnpjs
+        if faltando:
+            divs.append(f"fornecedores_faltando_akg: {len(faltando)}")
+        extras = a_cnpjs - s_cnpjs
+        if extras:
+            divs.append(f"fornecedores_extra_akg: {len(extras)}")
+        # Verifica código de produto no fornecedor em comum
+        a_forn_map = {f["cnpj"]: f for f in a_forn}
+        for sf in s_forn:
+            af = a_forn_map.get(sf["cnpj"])
+            if af and sf["codigo_fab"] and af["codigo_fab"] and sf["codigo_fab"] != af["codigo_fab"]:
+                divs.append(f"codigo_fornecedor: SHN={sf['codigo_fab']!r} | AKG={af['codigo_fab']!r}")
+
+    # ── Estoque ───────────────────────────────────────────
     s_est = _estoque(s)
     a_est = _estoque(a)
     if s_est != a_est:
-        divs.append(f"estoque: Shinsei={s_est} | AKG={a_est}")
+        divs.append(f"estoque: SHN={s_est} | AKG={a_est}")
 
     return divs
 
@@ -447,35 +581,45 @@ def resumo_divergencias():
     def _cat(div: str) -> str:
         """Normaliza o texto de divergência para uma categoria canônica."""
         d = div.lower()
-        if "imagem" in d:       return "imagens"
-        if "estoque" in d:      return "estoque"
-        if "variacao" in d or "variação" in d: return "variacoes"
-        if "composicao" in d or "composição" in d or "comp." in d: return "composicao"
+        if "imagem" in d:          return "imagens"
+        if "estoque" in d:         return "estoque"
+        if "variacao" in d or "variação" in d or "preco_variacao" in d: return "variacoes"
+        if "composicao" in d or "composição" in d: return "composicao"
         if "descricao" in d or "descrição" in d: return "descricao"
-        if "nome" in d:         return "nome"
-        if "peso" in d:         return "peso_dimensoes"
-        if "largura" in d or "altura" in d or "profundidade" in d: return "peso_dimensoes"
+        if "nome" in d:            return "nome"
+        if "peso" in d or "largura" in d or "altura" in d or "profundidade" in d: return "peso_dimensoes"
         if "gtin" in d or "ean" in d: return "gtin_ean"
-        if "tipo" in d:         return "tipo_formato"
-        if "formato" in d:      return "tipo_formato"
+        if "tipo" in d or "formato" in d: return "tipo_formato"
+        if "categoria" in d:       return "categoria"
+        if "marca" in d:           return "marca"
+        if "ncm" in d or "origem" in d or "cst" in d or "csosn" in d or "cest" in d or "ipi" in d or "pis" in d or "cofins" in d: return "fiscal"
+        if "fornecedor" in d or "codigo_fornecedor" in d: return "fornecedores"
+        if "preco_custo" in d:     return "preco_custo"
+        if "atributo" in d:        return "atributos"
         return "outros"
 
     cat_labels = {
-        "imagens":      "Imagens (quantidade diferente)",
-        "estoque":      "Estoque (saldo divergente)",
-        "variacoes":    "Variações (faltando ou extras)",
-        "composicao":   "Composição / Estrutura",
-        "descricao":    "Descrição",
-        "nome":         "Nome do produto",
+        "imagens":        "Imagens (quantidade / arquivos diferentes)",
+        "estoque":        "Estoque (saldo divergente)",
+        "variacoes":      "Variações (faltando, extras ou preço diferente)",
+        "composicao":     "Composição / Estrutura de kit",
+        "descricao":      "Descrição (curta ou completa)",
+        "nome":           "Nome do produto",
         "peso_dimensoes": "Peso / Dimensões",
-        "gtin_ean":     "GTIN / EAN / Código de barras",
-        "tipo_formato": "Tipo ou Formato do produto",
-        "outros":       "Outros campos",
+        "gtin_ean":       "GTIN / EAN / Código de barras",
+        "tipo_formato":   "Tipo ou Formato do produto",
+        "categoria":      "Categoria (classificação Bling)",
+        "marca":          "Marca",
+        "fiscal":         "Dados fiscais (NCM, CST, CSOSN, CEST, alíquotas)",
+        "fornecedores":   "Fornecedores (CNPJ / código do produto)",
+        "preco_custo":    "Preço de custo divergente",
+        "atributos":      "Atributos / Características",
+        "outros":         "Outros campos",
     }
 
     contagem: Counter = Counter()
-    exemplos_raw: dict[str, list[dict]] = {k: [] for k in cat_labels}
-    detalhes_raw: dict[str, list[str]] = {k: [] for k in cat_labels}
+    exemplos_raw: dict[str, list[dict]] = defaultdict(list)
+    detalhes_raw: dict[str, list[str]] = defaultdict(list)
 
     for p in prods:
         cats_vistas = set()
