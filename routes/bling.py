@@ -193,6 +193,85 @@ def bling_connect():
     return RedirectResponse(url="/bling/auth")
 
 
+@router.get("/bling/vendas/analise")
+def bling_vendas_analise(paginas: int = 50, data_inicio: str = "", data_fim: str = ""):
+    """
+    Consolida pedidos de vendas do Bling para análise estratégica.
+    Retorna: total de pedidos, GMV, ticket médio, top SKUs, top canais, vendas por mês.
+    paginas: quantas páginas buscar (100 pedidos/página). Default=50 → até 5.000 pedidos.
+    """
+    import time as _t
+    from collections import defaultdict
+    from bling_client import BlingClient
+
+    bc = BlingClient()
+    todos_pedidos = []
+    params_base: dict = {"limite": 100}
+    if data_inicio:
+        params_base["dataInicio"] = data_inicio
+    if data_fim:
+        params_base["dataFim"] = data_fim
+
+    for pag in range(1, paginas + 1):
+        try:
+            r = bc._get("pedidos/vendas", params={**params_base, "pagina": pag})
+            itens = r.get("data") or []
+            if not itens:
+                break
+            todos_pedidos.extend(itens)
+            if len(itens) < 100:
+                break
+            _t.sleep(0.3)
+        except Exception as e:
+            break
+
+    # Consolidar
+    gmv = 0.0
+    por_mes: dict = defaultdict(float)
+    por_canal: dict = defaultdict(int)
+    por_sku: dict = defaultdict(lambda: {"qtd": 0, "valor": 0.0, "nome": ""})
+    situacoes: dict = defaultdict(int)
+
+    for p in todos_pedidos:
+        valor = float(p.get("totalProdutos") or p.get("total") or 0)
+        gmv += valor
+        data_str = (p.get("data") or "")[:7]  # YYYY-MM
+        por_mes[data_str] += valor
+        canal = (p.get("canal") or {}).get("descricao") or (p.get("loja") or {}).get("descricao") or "Desconhecido"
+        por_canal[canal] += 1
+        sit = (p.get("situacao") or {}).get("valor") or p.get("situacao") or ""
+        situacoes[str(sit)] += 1
+        for item in (p.get("itens") or []):
+            sku = (item.get("produto") or {}).get("codigo") or item.get("codigo") or ""
+            nome = (item.get("produto") or {}).get("descricao") or item.get("descricao") or ""
+            qtd = int(float(item.get("quantidade") or 1))
+            val_item = float(item.get("valor") or 0) * qtd
+            if sku:
+                por_sku[sku]["qtd"] += qtd
+                por_sku[sku]["valor"] += val_item
+                if nome:
+                    por_sku[sku]["nome"] = nome
+
+    top_skus = sorted(por_sku.items(), key=lambda x: x[1]["valor"], reverse=True)[:30]
+    top_canais = sorted(por_canal.items(), key=lambda x: x[1], reverse=True)
+    meses_ord = sorted(por_mes.items())
+
+    return {
+        "total_pedidos": len(todos_pedidos),
+        "gmv_total": round(gmv, 2),
+        "ticket_medio": round(gmv / len(todos_pedidos), 2) if todos_pedidos else 0,
+        "paginas_buscadas": min(paginas, (len(todos_pedidos) // 100) + 1),
+        "por_mes": meses_ord,
+        "por_canal": top_canais,
+        "situacoes": dict(situacoes),
+        "top_skus": [
+            {"sku": k, "nome": v["nome"][:60], "qtd_vendida": v["qtd"], "valor_total": round(v["valor"], 2)}
+            for k, v in top_skus
+        ],
+        "amostra_pedido": todos_pedidos[0] if todos_pedidos else {},
+    }
+
+
 @router.post("/admin/refresh-tokens")
 @router.get("/admin/refresh-tokens")
 def refresh_all_tokens():
