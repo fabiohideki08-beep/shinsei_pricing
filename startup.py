@@ -243,6 +243,67 @@ if ml_access_token and ml_refresh_token:
 elif not ml_tokens_path.exists():
     pr("INFO: ML_ACCESS_TOKEN não definido — ml_tokens.json não criado (OAuth necessário)")
 
+# ── ML AKG tokens (ml_tokens_akg.json) ──────────────────────────────────────
+ml_akg_client_id     = os.getenv("ML_AKG_CLIENT_ID", "") or ml_client_id
+ml_akg_client_secret = os.getenv("ML_AKG_CLIENT_SECRET", "") or ml_client_secret
+ml_akg_access_token  = os.getenv("ML_AKG_ACCESS_TOKEN", "")
+ml_akg_refresh_token = os.getenv("ML_AKG_REFRESH_TOKEN", "")
+ml_akg_user_id       = os.getenv("ML_AKG_USER_ID", "").strip()
+ml_akg_tokens_path   = DATA_DIR / "ml_tokens_akg.json"
+
+if ml_akg_access_token and ml_akg_refresh_token:
+    import urllib.request as _urllib2
+    import urllib.parse as _urlparse2
+
+    _akg_vol_refresh = ml_akg_refresh_token
+    if ml_akg_tokens_path.exists():
+        try:
+            _akg_vol = json.loads(ml_akg_tokens_path.read_text(encoding="utf-8"))
+            _akg_vol_refresh = _akg_vol.get("refresh_token", ml_akg_refresh_token)
+            if not ml_akg_user_id:
+                ml_akg_user_id = str(_akg_vol.get("user_id", ""))
+            pr("ml_tokens_akg.json encontrado — usando refresh_token do volume")
+        except Exception:
+            pass
+
+    if ml_akg_client_id and ml_akg_client_secret:
+        for _rt in ([_akg_vol_refresh, ml_akg_refresh_token] if _akg_vol_refresh != ml_akg_refresh_token else [_akg_vol_refresh]):
+            try:
+                import time as _time_akg
+                _data = _urlparse2.urlencode({
+                    "grant_type":    "refresh_token",
+                    "client_id":     ml_akg_client_id,
+                    "client_secret": ml_akg_client_secret,
+                    "refresh_token": _rt,
+                }).encode()
+                _req2 = _urllib2.Request("https://api.mercadolibre.com/oauth/token", data=_data)
+                with _urllib2.urlopen(_req2, timeout=8) as _resp2:
+                    _new_akg = json.loads(_resp2.read())
+                    ml_akg_access_token  = _new_akg.get("access_token", ml_akg_access_token)
+                    ml_akg_refresh_token = _new_akg.get("refresh_token", ml_akg_refresh_token)
+                    if not ml_akg_user_id:
+                        ml_akg_user_id = str(_new_akg.get("user_id", ""))
+                    pr(f"Tokens ML AKG renovados via refresh. user_id={ml_akg_user_id}")
+                    break
+            except Exception as _e:
+                pr(f"AVISO: refresh ML AKG falhou ({_e})")
+
+    import time as _time_akg2
+    ml_akg_tok = {
+        "access_token":  ml_akg_access_token,
+        "refresh_token": ml_akg_refresh_token,
+        "token_type":    "Bearer",
+        "client_id":     ml_akg_client_id,
+        "client_secret": ml_akg_client_secret,
+        "user_id":       ml_akg_user_id,
+        "expires_at":    _time_akg2.time() + 21600,
+        "salvo_em":      datetime.now(timezone.utc).isoformat(),
+    }
+    ml_akg_tokens_path.write_text(json.dumps(ml_akg_tok, indent=2, ensure_ascii=False), encoding="utf-8")
+    pr(f"ml_tokens_akg.json atualizado (user_id={ml_akg_user_id or 'não obtido'})")
+elif not ml_akg_tokens_path.exists():
+    pr("INFO: ML_AKG_ACCESS_TOKEN não definido — ml_tokens_akg.json não criado (OAuth necessário via /ml/login2)")
+
 # ── Shopee tokens (shopee_tokens.json) ───────────────────────────────────────
 shopee_access_token  = os.getenv("SHOPEE_ACCESS_TOKEN", "")
 shopee_refresh_token = os.getenv("SHOPEE_REFRESH_TOKEN", "")

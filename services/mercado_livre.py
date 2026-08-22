@@ -33,8 +33,12 @@ def _salvar_tokens_ml(data: dict) -> None:
     _ML_TOKENS_PATH.parent.mkdir(exist_ok=True)
     _ML_TOKENS_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     try:
-        from token_persistence import save_ml_tokens
-        save_ml_tokens(data.get("access_token", ""), data.get("refresh_token", ""))
+        from render_persistence import save_ml_tokens_shinsei
+        save_ml_tokens_shinsei(
+            data.get("access_token", ""),
+            data.get("refresh_token", ""),
+            str(data.get("user_id", "")),
+        )
     except Exception:
         pass
 
@@ -303,6 +307,15 @@ class MercadoLivreOAuthService:
         data["expires_at"] = time.time() + int(data.get("expires_in", 21600))
         data["renovado_em"] = self._now_iso()
         self._write_json(self.tokens_file, data)
+        # Persiste no Render para sobreviver ao próximo deploy
+        try:
+            is_akg = "akg" in str(self.tokens_file)
+            from render_persistence import save_ml_tokens_akg, save_ml_tokens_shinsei
+            fn = save_ml_tokens_akg if is_akg else save_ml_tokens_shinsei
+            fn(data.get("access_token", ""), data.get("refresh_token", ""),
+               str(data.get("user_id", "")))
+        except Exception:
+            pass
         return {"success": True, "data": data}
 
     def ler_tokens(self):
