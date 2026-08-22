@@ -272,6 +272,51 @@ def _criar_item_akg(payload: dict, token: str) -> dict:
     return {"status_code": r.status_code, "body": body}
 
 
+def _get_akg_family_skus(family_name: str, seller_id: str, token: str) -> dict[str, str]:
+    """
+    Retorna mapa {sku: mlb_id} de todos os itens já existentes na família AKG.
+    Usado para deduplicação: pular itens cujo SKU já foi copiado.
+    """
+    skus: dict[str, str] = {}
+    # Busca itens do vendedor AKG nessa família pelo nome
+    # Precisa achar o family_id da AKG primeiro via q=family_name
+    r0 = _req.get(f"{ML_API}/users/{seller_id}/items/search",
+                  params={"q": family_name, "limit": 10},
+                  headers=_hdrs(token), timeout=15)
+    if r0.status_code != 200:
+        return skus
+    sample_ids = r0.json().get("results") or []
+    if not sample_ids:
+        return skus
+    # Pega family_id do primeiro item encontrado
+    r1 = _req.get(f"{ML_API}/items/{sample_ids[0]}",
+                  params={"attributes": "id,family_id,seller_custom_field"},
+                  headers=_hdrs(token), timeout=10)
+    if r1.status_code != 200:
+        return skus
+    fid = r1.json().get("family_id")
+    if not fid:
+        return skus
+    # Lista todos os membros da família
+    family_ids = _get_family_items_by_family_id(str(fid), seller_id, token)
+    # Busca SKU de cada membro em lotes de 20
+    for i in range(0, len(family_ids), 20):
+        batch = family_ids[i:i+20]
+        ids_param = ",".join(batch)
+        rb = _req.get(f"{ML_API}/items",
+                      params={"ids": ids_param, "attributes": "id,seller_custom_field"},
+                      headers=_hdrs(token), timeout=15)
+        if rb.status_code != 200:
+            continue
+        for entry in rb.json():
+            item_data = entry.get("body") or entry
+            sku = item_data.get("seller_custom_field") or ""
+            mid = item_data.get("id") or ""
+            if sku and mid:
+                skus[sku] = mid
+    return skus
+
+
 def _verificar_akg(novo_id: str, original: dict, token: str) -> dict:
     """Busca o item criado na AKG e compara campos essenciais com o original Shinsei."""
     try:
@@ -433,6 +478,22 @@ def copiar_anuncio(body: dict):
 
     resultados = []
 
+    # ── Pré-carrega SKUs já existentes na AKG para deduplicação ──────────────
+    # Detecta family_name do primeiro item para saber qual família buscar na AKG
+    akg_skus_existentes: dict[str, str] = {}  # {sku: mlb_id_akg}
+    try:
+        akg_seller_id = _get_seller_id(tok_a)
+        # Pega family_name do primeiro item da lista para buscar na AKG
+        primeiro_raw = _extract_id(ids_raw[0])
+        primeiro_item = _get_item(primeiro_raw, tok_s)
+        family_name_ref = primeiro_item.get("family_name") or primeiro_item.get("title", "")
+        if family_name_ref:
+            akg_skus_existentes = _get_akg_family_skus(family_name_ref, akg_seller_id, tok_a)
+            logger.info("Dedup AKG: %d SKUs já existentes na família '%s'",
+                        len(akg_skus_existentes), family_name_ref)
+    except Exception as e:
+        logger.warning("Não foi possível pré-carregar SKUs AKG para dedup: %s", e)
+
     # Expande famílias MLBU e MLBs com family_id para lista de filhos
     ids_expandidos: list[str] = []
     for raw in ids_raw:
@@ -458,14 +519,24 @@ def copiar_anuncio(body: dict):
             entry["titulo"] = item.get("title", "")
             entry["sku_raiz"] = item.get("seller_custom_field") or ""
 
-            # 2. Busca descrição
+            # 2. Deduplicação: pula se SKU já existe na AKG
+            sku_raiz = item.get("seller_custom_field") or ""
+            if sku_raiz and sku_raiz in akg_skus_existentes:
+                entry["ok"] = False
+                entry["pulado"] = True
+                entry["id_akg"] = akg_skus_existentes[sku_raiz]
+                entry["erro"] = f"SKU '{sku_raiz}' já existe na AKG ({akg_skus_existentes[sku_raiz]})"
+                resultados.append(entry)
+                continue
+
+            # 3. Busca descrição
             descricao = _get_description(mlb, tok_s)
             time.sleep(0.3)
 
-            # 3. Monta payload
+            # 4. Monta payload
             payload = _build_payload(item)
 
-            # 4. Cria na AKG
+            # 5. Cria na AKG
             resp = _criar_item_akg(payload, tok_a)
             entry["status_http"] = resp["status_code"]
 
@@ -474,10 +545,10 @@ def copiar_anuncio(body: dict):
                 entry["ok"] = True
                 entry["id_akg"] = novo_id
                 entry["msg"] = f"Criado: {novo_id}"
-                # 5. Cria descrição
+                # 6. Cria descrição
                 if novo_id and descricao:
                     _criar_description_akg(novo_id, descricao, tok_a)
-                # 6. Verifica item criado na AKG vs original Shinsei
+                # 7. Verifica item criado na AKG vs original Shinsei
                 if novo_id:
                     verificacao = _verificar_akg(novo_id, item, tok_a)
                     entry["verificacao"] = verificacao

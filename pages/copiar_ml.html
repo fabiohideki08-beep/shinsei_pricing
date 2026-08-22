@@ -189,6 +189,7 @@
   .cell-causes { color: var(--yellow); font-size: 11px; margin-top: 3px; }
   .chip-ok     { display: inline-block; background: #1a3a1a; color: var(--green); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
   .chip-err    { display: inline-block; background: #2a1a1a; color: var(--red); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+  .chip-skip   { display: inline-block; background: #1a1a2a; color: var(--blue); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
 
   /* ── Spinner ── */
   .spinner {
@@ -421,10 +422,13 @@ $('btn-copiar').addEventListener('click', async () => {
     const d = await r.json();
 
     // Summary
+    const pulados = (d.resultados || []).filter(r => r.pulado).length;
+    const erros_reais = d.erros - pulados;
     $('resultado-summary').innerHTML = `
       <div class="r-stat"><div class="num num-muted">${d.total}</div><div class="lbl">Total</div></div>
       <div class="r-stat"><div class="num num-green">${d.criados}</div><div class="lbl">Criados</div></div>
-      <div class="r-stat"><div class="num num-red">${d.erros}</div><div class="lbl">Erros</div></div>
+      ${pulados > 0 ? `<div class="r-stat"><div class="num" style="color:var(--blue)">${pulados}</div><div class="lbl">Já existiam</div></div>` : ''}
+      <div class="r-stat"><div class="num num-red">${erros_reais}</div><div class="lbl">Erros</div></div>
     `;
 
     // Tabela
@@ -455,6 +459,8 @@ $('btn-copiar').addEventListener('click', async () => {
                     : '';
                   return `<span class="chip-ok">✓ Criado</span>${statusChip}${fotosBadge}${divs}`;
                 })()
+              : res.pulado
+              ? `<span class="chip-skip">⏭ Já existe</span><div class="cell-erro" style="color:var(--blue)">${res.erro || ''}</div>`
               : `<span class="chip-err">✗ Erro</span><div class="cell-erro">${res.erro || ''}</div>${causas ? `<div class="cell-causes">${causas}</div>` : ''}`
             }
           </td>
