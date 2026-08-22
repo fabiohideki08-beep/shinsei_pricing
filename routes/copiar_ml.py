@@ -273,6 +273,7 @@ def _criar_item_akg(payload: dict, token: str) -> dict:
 
 
 _AKG_FAMILY_ID_CACHE_FILE = BASE_DIR / "data" / "akg_family_ids.json"
+_AKG_COPY_MAP_FILE        = BASE_DIR / "data" / "akg_copy_map.json"   # {id_shinsei: id_akg}
 
 
 def _load_akg_family_id_cache() -> dict[str, str]:
@@ -283,6 +284,29 @@ def _load_akg_family_id_cache() -> dict[str, str]:
     except Exception:
         pass
     return {}
+
+
+def _load_copy_map() -> dict[str, str]:
+    """Carrega mapa {id_shinsei: id_akg} persistido em disco."""
+    try:
+        if _AKG_COPY_MAP_FILE.exists():
+            return json.loads(_AKG_COPY_MAP_FILE.read_text(encoding="utf-8")) or {}
+    except Exception:
+        pass
+    return {}
+
+
+def _save_copy_map_entry(shinsei_id: str, akg_id: str):
+    """Persiste uma entrada no mapa de cópia."""
+    try:
+        m = _load_copy_map()
+        m[shinsei_id] = akg_id
+        _AKG_COPY_MAP_FILE.parent.mkdir(exist_ok=True)
+        _AKG_COPY_MAP_FILE.write_text(
+            json.dumps(m, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except Exception as e:
+        logger.warning("Não foi possível salvar copy_map: %s", e)
 
 
 def _save_akg_family_id(family_name: str, family_id: str):
@@ -536,21 +560,11 @@ def copiar_anuncio(body: dict):
 
     resultados = []
 
-    # ── Pré-carrega itens já existentes na AKG para deduplicação ────────────
-    # Estratégia: busca pela category_id+family_name do primeiro item da lista,
-    # depois usa o family_id retornado (mais confiável que o nome).
-    akg_skus_existentes: dict[str, str] = {}  # {sku_ou_titulo: mlb_id_akg}
-    _akg_family_id_cache: str = ""  # family_id da AKG, atualizado após 1º item criado
-    try:
-        akg_seller_id = _get_seller_id(tok_a)
-        primeiro_raw = _extract_id(ids_raw[0])
-        primeiro_item = _get_item(primeiro_raw, tok_s)
-        family_name_ref = primeiro_item.get("family_name") or primeiro_item.get("title", "")
-        if family_name_ref:
-            akg_skus_existentes = _get_akg_family_existing(family_name_ref, akg_seller_id, tok_a)
-            logger.info("Dedup AKG: %d entradas pré-carregadas", len(akg_skus_existentes))
-    except Exception as e:
-        logger.warning("Não foi possível pré-carregar dedup AKG: %s", e)
+    # ── Deduplicação: carrega mapa {id_shinsei: id_akg} do disco ────────────
+    # Abordagem primária: mapa exato por ID Shinsei, persistido após cada criação.
+    # Não depende de API — O(1) por item, nunca falha por timeout.
+    copy_map: dict[str, str] = _load_copy_map()
+    logger.info("Dedup AKG: %d mapeamentos carregados do copy_map", len(copy_map))
 
     # Expande famílias MLBU e MLBs com family_id para lista de filhos
     ids_expandidos: list[str] = []
@@ -577,16 +591,12 @@ def copiar_anuncio(body: dict):
             entry["titulo"] = item.get("title", "")
             entry["sku_raiz"] = item.get("seller_custom_field") or ""
 
-            # 2. Deduplicação: pula se SKU ou título já existe na AKG
-            sku_raiz = (item.get("seller_custom_field") or "").strip()
-            titulo_item = (item.get("title") or "").strip()
-            dedup_key = sku_raiz or titulo_item  # SKU preferido, título como fallback
-            if dedup_key and dedup_key in akg_skus_existentes:
+            # 2. Deduplicação: verifica mapa {id_shinsei: id_akg} salvo em disco
+            if mlb in copy_map:
                 entry["ok"] = False
                 entry["pulado"] = True
-                entry["id_akg"] = akg_skus_existentes[dedup_key]
-                label = f"SKU '{sku_raiz}'" if sku_raiz else f"título '{titulo_item[:40]}'"
-                entry["erro"] = f"{label} já existe na AKG ({akg_skus_existentes[dedup_key]})"
+                entry["id_akg"] = copy_map[mlb]
+                entry["erro"] = f"Já copiado para AKG ({copy_map[mlb]})"
                 resultados.append(entry)
                 continue
 
@@ -609,13 +619,10 @@ def copiar_anuncio(body: dict):
                 # 6. Cria descrição
                 if novo_id and descricao:
                     _criar_description_akg(novo_id, descricao, tok_a)
-                # 7a. Atualiza índice de dedup com o item recém-criado
+                # 7a. Persiste mapeamento Shinsei→AKG para dedup futura
                 if novo_id:
-                    titulo_criado = (item.get("title") or "").strip()
-                    if sku_raiz:
-                        akg_skus_existentes[sku_raiz] = novo_id
-                    if titulo_criado:
-                        akg_skus_existentes[titulo_criado] = novo_id
+                    copy_map[mlb] = novo_id
+                    _save_copy_map_entry(mlb, novo_id)
                 # 7b. Verifica item criado na AKG vs original Shinsei
                 if novo_id:
                     verificacao = _verificar_akg(novo_id, item, tok_a)
