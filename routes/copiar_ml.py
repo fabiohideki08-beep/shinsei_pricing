@@ -272,6 +272,32 @@ def _criar_item_akg(payload: dict, token: str) -> dict:
     return {"status_code": r.status_code, "body": body}
 
 
+_AKG_FAMILY_ID_CACHE_FILE = BASE_DIR / "data" / "akg_family_ids.json"
+
+
+def _load_akg_family_id_cache() -> dict[str, str]:
+    """Carrega mapa {family_name_shinsei: family_id_akg} do cache em disco."""
+    try:
+        if _AKG_FAMILY_ID_CACHE_FILE.exists():
+            return json.loads(_AKG_FAMILY_ID_CACHE_FILE.read_text(encoding="utf-8")) or {}
+    except Exception:
+        pass
+    return {}
+
+
+def _save_akg_family_id(family_name: str, family_id: str):
+    """Persiste o mapeamento family_name → family_id AKG para dedup futura."""
+    try:
+        cache = _load_akg_family_id_cache()
+        cache[family_name] = family_id
+        _AKG_FAMILY_ID_CACHE_FILE.parent.mkdir(exist_ok=True)
+        _AKG_FAMILY_ID_CACHE_FILE.write_text(
+            json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except Exception as e:
+        logger.warning("Não foi possível salvar cache family_id AKG: %s", e)
+
+
 def _get_akg_family_existing(family_name: str, seller_id: str, token: str) -> dict[str, str]:
     """
     Retorna mapa {chave: mlb_id_akg} de todos os itens já existentes na família AKG.
@@ -279,39 +305,50 @@ def _get_akg_family_existing(family_name: str, seller_id: str, token: str) -> di
     Usado para deduplicação: pular itens cujo SKU ou título já existe na AKG.
     """
     existing: dict[str, str] = {}
-    # Acha o family_id da AKG via busca pelo nome
-    r0 = _req.get(f"{ML_API}/users/{seller_id}/items/search",
-                  params={"q": family_name[:50], "limit": 10},
-                  headers=_hdrs(token), timeout=15)
-    if r0.status_code != 200:
-        return existing
-    sample_ids = r0.json().get("results") or []
-    if not sample_ids:
-        return existing
-    # Pega family_id do primeiro resultado
-    r1 = _req.get(f"{ML_API}/items/{sample_ids[0]}",
-                  params={"attributes": "id,family_id,family_name"},
-                  headers=_hdrs(token), timeout=10)
-    if r1.status_code != 200:
-        return existing
-    d1 = r1.json()
-    fid = d1.get("family_id")
+
+    # 1. Tenta usar family_id cacheado em disco (mais confiável)
+    fid: str = ""
+    cache = _load_akg_family_id_cache()
+    if family_name in cache:
+        fid = cache[family_name]
+        logger.info("Dedup AKG: usando family_id cacheado %s para '%s'", fid, family_name[:40])
+
+    # 2. Se não tem cache, busca via API por nome
     if not fid:
+        r0 = _req.get(f"{ML_API}/users/{seller_id}/items/search",
+                      params={"q": family_name[:50], "limit": 10},
+                      headers=_hdrs(token), timeout=15)
+        sample_ids = (r0.json().get("results") or []) if r0.status_code == 200 else []
+        if not sample_ids:
+            # Tenta com primeiras 3 palavras
+            words = " ".join(family_name.split()[:3])
+            r0b = _req.get(f"{ML_API}/users/{seller_id}/items/search",
+                           params={"q": words, "limit": 10},
+                           headers=_hdrs(token), timeout=15)
+            sample_ids = (r0b.json().get("results") or []) if r0b.status_code == 200 else []
+        for sid in sample_ids:
+            r1 = _req.get(f"{ML_API}/items/{sid}",
+                          params={"attributes": "id,family_id,family_name"},
+                          headers=_hdrs(token), timeout=10)
+            if r1.status_code != 200:
+                continue
+            d1 = r1.json()
+            candidate_fid = str(d1.get("family_id") or "")
+            if not candidate_fid:
+                continue
+            akg_name = (d1.get("family_name") or "").lower()
+            shinsei_words_set = set(family_name.lower().split())
+            akg_words_set = set(akg_name.split())
+            overlap = len(shinsei_words_set & akg_words_set) / max(len(shinsei_words_set), 1)
+            if overlap >= 0.4:
+                fid = candidate_fid
+                _save_akg_family_id(family_name, fid)
+                logger.info("Dedup AKG: family_id %s encontrado via busca (overlap=%.0f%%)", fid, overlap*100)
+                break
+
+    if not fid:
+        logger.warning("Dedup AKG: não foi possível determinar family_id para '%s'", family_name[:40])
         return existing
-    # Valida que a família encontrada é compatível com a Shinsei
-    akg_family_name = d1.get("family_name") or ""
-    shinsei_words = set(family_name.lower().split())
-    akg_words = set(akg_family_name.lower().split())
-    overlap = len(shinsei_words & akg_words) / max(len(shinsei_words), 1)
-    if overlap < 0.5:
-        logger.warning("Família AKG '%s' pode não corresponder a '%s' (overlap=%.0f%%)",
-                       akg_family_name, family_name, overlap*100)
-        # Tenta busca com palavras-chave mais genéricas
-        words = family_name.split()[:3]
-        r0b = _req.get(f"{ML_API}/users/{seller_id}/items/search",
-                       params={"q": " ".join(words), "limit": 10},
-                       headers=_hdrs(token), timeout=15)
-        sample_ids = r0b.json().get("results") or sample_ids
     # Lista todos os membros da família
     family_ids = _get_family_items_by_family_id(str(fid), seller_id, token)
     logger.info("Dedup: família AKG %s tem %d membros", fid, len(family_ids))
