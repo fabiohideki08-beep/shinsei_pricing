@@ -212,6 +212,11 @@ def _build_payload(item: dict) -> dict:
         "catalog_listing":     False,
     }
 
+    # family_name é obrigatório para categorias Omni (ex: colorações)
+    family_name = item.get("family_name")
+    if family_name:
+        payload["family_name"] = family_name
+
     if variacoes:
         payload["variations"] = variacoes
 
