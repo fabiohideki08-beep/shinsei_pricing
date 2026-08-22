@@ -291,15 +291,35 @@ def preview_anuncio(item_id: str):
     except Exception as e:
         return {"ok": False, "erro": f"Erro ao buscar {raw_id}: {e}"}
 
-    # Se item não tem variações, verifica se pertence a uma família
     variacoes = item.get("variations") or []
-    familia_hint = None
-    if not variacoes:
-        relations = item.get("item_relations") or []
-        for rel in relations:
-            if rel.get("id", "").startswith("MLBU"):
-                familia_hint = rel["id"]
-                break
+    family_id = item.get("family_id")
+
+    # Se tem family_id e sem variações inline → é anúncio Omni, auto-expande família
+    if family_id and not variacoes:
+        try:
+            filhos = _get_family_items(raw_id, tok_s)  # passa o MLB filho
+        except Exception as e:
+            filhos = []
+        if filhos and len(filhos) > 1:
+            titulo_base = item.get("title", "")
+            # Remove sufixo da cor do título: "... - 5-99 Castanho Claro" → "..."
+            if " - " in titulo_base:
+                titulo_base = titulo_base.rsplit(" - ", 1)[0]
+            return {
+                "ok":           True,
+                "tipo":         "familia",
+                "item_id":      f"MLBU{family_id}",
+                "filhos":       filhos,
+                "total_filhos": len(filhos),
+                "titulo_base":  titulo_base,
+                "categoria":    item.get("category_id"),
+                "preco":        item.get("price"),
+                "tipo_anuncio": item.get("listing_type_id"),
+                "condicao":     item.get("condition"),
+                "status":       item.get("status"),
+            }
+
+    familia_hint = f"MLBU{family_id}" if family_id else None
 
     return {
         "ok":           True,
@@ -344,17 +364,19 @@ def copiar_anuncio(body: dict):
 
     resultados = []
 
-    # Expande famílias MLBU para lista de MLBs filhos
+    # Expande famílias MLBU e MLBs com family_id para lista de filhos
     ids_expandidos: list[str] = []
     for raw in ids_raw:
         eid = _extract_id(raw)
-        if eid.startswith("MLBU"):
-            try:
-                filhos = _get_family_items(eid, tok_s)
+        # MLBU direto ou MLB filho de família Omni → expande
+        try:
+            filhos = _get_family_items(eid, tok_s)
+            if len(filhos) > 1 or (len(filhos) == 1 and filhos[0] != eid):
                 ids_expandidos.extend(filhos)
-            except Exception as e:
-                resultados.append({"id_shinsei": eid, "ok": False, "erro": f"Família: {e}"})
-        else:
+                continue
+        except Exception:
+            pass
+        if True:
             ids_expandidos.append(eid)
 
     for raw in ids_expandidos:
