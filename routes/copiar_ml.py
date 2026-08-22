@@ -298,10 +298,20 @@ def _get_akg_family_existing(family_name: str, seller_id: str, token: str) -> di
     fid = d1.get("family_id")
     if not fid:
         return existing
-    # Garante que a família encontrada é a correta pelo nome
+    # Valida que a família encontrada é compatível com a Shinsei
     akg_family_name = d1.get("family_name") or ""
-    if family_name and family_name.lower()[:30] not in akg_family_name.lower():
-        logger.warning("Família AKG '%s' não bate com '%s'", akg_family_name, family_name)
+    shinsei_words = set(family_name.lower().split())
+    akg_words = set(akg_family_name.lower().split())
+    overlap = len(shinsei_words & akg_words) / max(len(shinsei_words), 1)
+    if overlap < 0.5:
+        logger.warning("Família AKG '%s' pode não corresponder a '%s' (overlap=%.0f%%)",
+                       akg_family_name, family_name, overlap*100)
+        # Tenta busca com palavras-chave mais genéricas
+        words = family_name.split()[:3]
+        r0b = _req.get(f"{ML_API}/users/{seller_id}/items/search",
+                       params={"q": " ".join(words), "limit": 10},
+                       headers=_hdrs(token), timeout=15)
+        sample_ids = r0b.json().get("results") or sample_ids
     # Lista todos os membros da família
     family_ids = _get_family_items_by_family_id(str(fid), seller_id, token)
     logger.info("Dedup: família AKG %s tem %d membros", fid, len(family_ids))
@@ -489,21 +499,21 @@ def copiar_anuncio(body: dict):
 
     resultados = []
 
-    # ── Pré-carrega SKUs já existentes na AKG para deduplicação ──────────────
-    # Detecta family_name do primeiro item para saber qual família buscar na AKG
-    akg_skus_existentes: dict[str, str] = {}  # {sku: mlb_id_akg}
+    # ── Pré-carrega itens já existentes na AKG para deduplicação ────────────
+    # Estratégia: busca pela category_id+family_name do primeiro item da lista,
+    # depois usa o family_id retornado (mais confiável que o nome).
+    akg_skus_existentes: dict[str, str] = {}  # {sku_ou_titulo: mlb_id_akg}
+    _akg_family_id_cache: str = ""  # family_id da AKG, atualizado após 1º item criado
     try:
         akg_seller_id = _get_seller_id(tok_a)
-        # Pega family_name do primeiro item da lista para buscar na AKG
         primeiro_raw = _extract_id(ids_raw[0])
         primeiro_item = _get_item(primeiro_raw, tok_s)
         family_name_ref = primeiro_item.get("family_name") or primeiro_item.get("title", "")
         if family_name_ref:
             akg_skus_existentes = _get_akg_family_existing(family_name_ref, akg_seller_id, tok_a)
-            logger.info("Dedup AKG: %d SKUs já existentes na família '%s'",
-                        len(akg_skus_existentes), family_name_ref)
+            logger.info("Dedup AKG: %d entradas pré-carregadas", len(akg_skus_existentes))
     except Exception as e:
-        logger.warning("Não foi possível pré-carregar SKUs AKG para dedup: %s", e)
+        logger.warning("Não foi possível pré-carregar dedup AKG: %s", e)
 
     # Expande famílias MLBU e MLBs com family_id para lista de filhos
     ids_expandidos: list[str] = []
@@ -562,7 +572,14 @@ def copiar_anuncio(body: dict):
                 # 6. Cria descrição
                 if novo_id and descricao:
                     _criar_description_akg(novo_id, descricao, tok_a)
-                # 7. Verifica item criado na AKG vs original Shinsei
+                # 7a. Atualiza índice de dedup com o item recém-criado
+                if novo_id:
+                    titulo_criado = (item.get("title") or "").strip()
+                    if sku_raiz:
+                        akg_skus_existentes[sku_raiz] = novo_id
+                    if titulo_criado:
+                        akg_skus_existentes[titulo_criado] = novo_id
+                # 7b. Verifica item criado na AKG vs original Shinsei
                 if novo_id:
                     verificacao = _verificar_akg(novo_id, item, tok_a)
                     entry["verificacao"] = verificacao
