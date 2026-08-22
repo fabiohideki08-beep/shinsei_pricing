@@ -623,6 +623,24 @@ def copiar_anuncio(body: dict):
                 if novo_id:
                     copy_map[mlb] = novo_id
                     _save_copy_map_entry(mlb, novo_id)
+                    # 7a2. Registra no catálogo central (genérico, multi-campanha)
+                    try:
+                        from routes.controle_anuncios import register_copy as _reg
+                        campanha_slug = (item.get("family_name") or item.get("category_id") or "sem_campanha")
+                        campanha_slug = campanha_slug.lower().replace(" ", "_")[:40]
+                        _reg(
+                            id_shinsei=mlb,
+                            id_akg=novo_id,
+                            titulo=item.get("title", ""),
+                            campanha=campanha_slug,
+                            campanha_nome=item.get("family_name") or item.get("category_id") or "Sem campanha",
+                            sku=item.get("seller_custom_field") or "",
+                            preco=item.get("price"),
+                            categoria=item.get("category_id") or "",
+                            fotos_shinsei=len(item.get("pictures") or []),
+                        )
+                    except Exception as _re:
+                        logger.warning("register_copy falhou: %s", _re)
                 # 7b. Verifica item criado na AKG vs original Shinsei
                 if novo_id:
                     verificacao = _verificar_akg(novo_id, item, tok_a)

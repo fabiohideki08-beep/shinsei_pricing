@@ -1,0 +1,359 @@
+<!doctype html>
+<title>Controle de Anúncios AKG</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e2e8f0;
+    --muted: #8892a4;
+    --accent: #6366f1;
+    --accent-dim: rgba(99,102,241,.15);
+    --green: #22c55e;
+    --green-dim: rgba(34,197,94,.12);
+    --yellow: #f59e0b;
+    --yellow-dim: rgba(245,158,11,.12);
+    --red: #ef4444;
+    --red-dim: rgba(239,68,68,.12);
+    --blue: #3b82f6;
+    --blue-dim: rgba(59,130,246,.12);
+    --radius: 8px;
+    --font-mono: 'Cascadia Code', 'Fira Code', ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f1f5f9;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f1f5f9;
+    --surface: #ffffff;
+    --border: #e2e8f0;
+    --text: #0f172a;
+    --muted: #64748b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
+
+  /* ── Header ── */
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 16px; }
+  header h1 { font-size: 17px; font-weight: 600; letter-spacing: -.3px; }
+  .badge { background: var(--accent-dim); color: var(--accent); padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  header .right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+  /* ── Layout ── */
+  main { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+  /* ── Stats bar ── */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .stat-val { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+  .stat-lbl { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .stat.green .stat-val { color: var(--green); }
+  .stat.yellow .stat-val { color: var(--yellow); }
+  .stat.red .stat-val { color: var(--red); }
+  .stat.blue .stat-val { color: var(--blue); }
+
+  /* ── Toolbar ── */
+  .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+  .toolbar input, .toolbar select { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 7px 12px; border-radius: var(--radius); font-size: 13px; outline: none; }
+  .toolbar input:focus, .toolbar select:focus { border-color: var(--accent); }
+  .toolbar input { flex: 1; min-width: 200px; }
+
+  /* ── Tabela ── */
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { background: var(--bg); color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; padding: 10px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer; user-select: none; }
+  thead th:hover { color: var(--text); }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--accent-dim); }
+  td { padding: 9px 14px; vertical-align: middle; }
+  .td-titulo { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .td-mono { font-family: var(--font-mono); font-size: 12px; }
+  .td-link a { color: var(--accent); text-decoration: none; font-family: var(--font-mono); font-size: 11px; }
+  .td-link a:hover { text-decoration: underline; }
+
+  /* ── Status chips ── */
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .chip-ok     { background: var(--green-dim);  color: var(--green); }
+  .chip-pend   { background: var(--yellow-dim); color: var(--yellow); }
+  .chip-err    { background: var(--red-dim);    color: var(--red); }
+  .chip-pause  { background: var(--blue-dim);   color: var(--blue); }
+  .chip-muted  { background: var(--border);     color: var(--muted); }
+
+  /* ── Fotos ── */
+  .fotos-bar { display: flex; gap: 3px; align-items: center; }
+  .fotos-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); }
+  .fotos-dot.ok { background: var(--green); }
+  .fotos-dot.warn { background: var(--yellow); }
+
+  /* ── Botões ── */
+  .btn { padding: 7px 14px; border-radius: var(--radius); border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: opacity .15s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn:hover { opacity: .85; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* ── Campanhas sidebar ── */
+  .layout { display: grid; grid-template-columns: 220px 1fr; gap: 24px; }
+  .sidebar { position: sticky; top: 24px; align-self: start; }
+  .sidebar h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 10px; }
+  .camp-item { padding: 8px 12px; border-radius: var(--radius); cursor: pointer; font-size: 13px; margin-bottom: 4px; }
+  .camp-item:hover { background: var(--surface); }
+  .camp-item.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+  .camp-count { float: right; color: var(--muted); font-size: 11px; }
+
+  /* ── Empty ── */
+  .empty { text-align: center; padding: 48px; color: var(--muted); }
+  .empty svg { opacity: .3; margin-bottom: 12px; }
+
+  /* ── Progress ── */
+  .progress-bar { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 4px; }
+  .progress-fill { height: 100%; background: var(--accent); transition: width .4s; }
+
+  /* ── Toast ── */
+  #toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 18px; font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.3); opacity: 0; transform: translateY(8px); transition: all .2s; z-index: 999; }
+  #toast.show { opacity: 1; transform: none; }
+
+  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } .sidebar { position: static; } }
+</style>
+
+<header>
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+  </svg>
+  <h1>Controle de Anúncios AKG</h1>
+  <span class="badge">ML</span>
+  <span id="updated" style="color:var(--muted);font-size:12px;margin-left:8px"></span>
+  <div class="right">
+    <button class="btn btn-outline" onclick="refresh()" id="btn-refresh">⟳ Atualizar Status</button>
+    <a href="/copiar-ml" class="btn btn-primary">+ Copiar Anúncios</a>
+  </div>
+</header>
+
+<main>
+  <div class="stats" id="stats"></div>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <h2>Campanhas</h2>
+      <div id="campanhas"></div>
+    </aside>
+
+    <section>
+      <div class="toolbar">
+        <input type="search" id="busca" placeholder="Buscar por título, SKU ou ID…" oninput="filtrar()">
+        <select id="filtro-status" onchange="filtrar()">
+          <option value="">Todos os status</option>
+          <option value="nao_copiado">Pendentes</option>
+          <option value="active">AKG Ativo</option>
+          <option value="paused">AKG Pausado</option>
+          <option value="closed">AKG Fechado</option>
+          <option value="erro">Com erro</option>
+        </select>
+        <span id="contagem" style="color:var(--muted);white-space:nowrap;font-size:12px"></span>
+      </div>
+
+      <div id="refresh-progress" style="display:none;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px">
+          <span>Atualizando status via API ML…</span>
+          <span id="progress-txt"></span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th onclick="sort('titulo')">Título ▾</th>
+              <th onclick="sort('sku')">SKU</th>
+              <th onclick="sort('preco')">Preço</th>
+              <th>ID Shinsei</th>
+              <th>ID AKG</th>
+              <th onclick="sort('status_shinsei')">Shinsei</th>
+              <th onclick="sort('status_akg')">AKG</th>
+              <th>Fotos</th>
+              <th>Copiado em</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+        <div class="empty" id="empty" style="display:none">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <div>Nenhum anúncio encontrado</div>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const ML_URL = id => `https://www.mercadolivre.com.br/anuncio/${id}`;
+const ML_API_URL = id => `https://api.mercadolibre.com/items/${id}`;
+
+let allItens = [], campanhas = {}, campanhaAtiva = null, sortKey = 'titulo', sortAsc = true;
+
+async function load() {
+  const qs = campanhaAtiva ? `?campanha=${encodeURIComponent(campanhaAtiva)}` : '';
+  const d = await fetch('/controle-anuncios/data' + qs).then(r => r.json());
+  allItens = d.itens || [];
+  campanhas = d.campanhas || {};
+  renderStats(d.meta);
+  renderCampanhas(d.campanhas);
+  filtrar();
+  if (d.meta?.ultima_atualizacao) {
+    const dt = new Date(d.meta.ultima_atualizacao);
+    document.getElementById('updated').textContent = 'Atualizado ' + dt.toLocaleString('pt-BR');
+  }
+}
+
+function renderStats(meta) {
+  if (!meta) return;
+  document.getElementById('stats').innerHTML = `
+    <div class="stat green"><div class="stat-val">${meta.copiados ?? 0}</div><div class="stat-lbl">Copiados</div></div>
+    <div class="stat yellow"><div class="stat-val">${meta.pendentes ?? 0}</div><div class="stat-lbl">Pendentes</div></div>
+    <div class="stat red"><div class="stat-val">${meta.erros ?? 0}</div><div class="stat-lbl">Com erro</div></div>
+    <div class="stat blue"><div class="stat-val">${meta.inativos_akg ?? 0}</div><div class="stat-lbl">Inativos AKG</div></div>
+    <div class="stat"><div class="stat-val">${meta.total ?? 0}</div><div class="stat-lbl">Total</div></div>
+  `;
+}
+
+function renderCampanhas(camps) {
+  const el = document.getElementById('campanhas');
+  let html = `<div class="camp-item ${!campanhaAtiva ? 'active' : ''}" onclick="setCampanha(null)">Todos <span class="camp-count">${allItens.length}</span></div>`;
+  for (const [slug, info] of Object.entries(camps || {})) {
+    const cnt = allItens.filter(x => x.campanha === slug).length;
+    html += `<div class="camp-item ${campanhaAtiva === slug ? 'active' : ''}" onclick="setCampanha('${slug}')">
+      ${(info.nome || slug).split(' ').slice(0,4).join(' ')}
+      <span class="camp-count">${cnt}</span>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+function setCampanha(slug) {
+  campanhaAtiva = slug;
+  load();
+}
+
+function filtrar() {
+  const q = (document.getElementById('busca').value || '').toLowerCase();
+  const st = document.getElementById('filtro-status').value;
+  let rows = allItens.filter(x => {
+    if (q && !`${x.titulo}${x.sku}${x.id_shinsei}${x.id_akg}`.toLowerCase().includes(q)) return false;
+    if (st === 'nao_copiado') return !x.copiado;
+    if (st === 'erro') return x.erro;
+    if (st && x.status_akg !== st) return false;
+    return true;
+  });
+
+  // sort
+  rows.sort((a, b) => {
+    let va = a[sortKey] ?? '', vb = b[sortKey] ?? '';
+    if (typeof va === 'string') va = va.toLowerCase(), vb = (vb+'').toLowerCase();
+    return sortAsc ? (va < vb ? -1 : va > vb ? 1 : 0) : (va > vb ? -1 : va < vb ? 1 : 0);
+  });
+
+  document.getElementById('contagem').textContent = `${rows.length} resultado${rows.length !== 1 ? 's' : ''}`;
+  const tbody = document.getElementById('tbody');
+  const empty = document.getElementById('empty');
+  if (!rows.length) { tbody.innerHTML = ''; empty.style.display = ''; return; }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = rows.map(x => {
+    const statusS = chipStatus(x.status_shinsei);
+    const statusA = x.copiado ? chipStatus(x.status_akg) : `<span class="chip chip-pend">Pendente</span>`;
+    const erro = x.erro ? `<span title="${x.erro}" class="chip chip-err" style="margin-left:4px">!</span>` : '';
+    const fotos = fotasDots(x.fotos_shinsei, x.fotos_akg);
+    const preco = x.preco ? `R$&nbsp;${Number(x.preco).toLocaleString('pt-BR',{minimumFractionDigits:2})}` : '—';
+    const copiado_em = x.copiado_em ? new Date(x.copiado_em).toLocaleDateString('pt-BR') : '—';
+    const linkS = x.id_shinsei ? `<a href="${ML_URL(x.id_shinsei)}" target="_blank" title="Ver no ML">${x.id_shinsei}</a>` : '—';
+    const linkA = x.id_akg ? `<a href="${ML_API_URL(x.id_akg)}" target="_blank" title="Confirmar AKG">${x.id_akg}</a>` : `<span style="color:var(--muted)">—</span>`;
+    return `<tr>
+      <td class="td-titulo" title="${x.titulo}">${x.titulo || '—'}</td>
+      <td class="td-mono">${x.sku || '—'}</td>
+      <td style="white-space:nowrap;font-variant-numeric:tabular-nums">${preco}</td>
+      <td class="td-link">${linkS}</td>
+      <td class="td-link">${linkA}${erro}</td>
+      <td>${statusS}</td>
+      <td>${statusA}</td>
+      <td>${fotos}</td>
+      <td style="color:var(--muted)">${copiado_em}</td>
+    </tr>`;
+  }).join('');
+}
+
+function chipStatus(s) {
+  if (!s || s === 'not_found') return `<span class="chip chip-muted">${s || '?'}</span>`;
+  if (s === 'active')  return `<span class="chip chip-ok">Ativo</span>`;
+  if (s === 'paused')  return `<span class="chip chip-pause">Pausado</span>`;
+  if (s === 'closed')  return `<span class="chip chip-err">Fechado</span>`;
+  return `<span class="chip chip-muted">${s}</span>`;
+}
+
+function fotasDots(s, a) {
+  const max = Math.max(s || 0, a || 0, 1);
+  let html = '<div class="fotos-bar">';
+  for (let i = 0; i < Math.min(max, 10); i++) {
+    const hasS = i < (s || 0);
+    const hasA = i < (a || 0);
+    const cls = hasS && hasA ? 'ok' : (hasS || hasA ? 'warn' : '');
+    html += `<div class="fotos-dot ${cls}" title="S:${s||0} A:${a||0}"></div>`;
+  }
+  html += `<span style="margin-left:4px;font-size:11px;color:var(--muted)">${a||0}/${s||0}</span></div>`;
+  return html;
+}
+
+function sort(key) {
+  if (sortKey === key) sortAsc = !sortAsc; else { sortKey = key; sortAsc = true; }
+  filtrar();
+}
+
+async function refresh() {
+  const btn = document.getElementById('btn-refresh');
+  btn.disabled = true;
+  btn.textContent = '…';
+  const qs = campanhaAtiva ? `?campanha=${encodeURIComponent(campanhaAtiva)}` : '';
+  await fetch('/controle-anuncios/refresh' + qs, {method:'POST'});
+  document.getElementById('refresh-progress').style.display = '';
+  poll();
+}
+
+async function poll() {
+  const r = await fetch('/controle-anuncios/refresh/status').then(r => r.json());
+  const prog = document.getElementById('refresh-progress');
+  const fill = document.getElementById('progress-fill');
+  const txt = document.getElementById('progress-txt');
+  const btn = document.getElementById('btn-refresh');
+  const pct = r.total ? Math.round(r.progresso / r.total * 100) : 0;
+  fill.style.width = pct + '%';
+  txt.textContent = `${r.progresso || 0} / ${r.total || '?'}`;
+  if (r.rodando) { setTimeout(poll, 1200); return; }
+  prog.style.display = 'none';
+  btn.disabled = false;
+  btn.textContent = '⟳ Atualizar Status';
+  if (r.erro) toast('Erro: ' + r.erro, 'red');
+  else { toast('Status atualizado!', 'green'); load(); }
+}
+
+function toast(msg, color) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.borderColor = color === 'green' ? 'var(--green)' : color === 'red' ? 'var(--red)' : 'var(--border)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+load();
+setInterval(load, 60000);
+</script>
