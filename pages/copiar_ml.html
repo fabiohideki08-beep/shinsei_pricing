@@ -457,7 +457,11 @@ $('btn-copiar').addEventListener('click', async () => {
                 const fotosBadge = v.fotos_akg !== undefined
                   ? `<span style="font-size:10px;color:var(--muted);margin-left:4px;">${v.fotos_akg} foto(s)</span>`
                   : '';
-                return `<span class="chip-ok">✓ Criado</span>${posStatus}${fotosBadge}${anterior}${divs}`;
+                const gtinBadge = res.gtin_temp
+                  ? `<div style="font-size:10px;margin-top:2px;color:${res.gtin_atualizado?'var(--green)':'var(--yellow)'}">` +
+                    `GTIN temp:${res.gtin_temp} → real:${res.gtin_real||'?'} ${res.gtin_atualizado?'✓ aplicado':'⚠ pendente'}</div>`
+                  : '';
+                return `<span class="chip-ok">✓ Criado</span>${posStatus}${fotosBadge}${anterior}${gtinBadge}${divs}`;
               }
               if (res.pulado) {
                 return `<span class="chip-skip">⏭ Já existe</span>${preStatus}<div class="cell-erro" style="color:var(--blue)">${res.id_akg || ''}</div>`;

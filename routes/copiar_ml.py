@@ -255,20 +255,86 @@ def _gtin_conflict(body: dict) -> bool:
     return any(k in all_text for k in keywords)
 
 
+def _gtin_missing(body: dict) -> bool:
+    """Retorna True se o erro indica que GTIN é obrigatório para a categoria."""
+    all_text = " ".join([
+        (body.get("message") or ""),
+        *[c.get("message", "") for c in (body.get("cause") or [])],
+    ]).lower()
+    return "missing_conditional_required" in " ".join(
+        c.get("code", "") for c in (body.get("cause") or [])
+    ) or "required" in all_text and "gtin" in all_text
+
+
+def _gerar_gtin_temp() -> str:
+    """Gera um EAN-13 válido (checksum correto) com prefixo 9999 improvável de conflitar."""
+    import random
+    digits = [9, 9, 9, 9] + [random.randint(0, 9) for _ in range(8)]
+    # Calcula dígito verificador EAN-13
+    soma = sum(d * (1 if i % 2 == 0 else 3) for i, d in enumerate(digits))
+    check = (10 - (soma % 10)) % 10
+    return "".join(str(d) for d in digits) + str(check)
+
+
+def _atualizar_gtin_akg(akg_id: str, gtin_real: str, token: str) -> bool:
+    """Atualiza o GTIN do item AKG para o valor real após criação com temp."""
+    r = _req.put(f"{ML_API}/items/{akg_id}",
+                 headers=_hdrs(token),
+                 json={"attributes": [{"id": "GTIN", "value_name": gtin_real}]},
+                 timeout=15)
+    return r.status_code in (200, 201)
+
+
 def _criar_item_akg(payload: dict, token: str) -> dict:
     r = _req.post(f"{ML_API}/items", headers=_hdrs(token),
                   json=payload, timeout=30)
     body = r.json()
-    # Se conflito de GTIN (qualquer status 4xx), retenta sem GTIN
-    if r.status_code in (400, 422) and _gtin_conflict(body) and "attributes" in payload:
-        payload2 = {**payload}
-        payload2["attributes"] = [
-            a for a in payload["attributes"] if a.get("id") != "GTIN"
-        ]
+
+    if r.status_code in (200, 201):
+        return {"status_code": r.status_code, "body": body}
+
+    if r.status_code not in (400, 422) or "attributes" not in payload:
+        return {"status_code": r.status_code, "body": body}
+
+    gtin_original = next(
+        (a.get("value_name") for a in payload["attributes"] if a.get("id") == "GTIN"),
+        None,
+    )
+
+    # Conflito de GTIN com outra conta → tenta com GTIN temporário
+    if _gtin_conflict(body) and gtin_original:
+        gtin_temp = _gerar_gtin_temp()
+        payload_temp = {**payload, "attributes": [
+            {"id": "GTIN", "value_name": gtin_temp} if a.get("id") == "GTIN" else a
+            for a in payload["attributes"]
+        ]}
         r2 = _req.post(f"{ML_API}/items", headers=_hdrs(token),
-                       json=payload2, timeout=30)
+                       json=payload_temp, timeout=30)
         if r2.status_code in (200, 201):
-            return {"status_code": r2.status_code, "body": r2.json()}
+            novo_id = r2.json().get("id")
+            # Tenta atualizar com GTIN real imediatamente
+            gtin_atualizado = False
+            if novo_id:
+                time.sleep(1.0)
+                gtin_atualizado = _atualizar_gtin_akg(novo_id, gtin_original, token)
+            return {
+                "status_code": r2.status_code,
+                "body": r2.json(),
+                "gtin_temp": gtin_temp,
+                "gtin_real": gtin_original,
+                "gtin_atualizado": gtin_atualizado,
+            }
+
+    # GTIN obrigatório mas não foi enviado → tenta sem (pode travar em catch-22)
+    if _gtin_missing(body):
+        payload_sem = {**payload, "attributes": [
+            a for a in payload["attributes"] if a.get("id") != "GTIN"
+        ]}
+        r3 = _req.post(f"{ML_API}/items", headers=_hdrs(token),
+                       json=payload_sem, timeout=30)
+        if r3.status_code in (200, 201):
+            return {"status_code": r3.status_code, "body": r3.json()}
+
     return {"status_code": r.status_code, "body": body}
 
 
@@ -648,6 +714,12 @@ def copiar_anuncio(body: dict):
             if resp["status_code"] in (200, 201):
                 novo_id = resp["body"].get("id")
                 entry["id_akg"] = novo_id
+
+                # Informa se usou GTIN temporário e se o real foi aplicado
+                if resp.get("gtin_temp"):
+                    entry["gtin_temp"] = resp["gtin_temp"]
+                    entry["gtin_real"] = resp.get("gtin_real")
+                    entry["gtin_atualizado"] = resp.get("gtin_atualizado", False)
 
                 # 4. Descrição
                 if novo_id and descricao:
