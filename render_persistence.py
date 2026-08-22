@@ -42,7 +42,7 @@ def _patch_env_vars(updates: dict[str, str]) -> bool:
     try:
         # GET das vars existentes para não apagar as demais
         existing: dict[str, str] = {}
-        r_get = _req.get(url, headers=headers, timeout=10)
+        r_get = _req.get(url, headers=headers, params={"limit": 100}, timeout=10)
         if r_get.status_code == 200:
             for item in r_get.json():
                 k = item.get("envVar", {}).get("key") or item.get("key", "")
