@@ -134,6 +134,7 @@
   <span id="updated" style="color:var(--muted);font-size:12px;margin-left:8px"></span>
   <div class="right">
     <button class="btn btn-outline" onclick="refresh()" id="btn-refresh">⟳ Atualizar Status</button>
+    <button class="btn btn-outline" onclick="fixGtin()" id="btn-fix-gtin" style="display:none">🔧 Fix GTIN (<span id="gtin-count">0</span>)</button>
     <a href="/copiar-ml" class="btn btn-primary">+ Copiar Anúncios</a>
   </div>
 </header>
@@ -319,6 +320,33 @@ function sort(key) {
   filtrar();
 }
 
+async function loadGtinPendente() {
+  try {
+    const r = await fetch('/controle-anuncios/gtin-pendente').then(r => r.json());
+    const count = Object.keys(r).length;
+    const btn = document.getElementById('btn-fix-gtin');
+    document.getElementById('gtin-count').textContent = count;
+    btn.style.display = count > 0 ? '' : 'none';
+  } catch(e) {}
+}
+
+async function fixGtin() {
+  const btn = document.getElementById('btn-fix-gtin');
+  btn.disabled = true;
+  btn.textContent = '⏳ Aplicando GTINs…';
+  try {
+    const r = await fetch('/controle-anuncios/fix-gtin', {method:'POST'}).then(r => r.json());
+    toast(r.msg || 'Fix GTIN iniciado', 'green');
+    setTimeout(loadGtinPendente, 5000);
+  } catch(e) {
+    toast('Erro no fix GTIN: ' + e, 'red');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🔧 Fix GTIN (<span id="gtin-count">?</span>)';
+    loadGtinPendente();
+  }
+}
+
 async function refresh() {
   const btn = document.getElementById('btn-refresh');
   btn.disabled = true;
@@ -355,5 +383,6 @@ function toast(msg, color) {
 }
 
 load();
+loadGtinPendente();
 setInterval(load, 60000);
 </script>

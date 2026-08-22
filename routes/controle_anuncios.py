@@ -172,6 +172,63 @@ def _refresh_bg(filtro_campanha: str | None):
 
 # ─── Endpoints ───────────────────────────────────────────────────────────────
 
+_GTIN_PENDENTE_FILE = BASE_DIR / "data" / "akg_gtin_pendente.json"
+
+
+def _load_gtin_pendente() -> dict[str, str]:
+    try:
+        if _GTIN_PENDENTE_FILE.exists():
+            return json.loads(_GTIN_PENDENTE_FILE.read_text(encoding="utf-8")) or {}
+    except Exception:
+        pass
+    return {}
+
+
+def _save_gtin_pendente(data: dict) -> None:
+    _GTIN_PENDENTE_FILE.parent.mkdir(exist_ok=True)
+    _GTIN_PENDENTE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+@router.get("/gtin-pendente")
+async def api_gtin_pendente():
+    return _load_gtin_pendente()
+
+
+@router.post("/fix-gtin")
+async def api_fix_gtin(bg: BackgroundTasks):
+    pendentes = _load_gtin_pendente()
+    if not pendentes:
+        return {"ok": True, "msg": "Nenhum GTIN pendente", "total": 0}
+    bg.add_task(_fix_gtin_bg, pendentes)
+    return {"ok": True, "msg": f"Iniciando fix de {len(pendentes)} GTINs", "total": len(pendentes)}
+
+
+def _fix_gtin_bg(pendentes: dict[str, str]):
+    try:
+        tok_a = _token_akg()
+    except Exception as e:
+        logger.error("fix-gtin: token AKG indisponivel: %s", e)
+        return
+
+    restantes = dict(pendentes)
+    for akg_id, gtin_real in pendentes.items():
+        r = _req.put(f"{ML_API}/items/{akg_id}",
+                     headers={"Authorization": f"Bearer {tok_a}", "Content-Type": "application/json"},
+                     json={"attributes": [{"id": "GTIN", "value_name": gtin_real}]},
+                     timeout=15)
+        if r.status_code in (200, 201):
+            logger.info("fix-gtin OK: %s -> %s", akg_id, gtin_real)
+            del restantes[akg_id]
+        else:
+            logger.warning("fix-gtin FAIL %s: %s %s", akg_id, r.status_code, r.text[:120])
+        import time as _t
+        _t.sleep(0.5)
+
+    _save_gtin_pendente(restantes)
+    aplicados = len(pendentes) - len(restantes)
+    logger.info("fix-gtin concluido: %d aplicados, %d ainda pendentes", aplicados, len(restantes))
+
+
 @router.get("", response_class=HTMLResponse)
 async def page_controle():
     html = (PAGES_DIR / "controle_anuncios.html").read_text(encoding="utf-8")
