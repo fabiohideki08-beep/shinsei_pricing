@@ -438,7 +438,7 @@ $('btn-copiar').addEventListener('click', async () => {
           <td class="cell-title">${res.titulo || '—'}</td>
           <td class="cell-mono" style="font-size:11px;color:var(--blue)">${res.sku_raiz || '—'}</td>
           <td class="cell-id-akg">${res.id_akg
-            ? `<a href="https://vendedores.mercadolivre.com.br/anuncios/${res.id_akg}/modificar" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${res.id_akg}</a>`
+            ? `<a href="https://api.mercadolibre.com/items/${res.id_akg}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${res.id_akg}</a>`
             : '—'}</td>
           <td>
             ${res.ok
