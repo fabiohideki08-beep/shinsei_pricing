@@ -71,42 +71,58 @@ def _get_description(item_id: str, token: str) -> str:
 
 
 def _build_payload(item: dict) -> dict:
-    """Monta o payload para criar o anúncio na conta AKG."""
+    """
+    Monta o payload para criar o anúncio na conta AKG.
+    Sempre cria anúncio TRADICIONAL (não-catálogo): nunca inclui
+    catalog_product_id e força catalog_listing=false.
+    """
 
     # Fotos: passa as URLs originais — ML re-hospeda automaticamente
     pictures = [{"source": p["url"]} for p in (item.get("pictures") or []) if p.get("url")]
 
     # Variações com seller_custom_field (SKU)
+    # Remove picture_ids pois os IDs são da conta Shinsei e não existem na AKG
     variacoes = []
     for v in (item.get("variations") or []):
         var = {
             "attribute_combinations": v.get("attribute_combinations") or [],
-            "price": v.get("price") or item.get("price"),
-            "available_quantity": v.get("available_quantity") or 0,
-            "seller_custom_field": v.get("seller_custom_field") or "",
-            "picture_ids": v.get("picture_ids") or [],
+            "price":                  v.get("price") or item.get("price"),
+            "available_quantity":     v.get("available_quantity") or 0,
+            "seller_custom_field":    v.get("seller_custom_field") or "",
         }
         variacoes.append(var)
 
-    # Atributos (filtra os não-editáveis que ML rejeita na criação)
-    SKIP_ATTR_IDS = {"SELLER_SKU"}  # ML usa seller_custom_field nas variações
+    # Atributos — remove campos somente-leitura que ML rejeita na criação
+    SKIP_ATTR_IDS = {
+        "SELLER_SKU", "ITEM_CONDITION", "BRAND", "ALPHANUMERIC_MODEL",
+        "GTIN", "SELLER_ID", "CATALOG_LISTING",
+    }
     atributos = [
-        a for a in (item.get("attributes") or [])
+        {"id": a["id"], "value_name": a.get("value_name")}
+        for a in (item.get("attributes") or [])
         if a.get("id") not in SKIP_ATTR_IDS and a.get("value_name")
     ]
 
+    # listing_type_id: garante tipo tradicional (gold_special ou gold_pro)
+    # Nunca usa gold_premium pois esse força catálogo em algumas categorias
+    listing_type = item.get("listing_type_id") or "gold_special"
+    if listing_type not in ("gold_special", "gold_pro", "bronze", "free"):
+        listing_type = "gold_special"
+
     payload: dict[str, Any] = {
-        "title":              item.get("title", ""),
-        "category_id":        item.get("category_id", ""),
-        "price":              item.get("price"),
-        "currency_id":        item.get("currency_id", "BRL"),
-        "available_quantity": item.get("available_quantity", 0),
-        "buying_mode":        item.get("buying_mode", "buy_it_now"),
-        "listing_type_id":    item.get("listing_type_id", "gold_special"),
-        "condition":          item.get("condition", "new"),
-        "pictures":           pictures,
-        "attributes":         atributos,
+        "title":               item.get("title", ""),
+        "category_id":         item.get("category_id", ""),
+        "price":               item.get("price"),
+        "currency_id":         item.get("currency_id", "BRL"),
+        "available_quantity":  item.get("available_quantity", 0),
+        "buying_mode":         item.get("buying_mode", "buy_it_now"),
+        "listing_type_id":     listing_type,
+        "condition":           item.get("condition", "new"),
+        "pictures":            pictures,
+        "attributes":          atributos,
         "seller_custom_field": item.get("seller_custom_field") or "",
+        # Força modo tradicional — nunca catálogo
+        "catalog_listing":     False,
     }
 
     if variacoes:
@@ -116,10 +132,10 @@ def _build_payload(item: dict) -> dict:
     shipping = item.get("shipping") or {}
     if shipping:
         payload["shipping"] = {
-            "mode":           shipping.get("mode", "me2"),
-            "local_pick_up":  shipping.get("local_pick_up", False),
-            "free_shipping":  shipping.get("free_shipping", False),
-            "logistic_type":  shipping.get("logistic_type", "fulfillment"),
+            "mode":          shipping.get("mode", "me2"),
+            "local_pick_up": shipping.get("local_pick_up", False),
+            "free_shipping": shipping.get("free_shipping", False),
+            "logistic_type": shipping.get("logistic_type", "fulfillment"),
         }
 
     return payload
