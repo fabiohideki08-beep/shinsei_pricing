@@ -272,49 +272,60 @@ def _criar_item_akg(payload: dict, token: str) -> dict:
     return {"status_code": r.status_code, "body": body}
 
 
-def _get_akg_family_skus(family_name: str, seller_id: str, token: str) -> dict[str, str]:
+def _get_akg_family_existing(family_name: str, seller_id: str, token: str) -> dict[str, str]:
     """
-    Retorna mapa {sku: mlb_id} de todos os itens já existentes na família AKG.
-    Usado para deduplicação: pular itens cujo SKU já foi copiado.
+    Retorna mapa {chave: mlb_id_akg} de todos os itens já existentes na família AKG.
+    Chave = seller_custom_field (SKU) quando disponível, senão título do item.
+    Usado para deduplicação: pular itens cujo SKU ou título já existe na AKG.
     """
-    skus: dict[str, str] = {}
-    # Busca itens do vendedor AKG nessa família pelo nome
-    # Precisa achar o family_id da AKG primeiro via q=family_name
+    existing: dict[str, str] = {}
+    # Acha o family_id da AKG via busca pelo nome
     r0 = _req.get(f"{ML_API}/users/{seller_id}/items/search",
-                  params={"q": family_name, "limit": 10},
+                  params={"q": family_name[:50], "limit": 10},
                   headers=_hdrs(token), timeout=15)
     if r0.status_code != 200:
-        return skus
+        return existing
     sample_ids = r0.json().get("results") or []
     if not sample_ids:
-        return skus
-    # Pega family_id do primeiro item encontrado
+        return existing
+    # Pega family_id do primeiro resultado
     r1 = _req.get(f"{ML_API}/items/{sample_ids[0]}",
-                  params={"attributes": "id,family_id,seller_custom_field"},
+                  params={"attributes": "id,family_id,family_name"},
                   headers=_hdrs(token), timeout=10)
     if r1.status_code != 200:
-        return skus
-    fid = r1.json().get("family_id")
+        return existing
+    d1 = r1.json()
+    fid = d1.get("family_id")
     if not fid:
-        return skus
+        return existing
+    # Garante que a família encontrada é a correta pelo nome
+    akg_family_name = d1.get("family_name") or ""
+    if family_name and family_name.lower()[:30] not in akg_family_name.lower():
+        logger.warning("Família AKG '%s' não bate com '%s'", akg_family_name, family_name)
     # Lista todos os membros da família
     family_ids = _get_family_items_by_family_id(str(fid), seller_id, token)
-    # Busca SKU de cada membro em lotes de 20
+    logger.info("Dedup: família AKG %s tem %d membros", fid, len(family_ids))
+    # Busca SKU e título de cada membro em lotes de 20
     for i in range(0, len(family_ids), 20):
         batch = family_ids[i:i+20]
-        ids_param = ",".join(batch)
         rb = _req.get(f"{ML_API}/items",
-                      params={"ids": ids_param, "attributes": "id,seller_custom_field"},
+                      params={"ids": ",".join(batch),
+                              "attributes": "id,seller_custom_field,title"},
                       headers=_hdrs(token), timeout=15)
         if rb.status_code != 200:
             continue
         for entry in rb.json():
             item_data = entry.get("body") or entry
-            sku = item_data.get("seller_custom_field") or ""
             mid = item_data.get("id") or ""
-            if sku and mid:
-                skus[sku] = mid
-    return skus
+            if not mid:
+                continue
+            sku = (item_data.get("seller_custom_field") or "").strip()
+            title = (item_data.get("title") or "").strip()
+            if sku:
+                existing[sku] = mid
+            if title:
+                existing[title] = mid  # índice por título como fallback
+    return existing
 
 
 def _verificar_akg(novo_id: str, original: dict, token: str) -> dict:
@@ -488,7 +499,7 @@ def copiar_anuncio(body: dict):
         primeiro_item = _get_item(primeiro_raw, tok_s)
         family_name_ref = primeiro_item.get("family_name") or primeiro_item.get("title", "")
         if family_name_ref:
-            akg_skus_existentes = _get_akg_family_skus(family_name_ref, akg_seller_id, tok_a)
+            akg_skus_existentes = _get_akg_family_existing(family_name_ref, akg_seller_id, tok_a)
             logger.info("Dedup AKG: %d SKUs já existentes na família '%s'",
                         len(akg_skus_existentes), family_name_ref)
     except Exception as e:
@@ -519,13 +530,16 @@ def copiar_anuncio(body: dict):
             entry["titulo"] = item.get("title", "")
             entry["sku_raiz"] = item.get("seller_custom_field") or ""
 
-            # 2. Deduplicação: pula se SKU já existe na AKG
-            sku_raiz = item.get("seller_custom_field") or ""
-            if sku_raiz and sku_raiz in akg_skus_existentes:
+            # 2. Deduplicação: pula se SKU ou título já existe na AKG
+            sku_raiz = (item.get("seller_custom_field") or "").strip()
+            titulo_item = (item.get("title") or "").strip()
+            dedup_key = sku_raiz or titulo_item  # SKU preferido, título como fallback
+            if dedup_key and dedup_key in akg_skus_existentes:
                 entry["ok"] = False
                 entry["pulado"] = True
-                entry["id_akg"] = akg_skus_existentes[sku_raiz]
-                entry["erro"] = f"SKU '{sku_raiz}' já existe na AKG ({akg_skus_existentes[sku_raiz]})"
+                entry["id_akg"] = akg_skus_existentes[dedup_key]
+                label = f"SKU '{sku_raiz}'" if sku_raiz else f"título '{titulo_item[:40]}'"
+                entry["erro"] = f"{label} já existe na AKG ({akg_skus_existentes[dedup_key]})"
                 resultados.append(entry)
                 continue
 
