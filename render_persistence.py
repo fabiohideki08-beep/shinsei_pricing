@@ -26,8 +26,8 @@ _BASE_URL   = "https://api.render.com/v1"
 
 def _patch_env_vars(updates: dict[str, str]) -> bool:
     """
-    Atualiza variáveis de ambiente no serviço Render.
-    updates = {"VAR_NAME": "value", ...}
+    Atualiza variáveis de ambiente no serviço Render sem apagar as demais.
+    Faz GET para obter todas as vars existentes, mescla com `updates`, depois PUT.
     """
     if not _API_KEY or not _SERVICE_ID:
         logger.debug("render_persistence: RENDER_API_KEY ou RENDER_SERVICE_ID não definidos — skip")
@@ -39,12 +39,22 @@ def _patch_env_vars(updates: dict[str, str]) -> bool:
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
-    # Render API: PATCH com lista de {key, value}
-    body = [{"key": k, "value": v} for k, v in updates.items()]
     try:
+        # GET das vars existentes para não apagar as demais
+        existing: dict[str, str] = {}
+        r_get = _req.get(url, headers=headers, timeout=10)
+        if r_get.status_code == 200:
+            for item in r_get.json():
+                k = item.get("envVar", {}).get("key") or item.get("key", "")
+                v = item.get("envVar", {}).get("value") or item.get("value", "")
+                if k:
+                    existing[k] = v
+        # Mescla: updates sobrescreve vars existentes
+        merged = {**existing, **updates}
+        body = [{"key": k, "value": v} for k, v in merged.items()]
         r = _req.put(url, headers=headers, json=body, timeout=10)
         if r.status_code in (200, 201):
-            logger.info("render_persistence: %d env var(s) atualizadas", len(updates))
+            logger.info("render_persistence: %d env var(s) atualizadas (total=%d)", len(updates), len(merged))
             return True
         logger.warning("render_persistence: falha HTTP %s — %s", r.status_code, r.text[:200])
         return False
