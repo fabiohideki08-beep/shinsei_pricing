@@ -439,6 +439,21 @@ def copiar_anuncio(body: dict):
 
 # ── Debug ────────────────────────────────────────────────────────────────────
 
+@router.get("/copiar-ml/debug-payload/{item_id:path}")
+def debug_payload(item_id: str):
+    """Mostra o payload exato que seria enviado ao ML AKG para criação."""
+    raw_id = _extract_id(item_id)
+    try:
+        tok = _token_shinsei()
+    except Exception as e:
+        return {"erro": str(e)}
+    try:
+        item = _get_item(raw_id, tok)
+    except Exception as e:
+        return {"erro": str(e)}
+    return _build_payload(item)
+
+
 @router.get("/copiar-ml/debug/{item_id:path}")
 def debug_item(item_id: str):
     """Retorna campos brutos do ML para diagnóstico de estrutura MLBU/MLB."""
