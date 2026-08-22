@@ -414,13 +414,21 @@ gsa_path = DATA_DIR / "google_service_account.json"
 if gsa_b64:
     if not gsa_path.exists():
         try:
-            # Aceita JSON direto ou base64
+            import json as _json
+            gsa_json = None
+            # 1) Tenta JSON direto (pode conter \n ou espaços extras)
+            _stripped = gsa_b64.strip()
             try:
-                import json as _json
-                _json.loads(gsa_b64)
-                gsa_json = gsa_b64  # já é JSON válido
+                _json.loads(_stripped)
+                gsa_json = _stripped
             except Exception:
-                gsa_json = base64.b64decode(gsa_b64.encode()).decode("utf-8")
+                pass
+            # 2) Tenta base64 com padding automático
+            if gsa_json is None:
+                _b64 = _stripped
+                _pad = (4 - len(_b64) % 4) % 4
+                _b64 += "=" * _pad
+                gsa_json = base64.b64decode(_b64.encode()).decode("utf-8")
             gsa_path.write_text(gsa_json, encoding="utf-8")
             pr("google_service_account.json criado a partir de GOOGLE_SA_JSON")
         except Exception as _e:
