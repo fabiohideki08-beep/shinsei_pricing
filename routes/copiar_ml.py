@@ -185,8 +185,10 @@ def _build_payload(item: dict) -> dict:
     # Atributos — remove apenas campos que o ML rejeita na criação (somente-leitura do sistema)
     # BRAND é obrigatório em MLB264861 — NÃO remover
     # HAZMAT_TRANSPORTABILITY e PRODUCT_FEATURES são "not modifiable" — o ML ignora, mas aceita
+    # GTIN removido: o mesmo GTIN já está registrado nos anúncios Shinsei e
+    # o ML rejeita reutilização em conta diferente ("código usado em outra marca")
     SKIP_ATTR_IDS = {
-        "SELLER_SKU", "ITEM_CONDITION", "SELLER_ID", "CATALOG_LISTING",
+        "SELLER_SKU", "ITEM_CONDITION", "SELLER_ID", "CATALOG_LISTING", "GTIN",
     }
     atributos = [
         {"id": a["id"], "value_name": a.get("value_name")}
