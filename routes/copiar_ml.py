@@ -185,10 +185,10 @@ def _build_payload(item: dict) -> dict:
     # Atributos — remove apenas campos que o ML rejeita na criação (somente-leitura do sistema)
     # BRAND é obrigatório em MLB264861 — NÃO remover
     # HAZMAT_TRANSPORTABILITY e PRODUCT_FEATURES são "not modifiable" — o ML ignora, mas aceita
-    # GTIN removido: o mesmo GTIN já está registrado nos anúncios Shinsei e
-    # o ML rejeita reutilização em conta diferente ("código usado em outra marca")
+    # GTIN incluído: obrigatório para MLB264861. Se conflitar com Shinsei,
+    # _criar_item_akg faz retry automático sem GTIN.
     SKIP_ATTR_IDS = {
-        "SELLER_SKU", "ITEM_CONDITION", "SELLER_ID", "CATALOG_LISTING", "GTIN",
+        "SELLER_SKU", "ITEM_CONDITION", "SELLER_ID", "CATALOG_LISTING",
     }
     atributos = [
         {"id": a["id"], "value_name": a.get("value_name")}
@@ -246,7 +246,25 @@ def _build_payload(item: dict) -> dict:
 def _criar_item_akg(payload: dict, token: str) -> dict:
     r = _req.post(f"{ML_API}/items", headers=_hdrs(token),
                   json=payload, timeout=30)
-    return {"status_code": r.status_code, "body": r.json()}
+    body = r.json()
+    # Se conflito de GTIN com outra conta, retenta sem GTIN
+    if r.status_code == 400:
+        cause_text = str(body)
+        gtin_conflict = (
+            "código universal" in cause_text.lower()
+            or "insira um código universal" in cause_text.lower()
+            or "universal code" in cause_text.lower()
+        )
+        if gtin_conflict and "attributes" in payload:
+            payload2 = {**payload}
+            payload2["attributes"] = [
+                a for a in payload["attributes"] if a.get("id") != "GTIN"
+            ]
+            r2 = _req.post(f"{ML_API}/items", headers=_hdrs(token),
+                           json=payload2, timeout=30)
+            if r2.status_code in (200, 201):
+                return {"status_code": r2.status_code, "body": r2.json()}
+    return {"status_code": r.status_code, "body": body}
 
 
 def _criar_description_akg(item_id: str, texto: str, token: str):
