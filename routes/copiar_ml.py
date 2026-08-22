@@ -76,28 +76,81 @@ def _get_item(item_id: str, token: str) -> dict:
     return r.json()
 
 
-def _get_family_items(mlbu_id: str, token: str) -> list[str]:
-    """Retorna lista de MLB IDs de todos os filhos de uma família MLBU."""
-    r = _req.get(f"{ML_API}/items/{mlbu_id}/children",
-                 headers=_hdrs(token), timeout=20)
-    if r.status_code == 200:
+def _get_seller_id(token: str) -> str:
+    r = _req.get(f"{ML_API}/users/me", headers=_hdrs(token), timeout=10)
+    r.raise_for_status()
+    return str(r.json()["id"])
+
+
+def _get_seller_item_ids(seller_id: str, token: str) -> list[str]:
+    """Busca todos os IDs de anúncios do vendedor (até 1000)."""
+    ids: list[str] = []
+    offset = 0
+    while True:
+        r = _req.get(
+            f"{ML_API}/users/{seller_id}/items/search",
+            params={"limit": 100, "offset": offset},
+            headers=_hdrs(token), timeout=20,
+        )
+        if r.status_code != 200:
+            break
         data = r.json()
-        # Resposta pode ser lista direta ou {"children": [...]}
-        children = data if isinstance(data, list) else data.get("children", [])
-        return [c.get("id") or c for c in children if c]
-    # Fallback: busca via /items?ids=MLBU... que retorna family com item_relations
-    r2 = _req.get(f"{ML_API}/items", params={"ids": mlbu_id},
-                  headers=_hdrs(token), timeout=20)
-    if r2.status_code == 200:
-        body = r2.json()
-        items = body if isinstance(body, list) else [body]
-        for it in items:
-            b = it.get("body") or it
-            relations = b.get("item_relations") or []
-            ids = [rel.get("id") for rel in relations if rel.get("id")]
-            if ids:
-                return ids
-    return []
+        batch = data.get("results") or []
+        ids.extend(batch)
+        if len(batch) < 100 or len(ids) >= (data.get("paging", {}).get("total") or 0):
+            break
+        offset += 100
+    return ids
+
+
+def _get_family_items(mlbu_id: str, token: str) -> list[str]:
+    """
+    Retorna lista de MLB IDs de todos os filhos de uma família MLBU.
+    Estratégia: busca todos os anúncios do vendedor e filtra por parent_item_id == mlbu_id.
+    """
+    # Tenta direto via /items/{mlbu} — retorna variações se for multi-variação
+    r0 = _req.get(f"{ML_API}/items/{mlbu_id}", headers=_hdrs(token), timeout=20)
+    if r0.status_code == 200:
+        data = r0.json()
+        # Caso 1: item com variações (multi-sku tradicional)
+        variations = data.get("variations") or []
+        if variations:
+            # Variações inline — o próprio MLBU é o item pai
+            return [mlbu_id]
+        # Caso 2: children_ids no objeto
+        children = data.get("children_ids") or data.get("children") or []
+        if children:
+            return [c if isinstance(c, str) else c.get("id", "") for c in children]
+
+    # Busca por parent_item_id nos anúncios do vendedor
+    try:
+        seller_id = _get_seller_id(token)
+        all_ids = _get_seller_item_ids(seller_id, token)
+    except Exception:
+        return []
+
+    if not all_ids:
+        return []
+
+    # Batch fetch (50 por vez) e filtra parent_item_id
+    filhos: list[str] = []
+    batch_size = 50
+    for i in range(0, len(all_ids), batch_size):
+        batch = all_ids[i:i+batch_size]
+        r = _req.get(
+            f"{ML_API}/items",
+            params={"ids": ",".join(batch), "attributes": "id,parent_item_id"},
+            headers=_hdrs(token), timeout=20,
+        )
+        if r.status_code != 200:
+            continue
+        for entry in (r.json() if isinstance(r.json(), list) else []):
+            body = entry.get("body") or entry
+            if body.get("parent_item_id") == mlbu_id:
+                filhos.append(body["id"])
+        time.sleep(0.1)
+
+    return filhos
 
 
 def _get_description(item_id: str, token: str) -> str:
@@ -358,6 +411,28 @@ def copiar_anuncio(body: dict):
         "erros": total - criados,
         "resultados": resultados,
     }
+
+
+# ── Debug ────────────────────────────────────────────────────────────────────
+
+@router.get("/copiar-ml/debug/{item_id:path}")
+def debug_item(item_id: str):
+    """Retorna campos brutos do ML para diagnóstico de estrutura MLBU/MLB."""
+    raw_id = _extract_id(item_id)
+    try:
+        tok = _token_shinsei()
+    except Exception as e:
+        return {"erro": str(e)}
+    r = _req.get(f"{ML_API}/items/{raw_id}", headers=_hdrs(tok), timeout=20)
+    data = r.json()
+    keys_interesse = [
+        "id", "parent_item_id", "children_ids", "variations", "item_relations",
+        "catalog_product_id", "catalog_listing", "listing_type_id",
+        "family_name", "seller_id", "status",
+    ]
+    resumo = {k: data.get(k) for k in keys_interesse}
+    resumo["_keys_disponiveis"] = list(data.keys())
+    return resumo
 
 
 # ── Página HTML ───────────────────────────────────────────────────────────────
