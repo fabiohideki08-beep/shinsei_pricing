@@ -185,10 +185,10 @@ def _build_payload(item: dict) -> dict:
 
     # Atributos — remove campos que o ML rejeita na criação (somente-leitura do sistema)
     # BRAND é obrigatório em MLB264861 — NÃO remover
-    # GTIN removido sempre: o GTIN registrado na Shinsei não pode ser reusado na AKG
-    # (ML retorna "Insira um código universal que você não tenha usado no anúncio de outra marca")
+    # GTIN incluído: obrigatório para MLB264861. Se conflitar (mesmo GTIN já na Shinsei),
+    # _criar_item_akg faz retry automático sem GTIN.
     SKIP_ATTR_IDS = {
-        "SELLER_SKU", "ITEM_CONDITION", "SELLER_ID", "CATALOG_LISTING", "GTIN",
+        "SELLER_SKU", "ITEM_CONDITION", "SELLER_ID", "CATALOG_LISTING",
     }
     atributos = [
         {"id": a["id"], "value_name": a.get("value_name")}
@@ -243,27 +243,32 @@ def _build_payload(item: dict) -> dict:
     return payload
 
 
+def _gtin_conflict(body: dict) -> bool:
+    """Retorna True se o erro indica conflito de GTIN com outra conta."""
+    keywords = ("código universal", "insira um código universal", "universal code",
+                "not used in another", "outra marca")
+    # Checa message + causes
+    all_text = " ".join([
+        (body.get("message") or ""),
+        *[c.get("message", "") for c in (body.get("cause") or [])],
+    ]).lower()
+    return any(k in all_text for k in keywords)
+
+
 def _criar_item_akg(payload: dict, token: str) -> dict:
     r = _req.post(f"{ML_API}/items", headers=_hdrs(token),
                   json=payload, timeout=30)
     body = r.json()
-    # Se conflito de GTIN com outra conta, retenta sem GTIN
-    if r.status_code == 400:
-        cause_text = str(body)
-        gtin_conflict = (
-            "código universal" in cause_text.lower()
-            or "insira um código universal" in cause_text.lower()
-            or "universal code" in cause_text.lower()
-        )
-        if gtin_conflict and "attributes" in payload:
-            payload2 = {**payload}
-            payload2["attributes"] = [
-                a for a in payload["attributes"] if a.get("id") != "GTIN"
-            ]
-            r2 = _req.post(f"{ML_API}/items", headers=_hdrs(token),
-                           json=payload2, timeout=30)
-            if r2.status_code in (200, 201):
-                return {"status_code": r2.status_code, "body": r2.json()}
+    # Se conflito de GTIN (qualquer status 4xx), retenta sem GTIN
+    if r.status_code in (400, 422) and _gtin_conflict(body) and "attributes" in payload:
+        payload2 = {**payload}
+        payload2["attributes"] = [
+            a for a in payload["attributes"] if a.get("id") != "GTIN"
+        ]
+        r2 = _req.post(f"{ML_API}/items", headers=_hdrs(token),
+                       json=payload2, timeout=30)
+        if r2.status_code in (200, 201):
+            return {"status_code": r2.status_code, "body": r2.json()}
     return {"status_code": r.status_code, "body": body}
 
 
