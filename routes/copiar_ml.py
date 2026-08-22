@@ -28,15 +28,24 @@ ML_API    = "https://api.mercadolibre.com"
 # ── Helpers de token ──────────────────────────────────────────────────────────
 
 def _token_shinsei() -> str:
-    path = BASE_DIR / "data" / "ml_tokens.json"
-    data = json.loads(path.read_text(encoding="utf-8"))
-    return data.get("access_token", "")
+    """Lê o token ML Shinsei via OAuth service (mesmo padrão das rotas existentes)."""
+    from services.mercado_livre import MercadoLivreOAuthService
+    svc = MercadoLivreOAuthService(str(BASE_DIR))
+    result = svc.ler_tokens()
+    if not result.get("success"):
+        raise ValueError(result.get("error", "Token Shinsei não encontrado — faça login em /ml/login"))
+    return result["data"].get("access_token", "")
 
 
 def _token_akg() -> str:
-    path = BASE_DIR / "data" / "ml_tokens_akg.json"
-    data = json.loads(path.read_text(encoding="utf-8"))
-    return data.get("access_token", "")
+    """Lê o token ML AKG via OAuth service (mesmo padrão das rotas existentes)."""
+    import importlib, sys
+    routes_ml = sys.modules.get("routes.mercado_livre") or importlib.import_module("routes.mercado_livre")
+    svc = routes_ml._get_akg_oauth()
+    result = svc.ler_tokens()
+    if not result.get("success"):
+        raise ValueError(result.get("error", "Token AKG não encontrado — faça login em /ml/login2"))
+    return result["data"].get("access_token", "")
 
 
 def _hdrs(token: str) -> dict:
