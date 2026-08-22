@@ -103,54 +103,51 @@ def _get_seller_item_ids(seller_id: str, token: str) -> list[str]:
     return ids
 
 
-def _get_family_items(mlbu_id: str, token: str) -> list[str]:
-    """
-    Retorna lista de MLB IDs de todos os filhos de uma família MLBU.
-    Estratégia: busca todos os anúncios do vendedor e filtra por parent_item_id == mlbu_id.
-    """
-    # Tenta direto via /items/{mlbu} — retorna variações se for multi-variação
-    r0 = _req.get(f"{ML_API}/items/{mlbu_id}", headers=_hdrs(token), timeout=20)
-    if r0.status_code == 200:
-        data = r0.json()
-        # Caso 1: item com variações (multi-sku tradicional)
-        variations = data.get("variations") or []
-        if variations:
-            # Variações inline — o próprio MLBU é o item pai
-            return [mlbu_id]
-        # Caso 2: children_ids no objeto
-        children = data.get("children_ids") or data.get("children") or []
-        if children:
-            return [c if isinstance(c, str) else c.get("id", "") for c in children]
-
-    # Busca por parent_item_id nos anúncios do vendedor
-    try:
-        seller_id = _get_seller_id(token)
-        all_ids = _get_seller_item_ids(seller_id, token)
-    except Exception:
-        return []
-
-    if not all_ids:
-        return []
-
-    # Batch fetch (50 por vez) e filtra parent_item_id
-    filhos: list[str] = []
-    batch_size = 50
-    for i in range(0, len(all_ids), batch_size):
-        batch = all_ids[i:i+batch_size]
+def _get_family_items_by_family_id(family_id: str, seller_id: str, token: str) -> list[str]:
+    """Busca todos os MLBs do vendedor com o mesmo family_id (paginado)."""
+    ids: list[str] = []
+    offset = 0
+    while True:
         r = _req.get(
-            f"{ML_API}/items",
-            params={"ids": ",".join(batch), "attributes": "id,parent_item_id"},
+            f"{ML_API}/users/{seller_id}/items/search",
+            params={"family_id": family_id, "limit": 100, "offset": offset},
             headers=_hdrs(token), timeout=20,
         )
         if r.status_code != 200:
-            continue
-        for entry in (r.json() if isinstance(r.json(), list) else []):
-            body = entry.get("body") or entry
-            if body.get("parent_item_id") == mlbu_id:
-                filhos.append(body["id"])
-        time.sleep(0.1)
+            break
+        data = r.json()
+        batch = data.get("results") or []
+        ids.extend(batch)
+        total = (data.get("paging") or {}).get("total", 0)
+        if not batch or len(ids) >= total:
+            break
+        offset += 100
+    return ids
 
-    return filhos
+
+def _get_family_items(family_ref: str, token: str) -> list[str]:
+    """
+    Retorna lista de MLB IDs de todos os membros de uma família Omni.
+    Aceita MLBU (family_id) ou MLB (busca o family_id do item e lista irmãos).
+    """
+    seller_id = _get_seller_id(token)
+
+    # Se recebeu um MLB filho, extrai o family_id dele
+    if not family_ref.startswith("MLBU"):
+        r0 = _req.get(f"{ML_API}/items/{family_ref}",
+                      headers=_hdrs(token), timeout=20)
+        if r0.status_code == 200:
+            data = r0.json()
+            # Multi-variação tradicional: variações inline
+            if data.get("variations"):
+                return [family_ref]
+            fid = data.get("family_id")
+            if fid:
+                return _get_family_items_by_family_id(fid, seller_id, token)
+        return [family_ref]  # fallback: trata como item único
+
+    # Recebeu MLBU diretamente → usa como family_id
+    return _get_family_items_by_family_id(family_ref, seller_id, token)
 
 
 def _get_description(item_id: str, token: str) -> str:
@@ -428,7 +425,7 @@ def debug_item(item_id: str):
     keys_interesse = [
         "id", "parent_item_id", "children_ids", "variations", "item_relations",
         "catalog_product_id", "catalog_listing", "listing_type_id",
-        "family_name", "seller_id", "status",
+        "family_name", "family_id", "seller_id", "status",
     ]
     resumo = {k: data.get(k) for k in keys_interesse}
     resumo["_keys_disponiveis"] = list(data.keys())
