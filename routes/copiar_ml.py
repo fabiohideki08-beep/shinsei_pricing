@@ -216,9 +216,11 @@ def _build_payload(item: dict) -> dict:
     }
 
     # family_name é obrigatório para categorias Omni (ex: colorações)
+    # Quando presente, o título de cada item DEVE ser o family_name (sem sufixo de cor)
     family_name = item.get("family_name")
     if family_name:
         payload["family_name"] = family_name
+        payload["title"] = family_name  # ML rejeita título com cor específica em anúncios omni
 
     if variacoes:
         payload["variations"] = variacoes
