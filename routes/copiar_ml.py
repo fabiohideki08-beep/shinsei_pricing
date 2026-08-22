@@ -457,6 +457,24 @@ def debug_payload(item_id: str):
     return _build_payload(item)
 
 
+@router.get("/copiar-ml/debug-post/{item_id:path}")
+def debug_post(item_id: str):
+    """Faz o POST real ao ML AKG e mostra a resposta completa (para diagnóstico de body.invalid_fields)."""
+    raw_id = _extract_id(item_id)
+    try:
+        tok_s = _token_shinsei()
+        tok_a = _token_akg()
+    except Exception as e:
+        return {"erro": str(e)}
+    try:
+        item = _get_item(raw_id, tok_s)
+    except Exception as e:
+        return {"erro": str(e)}
+    payload = _build_payload(item)
+    r = _req.post(f"{ML_API}/items", headers=_hdrs(tok_a), json=payload, timeout=30)
+    return {"status_code": r.status_code, "payload_enviado": payload, "resposta_ml": r.json()}
+
+
 @router.get("/copiar-ml/debug/{item_id:path}")
 def debug_item(item_id: str):
     """Retorna campos brutos do ML para diagnóstico de estrutura MLBU/MLB."""
