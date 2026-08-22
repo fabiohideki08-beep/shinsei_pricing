@@ -28,24 +28,27 @@ ML_API    = "https://api.mercadolibre.com"
 # ── Helpers de token ──────────────────────────────────────────────────────────
 
 def _token_shinsei() -> str:
-    """Lê o token ML Shinsei via OAuth service (mesmo padrão das rotas existentes)."""
-    from services.mercado_livre import MercadoLivreOAuthService
-    svc = MercadoLivreOAuthService(str(BASE_DIR))
-    result = svc.ler_tokens()
-    if not result.get("success"):
-        raise ValueError(result.get("error", "Token Shinsei não encontrado — faça login em /ml/login"))
-    return result["data"].get("access_token", "")
+    """Retorna access_token ML Shinsei válido, renovando automaticamente se expirado."""
+    from services.mercado_livre import obter_token_ml
+    return obter_token_ml()
 
 
 def _token_akg() -> str:
-    """Lê o token ML AKG via OAuth service (mesmo padrão das rotas existentes)."""
-    import importlib, sys
+    """Retorna access_token ML AKG válido, renovando automaticamente se expirado."""
+    import importlib, sys, time as _time
     routes_ml = sys.modules.get("routes.mercado_livre") or importlib.import_module("routes.mercado_livre")
     svc = routes_ml._get_akg_oauth()
-    result = svc.ler_tokens()
+    tokens = svc._read_json(svc.tokens_file, {})
+    if not tokens:
+        raise ValueError("Token AKG não encontrado — faça login em /ml/login2")
+    expires_at = float(tokens.get("expires_at", 0))
+    if tokens.get("access_token") and _time.time() < expires_at - 300:
+        return tokens["access_token"]
+    # Renova
+    result = svc.refresh_token()
     if not result.get("success"):
-        raise ValueError(result.get("error", "Token AKG não encontrado — faça login em /ml/login2"))
-    return result["data"].get("access_token", "")
+        raise ValueError(result.get("error", "Falha ao renovar token AKG"))
+    return result["data"]["access_token"]
 
 
 def _hdrs(token: str) -> dict:
