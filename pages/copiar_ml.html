@@ -438,11 +438,23 @@ $('btn-copiar').addEventListener('click', async () => {
           <td class="cell-title">${res.titulo || '—'}</td>
           <td class="cell-mono" style="font-size:11px;color:var(--blue)">${res.sku_raiz || '—'}</td>
           <td class="cell-id-akg">${res.id_akg
-            ? `<a href="https://www.mercadolivre.com.br/anuncios/${res.id_akg}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${res.id_akg}</a>`
+            ? `<a href="https://vendedores.mercadolivre.com.br/anuncios/${res.id_akg}/modificar" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${res.id_akg}</a>`
             : '—'}</td>
           <td>
             ${res.ok
-              ? '<span class="chip-ok">✓ Criado</span>'
+              ? (() => {
+                  const v = res.verificacao || {};
+                  const divs = v.divergencias && v.divergencias.length
+                    ? `<div style="color:var(--yellow);font-size:11px;margin-top:4px;">⚠ ${v.divergencias.join(' | ')}</div>`
+                    : '';
+                  const statusChip = v.status
+                    ? `<span style="font-size:10px;color:var(--muted);margin-left:6px;">${v.status}</span>`
+                    : '';
+                  const fotosBadge = v.fotos_akg !== undefined
+                    ? `<span style="font-size:10px;color:var(--muted);margin-left:4px;">${v.fotos_akg} foto(s)</span>`
+                    : '';
+                  return `<span class="chip-ok">✓ Criado</span>${statusChip}${fotosBadge}${divs}`;
+                })()
               : `<span class="chip-err">✗ Erro</span><div class="cell-erro">${res.erro || ''}</div>${causas ? `<div class="cell-causes">${causas}</div>` : ''}`
             }
           </td>

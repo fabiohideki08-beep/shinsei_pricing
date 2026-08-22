@@ -182,13 +182,12 @@ def _build_payload(item: dict) -> dict:
         }
         variacoes.append(var)
 
-    # Atributos — remove apenas campos que o ML rejeita na criação (somente-leitura do sistema)
+    # Atributos — remove campos que o ML rejeita na criação (somente-leitura do sistema)
     # BRAND é obrigatório em MLB264861 — NÃO remover
-    # HAZMAT_TRANSPORTABILITY e PRODUCT_FEATURES são "not modifiable" — o ML ignora, mas aceita
-    # GTIN incluído: obrigatório para MLB264861. Se conflitar com Shinsei,
-    # _criar_item_akg faz retry automático sem GTIN.
+    # GTIN removido sempre: o GTIN registrado na Shinsei não pode ser reusado na AKG
+    # (ML retorna "Insira um código universal que você não tenha usado no anúncio de outra marca")
     SKIP_ATTR_IDS = {
-        "SELLER_SKU", "ITEM_CONDITION", "SELLER_ID", "CATALOG_LISTING",
+        "SELLER_SKU", "ITEM_CONDITION", "SELLER_ID", "CATALOG_LISTING", "GTIN",
     }
     atributos = [
         {"id": a["id"], "value_name": a.get("value_name")}
@@ -265,6 +264,37 @@ def _criar_item_akg(payload: dict, token: str) -> dict:
             if r2.status_code in (200, 201):
                 return {"status_code": r2.status_code, "body": r2.json()}
     return {"status_code": r.status_code, "body": body}
+
+
+def _verificar_akg(novo_id: str, original: dict, token: str) -> dict:
+    """Busca o item criado na AKG e compara campos essenciais com o original Shinsei."""
+    try:
+        r = _req.get(f"{ML_API}/items/{novo_id}", headers=_hdrs(token), timeout=15)
+        if r.status_code != 200:
+            return {"ok": False, "erro": f"GET {novo_id} retornou {r.status_code}"}
+        akg = r.json()
+        divergencias = []
+        if akg.get("category_id") != original.get("category_id"):
+            divergencias.append(f"category: {akg.get('category_id')} ≠ {original.get('category_id')}")
+        if abs((akg.get("price") or 0) - (original.get("price") or 0)) > 0.01:
+            divergencias.append(f"price: {akg.get('price')} ≠ {original.get('price')}")
+        akg_fotos = len(akg.get("pictures") or [])
+        ori_fotos = len(original.get("pictures") or [])
+        if akg_fotos != ori_fotos:
+            divergencias.append(f"fotos: {akg_fotos} ≠ {ori_fotos}")
+        akg_sku = akg.get("seller_custom_field") or ""
+        ori_sku = original.get("seller_custom_field") or ""
+        if ori_sku and akg_sku != ori_sku:
+            divergencias.append(f"sku: '{akg_sku}' ≠ '{ori_sku}'")
+        return {
+            "ok": True,
+            "status": akg.get("status"),
+            "divergencias": divergencias,
+            "fotos_akg": akg_fotos,
+            "sku_akg": akg_sku,
+        }
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
 
 
 def _criar_description_akg(item_id: str, texto: str, token: str):
@@ -441,6 +471,10 @@ def copiar_anuncio(body: dict):
                 # 5. Cria descrição
                 if novo_id and descricao:
                     _criar_description_akg(novo_id, descricao, tok_a)
+                # 6. Verifica item criado na AKG vs original Shinsei
+                if novo_id:
+                    verificacao = _verificar_akg(novo_id, item, tok_a)
+                    entry["verificacao"] = verificacao
             else:
                 entry["erro"] = resp["body"].get("message") or str(resp["body"])
                 # Detalhes de campo inválido
