@@ -186,8 +186,7 @@ def _build_payload(item: dict) -> dict:
     # BRAND é obrigatório em MLB264861 — NÃO remover
     # HAZMAT_TRANSPORTABILITY e PRODUCT_FEATURES são "not modifiable" — o ML ignora, mas aceita
     SKIP_ATTR_IDS = {
-        "SELLER_SKU", "ITEM_CONDITION", "ALPHANUMERIC_MODEL",
-        "GTIN", "SELLER_ID", "CATALOG_LISTING",
+        "SELLER_SKU", "ITEM_CONDITION", "SELLER_ID", "CATALOG_LISTING",
     }
     atributos = [
         {"id": a["id"], "value_name": a.get("value_name")}
