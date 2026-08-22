@@ -182,9 +182,11 @@ def _build_payload(item: dict) -> dict:
         }
         variacoes.append(var)
 
-    # Atributos — remove campos somente-leitura que ML rejeita na criação
+    # Atributos — remove apenas campos que o ML rejeita na criação (somente-leitura do sistema)
+    # BRAND é obrigatório em MLB264861 — NÃO remover
+    # HAZMAT_TRANSPORTABILITY e PRODUCT_FEATURES são "not modifiable" — o ML ignora, mas aceita
     SKIP_ATTR_IDS = {
-        "SELLER_SKU", "ITEM_CONDITION", "BRAND", "ALPHANUMERIC_MODEL",
+        "SELLER_SKU", "ITEM_CONDITION", "ALPHANUMERIC_MODEL",
         "GTIN", "SELLER_ID", "CATALOG_LISTING",
     }
     atributos = [
