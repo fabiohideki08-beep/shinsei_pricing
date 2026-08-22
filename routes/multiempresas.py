@@ -315,6 +315,10 @@ def _comparar(s: dict, a: dict) -> list[str]:
     # ── Fiscal ────────────────────────────────────────────
     for campo in ("ncm", "origem", "cst_ipi", "csosn", "cst", "cest"):
         sv, av = s_bas.get(campo, ""), a_bas.get(campo, "")
+        # Normaliza NCM: remove pontos e hífens para comparar apenas dígitos
+        if campo == "ncm":
+            sv = sv.replace(".", "").replace("-", "")
+            av = av.replace(".", "").replace("-", "")
         if sv and av and sv != av:
             divs.append(f"{campo}: SHN={sv!r} | AKG={av!r}")
     for campo in ("ipi_aliquota", "pis_aliquota", "cofins_aliquota"):
@@ -606,7 +610,7 @@ def resumo_divergencias():
     def _cat(div: str) -> str:
         """Normaliza o texto de divergência para uma categoria canônica."""
         d = div.lower()
-        if "imagem" in d:          return "imagens"
+        if "imag" in d:            return "imagens"      # imagem / imagens / imagens_qtd / imagens_faltando
         if "estoque" in d:         return "estoque"
         if "variacao" in d or "variação" in d or "preco_variacao" in d: return "variacoes"
         if "composicao" in d or "composição" in d: return "composicao"
