@@ -296,6 +296,35 @@ def _load_copy_map() -> dict[str, str]:
     return {}
 
 
+def _verificar_status_akg(akg_id: str, token: str) -> str:
+    """Retorna o status real do item na AKG via API. Nunca lança exceção."""
+    try:
+        r = _req.get(f"{ML_API}/items/{akg_id}",
+                     params={"attributes": "id,status"},
+                     headers=_hdrs(token), timeout=10)
+        if r.status_code == 404:
+            return "not_found"
+        if r.status_code == 200:
+            return r.json().get("status", "unknown")
+        return f"http_{r.status_code}"
+    except Exception as e:
+        logger.warning("_verificar_status_akg(%s): %s", akg_id, e)
+        return "error"
+
+
+def _remove_copy_map_entry(shinsei_id: str):
+    """Remove uma entrada do copy_map em disco (item fechado que será recriado)."""
+    try:
+        m = _load_copy_map()
+        if shinsei_id in m:
+            del m[shinsei_id]
+            _AKG_COPY_MAP_FILE.write_text(
+                json.dumps(m, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+    except Exception as e:
+        logger.warning("_remove_copy_map_entry(%s): %s", shinsei_id, e)
+
+
 def _save_copy_map_entry(shinsei_id: str, akg_id: str):
     """Persiste uma entrada no mapa de cópia."""
     try:
@@ -560,17 +589,14 @@ def copiar_anuncio(body: dict):
 
     resultados = []
 
-    # ── Deduplicação: carrega mapa {id_shinsei: id_akg} do disco ────────────
-    # Abordagem primária: mapa exato por ID Shinsei, persistido após cada criação.
-    # Não depende de API — O(1) por item, nunca falha por timeout.
+    # ── Copy map: {id_shinsei: id_akg} persistido em disco ──────────────────
     copy_map: dict[str, str] = _load_copy_map()
     logger.info("Dedup AKG: %d mapeamentos carregados do copy_map", len(copy_map))
 
-    # Expande famílias MLBU e MLBs com family_id para lista de filhos
+    # ── Expande famílias MLBU para lista de filhos individuais ───────────────
     ids_expandidos: list[str] = []
     for raw in ids_raw:
         eid = _extract_id(raw)
-        # MLBU direto ou MLB filho de família Omni → expande
         try:
             filhos = _get_family_items(eid, tok_s)
             if len(filhos) > 1 or (len(filhos) == 1 and filhos[0] != eid):
@@ -578,8 +604,7 @@ def copiar_anuncio(body: dict):
                 continue
         except Exception:
             pass
-        if True:
-            ids_expandidos.append(eid)
+        ids_expandidos.append(eid)
 
     for raw in ids_expandidos:
         mlb = _extract_id(raw)
@@ -591,39 +616,54 @@ def copiar_anuncio(body: dict):
             entry["titulo"] = item.get("title", "")
             entry["sku_raiz"] = item.get("seller_custom_field") or ""
 
-            # 2. Deduplicação: verifica mapa {id_shinsei: id_akg} salvo em disco
-            if mlb in copy_map:
-                entry["ok"] = False
-                entry["pulado"] = True
-                entry["id_akg"] = copy_map[mlb]
-                entry["erro"] = f"Já copiado para AKG ({copy_map[mlb]})"
-                resultados.append(entry)
-                continue
+            # ── PRÉ-CONFERÊNCIA: verifica se já existe na AKG e está ativo ──
+            akg_id_existente = copy_map.get(mlb)
+            if akg_id_existente:
+                status_akg = _verificar_status_akg(akg_id_existente, tok_a)
+                if status_akg in ("active", "paused"):
+                    # Ativo/pausado → pula, já OK
+                    entry["pulado"] = True
+                    entry["id_akg"] = akg_id_existente
+                    entry["status_akg_pre"] = status_akg
+                    entry["erro"] = f"Ja existe na AKG e esta {status_akg} ({akg_id_existente})"
+                    resultados.append(entry)
+                    continue
+                else:
+                    # closed/under_review → remove do map, vai recriar
+                    logger.info("AKG %s esta %s — removendo do copy_map e recriando", akg_id_existente, status_akg)
+                    entry["akg_anterior"] = akg_id_existente
+                    entry["status_akg_pre"] = status_akg
+                    copy_map.pop(mlb, None)
+                    _remove_copy_map_entry(mlb)
 
-            # 3. Busca descrição
+            # 2. Busca descrição
             descricao = _get_description(mlb, tok_s)
             time.sleep(0.3)
 
-            # 4. Monta payload
+            # 3. Monta payload e cria na AKG
             payload = _build_payload(item)
-
-            # 5. Cria na AKG
             resp = _criar_item_akg(payload, tok_a)
             entry["status_http"] = resp["status_code"]
 
             if resp["status_code"] in (200, 201):
                 novo_id = resp["body"].get("id")
-                entry["ok"] = True
                 entry["id_akg"] = novo_id
-                entry["msg"] = f"Criado: {novo_id}"
-                # 6. Cria descrição
+
+                # 4. Descrição
                 if novo_id and descricao:
                     _criar_description_akg(novo_id, descricao, tok_a)
-                # 7a. Persiste mapeamento Shinsei→AKG para dedup futura
-                if novo_id:
+
+                # ── PÓS-CONFERÊNCIA: confirma que o novo item está ativo ────
+                time.sleep(1.5)  # aguarda ML processar
+                status_pos = _verificar_status_akg(novo_id, tok_a) if novo_id else "unknown"
+                entry["status_akg_pos"] = status_pos
+
+                if status_pos in ("active", "paused", "under_review"):
+                    entry["ok"] = True
+                    entry["msg"] = f"Criado e {status_pos}: {novo_id}"
+                    # Persiste no copy_map e catálogo apenas se ativo/under_review
                     copy_map[mlb] = novo_id
                     _save_copy_map_entry(mlb, novo_id)
-                    # 7a2. Registra no catálogo central (genérico, multi-campanha)
                     try:
                         from routes.controle_anuncios import register_copy as _reg
                         campanha_slug = (item.get("family_name") or item.get("category_id") or "sem_campanha")
@@ -641,13 +681,15 @@ def copiar_anuncio(body: dict):
                         )
                     except Exception as _re:
                         logger.warning("register_copy falhou: %s", _re)
-                # 7b. Verifica item criado na AKG vs original Shinsei
-                if novo_id:
-                    verificacao = _verificar_akg(novo_id, item, tok_a)
-                    entry["verificacao"] = verificacao
+                    # Verificação detalhada de campos
+                    entry["verificacao"] = _verificar_akg(novo_id, item, tok_a)
+                else:
+                    # Criado mas imediatamente fechado pelo ML
+                    entry["ok"] = False
+                    entry["erro"] = f"Criado ({novo_id}) mas ML retornou status={status_pos} — nao salvo no copy_map"
+                    logger.warning("Item %s criado mas status=%s — descartado do copy_map", novo_id, status_pos)
             else:
                 entry["erro"] = resp["body"].get("message") or str(resp["body"])
-                # Detalhes de campo inválido
                 causes = resp["body"].get("cause") or []
                 if causes:
                     entry["causes"] = [c.get("message") or str(c) for c in causes[:5]]

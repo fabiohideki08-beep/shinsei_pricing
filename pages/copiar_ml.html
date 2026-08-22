@@ -445,24 +445,26 @@ $('btn-copiar').addEventListener('click', async () => {
             ? `<a href="https://api.mercadolibre.com/items/${res.id_akg}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${res.id_akg}</a>`
             : '—'}</td>
           <td>
-            ${res.ok
-              ? (() => {
-                  const v = res.verificacao || {};
-                  const divs = v.divergencias && v.divergencias.length
-                    ? `<div style="color:var(--yellow);font-size:11px;margin-top:4px;">⚠ ${v.divergencias.join(' | ')}</div>`
-                    : '';
-                  const statusChip = v.status
-                    ? `<span style="font-size:10px;color:var(--muted);margin-left:6px;">${v.status}</span>`
-                    : '';
-                  const fotosBadge = v.fotos_akg !== undefined
-                    ? `<span style="font-size:10px;color:var(--muted);margin-left:4px;">${v.fotos_akg} foto(s)</span>`
-                    : '';
-                  return `<span class="chip-ok">✓ Criado</span>${statusChip}${fotosBadge}${divs}`;
-                })()
-              : res.pulado
-              ? `<span class="chip-skip">⏭ Já existe</span><div class="cell-erro" style="color:var(--blue)">${res.erro || ''}</div>`
-              : `<span class="chip-err">✗ Erro</span><div class="cell-erro">${res.erro || ''}</div>${causas ? `<div class="cell-causes">${causas}</div>` : ''}`
-            }
+            ${(() => {
+              const preStatus = res.status_akg_pre ? `<span style="font-size:10px;color:var(--muted);margin-left:4px;">pré:${res.status_akg_pre}</span>` : '';
+              const posStatus = res.status_akg_pos ? `<span style="font-size:10px;color:${res.status_akg_pos==='active'?'var(--green)':res.status_akg_pos==='under_review'?'var(--yellow)':'var(--red)'};margin-left:4px;">pós:${res.status_akg_pos}</span>` : '';
+              const anterior = res.akg_anterior ? `<div style="font-size:10px;color:var(--yellow);margin-top:2px;">↺ recriado (anterior: ${res.akg_anterior})</div>` : '';
+              if (res.ok) {
+                const v = res.verificacao || {};
+                const divs = v.divergencias && v.divergencias.length
+                  ? `<div style="color:var(--yellow);font-size:11px;margin-top:4px;">⚠ ${v.divergencias.join(' | ')}</div>`
+                  : '';
+                const fotosBadge = v.fotos_akg !== undefined
+                  ? `<span style="font-size:10px;color:var(--muted);margin-left:4px;">${v.fotos_akg} foto(s)</span>`
+                  : '';
+                return `<span class="chip-ok">✓ Criado</span>${posStatus}${fotosBadge}${anterior}${divs}`;
+              }
+              if (res.pulado) {
+                return `<span class="chip-skip">⏭ Já existe</span>${preStatus}<div class="cell-erro" style="color:var(--blue)">${res.id_akg || ''}</div>`;
+              }
+              // Erro: mostra status pré se havia tentativa anterior
+              return `<span class="chip-err">✗ Erro</span>${preStatus}${posStatus}<div class="cell-erro">${res.erro || ''}</div>${anterior}${causas ? `<div class="cell-causes">${causas}</div>` : ''}`;
+            })()}
           </td>
         </tr>`;
     }
