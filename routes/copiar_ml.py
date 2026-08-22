@@ -149,8 +149,9 @@ def _get_family_items(family_ref: str, token: str) -> list[str]:
                 return _get_family_items_by_family_id(fid, seller_id, token)
         return [family_ref]  # fallback: trata como item único
 
-    # Recebeu MLBU diretamente → usa como family_id
-    return _get_family_items_by_family_id(family_ref, seller_id, token)
+    # Recebeu MLBU diretamente → extrai o número (ML espera family_id sem prefixo "MLBU")
+    numeric_id = re.sub(r"^MLBU", "", family_ref, flags=re.IGNORECASE)
+    return _get_family_items_by_family_id(numeric_id, seller_id, token)
 
 
 def _get_description(item_id: str, token: str) -> str:
