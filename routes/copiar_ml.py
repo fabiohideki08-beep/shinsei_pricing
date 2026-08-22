@@ -54,10 +54,10 @@ def _hdrs(token: str) -> dict:
 
 # ── Lógica de cópia ───────────────────────────────────────────────────────────
 
-def _extract_mlb_id(texto: str) -> str:
-    """Aceita MLB123456, URL completa ou só o número."""
+def _extract_id(texto: str) -> str:
+    """Aceita MLBU/MLB + número, URL completa ou só o número."""
     texto = texto.strip()
-    m = re.search(r"MLB\d+", texto.upper())
+    m = re.search(r"MLB[U]?\d+", texto.upper())
     if m:
         return m.group(0)
     m = re.search(r"\d{10,}", texto)
@@ -65,11 +65,39 @@ def _extract_mlb_id(texto: str) -> str:
         return f"MLB{m.group(0)}"
     return texto.upper()
 
+# Mantém alias para compatibilidade interna
+def _extract_mlb_id(texto: str) -> str:
+    return _extract_id(texto)
+
 
 def _get_item(item_id: str, token: str) -> dict:
     r = _req.get(f"{ML_API}/items/{item_id}", headers=_hdrs(token), timeout=20)
     r.raise_for_status()
     return r.json()
+
+
+def _get_family_items(mlbu_id: str, token: str) -> list[str]:
+    """Retorna lista de MLB IDs de todos os filhos de uma família MLBU."""
+    r = _req.get(f"{ML_API}/items/{mlbu_id}/children",
+                 headers=_hdrs(token), timeout=20)
+    if r.status_code == 200:
+        data = r.json()
+        # Resposta pode ser lista direta ou {"children": [...]}
+        children = data if isinstance(data, list) else data.get("children", [])
+        return [c.get("id") or c for c in children if c]
+    # Fallback: busca via /items?ids=MLBU... que retorna family com item_relations
+    r2 = _req.get(f"{ML_API}/items", params={"ids": mlbu_id},
+                  headers=_hdrs(token), timeout=20)
+    if r2.status_code == 200:
+        body = r2.json()
+        items = body if isinstance(body, list) else [body]
+        for it in items:
+            b = it.get("body") or it
+            relations = b.get("item_relations") or []
+            ids = [rel.get("id") for rel in relations if rel.get("id")]
+            if ids:
+                return ids
+    return []
 
 
 def _get_description(item_id: str, token: str) -> str:
@@ -166,37 +194,83 @@ def _criar_description_akg(item_id: str, texto: str, token: str):
 
 # ── Endpoint de preview ───────────────────────────────────────────────────────
 
-@router.get("/copiar-ml/preview/{item_id}")
+@router.get("/copiar-ml/preview/{item_id:path}")
 def preview_anuncio(item_id: str):
-    """Busca os dados do anúncio Shinsei para exibir preview antes de copiar."""
-    mlb = _extract_mlb_id(item_id)
+    """
+    Busca dados do anúncio Shinsei para preview.
+    Aceita MLB ou MLBU (família Omni). Para MLBU, enumera todos os filhos.
+    """
+    raw_id = _extract_id(item_id)
     try:
         tok_s = _token_shinsei()
     except Exception as e:
         return {"ok": False, "erro": f"Token Shinsei indisponível: {e}"}
+
+    # ── Família MLBU: enumera filhos ──────────────────────────────────────────
+    if raw_id.startswith("MLBU"):
+        try:
+            filhos = _get_family_items(raw_id, tok_s)
+        except Exception as e:
+            return {"ok": False, "erro": f"Erro ao buscar família {raw_id}: {e}"}
+        if not filhos:
+            return {"ok": False, "erro": f"Família {raw_id} não retornou filhos. Tente um MLB filho diretamente."}
+
+        # Preview do primeiro filho para pegar título/categoria/preço
+        try:
+            primeiro = _get_item(filhos[0], tok_s)
+        except Exception as e:
+            return {"ok": False, "erro": f"Erro ao buscar filho {filhos[0]}: {e}"}
+
+        return {
+            "ok":           True,
+            "tipo":         "familia",
+            "item_id":      raw_id,
+            "filhos":       filhos,
+            "total_filhos": len(filhos),
+            "titulo_base":  primeiro.get("title", "").rsplit(" - ", 1)[0],
+            "categoria":    primeiro.get("category_id"),
+            "preco":        primeiro.get("price"),
+            "tipo_anuncio": primeiro.get("listing_type_id"),
+            "condicao":     primeiro.get("condition"),
+            "status":       primeiro.get("status"),
+        }
+
+    # ── Item individual MLB ───────────────────────────────────────────────────
     try:
-        item = _get_item(mlb, tok_s)
+        item = _get_item(raw_id, tok_s)
     except Exception as e:
-        return {"ok": False, "erro": f"Erro ao buscar {mlb}: {e}"}
+        return {"ok": False, "erro": f"Erro ao buscar {raw_id}: {e}"}
+
+    # Se item não tem variações, verifica se pertence a uma família
+    variacoes = item.get("variations") or []
+    familia_hint = None
+    if not variacoes:
+        relations = item.get("item_relations") or []
+        for rel in relations:
+            if rel.get("id", "").startswith("MLBU"):
+                familia_hint = rel["id"]
+                break
 
     return {
-        "ok": True,
-        "item_id":       mlb,
-        "titulo":        item.get("title"),
-        "categoria":     item.get("category_id"),
-        "preco":         item.get("price"),
-        "tipo_anuncio":  item.get("listing_type_id"),
-        "condicao":      item.get("condition"),
-        "status":        item.get("status"),
-        "quantidade":    item.get("available_quantity"),
-        "fotos":         len(item.get("pictures") or []),
-        "variacoes":     len(item.get("variations") or []),
-        "atributos":     len(item.get("attributes") or []),
-        "sku":           item.get("seller_custom_field") or "(sem SKU raiz)",
+        "ok":           True,
+        "tipo":         "item",
+        "item_id":      raw_id,
+        "titulo":       item.get("title"),
+        "categoria":    item.get("category_id"),
+        "preco":        item.get("price"),
+        "tipo_anuncio": item.get("listing_type_id"),
+        "condicao":     item.get("condition"),
+        "status":       item.get("status"),
+        "quantidade":   item.get("available_quantity"),
+        "fotos":        len(item.get("pictures") or []),
+        "variacoes":    len(variacoes),
+        "atributos":    len(item.get("attributes") or []),
+        "sku":          item.get("seller_custom_field") or "(sem SKU raiz)",
         "skus_variacoes": [
-            v.get("seller_custom_field") for v in (item.get("variations") or [])
+            v.get("seller_custom_field") for v in variacoes
             if v.get("seller_custom_field")
         ][:10],
+        "familia_hint": familia_hint,  # MLBU pai, se detectado
     }
 
 
@@ -220,8 +294,21 @@ def copiar_anuncio(body: dict):
 
     resultados = []
 
+    # Expande famílias MLBU para lista de MLBs filhos
+    ids_expandidos: list[str] = []
     for raw in ids_raw:
-        mlb = _extract_mlb_id(raw)
+        eid = _extract_id(raw)
+        if eid.startswith("MLBU"):
+            try:
+                filhos = _get_family_items(eid, tok_s)
+                ids_expandidos.extend(filhos)
+            except Exception as e:
+                resultados.append({"id_shinsei": eid, "ok": False, "erro": f"Família: {e}"})
+        else:
+            ids_expandidos.append(eid)
+
+    for raw in ids_expandidos:
+        mlb = _extract_id(raw)
         entry: dict = {"id_shinsei": mlb, "ok": False}
 
         try:

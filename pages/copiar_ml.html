@@ -235,7 +235,7 @@
     <div class="card-title">IDs dos anúncios Shinsei</div>
     <textarea id="ids-input"
       placeholder="Cole os IDs ou URLs, um por linha:&#10;MLB3843109174&#10;MLB4127865432&#10;https://www.mercadolivre.com.br/p/MLB123456789"></textarea>
-    <div class="hint">Aceita: ID (MLB...), URL completa do ML ou só o número. Um por linha.</div>
+    <div class="hint">Aceita: MLB (item individual), MLBU (família Omni — copia todos os filhos), URL completa ou só o número. Um por linha.</div>
     <div class="btn-row">
       <button class="btn-preview" id="btn-preview">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -329,25 +329,53 @@ $('btn-preview').addEventListener('click', async () => {
 
       if (d.ok) {
         algumOk = true;
-        const skusHtml = d.skus_variacoes.length
-          ? `<div class="preview-skus">SKUs vars: ${d.skus_variacoes.join(', ')}</div>`
-          : (d.sku_raiz ? `<div class="preview-skus">SKU: ${d.sku_raiz}</div>` : '');
 
-        grid.innerHTML += `
-          <div class="preview-card ok">
-            <div class="preview-id">${d.item_id}</div>
-            ${badgeStatus(d.status)}
-            <div class="preview-title">${d.titulo || '—'}</div>
-            <div class="preview-row"><span>Categoria</span><strong>${d.categoria}</strong></div>
-            <div class="preview-row"><span>Preço</span><strong>R$ ${(d.preco||0).toFixed(2)}</strong></div>
-            <div class="preview-row"><span>Tipo</span><strong>${d.tipo_anuncio}</strong></div>
-            <div class="preview-row"><span>Condição</span><strong>${d.condicao}</strong></div>
-            <div class="preview-row"><span>Estoque</span><strong>${d.quantidade}</strong></div>
-            <div class="preview-row"><span>Fotos</span><strong>${d.fotos}</strong></div>
-            <div class="preview-row"><span>Variações</span><strong>${d.variacoes}</strong></div>
-            <div class="preview-row"><span>Atributos</span><strong>${d.atributos}</strong></div>
-            ${skusHtml}
-          </div>`;
+        if (d.tipo === 'familia') {
+          // Família MLBU: mostra resumo e lista de filhos
+          grid.innerHTML += `
+            <div class="preview-card ok" style="grid-column: 1/-1;">
+              <div class="preview-id">${d.item_id} <span style="color:var(--blue);font-size:11px;">FAMÍLIA OMNI</span></div>
+              ${badgeStatus(d.status)}
+              <div class="preview-title">${d.titulo_base || '—'}</div>
+              <div class="preview-row"><span>Categoria</span><strong>${d.categoria}</strong></div>
+              <div class="preview-row"><span>Preço base</span><strong>R$ ${(d.preco||0).toFixed(2)}</strong></div>
+              <div class="preview-row"><span>Tipo</span><strong>${d.tipo_anuncio}</strong></div>
+              <div class="preview-row"><span>Total filhos (cores/tamanhos)</span><strong>${d.total_filhos}</strong></div>
+              <div class="preview-skus" style="margin-top:8px;font-size:11px;color:var(--muted);">
+                Filhos: ${d.filhos.slice(0,10).join(', ')}${d.filhos.length > 10 ? ` ... +${d.filhos.length-10}` : ''}
+              </div>
+              <div style="margin-top:8px;font-size:11px;color:var(--yellow);">
+                ⚠ Ao copiar, serão criados ${d.total_filhos} anúncios individuais na AKG.
+              </div>
+            </div>`;
+        } else {
+          // Item individual MLB
+          const hintHtml = d.familia_hint
+            ? `<div style="margin-top:6px;font-size:11px;color:var(--yellow);">
+                ⚠ Este item pertence à família <strong>${d.familia_hint}</strong>. Cole o MLBU para copiar todas as variações.
+               </div>`
+            : '';
+          const skusHtml = (d.skus_variacoes||[]).length
+            ? `<div class="preview-skus">SKUs vars: ${d.skus_variacoes.join(', ')}</div>`
+            : (d.sku ? `<div class="preview-skus">SKU: ${d.sku}</div>` : '');
+
+          grid.innerHTML += `
+            <div class="preview-card ok">
+              <div class="preview-id">${d.item_id}</div>
+              ${badgeStatus(d.status)}
+              <div class="preview-title">${d.titulo || '—'}</div>
+              <div class="preview-row"><span>Categoria</span><strong>${d.categoria}</strong></div>
+              <div class="preview-row"><span>Preço</span><strong>R$ ${(d.preco||0).toFixed(2)}</strong></div>
+              <div class="preview-row"><span>Tipo</span><strong>${d.tipo_anuncio}</strong></div>
+              <div class="preview-row"><span>Condição</span><strong>${d.condicao}</strong></div>
+              <div class="preview-row"><span>Estoque</span><strong>${d.quantidade}</strong></div>
+              <div class="preview-row"><span>Fotos</span><strong>${d.fotos}</strong></div>
+              <div class="preview-row"><span>Variações</span><strong>${d.variacoes}</strong></div>
+              <div class="preview-row"><span>Atributos</span><strong>${d.atributos}</strong></div>
+              ${skusHtml}
+              ${hintHtml}
+            </div>`;
+        } // fim else item individual
       } else {
         grid.innerHTML += `
           <div class="preview-card error">
