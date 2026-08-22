@@ -199,8 +199,9 @@ def _build_payload(item: dict) -> dict:
     if listing_type not in ("gold_special", "gold_pro", "bronze", "free"):
         listing_type = "gold_special"
 
+    # Para anúncios omni (family_name), title é adicionado depois se não houver family_name
+    _title = item.get("title", "")
     payload: dict[str, Any] = {
-        "title":               item.get("title", ""),
         "category_id":         item.get("category_id", ""),
         "price":               item.get("price"),
         "currency_id":         item.get("currency_id", "BRL"),
@@ -216,11 +217,12 @@ def _build_payload(item: dict) -> dict:
     }
 
     # family_name é obrigatório para categorias Omni (ex: colorações)
-    # Quando presente, o título de cada item DEVE ser o family_name (sem sufixo de cor)
+    # Quando presente, NÃO enviar title — o ML usa family_name como título automaticamente
     family_name = item.get("family_name")
     if family_name:
         payload["family_name"] = family_name
-        payload["title"] = family_name  # ML rejeita título com cor específica em anúncios omni
+    else:
+        payload["title"] = _title
 
     if variacoes:
         payload["variations"] = variacoes
