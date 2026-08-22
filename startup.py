@@ -174,7 +174,7 @@ if ml_client_id and ml_client_secret:
 elif not ml_config_path.exists():
     pr("INFO: ML_CLIENT_ID não definido — ml_config.json não criado")
 
-if ml_access_token and ml_refresh_token:
+if ml_refresh_token:
     import urllib.request as _urllib
     import urllib.parse as _urlparse
 
@@ -251,7 +251,7 @@ ml_akg_refresh_token = os.getenv("ML_AKG_REFRESH_TOKEN", "")
 ml_akg_user_id       = os.getenv("ML_AKG_USER_ID", "").strip()
 ml_akg_tokens_path   = DATA_DIR / "ml_tokens_akg.json"
 
-if ml_akg_access_token and ml_akg_refresh_token:
+if ml_akg_refresh_token:
     import urllib.request as _urllib2
     import urllib.parse as _urlparse2
 
