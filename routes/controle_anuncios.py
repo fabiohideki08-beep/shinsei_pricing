@@ -105,9 +105,10 @@ def _token_akg() -> str:
     import importlib, sys
     routes_ml = sys.modules.get("routes.mercado_livre") or importlib.import_module("routes.mercado_livre")
     svc = routes_ml._get_akg_oauth()
-    tok = svc.get("access_token") or svc.get("token")
+    result = svc.ler_tokens()
+    tok = (result.get("data") or {}).get("access_token") or ""
     if not tok:
-        raise RuntimeError("Token AKG indisponível")
+        raise RuntimeError("Token AKG indisponível — faça login em /ml/login2")
     return tok
 
 
