@@ -316,33 +316,54 @@ def _fix_sku_bg():
         _fix_sku_state["total"] = total
         logger.info("fix-sku: %d itens AKG sem SKU", total)
 
-        cor_re   = re.compile(r"Selecione A Cor\s+([^\s]+)", re.IGNORECASE)
-        vol_re   = re.compile(r"\b(\d+)\s*[Vv]olumes?\b")
-        # Linhas conhecidas para extrair do título
+        # ── Base de conhecimento do catálogo ──────────────────────────────────
+        # Linhas ordenadas por comprimento (mais específica primeiro) para match correto
         LINHAS = [
+            # Schwarzkopf Igora (sub-linhas antes da genérica)
             "Igora Royal Highlifts", "Igora Royal Absolutes", "Igora Royal Vibrance",
-            "Igora Royal ZERO AMM", "Igora Royal Fashion Lights", "Igora Royal",
+            "Igora Royal ZERO AMM", "Igora Royal Fashion Lights", "Igora Royal Color 10",
+            "Igora Royal",
+            # Alfaparf
             "Evolution Of The Color", "Color Wear", "Semi Di Lino",
-            "Skala", "Inoar", "Soul Power", "Eico", "Mystic Color",
+            # Outras marcas
+            "Skala", "Inoar", "Soul Power", "Eico", "Mystic Color", "Phytoervas",
         ]
+        # Código de cor: suporta nb/NI/i + número.número ou número-número (ex: 6-0, 7.3, 9.5-49, nb 5.03)
+        cor_re = re.compile(
+            r"\b(?:(?:nb|NI|i)\s*)?(\d+[.\-]\d+(?:[.\-]\d+)?)\b"
+        )
+        vol_re = re.compile(r"\b(\d+)\s*[Vv]olumes?\b")
         aplicados = 0
 
         def _pesquisa_bling(titulo: str) -> str:
+            t = titulo
             partes = []
-            # Linha
+
+            # 1. Linha/marca — match mais específico primeiro (ordem da lista)
+            linha_enc = ""
             for linha in LINHAS:
-                if linha.lower() in titulo.lower():
-                    partes.append(linha)
+                if linha.lower() in t.lower():
+                    linha_enc = linha
                     break
-            # Volumes (kit com Ox)
-            mv = vol_re.search(titulo)
+            if linha_enc:
+                partes.append(linha_enc)
+
+            # 2. Volumes de Ox (kit) — agnóstico à posição
+            mv = vol_re.search(t)
             if mv:
                 partes.append(f"{mv.group(1)} Volumes")
-            # Código de cor / variação
-            mc = cor_re.search(titulo)
-            if mc:
-                partes.append(mc.group(1))
-            return " ".join(partes) if partes else titulo[:60]
+
+            # 3. Código de cor — agnóstico à posição
+            # Preferência: código após "Selecione A Cor" se existir
+            mc_scor = re.search(r"Selecione A Cor\s+(\S+)", t, re.IGNORECASE)
+            if mc_scor:
+                partes.append(mc_scor.group(1))
+            else:
+                mc = cor_re.search(t)
+                if mc:
+                    partes.append(mc.group(1))
+
+            return " ".join(partes) if partes else t[:60]
 
         for i, item in enumerate(sem_sku):
             pesquisa = _pesquisa_bling(item["titulo"])
