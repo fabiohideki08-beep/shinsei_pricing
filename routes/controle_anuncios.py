@@ -588,3 +588,109 @@ async def api_refresh(bg: BackgroundTasks, campanha: str | None = Query(None)):
 @router.get("/refresh/status")
 async def api_refresh_status():
     return _refresh_state
+
+
+# ─── Scan duplicatas de variações ────────────────────────────────────────────
+
+_scan_dup_state: dict = {"rodando": False, "resultado": None, "erro": None}
+
+
+def _scan_duplicatas_bg():
+    global _scan_dup_state
+    try:
+        _scan_dup_state.update({"rodando": True, "resultado": None, "erro": None})
+        tok_a = _token_akg()
+        AKG_SELLER_ID = "3541432733"
+        headers = {"Authorization": f"Bearer {tok_a}"}
+
+        # Coleta todos os IDs AKG (active + paused)
+        ids_all: list[str] = []
+        for status in ("active", "paused"):
+            offset = 0
+            while True:
+                r = _req.get(
+                    f"{ML_API}/users/{AKG_SELLER_ID}/items/search",
+                    headers=headers,
+                    params={"status": status, "limit": 100, "offset": offset},
+                    timeout=20,
+                )
+                if r.status_code != 200:
+                    break
+                body = r.json()
+                ids = body.get("results") or []
+                if not ids:
+                    break
+                ids_all.extend(ids)
+                offset += len(ids)
+                if offset >= body.get("paging", {}).get("total", 0):
+                    break
+                time.sleep(0.3)
+
+        logger.info("scan-dup: %d itens AKG coletados", len(ids_all))
+
+        # Busca titulo + HAIR_TONE em batches de 20
+        from collections import defaultdict
+        titulo_items: dict[str, list[dict]] = defaultdict(list)
+
+        for i in range(0, len(ids_all), 20):
+            chunk = ids_all[i:i + 20]
+            r2 = _req.get(
+                f"{ML_API}/items",
+                headers=headers,
+                params={"ids": ",".join(chunk), "attributes": "id,title,attributes,status"},
+                timeout=20,
+            )
+            if r2.status_code != 200:
+                time.sleep(0.5)
+                continue
+            for entry in r2.json():
+                d = entry.get("body") or entry
+                iid = d.get("id", "")
+                titulo = d.get("title", "")
+                attrs = d.get("attributes") or []
+                hair = next((a.get("value_name", "") for a in attrs if a.get("id") == "HAIR_TONE"), "")
+                status_item = d.get("status", "")
+                titulo_items[titulo].append({"id": iid, "hair_tone": hair, "status": status_item})
+            time.sleep(0.2)
+
+        # Detecta títulos onde TODOS os itens têm o mesmo HAIR_TONE (e não está vazio)
+        problemas = []
+        for titulo, items in titulo_items.items():
+            if len(items) < 2:
+                continue
+            tones = [x["hair_tone"] for x in items if x["hair_tone"]]
+            if not tones:
+                continue
+            if len(set(tones)) == 1:  # todos iguais
+                problemas.append({
+                    "titulo": titulo,
+                    "hair_tone_repetido": tones[0],
+                    "total_variacoes": len(items),
+                    "ids": [x["id"] for x in items],
+                })
+
+        _scan_dup_state.update({
+            "rodando": False,
+            "resultado": {
+                "total_itens_escaneados": len(ids_all),
+                "familias_com_problema": len(problemas),
+                "problemas": sorted(problemas, key=lambda x: -x["total_variacoes"]),
+            },
+        })
+        logger.info("scan-dup: %d famílias com variações duplicadas encontradas", len(problemas))
+    except Exception as e:
+        logger.exception("Erro no scan-dup")
+        _scan_dup_state.update({"rodando": False, "erro": str(e)})
+
+
+@router.post("/scan-duplicatas")
+async def api_scan_duplicatas(bg: BackgroundTasks):
+    if _scan_dup_state.get("rodando"):
+        return JSONResponse({"ok": False, "msg": "Scan já em andamento"})
+    bg.add_task(_scan_duplicatas_bg)
+    return {"ok": True, "msg": "Scan de duplicatas iniciado em background"}
+
+
+@router.get("/scan-duplicatas/status")
+async def api_scan_duplicatas_status():
+    return _scan_dup_state
