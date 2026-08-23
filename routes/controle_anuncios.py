@@ -245,21 +245,58 @@ def _bling_token_shinsei() -> str:
     return tok
 
 
+# Variantes de nome por linha — mesma linha pode ser cadastrada de formas diferentes no Bling
+_VARIANTES_LINHA: dict[str, list[str]] = {
+    "igora royal highlifts": ["Igora Royal Highlifts", "Schwarzkopf Igora Royal Highlifts", "Igora Highlifts"],
+    "igora royal absolutes": ["Igora Royal Absolutes", "Schwarzkopf Igora Royal Absolutes", "Igora Absolutes"],
+    "igora royal vibrance":  ["Igora Royal Vibrance",  "Schwarzkopf Igora Royal Vibrance",  "Igora Vibrance"],
+    "igora royal zero amm":  ["Igora Royal ZERO AMM",  "Schwarzkopf Igora Royal ZERO AMM",  "Igora ZERO AMM"],
+    "igora royal fashion lights": ["Igora Royal Fashion Lights", "Schwarzkopf Fashion Lights", "Fashion Lights"],
+    "igora royal color 10":  ["Igora Royal Color 10",  "Schwarzkopf Color 10",  "Igora Color 10"],
+    "igora royal":           ["Igora Royal", "Schwarzkopf Igora Royal", "Igora"],
+    "evolution of the color": ["Evolution Of The Color", "Alfaparf Evolution Of The Color", "Evolution Color"],
+    "color wear":            ["Color Wear", "Alfaparf Color Wear"],
+    "semi di lino":          ["Semi Di Lino", "Alfaparf Semi Di Lino"],
+}
+
+
 def _bling_buscar_sku(token: str, pesquisa: str) -> str | None:
-    """Busca no Bling Shinsei por pesquisa e retorna o código (SKU) do primeiro resultado."""
-    r = _req.get(
-        "https://api.bling.com.br/Api/v3/produtos",
-        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
-        params={"pesquisa": pesquisa, "limite": 5},
-        timeout=15,
-    )
-    if r.status_code != 200:
+    """Busca no Bling Shinsei, tentando variantes de nome se necessário."""
+
+    def _uma_busca(q: str) -> str | None:
+        r = _req.get(
+            "https://api.bling.com.br/Api/v3/produtos",
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+            params={"pesquisa": q, "limite": 5},
+            timeout=15,
+        )
+        if r.status_code != 200:
+            return None
+        for item in r.json().get("data") or []:
+            codigo = item.get("codigo") or ""
+            if codigo:
+                return codigo
         return None
-    items = r.json().get("data") or []
-    for item in items:
-        codigo = item.get("codigo") or ""
-        if codigo:
-            return codigo
+
+    # Tentativa 1: busca original
+    sku = _uma_busca(pesquisa)
+    if sku:
+        return sku
+
+    # Tentativa 2: variantes da linha detectada
+    p_lower = pesquisa.lower()
+    for chave, variantes in _VARIANTES_LINHA.items():
+        if chave in p_lower:
+            # extrai o sufixo (volumes + cor) removendo a linha original
+            sufixo = p_lower.replace(chave, "").strip()
+            for variante in variantes[1:]:  # pula a primeira (já tentada)
+                q = f"{variante} {sufixo}".strip()
+                sku = _uma_busca(q)
+                if sku:
+                    logger.info("fix-sku: achou com variante '%s'", q)
+                    return sku
+            break
+
     return None
 
 
