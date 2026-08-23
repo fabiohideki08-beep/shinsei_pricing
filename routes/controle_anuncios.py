@@ -229,6 +229,127 @@ def _fix_gtin_bg(pendentes: dict[str, str]):
     logger.info("fix-gtin concluido: %d aplicados, %d ainda pendentes", aplicados, len(restantes))
 
 
+_fix_sku_state: dict = {"rodando": False, "progresso": 0, "total": 0, "aplicados": 0, "erro": None}
+
+AKG_FAMILY_ID = "4943179930257231"
+
+
+def _bling_token_shinsei() -> str:
+    """Retorna access_token Bling Shinsei via endpoint local."""
+    r = _req.get("https://shinsei-pricing.onrender.com/bling/raw-token", timeout=20)
+    r.raise_for_status()
+    data = r.json()
+    tok = data.get("access_token") or (data.get("data") or {}).get("access_token")
+    if not tok:
+        raise RuntimeError(f"Token Bling indisponivel: {data}")
+    return tok
+
+
+def _bling_buscar_sku(token: str, pesquisa: str) -> str | None:
+    """Busca no Bling Shinsei por pesquisa e retorna o código (SKU) do primeiro resultado."""
+    r = _req.get(
+        "https://api.bling.com.br/Api/v3/produtos",
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+        params={"pesquisa": pesquisa, "limite": 5},
+        timeout=15,
+    )
+    if r.status_code != 200:
+        return None
+    items = r.json().get("data") or []
+    for item in items:
+        codigo = item.get("codigo") or ""
+        if codigo:
+            return codigo
+    return None
+
+
+def _fix_sku_bg():
+    global _fix_sku_state
+    import re
+    try:
+        _fix_sku_state.update({"rodando": True, "progresso": 0, "aplicados": 0, "erro": None})
+        tok_a = _token_akg()
+        tok_b = _bling_token_shinsei()
+
+        # Busca todos os itens ativos da família AKG sem seller_custom_field
+        scroll_id = None
+        sem_sku: list[dict] = []
+        while True:
+            params: dict = {"family_id": AKG_FAMILY_ID, "status": "active", "limit": 100,
+                            "attributes": "id,title,seller_custom_field"}
+            if scroll_id:
+                params["scroll_id"] = scroll_id
+            r = _req.get(f"{ML_API}/items/search", headers={"Authorization": f"Bearer {tok_a}"}, params=params, timeout=20)
+            if r.status_code != 200:
+                break
+            body = r.json()
+            results = body.get("results") or []
+            scroll_id = body.get("scroll_id")
+            for item_id in results:
+                det_r = _req.get(f"{ML_API}/items/{item_id}",
+                                 headers={"Authorization": f"Bearer {tok_a}"},
+                                 params={"attributes": "id,title,seller_custom_field"},
+                                 timeout=10)
+                if det_r.status_code == 200:
+                    d = det_r.json()
+                    if not d.get("seller_custom_field"):
+                        sem_sku.append({"id": d["id"], "titulo": d.get("title", "")})
+            if not scroll_id or not results:
+                break
+
+        total = len(sem_sku)
+        _fix_sku_state["total"] = total
+        logger.info("fix-sku: %d itens AKG sem SKU", total)
+
+        cor_re = re.compile(r"Selecione A Cor\s+([^\s]+)", re.IGNORECASE)
+        aplicados = 0
+
+        for i, item in enumerate(sem_sku):
+            m = cor_re.search(item["titulo"])
+            pesquisa = f"Igora Royal {m.group(1)}" if m else item["titulo"][:60]
+            sku = _bling_buscar_sku(tok_b, pesquisa)
+            if not sku:
+                logger.warning("fix-sku: sem resultado Bling para '%s'", pesquisa)
+                _fix_sku_state["progresso"] = i + 1
+                time.sleep(0.3)
+                continue
+
+            put_r = _req.put(
+                f"{ML_API}/items/{item['id']}",
+                headers={"Authorization": f"Bearer {tok_a}", "Content-Type": "application/json"},
+                json={"seller_custom_field": sku},
+                timeout=15,
+            )
+            if put_r.status_code in (200, 201):
+                logger.info("fix-sku OK: %s -> SKU=%s", item["id"], sku)
+                aplicados += 1
+                _fix_sku_state["aplicados"] = aplicados
+            else:
+                logger.warning("fix-sku FAIL %s: %s %s", item["id"], put_r.status_code, put_r.text[:120])
+
+            _fix_sku_state["progresso"] = i + 1
+            time.sleep(0.4)
+
+        _fix_sku_state.update({"rodando": False, "progresso": total})
+        logger.info("fix-sku concluido: %d/%d aplicados", aplicados, total)
+    except Exception as e:
+        logger.exception("Erro no fix-sku")
+        _fix_sku_state.update({"rodando": False, "erro": str(e)})
+
+
+@router.post("/fix-sku")
+async def api_fix_sku(bg: BackgroundTasks):
+    if _fix_sku_state.get("rodando"):
+        return JSONResponse({"ok": False, "msg": "Fix SKU já em andamento"})
+    bg.add_task(_fix_sku_bg)
+    return {"ok": True, "msg": "Fix SKU iniciado em background"}
+
+
+@router.get("/fix-sku/status")
+async def api_fix_sku_status():
+    return _fix_sku_state
+
+
 @router.get("", response_class=HTMLResponse)
 async def page_controle():
     html = (PAGES_DIR / "controle_anuncios.html").read_text(encoding="utf-8")

@@ -135,6 +135,7 @@
   <div class="right">
     <button class="btn btn-outline" onclick="refresh()" id="btn-refresh">⟳ Atualizar Status</button>
     <button class="btn btn-outline" onclick="fixGtin()" id="btn-fix-gtin" style="display:none">🔧 Fix GTIN (<span id="gtin-count">0</span>)</button>
+    <button class="btn btn-outline" onclick="fixSku()" id="btn-fix-sku">🏷️ Fix SKU</button>
     <a href="/copiar-ml" class="btn btn-primary">+ Copiar Anúncios</a>
   </div>
 </header>
@@ -344,6 +345,42 @@ async function fixGtin() {
     btn.disabled = false;
     btn.innerHTML = '🔧 Fix GTIN (<span id="gtin-count">?</span>)';
     loadGtinPendente();
+  }
+}
+
+let _skuPollTimer = null;
+async function fixSku() {
+  const btn = document.getElementById('btn-fix-sku');
+  btn.disabled = true;
+  btn.textContent = '⏳ Iniciando Fix SKU…';
+  try {
+    const r = await fetch('/controle-anuncios/fix-sku', {method:'POST'}).then(r => r.json());
+    toast(r.msg || 'Fix SKU iniciado', r.ok ? 'green' : 'red');
+    if (r.ok) _pollSkuStatus();
+  } catch(e) {
+    toast('Erro no fix SKU: ' + e, 'red');
+    btn.disabled = false;
+    btn.textContent = '🏷️ Fix SKU';
+  }
+}
+
+async function _pollSkuStatus() {
+  try {
+    const s = await fetch('/controle-anuncios/fix-sku/status').then(r => r.json());
+    const btn = document.getElementById('btn-fix-sku');
+    if (s.rodando) {
+      btn.textContent = `⏳ Fix SKU ${s.progresso}/${s.total} (${s.aplicados} ok)`;
+      _skuPollTimer = setTimeout(_pollSkuStatus, 3000);
+    } else {
+      btn.disabled = false;
+      btn.textContent = '🏷️ Fix SKU';
+      if (s.erro) toast('Fix SKU erro: ' + s.erro, 'red');
+      else toast(`Fix SKU concluído: ${s.aplicados}/${s.total} aplicados`, 'green');
+    }
+  } catch(e) {
+    const btn = document.getElementById('btn-fix-sku');
+    btn.disabled = false;
+    btn.textContent = '🏷️ Fix SKU';
   }
 }
 
