@@ -254,9 +254,24 @@ _VARIANTES_LINHA: dict[str, list[str]] = {
     "igora royal fashion lights": ["Igora Royal Fashion Lights", "Schwarzkopf Fashion Lights", "Fashion Lights"],
     "igora royal color 10":  ["Igora Royal Color 10",  "Schwarzkopf Color 10",  "Igora Color 10"],
     "igora royal":           ["Igora Royal", "Schwarzkopf Igora Royal", "Igora"],
-    "evolution of the color": ["Evolution Of The Color", "Alfaparf Evolution Of The Color", "Evolution Color"],
-    "color wear":            ["Color Wear", "Alfaparf Color Wear"],
-    "semi di lino":          ["Semi Di Lino", "Alfaparf Semi Di Lino"],
+    "evolution of the color": [
+        "Evolution Of The Color",
+        "Alfaparf Evolution Of The Color",
+        "Alfaparf Milano Evolution Of The Color",
+        "Alfaparf Professional Evolution Of The Color",
+    ],
+    "color wear": [
+        "Color Wear",
+        "Alfaparf Color Wear",
+        "Alfaparf Milano Color Wear",
+        "Alfaparf Professional Color Wear",
+    ],
+    "semi di lino": [
+        "Semi Di Lino",
+        "Alfaparf Semi Di Lino",
+        "Alfaparf Milano Semi Di Lino",
+        "Alfaparf Professional Semi Di Lino",
+    ],
 }
 
 
@@ -283,18 +298,24 @@ def _bling_buscar_sku(token: str, pesquisa: str) -> str | None:
     if sku:
         return sku
 
-    # Tentativa 2: variantes da linha detectada
+    # Tentativa 2: variantes da linha (com diferentes prefixos de marca)
     p_lower = pesquisa.lower()
     for chave, variantes in _VARIANTES_LINHA.items():
         if chave in p_lower:
-            # extrai o sufixo (volumes + cor) removendo a linha original
-            sufixo = p_lower.replace(chave, "").strip()
+            sufixo = pesquisa[pesquisa.lower().find(chave) + len(chave):].strip()
             for variante in variantes[1:]:  # pula a primeira (já tentada)
                 q = f"{variante} {sufixo}".strip()
                 sku = _uma_busca(q)
                 if sku:
                     logger.info("fix-sku: achou com variante '%s'", q)
                     return sku
+            # Tentativa 3: só linha + sufixo (sem marca)
+            linha_sem_marca = variantes[0]  # nome canônico da linha
+            q_sem_marca = f"{linha_sem_marca} {sufixo}".strip() if sufixo else linha_sem_marca
+            sku = _uma_busca(q_sem_marca)
+            if sku:
+                logger.info("fix-sku: achou sem marca '%s'", q_sem_marca)
+                return sku
             break
 
     return None
