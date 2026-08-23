@@ -275,48 +275,145 @@ _VARIANTES_LINHA: dict[str, list[str]] = {
 }
 
 
-def _bling_buscar_sku(token: str, pesquisa: str) -> str | None:
-    """Busca no Bling Shinsei, tentando variantes de nome se necessário."""
+def _bling_construir_indice(token: str) -> dict[str, str]:
+    """
+    Pagina todo o catálogo Bling Shinsei e monta um índice:
+    chave = "linha_normalizada|codigo_cor|volumes" → valor = codigo (SKU)
 
-    def _uma_busca(q: str) -> str | None:
+    O endpoint /produtos?pesquisa= ignora o termo e retorna resultados fixos,
+    por isso varremos por paginação e fazemos o match localmente.
+    """
+    import re as _re
+
+    LINHAS_NORM = [
+        "igora royal highlifts", "igora royal absolutes", "igora royal vibrance",
+        "igora royal zero amm", "igora royal fashion lights", "igora royal color 10",
+        "igora royal",
+        "evolution of the color", "color wear", "semi di lino",
+        "skala", "inoar", "soul power", "eico", "mystic color", "phytoervas",
+    ]
+    cor_re_idx  = _re.compile(r"\b(?:(?:nb|NI|i)\s*)?(\d+[.\-]\d+(?:[.\-]\d+)?)\b")
+    vol_re_idx  = _re.compile(r"\b(\d+)\s*[Vv]olumes?\b")
+
+    TIPOS_COR = {"coloração", "coloracoes", "colorações", "tinta", "tintura", "coloracao permanente", "coloração permanente"}
+    TIPOS_OX   = {"ativador", "agua oxigenada", "água oxigenada", "emulsao ativadora", "emulsão ativadora", "oxidante", "ox creme"}
+
+    def _tipo_produto(nome: str) -> str:
+        n = nome.lower()
+        for t in TIPOS_OX:
+            if t in n:
+                return "ox"
+        # "ox" isolado (ex: "Ox 20 volumes") — apenas quando não for parte de outra palavra
+        import re as _re2
+        if _re2.search(r"\box\b", n):
+            return "ox"
+        for t in TIPOS_COR:
+            if t in n:
+                return "coloracao"
+        if "tonalizante" in n:
+            return "tonalizante"
+        if "kit" in n:
+            return "kit"
+        return ""
+
+    def _extrair_chave(nome: str) -> list[str]:
+        n = nome.lower()
+        linha = next((l for l in LINHAS_NORM if l in n), "")
+        tipo  = _tipo_produto(nome)
+        mv = vol_re_idx.search(nome)
+        vols = mv.group(1) if mv else ""
+        cors = cor_re_idx.findall(nome)
+        chaves = []
+        for cor in cors:
+            chave = f"{tipo}|{linha}|{cor}|{vols}"
+            chaves.append(chave)
+            # Também indexa sem tipo (fallback)
+            chaves.append(f"|{linha}|{cor}|{vols}")
+        return chaves
+
+    indice: dict[str, str] = {}
+    pagina = 1
+    while True:
         r = _req.get(
             "https://api.bling.com.br/Api/v3/produtos",
             headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
-            params={"pesquisa": q, "limite": 5},
-            timeout=15,
+            params={"limite": 100, "pagina": pagina},
+            timeout=20,
         )
         if r.status_code != 200:
-            return None
-        for item in r.json().get("data") or []:
-            codigo = item.get("codigo") or ""
-            if codigo:
-                return codigo
-        return None
-
-    # Tentativa 1: busca original
-    sku = _uma_busca(pesquisa)
-    if sku:
-        return sku
-
-    # Tentativa 2: variantes da linha (com diferentes prefixos de marca)
-    p_lower = pesquisa.lower()
-    for chave, variantes in _VARIANTES_LINHA.items():
-        if chave in p_lower:
-            sufixo = pesquisa[pesquisa.lower().find(chave) + len(chave):].strip()
-            for variante in variantes[1:]:  # pula a primeira (já tentada)
-                q = f"{variante} {sufixo}".strip()
-                sku = _uma_busca(q)
-                if sku:
-                    logger.info("fix-sku: achou com variante '%s'", q)
-                    return sku
-            # Tentativa 3: só linha + sufixo (sem marca)
-            linha_sem_marca = variantes[0]  # nome canônico da linha
-            q_sem_marca = f"{linha_sem_marca} {sufixo}".strip() if sufixo else linha_sem_marca
-            sku = _uma_busca(q_sem_marca)
-            if sku:
-                logger.info("fix-sku: achou sem marca '%s'", q_sem_marca)
-                return sku
             break
+        data = r.json().get("data") or []
+        if not data:
+            break
+        for prod in data:
+            codigo = prod.get("codigo") or ""
+            nome   = prod.get("nome") or ""
+            if not codigo:
+                continue
+            for chave in _extrair_chave(nome):
+                if chave not in indice:
+                    indice[chave] = codigo
+        pagina += 1
+        time.sleep(0.2)
+
+    logger.info("fix-sku: índice Bling construído com %d entradas", len(indice))
+    return indice
+
+
+def _bling_buscar_sku_indice(indice: dict[str, str], titulo: str) -> str | None:
+    """Busca o SKU no índice local usando tipo + linha + cor + volumes extraídos do título."""
+    import re as _re
+
+    LINHAS_NORM = [
+        "igora royal highlifts", "igora royal absolutes", "igora royal vibrance",
+        "igora royal zero amm", "igora royal fashion lights", "igora royal color 10",
+        "igora royal",
+        "evolution of the color", "color wear", "semi di lino",
+        "skala", "inoar", "soul power", "eico", "mystic color", "phytoervas",
+    ]
+    TIPOS_OX_S  = {"ativador", "agua oxigenada", "água oxigenada", "emulsao ativadora", "emulsão ativadora", "oxidante", "ox creme"}
+    TIPOS_COR_S = {"coloração", "coloracoes", "colorações", "tinta", "tintura", "coloracao permanente", "coloração permanente"}
+
+    cor_re_s = _re.compile(r"\b(?:(?:nb|NI|i)\s*)?(\d+[.\-]\d+(?:[.\-]\d+)?)\b")
+    vol_re_s = _re.compile(r"\b(\d+)\s*[Vv]olumes?\b")
+
+    t = titulo.lower()
+    linha = next((l for l in LINHAS_NORM if l in t), "")
+    mv = vol_re_s.search(titulo)
+    vols = mv.group(1) if mv else ""
+
+    # Determina tipo do produto
+    tipo = ""
+    for tok in TIPOS_OX_S:
+        if tok in t:
+            tipo = "ox"
+            break
+    if not tipo and _re.search(r"\box\b", t):
+        tipo = "ox"
+    if not tipo:
+        for tok in TIPOS_COR_S:
+            if tok in t:
+                tipo = "coloracao"
+                break
+    if not tipo and "tonalizante" in t:
+        tipo = "tonalizante"
+    if not tipo and "kit" in t:
+        tipo = "kit"
+
+    # Preferência: cor após "Selecione A Cor"
+    mc_sc = _re.search(r"selecione a cor\s+(\S+)", t, _re.IGNORECASE)
+    cors = [mc_sc.group(1)] if mc_sc else cor_re_s.findall(titulo)
+
+    for cor in cors:
+        # Busca mais específica primeiro: tipo|linha|cor|vols
+        for chave in [
+            f"{tipo}|{linha}|{cor}|{vols}",
+            f"{tipo}|{linha}|{cor}|",       # sem volume
+            f"|{linha}|{cor}|{vols}",       # fallback sem tipo (indexado no _extrair_chave)
+            f"|{linha}|{cor}|",             # fallback sem tipo nem volume
+        ]:
+            if chave in indice:
+                return indice[chave]
 
     return None
 
@@ -372,62 +469,16 @@ def _fix_sku_bg():
 
         total = len(sem_sku)
         _fix_sku_state["total"] = total
-        logger.info("fix-sku: %d itens AKG sem SKU", total)
+        logger.info("fix-sku: %d itens AKG sem SKU — construindo índice Bling...", total)
 
-        # ── Base de conhecimento do catálogo ──────────────────────────────────
-        # Linhas ordenadas por comprimento (mais específica primeiro) para match correto
-        LINHAS = [
-            # Schwarzkopf Igora (sub-linhas antes da genérica)
-            "Igora Royal Highlifts", "Igora Royal Absolutes", "Igora Royal Vibrance",
-            "Igora Royal ZERO AMM", "Igora Royal Fashion Lights", "Igora Royal Color 10",
-            "Igora Royal",
-            # Alfaparf
-            "Evolution Of The Color", "Color Wear", "Semi Di Lino",
-            # Outras marcas
-            "Skala", "Inoar", "Soul Power", "Eico", "Mystic Color", "Phytoervas",
-        ]
-        # Código de cor: suporta nb/NI/i + número.número ou número-número (ex: 6-0, 7.3, 9.5-49, nb 5.03)
-        cor_re = re.compile(
-            r"\b(?:(?:nb|NI|i)\s*)?(\d+[.\-]\d+(?:[.\-]\d+)?)\b"
-        )
-        vol_re = re.compile(r"\b(\d+)\s*[Vv]olumes?\b")
+        # Constrói índice local do catálogo Bling (evita endpoint pesquisa quebrado)
+        indice_bling = _bling_construir_indice(tok_b)
         aplicados = 0
 
-        def _pesquisa_bling(titulo: str) -> str:
-            t = titulo
-            partes = []
-
-            # 1. Linha/marca — match mais específico primeiro (ordem da lista)
-            linha_enc = ""
-            for linha in LINHAS:
-                if linha.lower() in t.lower():
-                    linha_enc = linha
-                    break
-            if linha_enc:
-                partes.append(linha_enc)
-
-            # 2. Volumes de Ox (kit) — agnóstico à posição
-            mv = vol_re.search(t)
-            if mv:
-                partes.append(f"{mv.group(1)} Volumes")
-
-            # 3. Código de cor — agnóstico à posição
-            # Preferência: código após "Selecione A Cor" se existir
-            mc_scor = re.search(r"Selecione A Cor\s+(\S+)", t, re.IGNORECASE)
-            if mc_scor:
-                partes.append(mc_scor.group(1))
-            else:
-                mc = cor_re.search(t)
-                if mc:
-                    partes.append(mc.group(1))
-
-            return " ".join(partes) if partes else t[:60]
-
         for i, item in enumerate(sem_sku):
-            pesquisa = _pesquisa_bling(item["titulo"])
-            sku = _bling_buscar_sku(tok_b, pesquisa)
+            sku = _bling_buscar_sku_indice(indice_bling, item["titulo"])
             if not sku:
-                logger.warning("fix-sku: sem resultado Bling para '%s'", pesquisa)
+                logger.warning("fix-sku: sem resultado Bling para '%s'", item["titulo"][:80])
                 _fix_sku_state["progresso"] = i + 1
                 time.sleep(0.3)
                 continue
