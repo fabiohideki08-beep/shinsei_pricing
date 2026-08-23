@@ -193,7 +193,7 @@ def _build_payload(item: dict) -> dict:
     atributos = [
         {"id": a["id"], "value_name": a.get("value_name")}
         for a in (item.get("attributes") or [])
-        if a.get("id") not in SKIP_ATTR_IDS and a.get("value_name")
+        if a.get("id") and a.get("id") not in SKIP_ATTR_IDS and a.get("value_name")
     ]
 
     # listing_type_id: garante tipo tradicional (gold_special ou gold_pro)
