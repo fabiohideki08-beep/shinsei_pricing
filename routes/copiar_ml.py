@@ -831,9 +831,36 @@ def _batch_copy_bg(ids: list[str]):
         _batch_copy_state.update({"rodando": False, "erro": str(e)})
         return
 
+    # Expande famílias MLBU: se um MLB filho pertence a uma família omni,
+    # busca todos os irmãos. Deduplica pelo family_id para não processar
+    # a mesma família duas vezes caso múltiplos filhos estejam na lista.
+    expanded: list[str] = []
+    seen_families: set[str] = set()
+    for raw in ids:
+        eid = _extract_id(raw)
+        try:
+            filhos = _get_family_items(eid, tok_s)
+            if len(filhos) > 1 or (len(filhos) == 1 and filhos[0] != eid):
+                # Pega o family_id real para deduplicação
+                r0 = _req.get(f"{ML_API}/items/{filhos[0]}",
+                              params={"attributes": "family_id"},
+                              headers=_hdrs(tok_s), timeout=10)
+                fid = r0.json().get("family_id", eid) if r0.status_code == 200 else eid
+                if fid not in seen_families:
+                    seen_families.add(fid)
+                    expanded.extend(filhos)
+                    _batch_copy_state["log"].append(f"EXPAND:{eid}→{len(filhos)} filhos (family {fid})")
+                else:
+                    _batch_copy_state["log"].append(f"SKIP_FAM:{eid} (family {fid} já expandida)")
+                continue
+        except Exception as e:
+            _batch_copy_state["log"].append(f"EXPAND_ERR:{eid}:{str(e)[:50]}")
+        expanded.append(eid)
+
+    _batch_copy_state["total"] = len(expanded)
     copy_map = _load_copy_map()
 
-    for i, raw in enumerate(ids):
+    for i, raw in enumerate(expanded):
         mlb = _extract_id(raw)
         if mlb in copy_map:
             _batch_copy_state["pulados"] += 1
