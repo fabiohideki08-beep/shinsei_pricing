@@ -236,14 +236,14 @@ AKG_FAMILY_ID = "4943179930257231"
 
 
 def _bling_token_shinsei() -> str:
-    """Retorna access_token Bling Shinsei via endpoint local."""
-    r = _req.get("https://shinsei-pricing.onrender.com/bling/raw-token", timeout=20)
-    r.raise_for_status()
-    data = r.json()
-    tok = data.get("access_token") or (data.get("data") or {}).get("access_token")
-    if not tok:
-        raise RuntimeError(f"Token Bling indisponivel: {data}")
-    return tok
+    """Retorna access_token Bling Shinsei via BlingClient (com auto-refresh)."""
+    try:
+        from bling_client import BlingClient
+        client = BlingClient()
+        headers = client._get_headers()
+        return headers["Authorization"].replace("Bearer ", "")
+    except Exception as e:
+        raise RuntimeError(f"Token Bling indisponivel: {e}")
 
 
 # Variantes de nome por linha — mesma linha pode ser cadastrada de formas diferentes no Bling
