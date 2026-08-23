@@ -400,7 +400,20 @@ $('btn-preview').addEventListener('click', async () => {
   if (algumOk) $('btn-copiar').disabled = false;
 });
 
-// ── Copiar ───────────────────────────────────────────────────────────────────
+// ── Copiar (background + barra de progresso) ─────────────────────────────────
+let _batchPollTimer = null;
+
+function _stopPoll() {
+  if (_batchPollTimer) { clearInterval(_batchPollTimer); _batchPollTimer = null; }
+}
+
+function _renderProgressBar(proc, total) {
+  const pct = total > 0 ? Math.round(proc / total * 100) : 0;
+  return `<div style="background:var(--surface2,#222);border-radius:6px;overflow:hidden;height:10px;margin:10px 0">
+    <div style="background:var(--blue,#4f8cff);width:${pct}%;height:100%;transition:width .3s"></div>
+  </div>`;
+}
+
 $('btn-copiar').addEventListener('click', async () => {
   const ids = parseIds();
   if (!ids.length) return;
@@ -408,79 +421,69 @@ $('btn-copiar').addEventListener('click', async () => {
   if (!confirm(`Confirma a cópia de ${ids.length} anúncio(s) do ML Shinsei para o ML AKG?\n\nOs anúncios serão criados com SKU idêntico ao original.`)) return;
 
   const btn = $('btn-copiar');
-  btn.innerHTML = '<span class="spinner"></span> Copiando...';
+  btn.innerHTML = '<span class="spinner"></span> Iniciando...';
   btn.disabled = true;
   $('btn-preview').disabled = true;
   $('resultado-area').style.display = 'none';
 
+  // Inicia batch em background
   try {
-    const r = await fetch('/copiar-ml/copiar', {
+    const r = await fetch('/copiar-ml/batch', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ ids }),
     });
     const d = await r.json();
-
-    // Summary
-    const pulados = (d.resultados || []).filter(r => r.pulado).length;
-    const erros_reais = d.erros - pulados;
-    $('resultado-summary').innerHTML = `
-      <div class="r-stat"><div class="num num-muted">${d.total}</div><div class="lbl">Total</div></div>
-      <div class="r-stat"><div class="num num-green">${d.criados}</div><div class="lbl">Criados</div></div>
-      ${pulados > 0 ? `<div class="r-stat"><div class="num" style="color:var(--blue)">${pulados}</div><div class="lbl">Já existiam</div></div>` : ''}
-      <div class="r-stat"><div class="num num-red">${erros_reais}</div><div class="lbl">Erros</div></div>
-    `;
-
-    // Tabela
-    const tbody = $('result-tbody');
-    tbody.innerHTML = '';
-    for (const res of (d.resultados || [])) {
-      const causas = (res.causes || []).map(c => `<div>• ${c}</div>`).join('');
-      tbody.innerHTML += `
-        <tr>
-          <td class="cell-mono">${res.id_shinsei}</td>
-          <td class="cell-title">${res.titulo || '—'}</td>
-          <td class="cell-mono" style="font-size:11px;color:var(--blue)">${res.sku_raiz || '—'}</td>
-          <td class="cell-id-akg">${res.id_akg
-            ? `<a href="https://api.mercadolibre.com/items/${res.id_akg}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${res.id_akg}</a>`
-            : '—'}</td>
-          <td>
-            ${(() => {
-              const preStatus = res.status_akg_pre ? `<span style="font-size:10px;color:var(--muted);margin-left:4px;">pré:${res.status_akg_pre}</span>` : '';
-              const posStatus = res.status_akg_pos ? `<span style="font-size:10px;color:${res.status_akg_pos==='active'?'var(--green)':res.status_akg_pos==='under_review'?'var(--yellow)':'var(--red)'};margin-left:4px;">pós:${res.status_akg_pos}</span>` : '';
-              const anterior = res.akg_anterior ? `<div style="font-size:10px;color:var(--yellow);margin-top:2px;">↺ recriado (anterior: ${res.akg_anterior})</div>` : '';
-              if (res.ok) {
-                const v = res.verificacao || {};
-                const divs = v.divergencias && v.divergencias.length
-                  ? `<div style="color:var(--yellow);font-size:11px;margin-top:4px;">⚠ ${v.divergencias.join(' | ')}</div>`
-                  : '';
-                const fotosBadge = v.fotos_akg !== undefined
-                  ? `<span style="font-size:10px;color:var(--muted);margin-left:4px;">${v.fotos_akg} foto(s)</span>`
-                  : '';
-                const gtinBadge = res.gtin_temp
-                  ? `<div style="font-size:10px;margin-top:2px;color:${res.gtin_atualizado?'var(--green)':'var(--yellow)'}">` +
-                    `GTIN temp:${res.gtin_temp} → real:${res.gtin_real||'?'} ${res.gtin_atualizado?'✓ aplicado':'⚠ pendente'}</div>`
-                  : '';
-                return `<span class="chip-ok">✓ Criado</span>${posStatus}${fotosBadge}${anterior}${gtinBadge}${divs}`;
-              }
-              if (res.pulado) {
-                return `<span class="chip-skip">⏭ Já existe</span>${preStatus}<div class="cell-erro" style="color:var(--blue)">${res.id_akg || ''}</div>`;
-              }
-              // Erro: mostra status pré se havia tentativa anterior
-              return `<span class="chip-err">✗ Erro</span>${preStatus}${posStatus}<div class="cell-erro">${res.erro || ''}</div>${anterior}${causas ? `<div class="cell-causes">${causas}</div>` : ''}`;
-            })()}
-          </td>
-        </tr>`;
-    }
-
-    $('resultado-area').style.display = 'block';
+    if (!d.ok) { showAlert('warn', d.msg || 'Erro ao iniciar batch'); btn.disabled = false; $('btn-preview').disabled = false; return; }
   } catch (e) {
-    showAlert('warn', `Erro: ${e.message}`);
+    showAlert('warn', `Erro ao iniciar: ${e.message}`);
+    btn.disabled = false; $('btn-preview').disabled = false;
+    return;
   }
 
-  btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 17H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/><rect x="8" y="9" width="13" height="13" rx="2"/></svg> Copiar para AKG`;
-  btn.disabled = false;
-  $('btn-preview').disabled = false;
+  // Mostra área de progresso
+  $('resultado-summary').innerHTML = `<div id="batch-progress-wrap" style="width:100%">
+    <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">
+      <div class="r-stat"><div class="num num-muted" id="bp-total">—</div><div class="lbl">Total</div></div>
+      <div class="r-stat"><div class="num num-muted" id="bp-proc">0</div><div class="lbl">Processados</div></div>
+      <div class="r-stat"><div class="num num-green" id="bp-ok">0</div><div class="lbl">Criados</div></div>
+      <div class="r-stat"><div class="num" style="color:var(--blue)" id="bp-pulados">0</div><div class="lbl">Pulados</div></div>
+      <div class="r-stat"><div class="num num-red" id="bp-erros">0</div><div class="lbl">Erros</div></div>
+    </div>
+    <div id="bp-bar">${_renderProgressBar(0, 1)}</div>
+    <div id="bp-log" style="font-size:11px;color:var(--muted);margin-top:6px;max-height:80px;overflow:auto"></div>
+  </div>`;
+  $('result-tbody').innerHTML = '';
+  $('resultado-area').style.display = 'block';
+
+  // Poll a cada 2s
+  _stopPoll();
+  _batchPollTimer = setInterval(async () => {
+    try {
+      const s = await fetch('/copiar-ml/batch/status').then(r => r.json());
+      document.getElementById('bp-total').textContent   = s.total   ?? '—';
+      document.getElementById('bp-proc').textContent    = s.processados ?? 0;
+      document.getElementById('bp-ok').textContent      = s.ok      ?? 0;
+      document.getElementById('bp-pulados').textContent = s.pulados ?? 0;
+      document.getElementById('bp-erros').textContent   = s.erros   ?? 0;
+      document.getElementById('bp-bar').innerHTML = _renderProgressBar(s.processados || 0, s.total || 1);
+
+      // Últimas 5 linhas do log
+      if (s.log && s.log.length) {
+        document.getElementById('bp-log').textContent = s.log.slice(-5).join('\n');
+      }
+
+      btn.innerHTML = `<span class="spinner"></span> ${s.processados||0}/${s.total||'?'} — ${Math.round((s.processados||0)/(s.total||1)*100)}%`;
+
+      if (!s.rodando) {
+        _stopPoll();
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 17H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/><rect x="8" y="9" width="13" height="13" rx="2"/></svg> Copiar para AKG`;
+        btn.disabled = false;
+        $('btn-preview').disabled = false;
+        showAlert('ok', `Concluído! ✓ ${s.ok} criados · ⏭ ${s.pulados} pulados · ✗ ${s.erros} erros`);
+      }
+    } catch (e) { /* ignora falha de poll */ }
+  }, 2000);
 });
 
 // ── Limpar ───────────────────────────────────────────────────────────────────
