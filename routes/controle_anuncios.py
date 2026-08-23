@@ -293,7 +293,12 @@ def _bling_construir_indice(token: str) -> dict[str, str]:
         "evolution of the color", "color wear", "semi di lino",
         "skala", "inoar", "soul power", "eico", "mystic color", "phytoervas",
     ]
+    # Códigos numéricos: 6-0, 7.3, 9.5-49, nb 5.03, 10.0
     cor_re_idx  = _re.compile(r"\b(?:(?:nb|NI|i)\s*)?(\d+[.\-]\d+(?:[.\-]\d+)?)\b")
+    # Código dígito único Alfaparf (ex: "Evolution 4 Castanho") — captura N seguido de nome de tom
+    cor_re_digito = _re.compile(r"\b(\d)\s+(?:Castanho|Louro|Preto|Cobre|Vermelho|Cinza|Violeta|Dourado|Mogno|Ruivo|Acobreado|Bege|Bege|Natural|Claro|Escuro|Médio|Médio)", _re.IGNORECASE)
+    # Códigos nominais conhecidos (Pastelfier, etc)
+    CODIGOS_NOMINAIS = {"pastelfier"}
     vol_re_idx  = _re.compile(r"\b(\d+)\s*[Vv]olumes?\b")
 
     TIPOS_COR = {"coloração", "coloracoes", "colorações", "tinta", "tintura", "coloracao permanente", "coloração permanente"}
@@ -323,12 +328,21 @@ def _bling_construir_indice(token: str) -> dict[str, str]:
         tipo  = _tipo_produto(nome)
         mv = vol_re_idx.search(nome)
         vols = mv.group(1) if mv else ""
-        cors = cor_re_idx.findall(nome)
+        # Códigos numéricos padrão
+        cors = list(cor_re_idx.findall(nome))
+        # Códigos nominais (ex: Pastelfier)
+        for cod in CODIGOS_NOMINAIS:
+            if cod in n:
+                cors.append(cod)
+        # Dígito único para Alfaparf
+        if not cors and linha in ("evolution of the color", "color wear", "semi di lino"):
+            m = cor_re_digito.search(nome)
+            if m:
+                cors.append(m.group(1))
         chaves = []
         for cor in cors:
             chave = f"{tipo}|{linha}|{cor}|{vols}"
             chaves.append(chave)
-            # Também indexa sem tipo (fallback)
             chaves.append(f"|{linha}|{cor}|{vols}")
         return chaves
 
@@ -375,7 +389,9 @@ def _bling_buscar_sku_indice(indice: dict[str, str], titulo: str) -> str | None:
     TIPOS_OX_S  = {"ativador", "agua oxigenada", "água oxigenada", "emulsao ativadora", "emulsão ativadora", "oxidante", "ox creme"}
     TIPOS_COR_S = {"coloração", "coloracoes", "colorações", "tinta", "tintura", "coloracao permanente", "coloração permanente"}
 
-    cor_re_s = _re.compile(r"\b(?:(?:nb|NI|i)\s*)?(\d+[.\-]\d+(?:[.\-]\d+)?)\b")
+    cor_re_s       = _re.compile(r"\b(?:(?:nb|NI|i)\s*)?(\d+[.\-]\d+(?:[.\-]\d+)?)\b")
+    cor_re_digito_s = _re.compile(r"\b(\d)\s+(?:Castanho|Louro|Preto|Cobre|Vermelho|Cinza|Violeta|Dourado|Mogno|Ruivo|Acobreado|Bege|Natural|Claro|Escuro|Médio)", _re.IGNORECASE)
+    CODIGOS_NOMINAIS_S = {"pastelfier"}
     vol_re_s = _re.compile(r"\b(\d+)\s*[Vv]olumes?\b")
 
     t = titulo.lower()
@@ -401,9 +417,21 @@ def _bling_buscar_sku_indice(indice: dict[str, str], titulo: str) -> str | None:
     if not tipo and "kit" in t:
         tipo = "kit"
 
-    # Preferência: cor após "Selecione A Cor"
+    # Preferência: cor após "Selecione A Cor" (pode ser nominal como Pastelfier)
     mc_sc = _re.search(r"selecione a cor\s+(\S+)", t, _re.IGNORECASE)
-    cors = [mc_sc.group(1)] if mc_sc else cor_re_s.findall(titulo)
+    if mc_sc:
+        cors = [mc_sc.group(1).lower()]
+    else:
+        cors = cor_re_s.findall(titulo)
+        # Códigos nominais
+        for cod in CODIGOS_NOMINAIS_S:
+            if cod in t and cod not in cors:
+                cors.append(cod)
+        # Dígito único Alfaparf
+        if not cors and linha in ("evolution of the color", "color wear", "semi di lino"):
+            m2 = cor_re_digito_s.search(titulo)
+            if m2:
+                cors.append(m2.group(1))
 
     for cor in cors:
         # Busca mais específica primeiro: tipo|linha|cor|vols
