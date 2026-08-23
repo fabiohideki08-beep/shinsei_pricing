@@ -312,11 +312,13 @@ def _criar_item_akg(payload: dict, token: str) -> dict:
                        json=payload_temp, timeout=30)
         if r2.status_code in (200, 201):
             novo_id = r2.json().get("id")
-            # Tenta atualizar com GTIN real imediatamente
             gtin_atualizado = False
             if novo_id:
                 time.sleep(1.0)
                 gtin_atualizado = _atualizar_gtin_akg(novo_id, gtin_original, token)
+                if not gtin_atualizado:
+                    # Persiste para retry posterior via /controle-anuncios/fix-gtin
+                    _save_gtin_pendente(novo_id, gtin_original)
             return {
                 "status_code": r2.status_code,
                 "body": r2.json(),
@@ -340,6 +342,30 @@ def _criar_item_akg(payload: dict, token: str) -> dict:
 
 _AKG_FAMILY_ID_CACHE_FILE = BASE_DIR / "data" / "akg_family_ids.json"
 _AKG_COPY_MAP_FILE        = BASE_DIR / "data" / "akg_copy_map.json"   # {id_shinsei: id_akg}
+_AKG_GTIN_PENDENTE_FILE   = BASE_DIR / "data" / "akg_gtin_pendente.json"  # {akg_id: gtin_real}
+
+
+def _load_gtin_pendente() -> dict[str, str]:
+    try:
+        if _AKG_GTIN_PENDENTE_FILE.exists():
+            return json.loads(_AKG_GTIN_PENDENTE_FILE.read_text(encoding="utf-8")) or {}
+    except Exception:
+        pass
+    return {}
+
+
+def _save_gtin_pendente(akg_id: str, gtin_real: str):
+    m = _load_gtin_pendente()
+    m[akg_id] = gtin_real
+    _AKG_GTIN_PENDENTE_FILE.parent.mkdir(exist_ok=True)
+    _AKG_GTIN_PENDENTE_FILE.write_text(json.dumps(m, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _remove_gtin_pendente(akg_id: str):
+    m = _load_gtin_pendente()
+    if akg_id in m:
+        del m[akg_id]
+        _AKG_GTIN_PENDENTE_FILE.write_text(json.dumps(m, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _load_akg_family_id_cache() -> dict[str, str]:
@@ -781,6 +807,83 @@ def copiar_anuncio(body: dict):
         "erros": total - criados,
         "resultados": resultados,
     }
+
+
+# ── Cópia em background (batch assíncrono) ───────────────────────────────────
+
+_batch_copy_state: dict = {
+    "rodando": False, "total": 0, "processados": 0,
+    "ok": 0, "erros": 0, "pulados": 0, "log": [],
+}
+
+
+def _batch_copy_bg(ids: list[str]):
+    global _batch_copy_state
+    import time as _t
+    _batch_copy_state.update({
+        "rodando": True, "total": len(ids),
+        "processados": 0, "ok": 0, "erros": 0, "pulados": 0, "log": [],
+    })
+    try:
+        tok_s = _token_shinsei()
+        tok_a = _token_akg()
+    except Exception as e:
+        _batch_copy_state.update({"rodando": False, "erro": str(e)})
+        return
+
+    copy_map = _load_copy_map()
+
+    for i, raw in enumerate(ids):
+        mlb = _extract_id(raw)
+        if mlb in copy_map:
+            _batch_copy_state["pulados"] += 1
+            _batch_copy_state["processados"] = i + 1
+            continue
+        try:
+            item = _get_item(mlb, tok_s)
+            if not item or item.get("error"):
+                _batch_copy_state["erros"] += 1
+                _batch_copy_state["log"].append(f"NF:{mlb}")
+                _batch_copy_state["processados"] = i + 1
+                continue
+            payload = _build_payload(item)
+            res = _criar_item_akg(payload, tok_a)
+            if res.get("id"):
+                _save_copy_map_entry(mlb, res["id"])
+                _batch_copy_state["ok"] += 1
+                _batch_copy_state["log"].append(f"OK:{mlb}->{res['id']}")
+            else:
+                _batch_copy_state["erros"] += 1
+                _batch_copy_state["log"].append(f"ERR:{mlb}:{str(res)[:60]}")
+        except Exception as e:
+            _batch_copy_state["erros"] += 1
+            _batch_copy_state["log"].append(f"EXC:{mlb}:{str(e)[:60]}")
+        _batch_copy_state["processados"] = i + 1
+        if len(_batch_copy_state["log"]) > 200:
+            _batch_copy_state["log"] = _batch_copy_state["log"][-200:]
+        _t.sleep(0.5)
+
+    _batch_copy_state["rodando"] = False
+
+
+from fastapi import BackgroundTasks as _BG
+
+
+@router.post("/copiar-ml/batch")
+def batch_copy(body: dict, bg: _BG):
+    """Copia lista de IDs Shinsei → AKG em background. Body: {\"ids\": [...]}"""
+    if _batch_copy_state.get("rodando"):
+        return {"ok": False, "msg": "Batch já em andamento"}
+    ids = body.get("ids") or []
+    if not ids:
+        return {"ok": False, "msg": "ids vazio"}
+    bg.add_task(_batch_copy_bg, ids)
+    return {"ok": True, "msg": f"Copiando {len(ids)} itens em background"}
+
+
+@router.get("/copiar-ml/batch/status")
+def batch_copy_status():
+    return _batch_copy_state
 
 
 # ── Debug ────────────────────────────────────────────────────────────────────
