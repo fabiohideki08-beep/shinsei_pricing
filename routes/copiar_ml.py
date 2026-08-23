@@ -848,13 +848,14 @@ def _batch_copy_bg(ids: list[str]):
                 continue
             payload = _build_payload(item)
             res = _criar_item_akg(payload, tok_a)
-            if res.get("id"):
-                _save_copy_map_entry(mlb, res["id"])
+            akg_id = res.get("id") or (res.get("body") or {}).get("id")
+            if akg_id and res.get("status_code") in (200, 201):
+                _save_copy_map_entry(mlb, akg_id)
                 _batch_copy_state["ok"] += 1
-                _batch_copy_state["log"].append(f"OK:{mlb}->{res['id']}")
+                _batch_copy_state["log"].append(f"OK:{mlb}->{akg_id}")
             else:
                 _batch_copy_state["erros"] += 1
-                _batch_copy_state["log"].append(f"ERR:{mlb}:{str(res)[:60]}")
+                _batch_copy_state["log"].append(f"ERR:{mlb}:{str(res)[:80]}")
         except Exception as e:
             _batch_copy_state["erros"] += 1
             _batch_copy_state["log"].append(f"EXC:{mlb}:{str(e)[:60]}")
