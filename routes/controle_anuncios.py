@@ -318,7 +318,6 @@ def _fix_sku_bg():
 
         cor_re   = re.compile(r"Selecione A Cor\s+([^\s]+)", re.IGNORECASE)
         vol_re   = re.compile(r"\b(\d+)\s*[Vv]olumes?\b")
-        emb_re   = re.compile(r"\b(\d+(?:[.,]\d+)?)\s*(kg|g|ml|l)\b", re.IGNORECASE)
         # Linhas conhecidas para extrair do título
         LINHAS = [
             "Igora Royal Highlifts", "Igora Royal Absolutes", "Igora Royal Vibrance",
@@ -343,10 +342,6 @@ def _fix_sku_bg():
             mc = cor_re.search(titulo)
             if mc:
                 partes.append(mc.group(1))
-            # Tamanho da embalagem (60g, 500ml, 1kg, etc.)
-            me = emb_re.search(titulo)
-            if me:
-                partes.append(f"{me.group(1)}{me.group(2).lower()}")
             return " ".join(partes) if partes else titulo[:60]
 
         for i, item in enumerate(sem_sku):
