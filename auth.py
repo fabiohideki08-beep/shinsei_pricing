@@ -241,11 +241,28 @@ PUBLIC_PATHS = {
     "/copiar-ml",
     "/copiar-ml/preview",
     "/copiar-ml/copiar",
+    # Controle de anúncios AKG
+    "/controle-anuncios",
+    "/controle-anuncios/fix-sku",
+    "/controle-anuncios/fix-sku/status",
+    # Simulador de ADS ML
+    "/ml-ads/",
+    "/ml-ads/sync",
+    "/ml-ads/sync/status",
+    "/ml-ads/produtos",
+    "/ml-ads/produto",
+    "/ml-ads/historico-global",
+    "/ml-ads/consolidado",
+    "/ml-ads/ranking-roi",
+    "/ml-ads/investimentos",
+    "/ml-ads/simular",
+    "/ml-ads/calcular-meta",
 }
 
 
 # Prefixos pÃºblicos (qualquer rota que comece com esses valores)
 PUBLIC_PREFIXES = (
+    "/controle-anuncios/",
     "/fila/aprovar/",
     "/fila/rejeitar/",
     "/fila/completar/",
