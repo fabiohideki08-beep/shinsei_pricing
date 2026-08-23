@@ -279,7 +279,7 @@ def _fix_sku_bg():
             r = _req.get(
                 f"{ML_API}/users/{AKG_SELLER_ID}/items/search",
                 headers={"Authorization": f"Bearer {tok_a}"},
-                params={"status": "active", "q": "Igora Royal", "limit": 100, "offset": offset},
+                params={"status": "active", "limit": 100, "offset": offset},
                 timeout=20,
             )
             if r.status_code != 200:
@@ -316,12 +316,36 @@ def _fix_sku_bg():
         _fix_sku_state["total"] = total
         logger.info("fix-sku: %d itens AKG sem SKU", total)
 
-        cor_re = re.compile(r"Selecione A Cor\s+([^\s]+)", re.IGNORECASE)
+        cor_re   = re.compile(r"Selecione A Cor\s+([^\s]+)", re.IGNORECASE)
+        vol_re   = re.compile(r"\b(\d+)\s*[Vv]olumes?\b")
+        # Linhas conhecidas para extrair do título
+        LINHAS = [
+            "Igora Royal Highlifts", "Igora Royal Absolutes", "Igora Royal Vibrance",
+            "Igora Royal ZERO AMM", "Igora Royal Fashion Lights", "Igora Royal",
+            "Evolution Of The Color", "Color Wear", "Semi Di Lino",
+            "Skala", "Inoar", "Soul Power", "Eico", "Mystic Color",
+        ]
         aplicados = 0
 
+        def _pesquisa_bling(titulo: str) -> str:
+            partes = []
+            # Linha
+            for linha in LINHAS:
+                if linha.lower() in titulo.lower():
+                    partes.append(linha)
+                    break
+            # Volumes (kit com Ox)
+            mv = vol_re.search(titulo)
+            if mv:
+                partes.append(f"{mv.group(1)} Volumes")
+            # Código de cor / variação
+            mc = cor_re.search(titulo)
+            if mc:
+                partes.append(mc.group(1))
+            return " ".join(partes) if partes else titulo[:60]
+
         for i, item in enumerate(sem_sku):
-            m = cor_re.search(item["titulo"])
-            pesquisa = f"Igora Royal {m.group(1)}" if m else item["titulo"][:60]
+            pesquisa = _pesquisa_bling(item["titulo"])
             sku = _bling_buscar_sku(tok_b, pesquisa)
             if not sku:
                 logger.warning("fix-sku: sem resultado Bling para '%s'", pesquisa)
