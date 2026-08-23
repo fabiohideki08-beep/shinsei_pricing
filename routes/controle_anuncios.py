@@ -293,8 +293,8 @@ def _bling_construir_indice(token: str) -> dict[str, str]:
         "evolution of the color", "color wear", "semi di lino",
         "skala", "inoar", "soul power", "eico", "mystic color", "phytoervas",
     ]
-    # Códigos numéricos: 6-0, 7.3, 9.5-49, nb 5.03, 10.0
-    cor_re_idx  = _re.compile(r"\b(?:(?:nb|NI|i)\s*)?(\d+[.\-]\d+(?:[.\-]\d+)?)\b")
+    # Códigos: 6-0, 7.3, 9.5-49, nb 5.03, 10.0 + Fashion Lights: L-00, L-89
+    cor_re_idx  = _re.compile(r"\b(?:(?:nb|NI|i)\s*)?(L-\d+|\d+[.\-]\d+(?:[.\-]\d+)?)\b")
     # Código dígito único Alfaparf (ex: "Evolution 4 Castanho") — captura N seguido de nome de tom
     cor_re_digito = _re.compile(r"\b(\d)\s+(?:Castanho|Louro|Preto|Cobre|Vermelho|Cinza|Violeta|Dourado|Mogno|Ruivo|Acobreado|Bege|Bege|Natural|Claro|Escuro|Médio|Médio)", _re.IGNORECASE)
     # Códigos nominais conhecidos (Pastelfier, etc)
@@ -389,7 +389,7 @@ def _bling_buscar_sku_indice(indice: dict[str, str], titulo: str) -> str | None:
     TIPOS_OX_S  = {"ativador", "agua oxigenada", "água oxigenada", "emulsao ativadora", "emulsão ativadora", "oxidante", "ox creme"}
     TIPOS_COR_S = {"coloração", "coloracoes", "colorações", "tinta", "tintura", "coloracao permanente", "coloração permanente"}
 
-    cor_re_s       = _re.compile(r"\b(?:(?:nb|NI|i)\s*)?(\d+[.\-]\d+(?:[.\-]\d+)?)\b")
+    cor_re_s       = _re.compile(r"\b(?:(?:nb|NI|i)\s*)?(L-\d+|\d+[.\-]\d+(?:[.\-]\d+)?)\b")
     cor_re_digito_s = _re.compile(r"\b(\d)\s+(?:Castanho|Louro|Preto|Cobre|Vermelho|Cinza|Violeta|Dourado|Mogno|Ruivo|Acobreado|Bege|Natural|Claro|Escuro|Médio)", _re.IGNORECASE)
     CODIGOS_NOMINAIS_S = {"pastelfier"}
     vol_re_s = _re.compile(r"\b(\d+)\s*[Vv]olumes?\b")
