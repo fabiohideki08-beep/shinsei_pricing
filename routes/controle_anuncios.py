@@ -694,3 +694,53 @@ async def api_scan_duplicatas(bg: BackgroundTasks):
 @router.get("/scan-duplicatas/status")
 async def api_scan_duplicatas_status():
     return _scan_dup_state
+
+
+# ─── Fechar itens duplicados ──────────────────────────────────────────────────
+
+_fechar_dup_state: dict = {"rodando": False, "total": 0, "fechados": 0, "falhas": 0, "erro": None}
+
+
+def _fechar_ids_bg(ids: list[str]):
+    global _fechar_dup_state
+    try:
+        _fechar_dup_state.update({"rodando": True, "total": len(ids), "fechados": 0, "falhas": 0, "erro": None})
+        tok_a = _token_akg()
+        headers = {"Authorization": f"Bearer {tok_a}", "Content-Type": "application/json"}
+        fechados = 0
+        falhas = 0
+        for iid in ids:
+            r = _req.put(f"{ML_API}/items/{iid}", headers=headers, json={"status": "closed"}, timeout=15)
+            if r.status_code in (200, 201):
+                fechados += 1
+                logger.info("fechar-dup OK: %s", iid)
+            else:
+                falhas += 1
+                logger.warning("fechar-dup FAIL %s: %s %s", iid, r.status_code, r.text[:80])
+            _fechar_dup_state["fechados"] = fechados
+            _fechar_dup_state["falhas"] = falhas
+            time.sleep(0.4)
+        _fechar_dup_state["rodando"] = False
+        logger.info("fechar-dup concluido: %d fechados, %d falhas", fechados, falhas)
+    except Exception as e:
+        logger.exception("Erro fechar-dup")
+        _fechar_dup_state.update({"rodando": False, "erro": str(e)})
+
+
+from fastapi import Body as _Body
+
+
+@router.post("/fechar-duplicatas")
+async def api_fechar_duplicatas(bg: BackgroundTasks, payload: dict = _Body(...)):
+    if _fechar_dup_state.get("rodando"):
+        return JSONResponse({"ok": False, "msg": "Já em andamento"})
+    ids = payload.get("ids") or []
+    if not ids:
+        return JSONResponse({"ok": False, "msg": "ids vazio"})
+    bg.add_task(_fechar_ids_bg, ids)
+    return {"ok": True, "msg": f"Fechando {len(ids)} itens em background"}
+
+
+@router.get("/fechar-duplicatas/status")
+async def api_fechar_duplicatas_status():
+    return _fechar_dup_state
