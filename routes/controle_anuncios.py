@@ -427,46 +427,48 @@ def _fix_sku_bg():
         tok_a = _token_akg()
         tok_b = _bling_token_shinsei()
 
-        # Busca todos os itens ativos AKG sem seller_custom_field via seller search
+        # Busca itens AKG sem seller_custom_field (active + paused)
         AKG_SELLER_ID = "3541432733"
         sem_sku: list[dict] = []
-        offset = 0
-        while True:
-            r = _req.get(
-                f"{ML_API}/users/{AKG_SELLER_ID}/items/search",
-                headers={"Authorization": f"Bearer {tok_a}"},
-                params={"status": "active", "limit": 100, "offset": offset},
-                timeout=20,
-            )
-            if r.status_code != 200:
-                logger.warning("fix-sku: seller search %s: %s", r.status_code, r.text[:100])
-                break
-            body = r.json()
-            ids = body.get("results") or []
-            total_p = body.get("paging", {}).get("total", 0)
-            if not ids:
-                break
 
-            # detalhes em batches de 20
-            for i in range(0, len(ids), 20):
-                chunk = ids[i:i + 20]
-                r2 = _req.get(
-                    f"{ML_API}/items",
+        def _buscar_sem_sku(status: str):
+            offset = 0
+            while True:
+                r = _req.get(
+                    f"{ML_API}/users/{AKG_SELLER_ID}/items/search",
                     headers={"Authorization": f"Bearer {tok_a}"},
-                    params={"ids": ",".join(chunk), "attributes": "id,title,seller_custom_field"},
+                    params={"status": status, "limit": 100, "offset": offset},
                     timeout=20,
                 )
-                if r2.status_code == 200:
-                    for entry in r2.json():
-                        d = entry.get("body") or entry
-                        if d.get("id") and not d.get("seller_custom_field"):
-                            sem_sku.append({"id": d["id"], "titulo": d.get("title", "")})
-                time.sleep(0.2)
+                if r.status_code != 200:
+                    logger.warning("fix-sku: seller search [%s] %s: %s", status, r.status_code, r.text[:100])
+                    break
+                body = r.json()
+                ids = body.get("results") or []
+                total_p = body.get("paging", {}).get("total", 0)
+                if not ids:
+                    break
+                for i in range(0, len(ids), 20):
+                    chunk = ids[i:i + 20]
+                    r2 = _req.get(
+                        f"{ML_API}/items",
+                        headers={"Authorization": f"Bearer {tok_a}"},
+                        params={"ids": ",".join(chunk), "attributes": "id,title,seller_custom_field"},
+                        timeout=20,
+                    )
+                    if r2.status_code == 200:
+                        for entry in r2.json():
+                            d = entry.get("body") or entry
+                            if d.get("id") and not d.get("seller_custom_field"):
+                                sem_sku.append({"id": d["id"], "titulo": d.get("title", "")})
+                    time.sleep(0.2)
+                offset += len(ids)
+                if offset >= total_p:
+                    break
+                time.sleep(0.3)
 
-            offset += len(ids)
-            if offset >= total_p:
-                break
-            time.sleep(0.3)
+        _buscar_sem_sku("active")
+        _buscar_sem_sku("paused")
 
         total = len(sem_sku)
         _fix_sku_state["total"] = total
