@@ -345,3 +345,36 @@ def listar_etiquetas_me():
     if not log_file.exists():
         return {"etiquetas": []}
     return {"etiquetas": json.loads(log_file.read_text(encoding="utf-8"))[-50:]}
+
+
+@router.post("/test-me-label")
+def test_me_label(cep: str = "87043595", peso_kg: float = 0.6):
+    """Debug síncrono: cota ME para CEP informado e retorna resultado sem comprar."""
+    tok = _me_token()
+    if not tok:
+        return {"erro": "Token ME não encontrado", "env_var": bool(os.getenv("MELHOR_ENVIO_TOKEN"))}
+    try:
+        r = requests.post(
+            "https://melhorenvio.com.br/api/v2/me/shipment/calculate",
+            json={
+                "from": {"postal_code": ME_ORIGIN_CEP},
+                "to":   {"postal_code": cep.replace("-", "")},
+                "package": {"weight": peso_kg, "width": 16, "height": 10, "length": 22},
+                "options": {"receipt": False, "own_hand": False},
+                "services": ME_SERVICES,
+            },
+            headers=_me_headers(tok), timeout=15,
+        )
+        quotes = r.json() if r.status_code == 200 else []
+        available = [q for q in quotes if q.get("price") and not q.get("error")]
+        if not available:
+            return {"status": r.status_code, "raw": quotes}
+        best = min(available, key=lambda q: float(q["price"]))
+        return {
+            "token_ok": True,
+            "cep_destino": cep,
+            "melhor": {"nome": best["name"], "preco": best["price"], "prazo": best.get("delivery_time")},
+            "todas": [{"nome": q["name"], "preco": q["price"]} for q in available],
+        }
+    except Exception as e:
+        return {"erro": str(e)}
