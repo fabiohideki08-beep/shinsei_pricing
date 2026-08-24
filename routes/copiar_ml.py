@@ -222,9 +222,12 @@ def _build_payload(item: dict) -> dict:
 
     # family_name é obrigatório para categorias Omni (ex: colorações)
     # Quando presente, NÃO enviar title — o ML usa family_name como título automaticamente
+    # Normaliza family_name: remove " + " → " " para evitar conflito com família morta na AKG
+    # (família com todos os itens fechados fica bloqueada; nome ligeiramente diferente cria nova)
     family_name = item.get("family_name")
     if family_name:
-        payload["family_name"] = family_name
+        family_name_akg = family_name.replace(" + ", " ").strip()[:60]
+        payload["family_name"] = family_name_akg
     else:
         payload["title"] = _title
 
