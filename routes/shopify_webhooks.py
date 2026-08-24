@@ -178,8 +178,11 @@ def _generate_me_label(order: dict):
                 ],
                 "volumes": [{"weight": weight_kg, "width": 16, "height": 10, "length": 22}],
                 "tag": [{"tag": order_name, "url": None}],
-                "options": {"receipt": False, "own_hand": False,
-                            "reverse": False, "non_commercial": False},
+                "options": {
+                    "receipt": False, "own_hand": False,
+                    "reverse": False, "non_commercial": False,
+                    "insurance_value": round(float(order.get("total_price") or "0") or 1.0, 2),
+                },
             },
             headers=_me_headers(tok), timeout=15,
         )
