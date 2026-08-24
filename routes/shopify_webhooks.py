@@ -321,10 +321,10 @@ async def order_paid(
     except Exception:
         raise HTTPException(status_code=400, detail="JSON inválido")
 
-    background_tasks.add_task(_upload_conversion, order)
-
     if _is_free_shipping(order) and not _is_rmsp(order):
         background_tasks.add_task(_generate_me_label, order)
+
+    background_tasks.add_task(_upload_conversion, order)
 
     return {"ok": True, "order_id": order.get("id")}
 
