@@ -26,7 +26,7 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 
 # MelhorEnvio
 ME_ORIGIN_CEP = "06036003"  # SHINSEI MARKETPLACE, Osasco SP
-ME_SERVICES   = "1,2,3,4,17,33,34"  # PAC, SEDEX, Jadlog, Mini, JeT, Loggi
+ME_SERVICES   = "1,2,3,4,17,31,33"  # PAC, SEDEX, Jadlog .Package/.Com, Mini, Loggi Express, JeT Standard
 
 
 def _me_token() -> str:
@@ -177,10 +177,29 @@ def _generate_me_label(order: dict):
             headers=_me_headers(tok), timeout=15,
         )
         if r3.status_code not in (200, 201):
-            print(f"[me_label] {order_name} — erro checkout: {r3.status_code} {r3.text[:300]}")
-            _log_me_label(order_id, order_name, cart_id, best["name"],
-                          float(best["price"]), dest_cep, f"erro_checkout:{r3.status_code}")
-            return
+            # Remover item do carrinho e tentar próximo serviço
+            requests.delete(f"https://melhorenvio.com.br/api/v2/me/cart/{cart_id}",
+                            headers=_me_headers(tok), timeout=10)
+            remaining = [q for q in available if q["id"] != best["id"]]
+            if remaining:
+                best = min(remaining, key=lambda q: float(q["price"]))
+                print(f"[me_label] {order_name} — retry com {best['name']} R${best['price']}")
+                cart_payload["service"] = best["id"]
+                cart_payload["agency"] = best.get("agency")
+                r2b = requests.post("https://melhorenvio.com.br/api/v2/me/cart",
+                                    json=cart_payload, headers=_me_headers(tok), timeout=15)
+                if r2b.status_code not in (200, 201):
+                    _log_me_label(order_id, order_name, None, best["name"],
+                                  float(best["price"]), dest_cep, f"erro_retry:{r2b.status_code}")
+                    return
+                cart_id = r2b.json().get("id")
+                r3 = requests.post("https://melhorenvio.com.br/api/v2/me/shipment/checkout",
+                                   json={"orders": [cart_id]}, headers=_me_headers(tok), timeout=15)
+            if r3.status_code not in (200, 201):
+                print(f"[me_label] {order_name} — erro checkout: {r3.status_code} {r3.text[:300]}")
+                _log_me_label(order_id, order_name, cart_id, best["name"],
+                              float(best["price"]), dest_cep, f"erro_checkout:{r3.status_code}")
+                return
 
         print(f"[me_label] ✅ {order_name} — etiqueta gerada! id={cart_id} "
               f"serviço={best['name']} R${best['price']} CEP={dest_cep}")
