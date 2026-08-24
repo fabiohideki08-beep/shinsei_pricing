@@ -303,9 +303,9 @@ def _criar_item_akg(payload: dict, token: str) -> dict:
     )
 
     # Conflito de GTIN — detecta tanto erro explícito ("outra marca") quanto
-    # resposta vazia body:{} (conflito intra-conta quando item foi recriado com mesmo GTIN)
-    _body_empty = not body or (not body.get("cause") and not body.get("message"))
-    if (_gtin_conflict(body) or _body_empty) and gtin_original:
+    # body:{} ou cause:[] silenciosos (conflito intra-conta — GTIN travado por item fechado)
+    _gtin_silent = not body.get("cause")  # cause ausente ou lista vazia []
+    if (_gtin_conflict(body) or _gtin_silent) and gtin_original:
         gtin_temp = _gerar_gtin_temp()
         payload_temp = {**payload, "attributes": [
             {"id": "GTIN", "value_name": gtin_temp} if a.get("id") == "GTIN" else a
