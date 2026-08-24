@@ -124,18 +124,19 @@ def _generate_me_label(order: dict):
 
         # Shopify: address1 = "Rua X, 123" ou "Rua X"; address2 = complemento
         # ME exige address (rua) + number separados
-        address1_raw = addr.get("address1", "")
-        complement   = addr.get("address2", "") or ""
-        # Tenta extrair número do fim de address1 (ex: "Rua Rio Mamoré 58" → rua="Rua Rio Mamoré", num="58")
         import re as _re
-        _m = _re.search(r"^(.*?)[,\s]+(\d+\w*)$", address1_raw.strip())
+        # Remove caracteres invisíveis (U+2060, ZWNBSP, etc) que Shopify às vezes insere
+        def _clean(s): return _re.sub(r'[⁠​﻿­]', '', s or '').strip()
+        address1_raw = _clean(addr.get("address1", ""))
+        complement   = _clean(addr.get("address2", "")) or ""
+        # Tenta extrair número do fim de address1 (ex: "Rua Rio Mamoré 58" → rua="Rua Rio Mamoré", num="58")
+        _m = _re.search(r"^(.*?)[,\s]+(\d+\w*)$", address1_raw)
         if _m:
             address1 = _m.group(1).strip()
-            number   = _m.group(2)
+            number   = _m.group(2)[:20]  # ME limita a 32 chars mas 20 é seguro
         else:
             address1 = address1_raw
-            number   = complement or "SN"
-            complement = ""
+            number   = "SN"
         # Shopify não tem campo bairro — usar cidade como fallback aceito pelo ME
         district = addr.get("city", "Centro") or "Centro"
 
