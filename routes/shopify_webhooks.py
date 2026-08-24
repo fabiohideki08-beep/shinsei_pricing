@@ -26,7 +26,7 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 
 # MelhorEnvio
 ME_ORIGIN_CEP = "06036003"  # SHINSEI MARKETPLACE, Osasco SP
-ME_SERVICES   = "1,2,3,4,17,31,33"  # PAC, SEDEX, Jadlog .Package/.Com, Mini, Loggi Express, JeT Standard
+ME_SERVICES   = "1,2,3,4,17,33"  # PAC, SEDEX, Jadlog .Package/.Com, Mini Envios, JeT Standard
 
 
 def _me_token() -> str:
@@ -115,9 +115,22 @@ def _generate_me_label(order: dict):
                 "Destinatário")
         phone = (addr.get("phone") or "").replace(" ", "").replace("-", "")
 
-        # Número do endereço: Shopify coloca em address2 ou no fim de address1
-        address1 = addr.get("address1", "")
-        number   = addr.get("address2", "") or "SN"
+        # Shopify: address1 = "Rua X, 123" ou "Rua X"; address2 = complemento
+        # ME exige address (rua) + number separados
+        address1_raw = addr.get("address1", "")
+        complement   = addr.get("address2", "") or ""
+        # Tenta extrair número do fim de address1 (ex: "Rua Rio Mamoré 58" → rua="Rua Rio Mamoré", num="58")
+        import re as _re
+        _m = _re.search(r"^(.*?)[,\s]+(\d+\w*)$", address1_raw.strip())
+        if _m:
+            address1 = _m.group(1).strip()
+            number   = _m.group(2)
+        else:
+            address1 = address1_raw
+            number   = complement or "SN"
+            complement = ""
+        # Shopify não tem campo bairro — usar cidade como fallback aceito pelo ME
+        district = addr.get("city", "Centro") or "Centro"
 
         # Carrinho ME
         r2 = requests.post(
@@ -143,7 +156,8 @@ def _generate_me_label(order: dict):
                     "phone":       phone or "11999999999",
                     "address":     address1,
                     "number":      number,
-                    "district":    addr.get("city", ""),
+                    "complement":  complement,
+                    "district":    district,
                     "city":        addr.get("city", ""),
                     "state_abbr":  (addr.get("province_code") or "").replace("BR-", ""),
                     "postal_code": dest_cep,
