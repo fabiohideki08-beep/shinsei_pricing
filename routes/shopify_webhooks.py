@@ -115,6 +115,13 @@ def _generate_me_label(order: dict):
                 "Destinatário")
         phone = (addr.get("phone") or "").replace(" ", "").replace("-", "")
 
+        # CPF do destinatário — Shopify coloca em note_attributes
+        cpf_dest = ""
+        for attr in order.get("note_attributes", []):
+            if attr.get("name", "").upper() in ("CPF", "CPF/CNPJ", "CNPJ", "DOCUMENTO"):
+                cpf_dest = "".join(c for c in str(attr.get("value", "")) if c.isdigit())
+                break
+
         # Shopify: address1 = "Rua X, 123" ou "Rua X"; address2 = complemento
         # ME exige address (rua) + number separados
         address1_raw = addr.get("address1", "")
@@ -142,7 +149,6 @@ def _generate_me_label(order: dict):
                     "name":        "SHINSEI MARKETPLACE",
                     "phone":       "1140040140",
                     "email":       "fabiohideki08@gmail.com",
-                    "document":    "49374888000183",
                     "address":     "Rua Norma de Freitas Borges",
                     "number":      "65",
                     "district":    "Presidente Altino",
@@ -154,6 +160,7 @@ def _generate_me_label(order: dict):
                 "to": {
                     "name":        name,
                     "phone":       phone or "11999999999",
+                    "document":    cpf_dest or None,
                     "address":     address1,
                     "number":      number,
                     "complement":  complement,
