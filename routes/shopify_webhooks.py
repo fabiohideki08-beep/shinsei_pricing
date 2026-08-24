@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Shopify webhooks — rastreamento server-side de conversões no Google Ads.
-Quando um pedido é pago (orders/paid), envia conversão via Google Ads API.
+Shopify webhooks — rastreamento server-side de conversões no Google Ads
+e geração automática de etiquetas MelhorEnvio para pedidos com frete grátis.
 """
 from __future__ import annotations
 
@@ -23,6 +23,185 @@ AW_CUSTOMER_ID   = "2097362078"
 CONVERSION_ACTION = "customers/2097362078/conversionActions/7250153929"  # Finalizacao da compra
 
 DATA_DIR = Path(__file__).parent.parent / "data"
+
+# MelhorEnvio
+ME_ORIGIN_CEP = "06036003"  # SHINSEI MARKETPLACE, Osasco SP
+ME_SERVICES   = "1,2,3,4,17,33,34"  # PAC, SEDEX, Jadlog, Mini, JeT, Loggi
+
+
+def _me_token() -> str:
+    tok = os.getenv("MELHOR_ENVIO_TOKEN", "")
+    if not tok:
+        f = DATA_DIR / "melhorenvio_token.json"
+        if f.exists():
+            tok = json.loads(f.read_text())["access_token"]
+    return tok
+
+
+def _me_headers(tok: str) -> dict:
+    return {
+        "Authorization": f"Bearer {tok}",
+        "User-Agent": "Aplicação shinsei-pricing fabiohideki08@gmail.com",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+
+
+def _is_free_shipping(order: dict) -> bool:
+    for line in order.get("shipping_lines", []):
+        if float(line.get("price", "0") or "0") == 0:
+            return True
+    return not order.get("shipping_lines")
+
+
+def _is_rmsp(order: dict) -> bool:
+    """RMSP é atendido por parceiro próprio — não gerar etiqueta ME."""
+    for line in order.get("shipping_lines", []):
+        title = (line.get("title") or line.get("code") or "").upper()
+        if "RMSP" in title or "REGIÃO METROPOLITANA" in title:
+            return True
+    addr = order.get("shipping_address") or {}
+    cep = (addr.get("zip") or "").replace("-", "").replace(" ", "")
+    if len(cep) >= 5:
+        prefix = int(cep[:5])
+        # CEPs RMSP: 01000-09999 (SP capital), 06000-06299 (Osasco), 07000-07299 (Guarulhos)
+        # 09000-09999 (ABC), 06300-06999 (Carapicuíba/Barueri/etc)
+        if 1000 <= prefix <= 9999:
+            return True
+    return False
+
+
+def _generate_me_label(order: dict):
+    """Cota o ME e gera a etiqueta mais barata para pedidos com frete grátis fora da RMSP."""
+    order_name = order.get("name", f"#{order.get('id','?')}")
+    order_id   = str(order.get("id", ""))
+    try:
+        tok = _me_token()
+        if not tok:
+            print(f"[me_label] {order_name} — token ME não encontrado"); return
+
+        addr = order.get("shipping_address") or order.get("billing_address") or {}
+        dest_cep = (addr.get("zip") or "").replace("-", "").replace(" ", "")
+        if len(dest_cep) < 8:
+            print(f"[me_label] {order_name} — CEP inválido: {dest_cep}"); return
+
+        items = order.get("line_items", [])
+        weight_g  = sum(float(i.get("grams") or 300) * int(i.get("quantity", 1)) for i in items)
+        weight_kg = max(round(weight_g / 1000, 3), 0.1)
+
+        # Cotação
+        r = requests.post(
+            "https://melhorenvio.com.br/api/v2/me/shipment/calculate",
+            json={
+                "from": {"postal_code": ME_ORIGIN_CEP},
+                "to":   {"postal_code": dest_cep},
+                "package": {"weight": weight_kg, "width": 16, "height": 10, "length": 22},
+                "options": {"receipt": False, "own_hand": False},
+                "services": ME_SERVICES,
+            },
+            headers=_me_headers(tok), timeout=15,
+        )
+        quotes = r.json() if r.status_code == 200 else []
+        available = [q for q in quotes if q.get("price") and not q.get("error")]
+        if not available:
+            print(f"[me_label] {order_name} — nenhuma cotação para CEP {dest_cep}"); return
+
+        best = min(available, key=lambda q: float(q["price"]))
+        print(f"[me_label] {order_name} — melhor: {best['name']} R${best['price']}")
+
+        # Destinatário
+        name = (addr.get("name") or
+                f"{addr.get('first_name','')} {addr.get('last_name','')}".strip() or
+                "Destinatário")
+        phone = (addr.get("phone") or "").replace(" ", "").replace("-", "")
+
+        # Número do endereço: Shopify coloca em address2 ou no fim de address1
+        address1 = addr.get("address1", "")
+        number   = addr.get("address2", "") or "SN"
+
+        # Carrinho ME
+        r2 = requests.post(
+            "https://melhorenvio.com.br/api/v2/me/cart",
+            json={
+                "service": best["id"],
+                "agency":  best.get("agency"),
+                "from": {
+                    "name":        "SHINSEI MARKETPLACE",
+                    "phone":       "1140040140",
+                    "email":       "fabiohideki08@gmail.com",
+                    "document":    "49374888000183",
+                    "address":     "Rua Norma de Freitas Borges",
+                    "number":      "65",
+                    "district":    "Presidente Altino",
+                    "city":        "Osasco",
+                    "state_abbr":  "SP",
+                    "postal_code": ME_ORIGIN_CEP,
+                    "country_id":  "BR",
+                },
+                "to": {
+                    "name":        name,
+                    "phone":       phone or "11999999999",
+                    "address":     address1,
+                    "number":      number,
+                    "district":    addr.get("city", ""),
+                    "city":        addr.get("city", ""),
+                    "state_abbr":  (addr.get("province_code") or "").replace("BR-", ""),
+                    "postal_code": dest_cep,
+                    "country_id":  "BR",
+                },
+                "products": [
+                    {"name": i.get("name", "Produto")[:50],
+                     "quantity": int(i.get("quantity", 1)),
+                     "unitary_value": float(i.get("price") or "0")}
+                    for i in items[:10]
+                ],
+                "volumes": [{"weight": weight_kg, "width": 16, "height": 10, "length": 22}],
+                "tag": [{"tag": order_name, "url": None}],
+                "options": {"receipt": False, "own_hand": False,
+                            "reverse": False, "non_commercial": False},
+            },
+            headers=_me_headers(tok), timeout=15,
+        )
+        if r2.status_code not in (200, 201):
+            print(f"[me_label] {order_name} — erro carrinho: {r2.status_code} {r2.text[:300]}")
+            _log_me_label(order_id, order_name, None, best["name"],
+                          float(best["price"]), dest_cep, f"erro_cart:{r2.status_code}")
+            return
+
+        cart_id = r2.json().get("id")
+
+        # Checkout — debita saldo ME e gera etiqueta
+        r3 = requests.post(
+            "https://melhorenvio.com.br/api/v2/me/shipment/checkout",
+            json={"orders": [cart_id]},
+            headers=_me_headers(tok), timeout=15,
+        )
+        if r3.status_code not in (200, 201):
+            print(f"[me_label] {order_name} — erro checkout: {r3.status_code} {r3.text[:300]}")
+            _log_me_label(order_id, order_name, cart_id, best["name"],
+                          float(best["price"]), dest_cep, f"erro_checkout:{r3.status_code}")
+            return
+
+        print(f"[me_label] ✅ {order_name} — etiqueta gerada! id={cart_id} "
+              f"serviço={best['name']} R${best['price']} CEP={dest_cep}")
+        _log_me_label(order_id, order_name, cart_id, best["name"],
+                      float(best["price"]), dest_cep, "ok")
+
+    except Exception as e:
+        print(f"[me_label] ERRO {order_name}: {e}")
+        _log_me_label(order_id, order_name, None, "", 0, "", f"erro:{e}")
+
+
+def _log_me_label(order_id, order_name, cart_id, servico, preco, cep, status):
+    log_file = DATA_DIR / "etiquetas_me.json"
+    try:
+        log = json.loads(log_file.read_text(encoding="utf-8")) if log_file.exists() else []
+    except Exception:
+        log = []
+    log.append({"order_id": order_id, "order_name": order_name, "cart_id": cart_id,
+                 "servico": servico, "preco": preco, "cep": cep, "status": status,
+                 "ts": datetime.now(timezone.utc).isoformat()})
+    log_file.write_text(json.dumps(log[-500:], ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _gads_client():
@@ -143,6 +322,10 @@ async def order_paid(
         raise HTTPException(status_code=400, detail="JSON inválido")
 
     background_tasks.add_task(_upload_conversion, order)
+
+    if _is_free_shipping(order) and not _is_rmsp(order):
+        background_tasks.add_task(_generate_me_label, order)
+
     return {"ok": True, "order_id": order.get("id")}
 
 
@@ -153,3 +336,12 @@ def listar_conversoes():
     if not log_file.exists():
         return {"conversoes": []}
     return {"conversoes": json.loads(log_file.read_text(encoding="utf-8"))}
+
+
+@router.get("/etiquetas-me")
+def listar_etiquetas_me():
+    """Lista etiquetas MelhorEnvio geradas automaticamente."""
+    log_file = DATA_DIR / "etiquetas_me.json"
+    if not log_file.exists():
+        return {"etiquetas": []}
+    return {"etiquetas": json.loads(log_file.read_text(encoding="utf-8"))[-50:]}
