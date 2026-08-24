@@ -189,6 +189,7 @@ def _build_payload(item: dict) -> dict:
     # _criar_item_akg faz retry automático sem GTIN.
     SKIP_ATTR_IDS = {
         "SELLER_SKU", "ITEM_CONDITION", "SELLER_ID", "CATALOG_LISTING",
+        "GIFTABLE", "SELLER_PACKAGE_TYPE",
     }
     atributos = [
         {"id": a["id"], "value_name": a.get("value_name")}
