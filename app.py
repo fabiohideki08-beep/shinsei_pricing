@@ -1480,6 +1480,71 @@ def bling_akg_anuncios_sem_ml(id_loja: int = Query(..., description="ID da loja 
     }
 
 
+@app.get("/bling/cross-reference-skus")
+def bling_cross_reference_skus(situacao: str = Query(default="A")):
+    """
+    Compara SKUs ativos do Bling Shinsei vs Bling AKG.
+    Retorna: em_shinsei_faltando_akg, em_akg_faltando_shinsei, em_ambos.
+    """
+    import requests as _req
+
+    def _listar_skus(headers, nome_conta):
+        skus = {}
+        page = 1
+        while True:
+            r = _req.get("https://api.bling.com.br/Api/v3/produtos",
+                         params={"pagina": page, "limite": 100, "situacao": situacao},
+                         headers=headers, timeout=30)
+            if r.status_code == 401:
+                return None, f"{nome_conta}: token inválido (401)"
+            if r.status_code != 200:
+                break
+            items = r.json().get("data", [])
+            if not items:
+                break
+            for p in items:
+                cod = (p.get("codigo") or "").strip()
+                nome = (p.get("nome") or "").strip()
+                if cod:
+                    skus[cod] = nome
+            if len(items) < 100:
+                break
+            page += 1
+        return skus, None
+
+    # Shinsei
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="BlingClient não disponível")
+    sh_client = BlingClient()
+    sh_headers = sh_client._get_headers()
+    shinsei_skus, err = _listar_skus(sh_headers, "Shinsei")
+    if err:
+        raise HTTPException(status_code=500, detail=err)
+
+    # AKG
+    akg_headers = _bling_akg_headers()
+    akg_skus, err = _listar_skus(akg_headers, "AKG")
+    if err:
+        raise HTTPException(status_code=500, detail=err)
+
+    sh_set = set(shinsei_skus.keys())
+    akg_set = set(akg_skus.keys())
+    faltando_akg = sorted(sh_set - akg_set)
+    faltando_shinsei = sorted(akg_set - sh_set)
+    em_ambos = sorted(sh_set & akg_set)
+
+    return {
+        "ok": True,
+        "total_shinsei": len(sh_set),
+        "total_akg": len(akg_set),
+        "em_ambos": len(em_ambos),
+        "faltando_akg_count": len(faltando_akg),
+        "faltando_shinsei_count": len(faltando_shinsei),
+        "faltando_akg": [{"sku": s, "nome": shinsei_skus[s]} for s in faltando_akg],
+        "faltando_shinsei": [{"sku": s, "nome": akg_skus[s]} for s in faltando_shinsei],
+    }
+
+
 @app.get("/bling/exportar-tokens")
 def bling_exportar_tokens(api_key: str = Query(...)):
     """Exporta tokens Bling para configurar como env vars no Cloud Run. Protegido por api_key (middleware)."""
