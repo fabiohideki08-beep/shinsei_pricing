@@ -1512,20 +1512,51 @@ def bling_cross_reference_skus(situacao: str = Query(default="A")):
             page += 1
         return skus, None
 
-    # Shinsei
+    # Shinsei — usa BlingClient que faz refresh interno
     if not BlingClient:
         raise HTTPException(status_code=500, detail="BlingClient não disponível")
     sh_client = BlingClient()
-    sh_headers = sh_client._get_headers()
-    shinsei_skus, err = _listar_skus(sh_headers, "Shinsei")
-    if err:
-        raise HTTPException(status_code=500, detail=err)
+    shinsei_skus: dict[str, str] = {}
+    page = 1
+    while True:
+        try:
+            resp = sh_client.list_products(page=page, limit=100)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Shinsei list_products p{page}: {e}")
+        items = resp.get("data", []) if isinstance(resp, dict) else []
+        if not items:
+            break
+        for p in items:
+            cod = (p.get("codigo") or "").strip()
+            if cod:
+                shinsei_skus[cod] = (p.get("nome") or "").strip()
+        if len(items) < 100:
+            break
+        page += 1
 
     # AKG
     akg_headers = _bling_akg_headers()
-    akg_skus, err = _listar_skus(akg_headers, "AKG")
-    if err:
-        raise HTTPException(status_code=500, detail=err)
+    import requests as _req_cr
+    akg_skus: dict[str, str] = {}
+    page = 1
+    while True:
+        r = _req_cr.get("https://api.bling.com.br/Api/v3/produtos",
+                        params={"pagina": page, "limite": 100, "situacao": situacao},
+                        headers=akg_headers, timeout=30)
+        if r.status_code == 401:
+            raise HTTPException(status_code=500, detail="AKG: token inválido (401)")
+        if r.status_code != 200:
+            break
+        items = r.json().get("data", [])
+        if not items:
+            break
+        for p in items:
+            cod = (p.get("codigo") or "").strip()
+            if cod:
+                akg_skus[cod] = (p.get("nome") or "").strip()
+        if len(items) < 100:
+            break
+        page += 1
 
     sh_set = set(shinsei_skus.keys())
     akg_set = set(akg_skus.keys())
