@@ -205,7 +205,8 @@ def _build_single_payload(item: dict) -> dict | None:
         payload["title"] = title
         payload["attributes"] = [
             a for a in item.get("attributes", [])
-            if a.get("id") not in ("SELLER_SKU", "HAIR_TONE", "MANUAL_TITLE")
+            if a.get("id") not in ("SELLER_SKU", "HAIR_TONE", "MANUAL_TITLE", "GTIN")
+            and a.get("id") is not None
         ]
 
     sku = _extract_sku(item)
@@ -249,25 +250,32 @@ def _build_variation_payload(items: list[dict]) -> dict | None:
             var["seller_custom_field"] = sku
         if hair_tone:
             var["attribute_combinations"] = [hair_tone]
-        # Fotos da variação
-        pics = _pics(item)
-        if pics:
-            var["picture_ids"] = []  # ML vai fazer upload das fotos pelo source nas pictures do topo
         variations.append(var)
 
     if not variations:
         return None
 
-    # Preço médio como referência de topo (variações sobrescrevem)
+    # Preço de referência no topo (variações sobrescrevem individualmente)
     prices = [v["price"] for v in variations if v.get("price")]
-    avg_price = prices[0] if prices else anchor.get("price", 0)
+    top_price = prices[0] if prices else anchor.get("price", 0)
+
+    # Agrega todas as fotos de todas as variações
+    all_pics: list[dict] = []
+    seen_urls: set[str] = set()
+    for it in items:
+        for pic in _pics(it):
+            url = pic.get("source", "")
+            if url and url not in seen_urls:
+                all_pics.append(pic)
+                seen_urls.add(url)
 
     payload: dict = {
         "category_id": category_id,
+        "price": top_price,
         "listing_type_id": LISTING_TYPE,
         "condition": anchor.get("condition", "new"),
         "currency_id": anchor.get("currency_id", "BRL"),
-        "pictures": _pics(anchor),
+        "pictures": all_pics or _pics(anchor),
         "variations": variations,
     }
 

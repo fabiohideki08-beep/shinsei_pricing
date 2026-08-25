@@ -903,6 +903,103 @@ def _batch_copy_bg(ids: list[str]):
 from fastapi import BackgroundTasks as _BG
 
 
+def _scroll_shinsei_ids(tok: str, seller_id: str) -> list[str]:
+    """Coleta TODOS os IDs ativos Shinsei via scroll (sem limite de offset)."""
+    ids: list[str] = []
+    scroll_id = None
+    while True:
+        params: dict = {"status": "active", "limit": 100, "search_type": "scan"}
+        if scroll_id:
+            params["scroll_id"] = scroll_id
+        r = _req.get(f"{ML_API}/users/{seller_id}/items/search",
+                     params=params, headers=_hdrs(tok), timeout=30)
+        if r.status_code != 200:
+            break
+        data = r.json()
+        batch = data.get("results", [])
+        scroll_id = data.get("scroll_id")
+        ids.extend(batch)
+        if not batch or not scroll_id:
+            break
+    return ids
+
+
+def _resolve_skus_to_ml_ids(skus: set[str], tok: str, seller_id: str) -> list[str]:
+    """Mapeia SKUs Bling para IDs ML buscando seller_custom_field em cada item ativo."""
+    all_ids = _scroll_shinsei_ids(tok, seller_id)
+    matched: list[str] = []
+    # Busca em lotes de 20
+    for i in range(0, len(all_ids), 20):
+        chunk = all_ids[i:i+20]
+        ids_str = ",".join(chunk)
+        r = _req.get(f"{ML_API}/items",
+                     params={"ids": ids_str, "attributes": "id,seller_custom_field"},
+                     headers=_hdrs(tok), timeout=20)
+        if r.status_code != 200:
+            continue
+        for entry in r.json():
+            body = entry.get("body") or {}
+            sku = body.get("seller_custom_field") or ""
+            mlb = body.get("id") or ""
+            if sku and mlb and sku in skus:
+                matched.append(mlb)
+        time.sleep(0.2)
+    return matched
+
+
+def _batch_from_faltando_bg(limit: int | None):
+    """Background: lê _faltando_akg_capilares.json, resolve IDs ML e copia."""
+    global _batch_copy_state
+    DATA_DIR = BASE_DIR / "data"
+    faltando_path = DATA_DIR / "_faltando_akg_capilares.json"
+
+    _batch_copy_state.update({
+        "rodando": True, "total": 0, "processados": 0,
+        "ok": 0, "erros": 0, "pulados": 0, "log": ["Iniciando cópia faltando AKG..."],
+    })
+
+    try:
+        tok_s = _token_shinsei()
+        tok_a = _token_akg()
+    except Exception as e:
+        _batch_copy_state.update({"rodando": False, "erro": str(e)})
+        return
+
+    if not faltando_path.exists():
+        _batch_copy_state.update({"rodando": False, "erro": "arquivo _faltando_akg_capilares.json não encontrado"})
+        return
+
+    faltando = json.loads(faltando_path.read_text(encoding="utf-8"))
+    skus = {item["sku"] for item in faltando}
+    if limit:
+        skus = set(list(skus)[:limit])
+
+    _batch_copy_state["log"].append(f"Resolvendo {len(skus)} SKUs → IDs ML...")
+    me_r = _req.get(f"{ML_API}/users/me", headers=_hdrs(tok_s), timeout=15)
+    seller_id = str(me_r.json()["id"])
+
+    ml_ids = _resolve_skus_to_ml_ids(skus, tok_s, seller_id)
+    _batch_copy_state["log"].append(f"{len(ml_ids)} IDs ML encontrados para {len(skus)} SKUs")
+
+    if not ml_ids:
+        _batch_copy_state.update({"rodando": False, "erro": "Nenhum ID ML encontrado"})
+        return
+
+    # Reutiliza _batch_copy_bg com os IDs resolvidos
+    _batch_copy_bg(ml_ids)
+
+
+@router.post("/copiar-ml/batch-faltando")
+def batch_copy_faltando(bg: _BG, body: dict = {}):
+    """Copia todos os SKUs de _faltando_akg_capilares.json para a AKG.
+    Body opcional: {\"limit\": 50} para testar com subconjunto."""
+    if _batch_copy_state.get("rodando"):
+        return {"ok": False, "msg": "Batch já em andamento"}
+    limit = body.get("limit") if body else None
+    bg.add_task(_batch_from_faltando_bg, limit)
+    return {"ok": True, "msg": "Iniciando cópia de faltando AKG em background"}
+
+
 @router.post("/copiar-ml/batch")
 def batch_copy(body: dict, bg: _BG):
     """Copia lista de IDs Shinsei → AKG em background. Body: {\"ids\": [...]}"""
