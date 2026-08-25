@@ -106,21 +106,39 @@ def _generate_me_label(order: dict):
         if not available:
             print(f"[me_label] {order_name} — nenhuma cotação para CEP {dest_cep}"); return
 
-        best = min(available, key=lambda q: float(q["price"]))
-        print(f"[me_label] {order_name} — melhor: {best['name']} R${best['price']}")
-
         # Destinatário
         name = (addr.get("name") or
                 f"{addr.get('first_name','')} {addr.get('last_name','')}".strip() or
                 "Destinatário")
         phone = (addr.get("phone") or "").replace(" ", "").replace("-", "")
 
-        # CPF do destinatário — Shopify coloca em note_attributes
+        # CPF do destinatário — tenta note_attributes, company field e customer.note
         cpf_dest = ""
         for attr in order.get("note_attributes", []):
-            if attr.get("name", "").upper() in ("CPF", "CPF/CNPJ", "CNPJ", "DOCUMENTO"):
+            if attr.get("name", "").upper() in ("CPF", "CPF/CNPJ", "CNPJ", "DOCUMENTO", "TAX_ID", "TAXID"):
                 cpf_dest = "".join(c for c in str(attr.get("value", "")) if c.isdigit())
                 break
+        if not cpf_dest:
+            for a in (addr, order.get("billing_address") or {}):
+                raw = "".join(c for c in (a.get("company") or "") if c.isdigit())
+                if 11 <= len(raw) <= 14:
+                    cpf_dest = raw; break
+        if not cpf_dest:
+            raw = "".join(c for c in (order.get("customer", {}).get("note") or "") if c.isdigit())
+            if 11 <= len(raw) <= 14:
+                cpf_dest = raw
+
+        # Sem CPF, descartar serviços que exigem documento (ex: Jadlog)
+        if not cpf_dest:
+            sem_cpf = [q for q in available if "documents" not in (q.get("requirements") or [])]
+            if sem_cpf:
+                available = sem_cpf
+                print(f"[me_label] {order_name} — sem CPF, excluindo serviços com documento obrigatório")
+            else:
+                print(f"[me_label] {order_name} — sem CPF e nenhum serviço disponível sem documento"); return
+
+        best = min(available, key=lambda q: float(q["price"]))
+        print(f"[me_label] {order_name} — melhor: {best['name']} R${best['price']}")
 
         # Shopify: address1 = "Rua X, 123" ou "Rua X"; address2 = complemento
         # ME exige address (rua) + number separados
