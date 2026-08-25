@@ -185,14 +185,28 @@ def _build_payload(item: dict) -> dict:
 
     # Atributos — remove campos que o ML rejeita na criação (somente-leitura do sistema)
     # BRAND é obrigatório em MLB264861 — NÃO remover
-    # GTIN incluído: obrigatório para MLB264861. Se conflitar (mesmo GTIN já na Shinsei),
-    # _criar_item_akg faz retry automático sem GTIN.
+    # GTIN incluído: obrigatório para MLB264861. Retry automático sem GTIN se conflitar.
+    # HAIR_TONE: necessário para itens omni identificarem a cor dentro da família.
+    #   PORÉM, quando family_name já contém o código da cor (ex: "Alfaparf 5.32 60ml"),
+    #   o ML compõe o título como family_name + HAIR_TONE = duplicado.
+    #   Solução: excluir HAIR_TONE apenas quando seu código numérico já está no family_name.
     SKIP_ATTR_IDS = {
         "SELLER_SKU", "ITEM_CONDITION", "SELLER_ID", "CATALOG_LISTING",
-        "GIFTABLE", "SELLER_PACKAGE_TYPE",
-        # HAIR_TONE e MANUAL_TITLE causam título duplicado quando family_name já tem o código da cor
-        "HAIR_TONE", "MANUAL_TITLE",
+        "GIFTABLE", "SELLER_PACKAGE_TYPE", "MANUAL_TITLE",
     }
+
+    # Detecta se HAIR_TONE vai duplicar no título
+    _family_name_raw = (item.get("family_name") or "").upper()
+    _hair_tone_attr = next((a for a in (item.get("attributes") or []) if a.get("id") == "HAIR_TONE"), None)
+    _hair_tone_val = (_hair_tone_attr.get("value_name") or "") if _hair_tone_attr else ""
+    # Código numérico do HAIR_TONE: primeiros tokens até encontrar letra (ex: "5.32" de "5.32 Dourado")
+    import re as _re
+    _ht_code_m = _re.match(r'([\d\.]+)', _hair_tone_val.strip())
+    _ht_code = _ht_code_m.group(1) if _ht_code_m else ""
+    _hair_tone_duplica = bool(_ht_code and _ht_code in _family_name_raw)
+    if _hair_tone_duplica:
+        SKIP_ATTR_IDS = SKIP_ATTR_IDS | {"HAIR_TONE"}
+
     atributos = [
         {"id": a["id"], "value_name": a.get("value_name")}
         for a in (item.get("attributes") or [])
@@ -200,12 +214,10 @@ def _build_payload(item: dict) -> dict:
     ]
 
     # listing_type_id: garante tipo tradicional (gold_special ou gold_pro)
-    # Nunca usa gold_premium pois esse força catálogo em algumas categorias
     listing_type = item.get("listing_type_id") or "gold_special"
     if listing_type not in ("gold_special", "gold_pro", "bronze", "free"):
         listing_type = "gold_special"
 
-    # Para anúncios omni (family_name), title é adicionado depois se não houver family_name
     _title = item.get("title", "")
     payload: dict[str, Any] = {
         "category_id":         item.get("category_id", ""),
@@ -218,18 +230,14 @@ def _build_payload(item: dict) -> dict:
         "pictures":            pictures,
         "attributes":          atributos,
         "seller_custom_field": item.get("seller_custom_field") or "",
-        # Força modo tradicional — nunca catálogo
         "catalog_listing":     False,
     }
 
-    # family_name é obrigatório para categorias Omni (ex: colorações)
-    # Quando presente, NÃO enviar title — o ML usa family_name como título automaticamente
-    # Normaliza family_name: remove " + " → " " para evitar conflito com família morta na AKG
-    # (família com todos os itens fechados fica bloqueada; nome ligeiramente diferente cria nova)
+    # family_name é obrigatório para itens omni (colorações, etc.)
+    # Normaliza: remove " + " para evitar família morta na AKG
     family_name = item.get("family_name")
     if family_name:
-        family_name_akg = family_name.replace(" + ", " ").strip()[:60]
-        payload["family_name"] = family_name_akg
+        payload["family_name"] = family_name.replace(" + ", " ").strip()[:60]
     else:
         payload["title"] = _title
 
