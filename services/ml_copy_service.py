@@ -204,7 +204,8 @@ def _build_single_payload(item: dict) -> dict | None:
             return None
         payload["title"] = title
         payload["attributes"] = [
-            a for a in item.get("attributes", []) if a.get("id") not in ("SELLER_SKU",)
+            a for a in item.get("attributes", [])
+            if a.get("id") not in ("SELLER_SKU", "HAIR_TONE", "MANUAL_TITLE")
         ]
 
     sku = _extract_sku(item)
