@@ -352,15 +352,20 @@ def _criar_item_akg(payload: dict, token: str) -> dict:
                 "gtin_atualizado": gtin_atualizado,
             }
 
-    # GTIN obrigatório mas não foi enviado → tenta sem (pode travar em catch-22)
+    # GTIN obrigatório mas não existe no Shinsei → cria com GTIN temp e marca pendente
     if _gtin_missing(body):
-        payload_sem = {**payload, "attributes": [
-            a for a in payload["attributes"] if a.get("id") != "GTIN"
-        ]}
+        gtin_temp = _gerar_gtin_temp()
+        attrs_com_temp = [a for a in payload["attributes"] if a.get("id") != "GTIN"]
+        attrs_com_temp.append({"id": "GTIN", "value_name": gtin_temp})
+        payload_temp = {**payload, "attributes": attrs_com_temp}
         r3 = _req.post(f"{ML_API}/items", headers=_hdrs(token),
-                       json=payload_sem, timeout=30)
+                       json=payload_temp, timeout=30)
         if r3.status_code in (200, 201):
-            return {"status_code": r3.status_code, "body": r3.json()}
+            novo_id = r3.json().get("id")
+            if novo_id:
+                _save_gtin_pendente(novo_id, "__sem_gtin__")
+            return {"status_code": r3.status_code, "body": r3.json(),
+                    "gtin_temp": gtin_temp, "gtin_real": None}
 
     return {"status_code": r.status_code, "body": body}
 
