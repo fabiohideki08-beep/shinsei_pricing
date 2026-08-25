@@ -145,6 +145,30 @@ if bling_access and bling_refresh:
 elif not bling_path.exists():
     pr("INFO: BLING_ACCESS_TOKEN não definido — bling_tokens.json não criado (OAuth necessário)")
 
+# ── Bling AKG tokens (recria bling_tokens_akg.json a partir de env vars) ──────
+bling_akg_access  = os.getenv("BLING_AKG_ACCESS_TOKEN", "")
+bling_akg_refresh = os.getenv("BLING_AKG_REFRESH_TOKEN", "")
+bling_akg_path    = DATA_DIR / "bling_tokens_akg.json"
+
+if bling_akg_access and bling_akg_refresh:
+    import time as _time_akg
+    akg_tok = {}
+    if bling_akg_path.exists():
+        try:
+            akg_tok = json.loads(bling_akg_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    akg_tok.update({
+        "access_token":  bling_akg_access,
+        "refresh_token": bling_akg_refresh,
+        "expires_in":    21600,
+        "expires_at":    _time_akg.time() + 21600 - 60,
+    })
+    bling_akg_path.write_text(json.dumps(akg_tok, ensure_ascii=False, indent=2), encoding="utf-8")
+    pr("bling_tokens_akg.json criado/atualizado a partir de env vars")
+elif not bling_akg_path.exists():
+    pr("INFO: BLING_AKG_ACCESS_TOKEN não definido — bling_tokens_akg.json não criado (OAuth necessário)")
+
 # ── Melhor Envio token (se fornecido diretamente via env) ────────────────────
 me_token = os.getenv("MELHOR_ENVIO_TOKEN", "")
 if me_token:
@@ -438,6 +462,28 @@ if gsa_b64:
 else:
     if not gsa_path.exists():
         pr("INFO: GOOGLE_SA_JSON não definido — google_service_account.json não criado")
+
+# ── Google Ads YAML (recria a partir de env vars para sobreviver a deploys) ──
+_ads_yaml_path = Path(__file__).parent / "google-ads.yaml"
+_ads_client_id       = os.getenv("GOOGLE_ADS_CLIENT_ID", "")
+_ads_client_secret   = os.getenv("GOOGLE_ADS_CLIENT_SECRET", "")
+_ads_dev_token       = os.getenv("GOOGLE_ADS_DEVELOPER_TOKEN", "")
+_ads_login_cid       = os.getenv("GOOGLE_ADS_LOGIN_CUSTOMER_ID", "")
+_ads_refresh_token   = os.getenv("GOOGLE_ADS_REFRESH_TOKEN", "")
+if _ads_client_id and _ads_client_secret and _ads_refresh_token:
+    _ads_yaml_content = (
+        f"client_id: {_ads_client_id}\n"
+        f"client_secret: {_ads_client_secret}\n"
+        f"developer_token: {_ads_dev_token}\n"
+        f"login_customer_id: {_ads_login_cid}\n"
+        f"refresh_token: {_ads_refresh_token}\n"
+        f"use_proto_plus: true\n"
+    )
+    _ads_yaml_path.write_text(_ads_yaml_content, encoding="utf-8")
+    pr("google-ads.yaml recriado a partir de env vars")
+else:
+    if not _ads_yaml_path.exists():
+        pr("INFO: GOOGLE_ADS_CLIENT_ID/REFRESH_TOKEN não definidos — google-ads.yaml não criado")
 
 # ── Cria diretórios necessários ───────────────────────────────────────────────
 for d in ["logs", "pages"]:

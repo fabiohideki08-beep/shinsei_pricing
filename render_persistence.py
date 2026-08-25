@@ -93,6 +93,14 @@ def save_bling_tokens(access_token: str, refresh_token: str) -> bool:
     })
 
 
+def save_bling_tokens_akg(access_token: str, refresh_token: str) -> bool:
+    """Persiste tokens Bling AKG nas env vars do Render."""
+    return _patch_env_vars({
+        "BLING_AKG_ACCESS_TOKEN":  access_token,
+        "BLING_AKG_REFRESH_TOKEN": refresh_token,
+    })
+
+
 def save_shopee_tokens(access_token: str, refresh_token: str, shop_id: int = 0) -> bool:
     """Persiste tokens Shopee nas env vars do Render."""
     updates: dict[str, str] = {

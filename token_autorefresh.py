@@ -98,6 +98,13 @@ def _renovar_bling() -> bool:
         # Persiste no Secret Manager
         save_bling_tokens(access, refresh)
 
+        # Persiste nas env vars do Render (sobrevive a deploys sem Secret Manager)
+        try:
+            from render_persistence import save_bling_tokens as _render_save
+            _render_save(access, refresh)
+        except Exception as _re:
+            logger.warning("Bling auto-refresh: falha ao salvar no Render env vars: %s", _re)
+
         # Atualiza arquivo local (formato criptografado)
         import hashlib
         raw_tok = {
@@ -120,6 +127,89 @@ def _renovar_bling() -> bool:
 
     except Exception as e:
         logger.error("Bling auto-refresh erro: %s", e)
+        return False
+
+
+def _renovar_bling_akg() -> bool:
+    """Renova tokens Bling AKG via refresh_token e persiste no Render."""
+    try:
+        import json as _json
+        akg_path = DATA_DIR / "bling_tokens_akg.json"
+        refresh_token = os.getenv("BLING_AKG_REFRESH_TOKEN", "")
+
+        if akg_path.exists():
+            try:
+                tok = _json.loads(akg_path.read_text(encoding="utf-8"))
+                refresh_token = tok.get("refresh_token", refresh_token)
+            except Exception:
+                pass
+
+        if not refresh_token:
+            logger.warning("Bling AKG auto-refresh: sem refresh_token disponível")
+            return False
+
+        # Credenciais do credentials.json
+        cred_path = DATA_DIR.parent / "data" / "credentials.json"
+        cid, csec = "", ""
+        try:
+            creds = _json.loads((DATA_DIR.parent / "data" / "credentials.json").read_text(encoding="utf-8"))
+            akg = creds.get("bling_akg", {})
+            cid = akg.get("client_id", "") or os.getenv("BLING_AKG_CLIENT_ID", "")
+            csec = akg.get("client_secret", "") or os.getenv("BLING_AKG_CLIENT_SECRET", "")
+        except Exception:
+            cid = os.getenv("BLING_AKG_CLIENT_ID", "")
+            csec = os.getenv("BLING_AKG_CLIENT_SECRET", "")
+
+        if not cid or not csec:
+            logger.warning("Bling AKG auto-refresh: credenciais não configuradas")
+            return False
+
+        basic = base64.b64encode(f"{cid}:{csec}".encode()).decode()
+        data  = urllib.parse.urlencode({
+            "grant_type":    "refresh_token",
+            "refresh_token": refresh_token,
+        }).encode()
+        req = urllib.request.Request(
+            "https://www.bling.com.br/Api/v3/oauth/token",
+            data=data,
+            headers={
+                "Authorization":  f"Basic {basic}",
+                "Content-Type":   "application/x-www-form-urlencoded",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            new = _json.loads(resp.read())
+
+        access  = new.get("access_token", "")
+        refresh = new.get("refresh_token", "")
+        if not access or not refresh:
+            logger.error("Bling AKG auto-refresh: resposta sem tokens: %s", new)
+            return False
+
+        # Salva no arquivo local
+        if akg_path.exists():
+            try:
+                tok = _json.loads(akg_path.read_text(encoding="utf-8"))
+            except Exception:
+                tok = {}
+        else:
+            tok = {}
+        tok.update({"access_token": access, "refresh_token": refresh, "expires_in": 21600})
+        DATA_DIR.mkdir(exist_ok=True)
+        akg_path.write_text(_json.dumps(tok, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        # Persiste nas env vars do Render
+        try:
+            from render_persistence import save_bling_tokens_akg as _render_save
+            _render_save(access, refresh)
+        except Exception as _re:
+            logger.warning("Bling AKG auto-refresh: falha ao salvar no Render env vars: %s", _re)
+
+        logger.info("Bling AKG: tokens renovados automaticamente ✓")
+        return True
+
+    except Exception as e:
+        logger.error("Bling AKG auto-refresh erro: %s", e)
         return False
 
 
@@ -164,11 +254,16 @@ def _renovar_shopee() -> bool:
         shopee_path = DATA_DIR / "shopee_tokens.json"
         if shopee_path.exists():
             tok = json.loads(shopee_path.read_text(encoding="utf-8"))
-            save_shopee_tokens(
-                tok.get("access_token", ""),
-                tok.get("refresh_token", ""),
-                int(tok.get("shop_id", 0)),
-            )
+            _access  = tok.get("access_token", "")
+            _refresh = tok.get("refresh_token", "")
+            _shop_id = int(tok.get("shop_id", 0))
+            save_shopee_tokens(_access, _refresh, _shop_id)
+            # Persiste nas env vars do Render
+            try:
+                from render_persistence import save_shopee_tokens as _render_save
+                _render_save(_access, _refresh, _shop_id)
+            except Exception as _re:
+                logger.warning("Shopee auto-refresh: falha ao salvar no Render env vars: %s", _re)
 
         logger.info("Shopee: tokens renovados automaticamente ✓")
         return True
@@ -238,6 +333,13 @@ def _renovar_ml() -> bool:
         # Persiste no Secret Manager
         save_ml_tokens(access, refresh or refresh_token, client_id, client_secret, user_id)
 
+        # Persiste nas env vars do Render
+        try:
+            from render_persistence import save_ml_tokens_shinsei as _render_save
+            _render_save(access, refresh or refresh_token, user_id)
+        except Exception as _re:
+            logger.warning("ML auto-refresh: falha ao salvar no Render env vars: %s", _re)
+
         logger.info("ML: tokens renovados automaticamente ✓")
         return True
 
@@ -248,8 +350,57 @@ def _renovar_ml() -> bool:
 
 def _checar_expiry_ml() -> float:
     """ML tokens não têm expires_at local — assume 5h de vida."""
-    # ML renova em cada startup. Retornamos -1 para deixar o scheduler decidir.
     return -1
+
+
+def _renovar_ml_akg() -> bool:
+    """Renova tokens ML AKG via refresh_token e persiste no Secret Manager + Render."""
+    try:
+        ml_path = DATA_DIR / "ml_tokens_akg.json"
+        if not ml_path.exists():
+            return False
+        tok = json.loads(ml_path.read_text(encoding="utf-8"))
+        refresh_token = tok.get("refresh_token", "") or os.getenv("ML_AKG_REFRESH_TOKEN", "")
+        client_id     = tok.get("client_id", "") or os.getenv("ML_AKG_CLIENT_ID", "")
+        client_secret = os.getenv("ML_AKG_CLIENT_SECRET", "")
+        user_id       = tok.get("user_id", "")
+
+        if not refresh_token or not client_id or not client_secret:
+            return False
+
+        data = urllib.parse.urlencode({
+            "grant_type":    "refresh_token",
+            "client_id":     client_id,
+            "client_secret": client_secret,
+            "refresh_token": refresh_token,
+        }).encode()
+        req = urllib.request.Request("https://api.mercadolibre.com/oauth/token", data=data)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            new = json.loads(resp.read())
+
+        access  = new.get("access_token", "")
+        refresh = new.get("refresh_token", "")
+        if not access:
+            return False
+        if not user_id:
+            user_id = str(new.get("user_id", ""))
+
+        tok.update({"access_token": access, "refresh_token": refresh or refresh_token, "user_id": user_id})
+        ml_path.write_text(json.dumps(tok, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        # Render env vars
+        try:
+            from render_persistence import save_ml_tokens_akg as _render_save
+            _render_save(access, refresh or refresh_token, user_id)
+        except Exception as _re:
+            logger.warning("ML AKG auto-refresh: falha ao salvar no Render env vars: %s", _re)
+
+        logger.info("ML AKG: tokens renovados automaticamente ✓")
+        return True
+
+    except Exception as e:
+        logger.error("ML AKG auto-refresh erro: %s", e)
+        return False
 
 
 # ─── Loop principal ───────────────────────────────────────────────────────────
@@ -292,7 +443,7 @@ def _loop():
         except Exception as e:
             logger.error("Auto-refresh Shopee inesperado: %s", e)
 
-        # ── ML ─────────────────────────────────────────────────────────────────
+        # ── ML Shinsei ─────────────────────────────────────────────────────────
         try:
             ult = _ultima_renovacao.get("ml", 0)
             if (agora - ult) > 4 * 3600:  # renova ML a cada 4h
@@ -300,6 +451,24 @@ def _loop():
                     _ultima_renovacao["ml"] = agora
         except Exception as e:
             logger.error("Auto-refresh ML inesperado: %s", e)
+
+        # ── ML AKG ─────────────────────────────────────────────────────────────
+        try:
+            ult = _ultima_renovacao.get("ml_akg", 0)
+            if (agora - ult) > 4 * 3600:
+                if _renovar_ml_akg():
+                    _ultima_renovacao["ml_akg"] = agora
+        except Exception as e:
+            logger.error("Auto-refresh ML AKG inesperado: %s", e)
+
+        # ── Bling AKG ──────────────────────────────────────────────────────────
+        try:
+            ult = _ultima_renovacao.get("bling_akg", 0)
+            if (agora - ult) > 4 * 3600:
+                if _renovar_bling_akg():
+                    _ultima_renovacao["bling_akg"] = agora
+        except Exception as e:
+            logger.error("Auto-refresh Bling AKG inesperado: %s", e)
 
         time.sleep(INTERVALO)
 

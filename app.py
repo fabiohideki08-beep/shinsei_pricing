@@ -1200,6 +1200,12 @@ def bling_callback2(code: str | None = Query(None), state: str | None = Query(No
     tokens = r.json()
     tokens["expires_at"] = _time.time() + tokens.get("expires_in", 3600) - 60
     _bling_akg_save(tokens)
+    # Persiste nas env vars do Render para sobreviver a restarts
+    try:
+        from render_persistence import save_bling_tokens_akg as _rp_save_akg
+        _rp_save_akg(tokens.get("access_token", ""), tokens.get("refresh_token", ""))
+    except Exception as _rp_e:
+        import logging as _lg; _lg.getLogger(__name__).warning("callback2: falha render_persistence: %s", _rp_e)
     return {"ok": True, "message": "Conta AKG conectada ao Bling com sucesso.", "expires_in": tokens.get("expires_in")}
 
 @app.get("/bling/status2")
@@ -1222,6 +1228,19 @@ def bling_tokens2():
     if not tokens.get("access_token"):
         return {"success": False, "error": "Bling AKG não conectado."}
     return {"success": True, "data": tokens}
+
+@app.post("/bling/sync-render-akg")
+def bling_sync_render_akg():
+    """Salva o token Bling AKG atual nas env vars do Render (garante persistência após reconexão)."""
+    tokens = _bling_akg_load()
+    if not tokens.get("access_token"):
+        return {"ok": False, "error": "Bling AKG não conectado."}
+    try:
+        from render_persistence import save_bling_tokens_akg as _rp
+        ok = _rp(tokens["access_token"], tokens.get("refresh_token", ""))
+        return {"ok": ok, "message": "Tokens AKG salvos nas env vars do Render." if ok else "Falha ao salvar."}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 @app.get("/ml/akg/copiar-shinsei/status")
 def ml_akg_copy_status():
