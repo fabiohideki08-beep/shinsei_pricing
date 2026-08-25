@@ -1121,6 +1121,122 @@ def fix_hair_tone_status():
     return _fix_state
 
 
+@router.get("/copiar-ml/copy-map")
+def export_copy_map():
+    """Retorna o copy_map completo {shinsei_id: akg_id} persistido em disco."""
+    return _load_copy_map()
+
+
+@router.post("/copiar-ml/rebuild-copy-map")
+def rebuild_copy_map_endpoint(bg: _BG):
+    """Reconstrói o copy_map escaneando todos os itens AKG ativos e cruzando com Shinsei."""
+    bg.add_task(_rebuild_copy_map_bg)
+    return {"ok": True, "msg": "Reconstruindo copy_map em background"}
+
+
+_rebuild_state: dict = {}
+
+
+def _rebuild_copy_map_bg():
+    """Escaneia AKG (seller_custom_field) e Shinsei (seller_custom_field) e reconstrói o map."""
+    global _rebuild_state
+    _rebuild_state = {"rodando": True, "total_akg": 0, "mapeados": 0, "log": []}
+    try:
+        tok_s = _token_shinsei()
+        tok_a = _token_akg()
+    except Exception as e:
+        _rebuild_state.update({"rodando": False, "erro": str(e)})
+        return
+
+    # Coleta AKG: {seller_custom_field: akg_id}
+    r_me_a = _req.get(f"{ML_API}/users/me", headers=_hdrs(tok_a), timeout=15)
+    akg_seller_id = str(r_me_a.json()["id"])
+    akg_by_sku: dict[str, str] = {}
+    scroll_id = None
+    _rebuild_state["log"].append("Coletando itens AKG...")
+    while True:
+        params: dict = {"status": "active", "limit": 100, "search_type": "scan"}
+        if scroll_id:
+            params["scroll_id"] = scroll_id
+        r = _req.get(f"{ML_API}/users/{akg_seller_id}/items/search",
+                     params=params, headers=_hdrs(tok_a), timeout=30)
+        if r.status_code != 200:
+            break
+        data = r.json()
+        batch = data.get("results", [])
+        scroll_id = data.get("scroll_id")
+        if not batch:
+            break
+        # Busca seller_custom_field em lotes de 20
+        for i in range(0, len(batch), 20):
+            chunk = batch[i:i+20]
+            rr = _req.get(f"{ML_API}/items",
+                          params={"ids": ",".join(chunk), "attributes": "id,seller_custom_field"},
+                          headers=_hdrs(tok_a), timeout=20)
+            if rr.status_code == 200:
+                for entry in rr.json():
+                    body = entry.get("body") or {}
+                    sku = body.get("seller_custom_field") or ""
+                    mlb = body.get("id") or ""
+                    if sku and mlb:
+                        akg_by_sku[sku] = mlb
+            import time as _t; _t.sleep(0.15)
+        if not scroll_id:
+            break
+
+    _rebuild_state["total_akg"] = len(akg_by_sku)
+    _rebuild_state["log"].append(f"{len(akg_by_sku)} itens AKG com SKU coletados")
+
+    # Coleta Shinsei: {seller_custom_field: shinsei_id}
+    r_me_s = _req.get(f"{ML_API}/users/me", headers=_hdrs(tok_s), timeout=15)
+    shin_seller_id = str(r_me_s.json()["id"])
+    _rebuild_state["log"].append("Coletando itens Shinsei...")
+    new_map: dict[str, str] = {}  # {shinsei_id: akg_id}
+    scroll_id = None
+    while True:
+        params = {"status": "active", "limit": 100, "search_type": "scan"}
+        if scroll_id:
+            params["scroll_id"] = scroll_id
+        r = _req.get(f"{ML_API}/users/{shin_seller_id}/items/search",
+                     params=params, headers=_hdrs(tok_s), timeout=30)
+        if r.status_code != 200:
+            break
+        data = r.json()
+        batch = data.get("results", [])
+        scroll_id = data.get("scroll_id")
+        if not batch:
+            break
+        for i in range(0, len(batch), 20):
+            chunk = batch[i:i+20]
+            rr = _req.get(f"{ML_API}/items",
+                          params={"ids": ",".join(chunk), "attributes": "id,seller_custom_field"},
+                          headers=_hdrs(tok_s), timeout=20)
+            if rr.status_code == 200:
+                for entry in rr.json():
+                    body = entry.get("body") or {}
+                    sku = body.get("seller_custom_field") or ""
+                    shin_id = body.get("id") or ""
+                    if sku and shin_id and sku in akg_by_sku:
+                        new_map[shin_id] = akg_by_sku[sku]
+            import time as _t; _t.sleep(0.15)
+        if not scroll_id:
+            break
+
+    _rebuild_state["mapeados"] = len(new_map)
+    _rebuild_state["log"].append(f"{len(new_map)} pares Shinsei→AKG mapeados")
+
+    # Salva em disco
+    _AKG_COPY_MAP_FILE.parent.mkdir(exist_ok=True)
+    _AKG_COPY_MAP_FILE.write_text(json.dumps(new_map, indent=2, ensure_ascii=False), encoding="utf-8")
+    _rebuild_state["log"].append(f"copy_map salvo em {_AKG_COPY_MAP_FILE}")
+    _rebuild_state["rodando"] = False
+
+
+@router.get("/copiar-ml/rebuild-copy-map/status")
+def rebuild_copy_map_status():
+    return _rebuild_state
+
+
 # ── Verificação cruzada ───────────────────────────────────────────────────────
 
 @router.get("/copiar-ml/verificar-clone")
