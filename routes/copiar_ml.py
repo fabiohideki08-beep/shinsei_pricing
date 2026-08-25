@@ -1022,19 +1022,21 @@ def batch_copy_status():
 # ── Correção de títulos duplicados ───────────────────────────────────────────
 
 @router.post("/copiar-ml/fix-hair-tone-akg")
-def fix_hair_tone_akg(bg: _BG, body: dict = {}):
-    """Remove HAIR_TONE e MANUAL_TITLE de itens AKG com título duplicado.
-    Body: {} → usa copy_map; {"scan_all": true} → escaneia TODOS os ativos AKG."""
-    scan_all = (body or {}).get("scan_all", False)
-    if scan_all:
-        bg.add_task(_fix_hair_tone_bg, [], True)
-        return {"ok": True, "msg": "Escaneando TODOS os itens AKG ativos em background"}
+def fix_hair_tone_akg(bg: _BG):
+    """Remove HAIR_TONE e MANUAL_TITLE de itens AKG do copy_map."""
     copy_map = _load_copy_map()
     akg_ids = list(copy_map.values())
     if not akg_ids:
         return {"ok": False, "msg": "copy_map vazio"}
     bg.add_task(_fix_hair_tone_bg, akg_ids)
     return {"ok": True, "msg": f"Corrigindo {len(akg_ids)} itens AKG em background", "total": len(akg_ids)}
+
+
+@router.post("/copiar-ml/fix-hair-tone-akg-all")
+def fix_hair_tone_akg_all(bg: _BG):
+    """Escaneia TODOS os itens AKG ativos e remove HAIR_TONE/MANUAL_TITLE (corrige título duplicado)."""
+    bg.add_task(_fix_hair_tone_bg, [], True)
+    return {"ok": True, "msg": "Escaneando TODOS os itens AKG ativos em background"}
 
 
 _fix_state: dict = {}
