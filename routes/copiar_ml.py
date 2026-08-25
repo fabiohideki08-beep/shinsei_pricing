@@ -1364,7 +1364,7 @@ def _fechar_todos_akg_bg():
     for status in ("active", "paused"):
         scroll_id = None
         while True:
-            params = {"status": status, "limit": 100}
+            params = {"status": status, "limit": 100, "search_type": "scan"}
             if scroll_id:
                 params["scroll_id"] = scroll_id
             r = _req.get(f"{ML_API}/users/3541432733/items/search",
