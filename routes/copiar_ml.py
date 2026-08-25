@@ -1568,9 +1568,12 @@ def verificar_clone_batch(pares: str = ""):
         a_title = ra.get("title", "")
         s_fn = (rs.get("family_name") or "").replace(" + ", " ").strip()[:60]
         a_fn = (ra.get("family_name") or "").replace(" + ", " ").strip()[:60]
-        if s_title and a_title and s_title != a_title:
+        # normalize: Shinsei title/fn toggled = expected AKG value
+        s_title_norm = _toggle_last_word_first(s_title) if s_title else s_title
+        s_fn_norm = _toggle_last_word_first(s_fn) if s_fn else s_fn
+        if s_title and a_title and s_title_norm != a_title:
             diffs.append(f"titulo: '{s_title[:50]}' ≠ '{a_title[:50]}'")
-        if s_fn and a_fn and s_fn != a_fn:
+        if s_fn and a_fn and s_fn_norm != a_fn:
             diffs.append(f"family_name: '{s_fn}' ≠ '{a_fn}'")
         # Categoria
         if rs.get("category_id") != ra.get("category_id"):
