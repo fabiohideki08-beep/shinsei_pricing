@@ -385,8 +385,10 @@ def _atualizar_gtin_akg(akg_id: str, gtin_real: str, token: str) -> bool:
 
 
 def _criar_item_akg(payload: dict, token: str) -> dict:
+    # Remove campos auxiliares de metadado (prefixo _) antes de enviar ao ML
+    clean = {k: v for k, v in payload.items() if not k.startswith("_")}
     r = _req.post(f"{ML_API}/items", headers=_hdrs(token),
-                  json=payload, timeout=30)
+                  json=clean, timeout=30)
     body = r.json()
 
     if r.status_code in (200, 201):
