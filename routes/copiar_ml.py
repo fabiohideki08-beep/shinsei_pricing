@@ -234,19 +234,19 @@ def _build_payload(item: dict) -> dict:
     }
 
     # family_name é obrigatório para itens omni (colorações, etc.)
-    # Inverte 1ª letra de cada palavra para diferenciar da família Shinsei
-    # (evita família "morta" na AKG) sem alterar o título visualmente de forma perceptível
-    def _toggle_first(s: str) -> str:
-        def _tf(w: str) -> str:
-            if not w:
-                return w
-            c = w[0]
-            return (c.lower() if c.isupper() else c.upper()) + w[1:]
-        return " ".join(_tf(w) for w in s.split(" "))
+    # Inverte apenas a 1ª letra da última palavra para diferenciar da família Shinsei
+    # (evita família "morta" na AKG) mantendo o restante intacto
+    def _toggle_last_word_first(s: str) -> str:
+        words = s.split(" ")
+        last = words[-1]
+        if last:
+            c = last[0]
+            words[-1] = (c.lower() if c.isupper() else c.upper()) + last[1:]
+        return " ".join(words)
 
     family_name = item.get("family_name")
     if family_name:
-        payload["family_name"] = _toggle_first(family_name.strip())[:60]
+        payload["family_name"] = _toggle_last_word_first(family_name.strip())[:60]
     else:
         payload["title"] = _title
 
