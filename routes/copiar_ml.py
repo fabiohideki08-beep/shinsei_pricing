@@ -1223,6 +1223,70 @@ def fix_add_hair_tone_status():
     return _fix_add_state
 
 
+# ── Fechar itens do piloto (criados com código antigo/errado) ─────────────────
+
+_fechar_piloto_state: dict = {}
+
+
+@router.post("/copiar-ml/fechar-piloto")
+def fechar_piloto(bg: _BG):
+    """Fecha todos os itens AKG do piloto (prefixo MLB750/MLB512) e limpa do copy_map.
+    Esses itens foram criados antes das regras corretas e precisam ser recriados.
+    """
+    copy_map = _load_copy_map()
+    piloto_ids = {k: v for k, v in copy_map.items()
+                  if v.startswith("MLB750") or v.startswith("MLB512")}
+    if not piloto_ids:
+        return {"ok": False, "msg": "Nenhum item de piloto encontrado no copy_map"}
+    bg.add_task(_fechar_piloto_bg, piloto_ids)
+    return {"ok": True, "total": len(piloto_ids),
+            "msg": f"Fechando {len(piloto_ids)} itens do piloto em background"}
+
+
+def _fechar_piloto_bg(piloto_ids: dict[str, str]):
+    global _fechar_piloto_state
+    _fechar_piloto_state = {
+        "rodando": True, "total": len(piloto_ids),
+        "fechados": 0, "erros": 0, "log": []
+    }
+    try:
+        tok_a = _token_akg()
+    except Exception as e:
+        _fechar_piloto_state.update({"rodando": False, "erro": str(e)})
+        return
+
+    copy_map = _load_copy_map()
+
+    for shin_id, akg_id in piloto_ids.items():
+        try:
+            rp = _req.put(
+                f"{ML_API}/items/{akg_id}",
+                json={"status": "closed"},
+                headers=_hdrs(tok_a), timeout=15
+            )
+            if rp.status_code in (200, 201):
+                _fechar_piloto_state["fechados"] += 1
+                _fechar_piloto_state["log"].append(f"OK:fechado:{akg_id}")
+                copy_map.pop(shin_id, None)
+            else:
+                body = rp.text[:80]
+                _fechar_piloto_state["erros"] += 1
+                _fechar_piloto_state["log"].append(f"ERR:{akg_id}:{rp.status_code}:{body}")
+        except Exception as e:
+            _fechar_piloto_state["erros"] += 1
+            _fechar_piloto_state["log"].append(f"EXC:{akg_id}:{str(e)[:60]}")
+        time.sleep(0.3)
+
+    _save_copy_map(copy_map)
+    _fechar_piloto_state["rodando"] = False
+    _fechar_piloto_state["copy_map_restante"] = len(copy_map)
+
+
+@router.get("/copiar-ml/fechar-piloto/status")
+def fechar_piloto_status():
+    return _fechar_piloto_state
+
+
 @router.get("/copiar-ml/copy-map")
 def export_copy_map():
     """Retorna o copy_map completo {shinsei_id: akg_id} persistido em disco."""
