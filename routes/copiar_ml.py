@@ -190,6 +190,8 @@ def _build_payload(item: dict) -> dict:
     SKIP_ATTR_IDS = {
         "SELLER_SKU", "ITEM_CONDITION", "SELLER_ID", "CATALOG_LISTING",
         "GIFTABLE", "SELLER_PACKAGE_TYPE",
+        # HAIR_TONE e MANUAL_TITLE causam título duplicado quando family_name já tem o código da cor
+        "HAIR_TONE", "MANUAL_TITLE",
     }
     atributos = [
         {"id": a["id"], "value_name": a.get("value_name")}
@@ -1015,6 +1017,76 @@ def batch_copy(body: dict, bg: _BG):
 @router.get("/copiar-ml/batch/status")
 def batch_copy_status():
     return _batch_copy_state
+
+
+# ── Correção de títulos duplicados ───────────────────────────────────────────
+
+@router.post("/copiar-ml/fix-hair-tone-akg")
+def fix_hair_tone_akg(bg: _BG):
+    """Remove HAIR_TONE e MANUAL_TITLE de todos os itens AKG do copy_map (corrige título duplicado)."""
+    copy_map = _load_copy_map()
+    akg_ids = list(copy_map.values())
+    if not akg_ids:
+        return {"ok": False, "msg": "copy_map vazio"}
+    bg.add_task(_fix_hair_tone_bg, akg_ids)
+    return {"ok": True, "msg": f"Corrigindo {len(akg_ids)} itens AKG em background", "total": len(akg_ids)}
+
+
+_fix_state: dict = {}
+
+
+def _fix_hair_tone_bg(akg_ids: list[str]):
+    global _fix_state
+    _fix_state = {"rodando": True, "total": len(akg_ids), "ok": 0, "erros": 0, "sem_hair_tone": 0, "log": []}
+    try:
+        tok_a = _token_akg()
+    except Exception as e:
+        _fix_state.update({"rodando": False, "erro": str(e)})
+        return
+
+    null_attrs = [
+        {"id": "HAIR_TONE", "value_name": None},
+        {"id": "MANUAL_TITLE", "value_name": None},
+    ]
+
+    for akg_id in akg_ids:
+        try:
+            # Verifica se tem HAIR_TONE antes de PUT
+            r = _req.get(f"{ML_API}/items/{akg_id}",
+                         params={"attributes": "id,attributes"},
+                         headers=_hdrs(tok_a), timeout=15)
+            if r.status_code != 200:
+                _fix_state["erros"] += 1
+                continue
+
+            item_attrs = r.json().get("attributes", [])
+            has_hair = any(a.get("id") == "HAIR_TONE" for a in item_attrs)
+            has_manual = any(a.get("id") == "MANUAL_TITLE" for a in item_attrs)
+
+            if not has_hair and not has_manual:
+                _fix_state["sem_hair_tone"] += 1
+                continue
+
+            rp = _req.put(f"{ML_API}/items/{akg_id}",
+                          json={"attributes": null_attrs},
+                          headers=_hdrs(tok_a), timeout=15)
+            if rp.status_code in (200, 201):
+                _fix_state["ok"] += 1
+                _fix_state["log"].append(f"OK:{akg_id}")
+            else:
+                _fix_state["erros"] += 1
+                _fix_state["log"].append(f"ERR:{akg_id}:{rp.text[:80]}")
+        except Exception as e:
+            _fix_state["erros"] += 1
+            _fix_state["log"].append(f"EXC:{akg_id}:{str(e)[:50]}")
+        import time as _t; _t.sleep(0.3)
+
+    _fix_state["rodando"] = False
+
+
+@router.get("/copiar-ml/fix-hair-tone-akg/status")
+def fix_hair_tone_status():
+    return _fix_state
 
 
 # ── Verificação cruzada ───────────────────────────────────────────────────────
