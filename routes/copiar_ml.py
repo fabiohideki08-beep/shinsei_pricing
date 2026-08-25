@@ -1022,8 +1022,13 @@ def batch_copy_status():
 # ── Correção de títulos duplicados ───────────────────────────────────────────
 
 @router.post("/copiar-ml/fix-hair-tone-akg")
-def fix_hair_tone_akg(bg: _BG):
-    """Remove HAIR_TONE e MANUAL_TITLE de todos os itens AKG do copy_map (corrige título duplicado)."""
+def fix_hair_tone_akg(bg: _BG, body: dict = {}):
+    """Remove HAIR_TONE e MANUAL_TITLE de itens AKG com título duplicado.
+    Body: {} → usa copy_map; {"scan_all": true} → escaneia TODOS os ativos AKG."""
+    scan_all = (body or {}).get("scan_all", False)
+    if scan_all:
+        bg.add_task(_fix_hair_tone_bg, [], True)
+        return {"ok": True, "msg": "Escaneando TODOS os itens AKG ativos em background"}
     copy_map = _load_copy_map()
     akg_ids = list(copy_map.values())
     if not akg_ids:
@@ -1035,7 +1040,7 @@ def fix_hair_tone_akg(bg: _BG):
 _fix_state: dict = {}
 
 
-def _fix_hair_tone_bg(akg_ids: list[str]):
+def _fix_hair_tone_bg(akg_ids: list[str], scan_all: bool = False):
     global _fix_state
     _fix_state = {"rodando": True, "total": len(akg_ids), "ok": 0, "erros": 0, "sem_hair_tone": 0, "log": []}
     try:
@@ -1043,6 +1048,31 @@ def _fix_hair_tone_bg(akg_ids: list[str]):
     except Exception as e:
         _fix_state.update({"rodando": False, "erro": str(e)})
         return
+
+    if scan_all:
+        # Busca TODOS os IDs ativos da conta AKG via scroll
+        _fix_state["log"].append("Coletando IDs AKG via scroll...")
+        r_me = _req.get(f"{ML_API}/users/me", headers=_hdrs(tok_a), timeout=15)
+        akg_seller_id = str(r_me.json()["id"])
+        all_ids: list[str] = []
+        scroll_id = None
+        while True:
+            params: dict = {"status": "active", "limit": 100, "search_type": "scan"}
+            if scroll_id:
+                params["scroll_id"] = scroll_id
+            r = _req.get(f"{ML_API}/users/{akg_seller_id}/items/search",
+                         params=params, headers=_hdrs(tok_a), timeout=30)
+            if r.status_code != 200:
+                break
+            data = r.json()
+            batch = data.get("results", [])
+            scroll_id = data.get("scroll_id")
+            all_ids.extend(batch)
+            if not batch or not scroll_id:
+                break
+        akg_ids = all_ids
+        _fix_state["total"] = len(akg_ids)
+        _fix_state["log"].append(f"{len(akg_ids)} itens AKG ativos encontrados")
 
     null_attrs = [
         {"id": "HAIR_TONE", "value_name": None},
