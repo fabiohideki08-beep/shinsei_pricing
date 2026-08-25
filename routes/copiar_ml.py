@@ -1287,6 +1287,95 @@ def fechar_piloto_status():
     return _fechar_piloto_state
 
 
+# ── Fechar TODOS os itens AKG (reset completo) ────────────────────────────────
+
+_fechar_tudo_state: dict = {}
+
+
+@router.post("/copiar-ml/fechar-todos-akg")
+def fechar_todos_akg(bg: _BG):
+    """Fecha TODOS os itens ativos e pausados da conta AKG via scroll.
+    Limpa copy_map completamente ao final.
+    Usar antes de recriar tudo do zero.
+    """
+    _fechar_tudo_state.clear()
+    bg.add_task(_fechar_todos_akg_bg)
+    return {"ok": True, "msg": "Fechando todos os itens AKG em background — acompanhe em /fechar-todos-akg/status"}
+
+
+def _fechar_todos_akg_bg():
+    global _fechar_tudo_state
+    _fechar_tudo_state = {
+        "rodando": True, "coletados": 0,
+        "fechados": 0, "erros": 0, "log": []
+    }
+    try:
+        tok_a = _token_akg()
+        # Verifica que o token é realmente AKG
+        rme = _req.get(f"{ML_API}/users/me", headers=_hdrs(tok_a), timeout=10)
+        me_id = rme.json().get("id")
+        if str(me_id) != "3541432733":
+            _fechar_tudo_state.update({
+                "rodando": False,
+                "erro": f"Token AKG está apontando para user_id={me_id} (esperado 3541432733). Abortar."
+            })
+            return
+    except Exception as e:
+        _fechar_tudo_state.update({"rodando": False, "erro": str(e)})
+        return
+
+    # Coleta todos os IDs via scroll (active + paused)
+    all_ids: list[str] = []
+    for status in ("active", "paused"):
+        scroll_id = None
+        while True:
+            params = {"status": status, "limit": 100}
+            if scroll_id:
+                params["scroll_id"] = scroll_id
+            r = _req.get(f"{ML_API}/users/3541432733/items/search",
+                         params=params, headers=_hdrs(tok_a), timeout=20)
+            if r.status_code != 200:
+                break
+            data = r.json()
+            ids = data.get("results", [])
+            if not ids:
+                break
+            all_ids.extend(ids)
+            _fechar_tudo_state["coletados"] = len(all_ids)
+            scroll_id = data.get("scroll_id")
+            if not scroll_id:
+                break
+            time.sleep(0.2)
+
+    _fechar_tudo_state["coletados"] = len(all_ids)
+
+    # Fecha todos
+    for item_id in all_ids:
+        try:
+            rp = _req.put(f"{ML_API}/items/{item_id}",
+                          json={"status": "closed"},
+                          headers=_hdrs(tok_a), timeout=15)
+            if rp.status_code in (200, 201):
+                _fechar_tudo_state["fechados"] += 1
+            else:
+                _fechar_tudo_state["erros"] += 1
+                _fechar_tudo_state["log"].append(f"ERR:{item_id}:{rp.status_code}:{rp.text[:50]}")
+        except Exception as e:
+            _fechar_tudo_state["erros"] += 1
+            _fechar_tudo_state["log"].append(f"EXC:{item_id}:{str(e)[:40]}")
+        time.sleep(0.3)
+
+    # Limpa copy_map
+    _save_copy_map({})
+    _fechar_tudo_state["rodando"] = False
+    _fechar_tudo_state["copy_map_limpo"] = True
+
+
+@router.get("/copiar-ml/fechar-todos-akg/status")
+def fechar_todos_akg_status():
+    return _fechar_tudo_state
+
+
 @router.get("/copiar-ml/copy-map")
 def export_copy_map():
     """Retorna o copy_map completo {shinsei_id: akg_id} persistido em disco."""
