@@ -1129,6 +1129,100 @@ def fix_hair_tone_status():
     return _fix_state
 
 
+@router.post("/copiar-ml/fix-add-hair-tone")
+def fix_add_hair_tone(bg: _BG):
+    """Para itens do copy_map que estão sem HAIR_TONE na AKG mas têm no Shinsei: adiciona."""
+    copy_map = _load_copy_map()
+    if not copy_map:
+        return {"ok": False, "msg": "copy_map vazio"}
+    bg.add_task(_fix_add_hair_tone_bg, copy_map)
+    return {"ok": True, "msg": f"Verificando {len(copy_map)} pares para adicionar HAIR_TONE", "total": len(copy_map)}
+
+
+_fix_add_state: dict = {}
+
+
+def _fix_add_hair_tone_bg(copy_map: dict[str, str]):
+    global _fix_add_state
+    _fix_add_state = {"rodando": True, "total": len(copy_map), "adicionados": 0, "sem_ht_shinsei": 0, "ja_ok": 0, "erros": 0, "log": []}
+    try:
+        tok_s = _token_shinsei()
+        tok_a = _token_akg()
+    except Exception as e:
+        _fix_add_state.update({"rodando": False, "erro": str(e)})
+        return
+
+    for shin_id, akg_id in copy_map.items():
+        import time as _t
+        try:
+            # Busca HAIR_TONE do item Shinsei
+            rs = _req.get(f"{ML_API}/items/{shin_id}",
+                          params={"attributes": "id,attributes,family_name"},
+                          headers=_hdrs(tok_s), timeout=15)
+            if rs.status_code != 200:
+                _fix_add_state["erros"] += 1
+                continue
+
+            shin_data = rs.json()
+            shin_attrs = shin_data.get("attributes") or []
+            family_name = shin_data.get("family_name") or ""
+            hair_tone_attr = next((a for a in shin_attrs if a.get("id") == "HAIR_TONE"), None)
+
+            if not hair_tone_attr or not hair_tone_attr.get("value_name"):
+                _fix_add_state["sem_ht_shinsei"] += 1
+                continue
+
+            ht_val = hair_tone_attr.get("value_name", "")
+            ht_vid = hair_tone_attr.get("value_id")
+
+            # Verifica se family_name já tem o código da cor (não deve adicionar HAIR_TONE)
+            import re as _re2
+            fn_upper = family_name.upper()
+            ht_code_m = _re2.match(r'([\d\.]+)', ht_val.strip())
+            ht_code = ht_code_m.group(1) if ht_code_m else ""
+            if ht_code and ht_code in fn_upper:
+                _fix_add_state["sem_ht_shinsei"] += 1
+                continue
+
+            # Verifica se AKG já tem HAIR_TONE
+            ra = _req.get(f"{ML_API}/items/{akg_id}",
+                          params={"attributes": "id,attributes"},
+                          headers=_hdrs(tok_a), timeout=15)
+            if ra.status_code != 200:
+                _fix_add_state["erros"] += 1
+                continue
+
+            akg_attrs = ra.json().get("attributes") or []
+            akg_ht = next((a for a in akg_attrs if a.get("id") == "HAIR_TONE"), None)
+            if akg_ht and akg_ht.get("value_name"):
+                _fix_add_state["ja_ok"] += 1
+                continue
+
+            # Adiciona HAIR_TONE ao AKG
+            ht_payload = {"id": "HAIR_TONE", "value_name": ht_val}
+            if ht_vid:
+                ht_payload["value_id"] = ht_vid
+            rp = _req.put(f"{ML_API}/items/{akg_id}",
+                          json={"attributes": [ht_payload]},
+                          headers=_hdrs(tok_a), timeout=15)
+            if rp.status_code in (200, 201):
+                _fix_add_state["adicionados"] += 1
+                _fix_add_state["log"].append(f"OK:{shin_id}->{akg_id} ht='{ht_val[:30]}'")
+            else:
+                _fix_add_state["erros"] += 1
+                _fix_add_state["log"].append(f"ERR:{akg_id}:{rp.text[:60]}")
+        except Exception as e:
+            _fix_add_state["erros"] += 1
+        _t.sleep(0.25)
+
+    _fix_add_state["rodando"] = False
+
+
+@router.get("/copiar-ml/fix-add-hair-tone/status")
+def fix_add_hair_tone_status():
+    return _fix_add_state
+
+
 @router.get("/copiar-ml/copy-map")
 def export_copy_map():
     """Retorna o copy_map completo {shinsei_id: akg_id} persistido em disco."""
