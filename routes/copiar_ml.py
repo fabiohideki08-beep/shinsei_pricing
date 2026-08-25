@@ -166,13 +166,20 @@ def _build_payload(item: dict) -> dict:
     Monta o payload para criar o anúncio na conta AKG.
     Sempre cria anúncio TRADICIONAL (não-catálogo): nunca inclui
     catalog_product_id e força catalog_listing=false.
+    Clone perfeito: title, family_name, SKU, fotos, variações, warranty, descrição.
     """
 
     # Fotos: passa as URLs originais — ML re-hospeda automaticamente
-    pictures = [{"source": p["url"]} for p in (item.get("pictures") or []) if p.get("url")]
+    # Guardamos também os IDs originais (Shinsei) para mapear picture_ids nas variações
+    src_pictures = (item.get("pictures") or [])
+    pictures = [{"source": p["url"]} for p in src_pictures if p.get("url")]
+    # Índice: shinsei_picture_id → posição na lista (para mapear após criação)
+    shinsei_pic_index: dict[str, int] = {
+        p["id"]: i for i, p in enumerate(src_pictures) if p.get("id")
+    }
 
-    # Variações com seller_custom_field (SKU)
-    # Remove picture_ids pois os IDs são da conta Shinsei e não existem na AKG
+    # Variações com seller_custom_field (SKU) — sem picture_ids por ora
+    # (picture_ids são mapeados pós-criação em _fix_variation_pictures)
     variacoes = []
     for v in (item.get("variations") or []):
         var = {
@@ -181,6 +188,9 @@ def _build_payload(item: dict) -> dict:
             "available_quantity":     v.get("available_quantity") or 0,
             "seller_custom_field":    v.get("seller_custom_field") or "",
         }
+        # Preserva picture_ids Shinsei no campo auxiliar (não enviado ao ML)
+        if v.get("picture_ids"):
+            var["_shinsei_picture_ids"] = v["picture_ids"]
         variacoes.append(var)
 
     # Atributos — remove campos que o ML rejeita na criação (somente-leitura do sistema)
@@ -199,7 +209,6 @@ def _build_payload(item: dict) -> dict:
     _family_name_raw = (item.get("family_name") or "").upper()
     _hair_tone_attr = next((a for a in (item.get("attributes") or []) if a.get("id") == "HAIR_TONE"), None)
     _hair_tone_val = (_hair_tone_attr.get("value_name") or "") if _hair_tone_attr else ""
-    # Código numérico do HAIR_TONE: primeiros tokens até encontrar letra (ex: "5.32" de "5.32 Dourado")
     import re as _re
     _ht_code_m = _re.match(r'([\d\.]+)', _hair_tone_val.strip())
     _ht_code = _ht_code_m.group(1) if _ht_code_m else ""
@@ -233,25 +242,25 @@ def _build_payload(item: dict) -> dict:
         "catalog_listing":     False,
     }
 
-    # family_name é obrigatório para itens omni (colorações, etc.)
-    # Inverte apenas a 1ª letra da última palavra para diferenciar da família Shinsei
-    # (evita família "morta" na AKG) mantendo o restante intacto
-    def _toggle_last_word_first(s: str) -> str:
-        words = s.split(" ")
-        last = words[-1]
-        if last:
-            c = last[0]
-            words[-1] = (c.lower() if c.isupper() else c.upper()) + last[1:]
-        return " ".join(words)
+    if item.get("warranty"):
+        payload["warranty"] = item["warranty"]
 
+    # family_name é obrigatório para itens omni (colorações, etc.)
+    # Usa o family_name original para título idêntico ao Shinsei.
+    # A idempotência é garantida pelo copy_map — não há risco de família duplicada
+    # para itens que nunca foram tentados.
     family_name = item.get("family_name")
     if family_name:
-        payload["family_name"] = _toggle_last_word_first(family_name.strip())[:60]
+        payload["family_name"] = family_name.strip()[:60]
     else:
         payload["title"] = _title
 
     if variacoes:
-        payload["variations"] = variacoes
+        # Envia sem picture_ids (serão associados via PUT após criação)
+        payload["variations"] = [
+            {k: v for k, v in var.items() if not k.startswith("_")}
+            for var in variacoes
+        ]
 
     # Frete
     shipping = item.get("shipping") or {}
@@ -263,7 +272,74 @@ def _build_payload(item: dict) -> dict:
             "logistic_type": shipping.get("logistic_type", "fulfillment"),
         }
 
+    # Metadado auxiliar (não enviado ao ML) para mapeamento de fotos pós-criação
+    payload["_shinsei_pic_index"] = shinsei_pic_index
+    payload["_variacoes_com_pics"] = variacoes  # contém _shinsei_picture_ids
+
     return payload
+
+
+def _fix_variation_pictures(novo_id: str, payload: dict, tok_a: str) -> bool:
+    """
+    Pós-criação: mapeia picture_ids Shinsei → AKG por posição e faz PUT
+    nas variações para associar as fotos corretas a cada variação.
+    Retorna True se houve PUT bem-sucedido, False se não havia o que fazer.
+    """
+    variacoes_orig = payload.get("_variacoes_com_pics") or []
+    shinsei_pic_index = payload.get("_shinsei_pic_index") or {}
+
+    # Verifica se alguma variação tinha picture_ids
+    tem_pics = any(v.get("_shinsei_picture_ids") for v in variacoes_orig)
+    if not tem_pics or not shinsei_pic_index:
+        return False
+
+    # Busca o item recém-criado na AKG para obter os novos picture_ids
+    r = _req.get(f"{ML_API}/items/{novo_id}", headers=_hdrs(tok_a), timeout=20)
+    if r.status_code != 200:
+        return False
+    akg_item = r.json()
+
+    # Mapeia posição → novo AKG picture_id
+    akg_pictures = akg_item.get("pictures") or []
+    pos_to_akg_id = {i: p["id"] for i, p in enumerate(akg_pictures) if p.get("id")}
+
+    # Mapeia shinsei_picture_id → akg_picture_id via posição
+    shinsei_to_akg: dict[str, str] = {}
+    for s_id, pos in shinsei_pic_index.items():
+        if pos in pos_to_akg_id:
+            shinsei_to_akg[s_id] = pos_to_akg_id[pos]
+
+    if not shinsei_to_akg:
+        return False
+
+    # Monta variações com os novos picture_ids para o PUT
+    akg_variacoes = akg_item.get("variations") or []
+    # Cria índice por seller_custom_field para casar variação Shinsei → AKG
+    akg_var_by_sku: dict[str, dict] = {
+        v.get("seller_custom_field", ""): v for v in akg_variacoes if v.get("seller_custom_field")
+    }
+
+    vars_put = []
+    for orig_var in variacoes_orig:
+        sku = orig_var.get("seller_custom_field") or ""
+        s_pic_ids = orig_var.get("_shinsei_picture_ids") or []
+        akg_var = akg_var_by_sku.get(sku)
+        if not akg_var or not s_pic_ids:
+            continue
+        novos_pic_ids = [shinsei_to_akg[pid] for pid in s_pic_ids if pid in shinsei_to_akg]
+        if novos_pic_ids:
+            vars_put.append({"id": akg_var["id"], "picture_ids": novos_pic_ids})
+
+    if not vars_put:
+        return False
+
+    r2 = _req.put(
+        f"{ML_API}/items/{novo_id}",
+        headers=_hdrs(tok_a),
+        json={"variations": vars_put},
+        timeout=20,
+    )
+    return r2.status_code in (200, 201)
 
 
 def _gtin_conflict(body: dict) -> bool:
@@ -781,6 +857,13 @@ def copiar_anuncio(body: dict):
                 if novo_id and descricao:
                     _criar_description_akg(novo_id, descricao, tok_a)
 
+                # 5. Associa picture_ids às variações (clone perfeito de fotos)
+                if novo_id:
+                    try:
+                        _fix_variation_pictures(novo_id, payload, tok_a)
+                    except Exception as _pe:
+                        logger.warning("fix_variation_pictures %s: %s", novo_id, _pe)
+
                 # ── PÓS-CONFERÊNCIA: confirma que o novo item está ativo ────
                 time.sleep(1.5)  # aguarda ML processar
                 status_pos = _verificar_status_akg(novo_id, tok_a) if novo_id else "unknown"
@@ -903,11 +986,19 @@ def _batch_copy_bg(ids: list[str]):
                 _batch_copy_state["log"].append(f"NF:{mlb}")
                 _batch_copy_state["processados"] = i + 1
                 continue
+            descricao = _get_description(mlb, tok_s)
+            _t.sleep(0.3)
             payload = _build_payload(item)
             res = _criar_item_akg(payload, tok_a)
             akg_id = res.get("id") or (res.get("body") or {}).get("id")
             if akg_id and res.get("status_code") in (200, 201):
                 _save_copy_map_entry(mlb, akg_id)
+                if descricao:
+                    _criar_description_akg(akg_id, descricao, tok_a)
+                try:
+                    _fix_variation_pictures(akg_id, payload, tok_a)
+                except Exception as _pe:
+                    logger.warning("fix_var_pics %s: %s", akg_id, _pe)
                 _batch_copy_state["ok"] += 1
                 _batch_copy_state["log"].append(f"OK:{mlb}->{akg_id}")
             else:
