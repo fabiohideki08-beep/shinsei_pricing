@@ -1064,9 +1064,10 @@ def _resolve_skus_to_ml_ids(skus: set[str], tok: str, seller_id: str) -> list[st
     return matched
 
 
-def _batch_from_faltando_bg(limit: int | None, family_only: bool = False):
+def _batch_from_faltando_bg(limit: int | None, family_only: bool = False, sort_by_family: bool = False):
     """Background: lê _faltando_akg_capilares.json, resolve IDs ML e copia.
     family_only=True: copia apenas itens omni (com family_name/variações).
+    sort_by_family=True: processa famílias maiores primeiro (maior risco primeiro).
     """
     global _batch_copy_state
     DATA_DIR = BASE_DIR / "data"
@@ -1121,6 +1122,30 @@ def _batch_from_faltando_bg(limit: int | None, family_only: bool = False):
         _batch_copy_state["log"].append(f"{len(family_ids)} itens com variações encontrados")
         ml_ids = family_ids
 
+    # Ordena pelo tamanho da família (maiores primeiro) antes de aplicar limit
+    # Usa batch GET de family_id (~46 chamadas para 905 IDs) — eficiente
+    if sort_by_family and ml_ids:
+        _batch_copy_state["log"].append("Ordenando famílias por tamanho (maiores primeiro)...")
+        fam_of: dict[str, str] = {}
+        fam_count: dict[str, int] = {}
+        for i in range(0, len(ml_ids), 20):
+            chunk = ml_ids[i:i+20]
+            r = _req.get(f"{ML_API}/items",
+                         params={"ids": ",".join(chunk), "attributes": "id,family_id"},
+                         headers=_hdrs(tok_s), timeout=20)
+            if r.status_code == 200:
+                for entry in r.json():
+                    body = entry.get("body") or {}
+                    mid = body.get("id")
+                    fid = body.get("family_id") or mid or ""
+                    if mid:
+                        fam_of[mid] = fid
+                        fam_count[fid] = fam_count.get(fid, 0) + 1
+            time.sleep(0.2)
+        ml_ids = sorted(ml_ids, key=lambda x: fam_count.get(fam_of.get(x, x), 1), reverse=True)
+        top5 = sorted(fam_count.items(), key=lambda x: x[1], reverse=True)[:5]
+        _batch_copy_state["log"].append(f"Top 5 famílias: {top5}")
+
     if limit:
         ml_ids = ml_ids[:limit]
 
@@ -1133,14 +1158,16 @@ def batch_copy_faltando(bg: _BG, body: dict = {}):
     """Copia todos os SKUs de _faltando_akg_capilares.json para a AKG.
     Body opcional: {\"limit\": 50} para testar com subconjunto.
     {\"family_only\": true} para clonar apenas itens com variações (omni).
+    {\"sort_by_family\": true} para processar famílias maiores primeiro.
     {\"limit\": 1, \"family_only\": true} para clonar um de cada vez."""
     if _batch_copy_state.get("rodando"):
         return {"ok": False, "msg": "Batch já em andamento"}
     limit = body.get("limit") if body else None
     family_only = bool(body.get("family_only")) if body else False
-    bg.add_task(_batch_from_faltando_bg, limit, family_only)
+    sort_by_family = bool(body.get("sort_by_family")) if body else False
+    bg.add_task(_batch_from_faltando_bg, limit, family_only, sort_by_family)
     return {"ok": True, "msg": "Iniciando cópia de faltando AKG em background",
-            "family_only": family_only, "limit": limit}
+            "family_only": family_only, "limit": limit, "sort_by_family": sort_by_family}
 
 
 @router.post("/copiar-ml/batch")
