@@ -966,8 +966,10 @@ def _resolve_skus_to_ml_ids(skus: set[str], tok: str, seller_id: str) -> list[st
     return matched
 
 
-def _batch_from_faltando_bg(limit: int | None):
-    """Background: lê _faltando_akg_capilares.json, resolve IDs ML e copia."""
+def _batch_from_faltando_bg(limit: int | None, family_only: bool = False):
+    """Background: lê _faltando_akg_capilares.json, resolve IDs ML e copia.
+    family_only=True: copia apenas itens omni (com family_name/variações).
+    """
     global _batch_copy_state
     DATA_DIR = BASE_DIR / "data"
     faltando_path = DATA_DIR / "_faltando_akg_capilares.json"
@@ -990,8 +992,6 @@ def _batch_from_faltando_bg(limit: int | None):
 
     faltando = json.loads(faltando_path.read_text(encoding="utf-8"))
     skus = {item["sku"] for item in faltando}
-    if limit:
-        skus = set(list(skus)[:limit])
 
     _batch_copy_state["log"].append(f"Resolvendo {len(skus)} SKUs → IDs ML...")
     me_r = _req.get(f"{ML_API}/users/me", headers=_hdrs(tok_s), timeout=15)
@@ -1004,6 +1004,28 @@ def _batch_from_faltando_bg(limit: int | None):
         _batch_copy_state.update({"rodando": False, "erro": "Nenhum ID ML encontrado"})
         return
 
+    # Filtro family_only: busca detalhes e mantém só os que têm family_name
+    if family_only:
+        _batch_copy_state["log"].append("Filtrando apenas itens com variações (family_name)...")
+        family_ids: list[str] = []
+        for i in range(0, len(ml_ids), 20):
+            chunk = ml_ids[i:i+20]
+            r = _req.get(f"{ML_API}/items",
+                         params={"ids": ",".join(chunk), "attributes": "id,family_name"},
+                         headers=_hdrs(tok_s), timeout=20)
+            if r.status_code != 200:
+                continue
+            for entry in r.json():
+                body = entry.get("body") or {}
+                if body.get("family_name"):
+                    family_ids.append(body["id"])
+            time.sleep(0.2)
+        _batch_copy_state["log"].append(f"{len(family_ids)} itens com variações encontrados")
+        ml_ids = family_ids
+
+    if limit:
+        ml_ids = ml_ids[:limit]
+
     # Reutiliza _batch_copy_bg com os IDs resolvidos
     _batch_copy_bg(ml_ids)
 
@@ -1011,12 +1033,16 @@ def _batch_from_faltando_bg(limit: int | None):
 @router.post("/copiar-ml/batch-faltando")
 def batch_copy_faltando(bg: _BG, body: dict = {}):
     """Copia todos os SKUs de _faltando_akg_capilares.json para a AKG.
-    Body opcional: {\"limit\": 50} para testar com subconjunto."""
+    Body opcional: {\"limit\": 50} para testar com subconjunto.
+    {\"family_only\": true} para clonar apenas itens com variações (omni).
+    {\"limit\": 1, \"family_only\": true} para clonar um de cada vez."""
     if _batch_copy_state.get("rodando"):
         return {"ok": False, "msg": "Batch já em andamento"}
     limit = body.get("limit") if body else None
-    bg.add_task(_batch_from_faltando_bg, limit)
-    return {"ok": True, "msg": "Iniciando cópia de faltando AKG em background"}
+    family_only = bool(body.get("family_only")) if body else False
+    bg.add_task(_batch_from_faltando_bg, limit, family_only)
+    return {"ok": True, "msg": "Iniciando cópia de faltando AKG em background",
+            "family_only": family_only, "limit": limit}
 
 
 @router.post("/copiar-ml/batch")
