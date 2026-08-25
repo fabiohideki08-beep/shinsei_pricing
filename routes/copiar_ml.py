@@ -1017,6 +1017,89 @@ def batch_copy_status():
     return _batch_copy_state
 
 
+# ── Verificação cruzada ───────────────────────────────────────────────────────
+
+@router.get("/copiar-ml/verificar-clone")
+def verificar_clone_batch(pares: str = ""):
+    """Verifica se anúncios AKG são clones dos Shinsei.
+    Query param: pares=MLB123:MLB456,MLB789:MLB012
+    Compara: título/family_name, categoria, preço, fotos, SKU, atributos chave.
+    """
+    if not pares:
+        return {"erro": "pares param obrigatório: MLB123:MLB456,MLB789:MLB012"}
+    try:
+        tok_s = _token_shinsei()
+        tok_a = _token_akg()
+    except Exception as e:
+        return {"erro": str(e)}
+
+    resultados = []
+    for par in pares.split(","):
+        parts = par.strip().split(":")
+        if len(parts) != 2:
+            continue
+        shin_id = _extract_id(parts[0])
+        akg_id = _extract_id(parts[1])
+        try:
+            rs = _get_item(shin_id, tok_s)
+            ra = _get_item(akg_id, tok_a)
+        except Exception as e:
+            resultados.append({"par": par, "erro": str(e)})
+            continue
+
+        diffs = []
+        # Título / family_name
+        s_title = rs.get("title", "")
+        a_title = ra.get("title", "")
+        s_fn = (rs.get("family_name") or "").replace(" + ", " ").strip()[:60]
+        a_fn = (ra.get("family_name") or "").replace(" + ", " ").strip()[:60]
+        if s_title and a_title and s_title != a_title:
+            diffs.append(f"titulo: '{s_title[:50]}' ≠ '{a_title[:50]}'")
+        if s_fn and a_fn and s_fn != a_fn:
+            diffs.append(f"family_name: '{s_fn}' ≠ '{a_fn}'")
+        # Categoria
+        if rs.get("category_id") != ra.get("category_id"):
+            diffs.append(f"categoria: {rs.get('category_id')} ≠ {ra.get('category_id')}")
+        # SKU
+        s_sku = rs.get("seller_custom_field", "")
+        a_sku = ra.get("seller_custom_field", "")
+        if s_sku != a_sku:
+            diffs.append(f"sku: '{s_sku}' ≠ '{a_sku}'")
+        # Fotos
+        s_pics = len(rs.get("pictures", []))
+        a_pics = len(ra.get("pictures", []))
+        if s_pics != a_pics:
+            diffs.append(f"fotos: {s_pics} ≠ {a_pics}")
+        # Atributos importantes
+        s_attrs = {a["id"]: a.get("value_name", "") for a in rs.get("attributes", []) if a.get("id")}
+        a_attrs = {a["id"]: a.get("value_name", "") for a in ra.get("attributes", []) if a.get("id")}
+        for attr in ("BRAND", "LINE", "NET_VOLUME", "HAIR_TONE"):
+            if s_attrs.get(attr) and a_attrs.get(attr) and s_attrs[attr] != a_attrs[attr]:
+                diffs.append(f"attr {attr}: '{s_attrs[attr]}' ≠ '{a_attrs[attr]}'")
+
+        resultados.append({
+            "shin_id": shin_id,
+            "akg_id": akg_id,
+            "clone": len(diffs) == 0,
+            "titulo_shin": (s_title or s_fn)[:60],
+            "titulo_akg": (a_title or a_fn)[:60],
+            "sku_shin": s_sku,
+            "sku_akg": a_sku,
+            "fotos_shin": s_pics,
+            "fotos_akg": a_pics,
+            "diffs": diffs,
+        })
+        import time as _t; _t.sleep(0.1)
+
+    clones = sum(1 for r in resultados if r.get("clone"))
+    return {
+        "total": len(resultados),
+        "clones": clones,
+        "divergentes": len(resultados) - clones,
+        "resultados": resultados,
+    }
+
+
 # ── Debug ────────────────────────────────────────────────────────────────────
 
 @router.get("/copiar-ml/debug-payload/{item_id:path}")
