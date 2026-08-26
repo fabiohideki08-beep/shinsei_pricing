@@ -34,16 +34,30 @@ BLING_SHOPIFY_LOJA_ID = 206160746
 
 
 def _bling_token() -> str:
-    """Pega token Bling do env (injetado pelo auto-refresh do Render)."""
-    tok = os.getenv("BLING_ACCESS_TOKEN", "")
-    if not tok:
-        f = DATA_DIR / "bling_tokens.json"
+    """Pega token Bling Shinsei via BlingClient (com auto-refresh)."""
+    try:
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from bling_client import BlingClient
+        bc = BlingClient()
+        if bc.has_local_tokens():
+            tok = bc._load_tokens().get("access_token", "")
+            if tok:
+                return tok
+    except Exception:
+        pass
+    # Fallback: ler diretamente do arquivo
+    for fname in ("bling_tokens.json", "bling_token_fresh.json"):
+        f = DATA_DIR / fname
         if f.exists():
             try:
-                tok = json.loads(f.read_text()).get("access_token", "")
+                data = json.loads(f.read_text())
+                tok = data.get("access_token") or data.get("data", {}).get("access_token", "")
+                if tok:
+                    return tok
             except Exception:
                 pass
-    return tok
+    return ""
 
 
 def _bling_headers(tok: str) -> dict:
