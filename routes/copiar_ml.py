@@ -1014,7 +1014,9 @@ def _batch_copy_bg(ids: list[str]):
                 _batch_copy_state["log"].append(f"OK:{mlb}->{akg_id}")
             else:
                 _batch_copy_state["erros"] += 1
-                _batch_copy_state["log"].append(f"ERR:{mlb}:{str(res)[:80]}")
+                _causes = (res.get("body") or {}).get("cause") or []
+                _cs = ",".join(f"{c.get('cause_id')}({c.get('type','?')})" for c in _causes[:6])
+                _batch_copy_state["log"].append(f"ERR:{mlb}:sc={res.get('status_code')} [{_cs}] {(res.get('body') or {}).get('message','')}")
         except Exception as e:
             _batch_copy_state["erros"] += 1
             _batch_copy_state["log"].append(f"EXC:{mlb}:{str(e)[:60]}")
@@ -1698,11 +1700,9 @@ def verificar_clone_batch(pares: str = ""):
         s_fn = (rs.get("family_name") or "").replace(" + ", " ").strip()[:60]
         a_fn = (ra.get("family_name") or "").replace(" + ", " ").strip()[:60]
         # normalize: Shinsei title/fn toggled = expected AKG value
-        s_title_norm = _toggle_last_word_first(s_title) if s_title else s_title
-        s_fn_norm = _toggle_last_word_first(s_fn) if s_fn else s_fn
-        if s_title and a_title and s_title_norm != a_title:
+        if s_title and a_title and s_title != a_title:
             diffs.append(f"titulo: '{s_title[:50]}' ≠ '{a_title[:50]}'")
-        if s_fn and a_fn and s_fn_norm != a_fn:
+        if s_fn and a_fn and s_fn != a_fn:
             diffs.append(f"family_name: '{s_fn}' ≠ '{a_fn}'")
         # Categoria
         if rs.get("category_id") != ra.get("category_id"):
