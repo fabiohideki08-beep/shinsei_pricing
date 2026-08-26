@@ -213,7 +213,9 @@ def _build_payload(item: dict) -> dict:
     _ht_code_m = _re.match(r'([\d\.]+)', _hair_tone_val.strip())
     _ht_code = _ht_code_m.group(1) if _ht_code_m else ""
     _hair_tone_duplica = bool(_ht_code and _ht_code in _family_name_raw)
-    if _hair_tone_duplica:
+    # HAIR_TONE sem value_id → ML AKG rejeita com cause_id 410 (conta nova só aceita valores pré-definidos)
+    _hair_tone_sem_vid = _hair_tone_attr and not (_hair_tone_attr.get("value_id"))
+    if _hair_tone_duplica or _hair_tone_sem_vid:
         SKIP_ATTR_IDS = SKIP_ATTR_IDS | {"HAIR_TONE"}
 
     def _mk_attr(a: dict) -> dict:
