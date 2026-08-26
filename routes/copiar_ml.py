@@ -230,6 +230,14 @@ def _build_payload(item: dict) -> dict:
         if a.get("id") and a.get("id") not in SKIP_ATTR_IDS and a.get("value_name")
     ]
 
+    # NAME é obrigatório em MLB264861 para contas novas — adicionar se ausente
+    if not any(a["id"] == "NAME" for a in atributos):
+        brand = next((a.get("value_name","") for a in (item.get("attributes") or []) if a.get("id") == "BRAND"), "")
+        line = next((a.get("value_name","") for a in (item.get("attributes") or []) if a.get("id") == "LINE"), "")
+        name_val = f"{brand} {line}".strip() or item.get("title", "")[:60]
+        if name_val:
+            atributos.append({"id": "NAME", "value_name": name_val})
+
     # listing_type_id: garante tipo tradicional (gold_special ou gold_pro)
     listing_type = item.get("listing_type_id") or "gold_special"
     if listing_type not in ("gold_special", "gold_pro", "bronze", "free"):
