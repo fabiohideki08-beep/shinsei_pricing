@@ -1768,7 +1768,7 @@ def debug_payload(item_id: str):
 
 @router.get("/copiar-ml/debug-post/{item_id:path}")
 def debug_post(item_id: str):
-    """Faz o POST real ao ML AKG e mostra a resposta completa (para diagnóstico de body.invalid_fields)."""
+    """Faz o POST real ao ML AKG via _criar_item_akg (igual ao batch) e mostra resposta completa."""
     raw_id = _extract_id(item_id)
     try:
         tok_s = _token_shinsei()
@@ -1780,8 +1780,9 @@ def debug_post(item_id: str):
     except Exception as e:
         return {"erro": str(e)}
     payload = _build_payload(item)
-    r = _req.post(f"{ML_API}/items", headers=_hdrs(tok_a), json=payload, timeout=30)
-    return {"status_code": r.status_code, "payload_enviado": payload, "resposta_ml": r.json()}
+    clean = {k: v for k, v in payload.items() if not k.startswith("_")}
+    res = _criar_item_akg(payload, tok_a)
+    return {"status_code": res.get("status_code"), "payload_enviado": clean, "resposta_ml": res.get("body"), "meta": {k: v for k, v in res.items() if k not in ("status_code","body")}}
 
 
 @router.get("/copiar-ml/debug/{item_id:path}")
