@@ -394,11 +394,11 @@ def _criar_item_akg(payload: dict, token: str) -> dict:
     if r.status_code in (200, 201):
         return {"status_code": r.status_code, "body": body}
 
-    if r.status_code not in (400, 422) or "attributes" not in payload:
+    if r.status_code not in (400, 422) or "attributes" not in clean:
         return {"status_code": r.status_code, "body": body}
 
     gtin_original = next(
-        (a.get("value_name") for a in payload["attributes"] if a.get("id") == "GTIN"),
+        (a.get("value_name") for a in clean["attributes"] if a.get("id") == "GTIN"),
         None,
     )
 
@@ -407,12 +407,12 @@ def _criar_item_akg(payload: dict, token: str) -> dict:
     _gtin_silent = not body.get("cause")  # cause ausente ou lista vazia []
     if (_gtin_conflict(body) or _gtin_silent) and gtin_original:
         gtin_temp = _gerar_gtin_temp()
-        payload_temp = {**payload, "attributes": [
+        clean_temp = {**clean, "attributes": [
             {"id": "GTIN", "value_name": gtin_temp} if a.get("id") == "GTIN" else a
-            for a in payload["attributes"]
+            for a in clean["attributes"]
         ]}
         r2 = _req.post(f"{ML_API}/items", headers=_hdrs(token),
-                       json=payload_temp, timeout=30)
+                       json=clean_temp, timeout=30)
         if r2.status_code in (200, 201):
             novo_id = r2.json().get("id")
             gtin_atualizado = False
@@ -433,11 +433,11 @@ def _criar_item_akg(payload: dict, token: str) -> dict:
     # GTIN obrigatório mas não existe no Shinsei → cria com GTIN temp e marca pendente
     if _gtin_missing(body):
         gtin_temp = _gerar_gtin_temp()
-        attrs_com_temp = [a for a in payload["attributes"] if a.get("id") != "GTIN"]
+        attrs_com_temp = [a for a in clean["attributes"] if a.get("id") != "GTIN"]
         attrs_com_temp.append({"id": "GTIN", "value_name": gtin_temp})
-        payload_temp = {**payload, "attributes": attrs_com_temp}
+        clean_temp = {**clean, "attributes": attrs_com_temp}
         r3 = _req.post(f"{ML_API}/items", headers=_hdrs(token),
-                       json=payload_temp, timeout=30)
+                       json=clean_temp, timeout=30)
         if r3.status_code in (200, 201):
             novo_id = r3.json().get("id")
             if novo_id:
