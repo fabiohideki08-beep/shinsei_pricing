@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 Shopify webhooks — rastreamento server-side de conversões no Google Ads
-e geração automática de etiquetas MelhorEnvio para pedidos com frete grátis.
+e configuração automática de transporte MelhorEnvio no Bling para emissão
+da NF com etiqueta ME (impressão automática Bling = DANFE + etiqueta juntos).
 """
 from __future__ import annotations
 
@@ -27,6 +28,144 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 # MelhorEnvio
 ME_ORIGIN_CEP = "06036003"  # SHINSEI MARKETPLACE, Osasco SP
 ME_SERVICES   = "1,2,3,4,17,33"  # PAC, SEDEX, Jadlog .Package/.Com, Mini Envios, JeT Standard
+
+# Bling — loja Shopify
+BLING_SHOPIFY_LOJA_ID = 206160746
+
+
+def _bling_token() -> str:
+    """Pega token Bling do env (injetado pelo auto-refresh do Render)."""
+    tok = os.getenv("BLING_ACCESS_TOKEN", "")
+    if not tok:
+        f = DATA_DIR / "bling_tokens.json"
+        if f.exists():
+            try:
+                tok = json.loads(f.read_text()).get("access_token", "")
+            except Exception:
+                pass
+    return tok
+
+
+def _bling_headers(tok: str) -> dict:
+    return {"Authorization": f"Bearer {tok}", "Content-Type": "application/json"}
+
+
+def _me_quote_best(dest_cep: str, weight_kg: float) -> dict | None:
+    """Cota ME e retorna o serviço mais barato disponível."""
+    tok = _me_token()
+    if not tok:
+        return None
+    try:
+        r = requests.post(
+            "https://melhorenvio.com.br/api/v2/me/shipment/calculate",
+            json={
+                "from": {"postal_code": ME_ORIGIN_CEP},
+                "to":   {"postal_code": dest_cep},
+                "package": {"weight": weight_kg, "width": 16, "height": 10, "length": 22},
+                "options": {"receipt": False, "own_hand": False},
+                "services": ME_SERVICES,
+            },
+            headers=_me_headers(tok), timeout=15,
+        )
+        quotes = r.json() if r.status_code == 200 else []
+        available = [q for q in quotes if q.get("price") and not q.get("error")]
+        return min(available, key=lambda q: float(q["price"])) if available else None
+    except Exception:
+        return None
+
+
+# Mapeamento nome ME → transportadora Bling (IDs configurados na conta Bling)
+_ME_SERVICE_TO_BLING = {
+    "PAC":      {"nome": "PAC - Correios", "codigo": "PAC"},
+    "SEDEX":    {"nome": "SEDEX - Correios", "codigo": "SEDEX"},
+    ".Package": {"nome": "Jadlog .Package", "codigo": "JADLOG_PACKAGE"},
+    ".Com":     {"nome": "Jadlog .Com",     "codigo": "JADLOG_COM"},
+    "Standard": {"nome": "JeT Standard",   "codigo": "JET_STANDARD"},
+    "Mini Envios": {"nome": "Mini Envios - Correios", "codigo": "MINI_ENVIOS"},
+}
+
+
+def _set_bling_transporte_me(order: dict) -> bool:
+    """
+    Busca o pedido de venda no Bling correspondente ao pedido Shopify,
+    e atualiza o transporte com o serviço ME mais barato cotado.
+    Quando o usuário emitir a NF no Bling, a impressão automática
+    gera a etiqueta ME + DANFE juntos.
+    """
+    order_name = order.get("name", f"#{order.get('id','?')}")
+    order_num  = str(order.get("order_number") or order.get("number") or "")
+
+    bling_tok = _bling_token()
+    if not bling_tok:
+        print(f"[bling_transporte] {order_name} — token Bling não disponível"); return False
+
+    addr = order.get("shipping_address") or order.get("billing_address") or {}
+    dest_cep = (addr.get("zip") or "").replace("-", "").replace(" ", "")
+    if len(dest_cep) < 8:
+        print(f"[bling_transporte] {order_name} — CEP inválido: {dest_cep}"); return False
+
+    items = order.get("line_items", [])
+    weight_kg = max(round(sum(float(i.get("grams") or 300) * int(i.get("quantity", 1)) for i in items) / 1000, 3), 0.1)
+
+    # Cotar ME
+    best = _me_quote_best(dest_cep, weight_kg)
+    if not best:
+        print(f"[bling_transporte] {order_name} — sem cotação ME para CEP {dest_cep}"); return False
+    print(f"[bling_transporte] {order_name} — melhor: {best['name']} R${best['price']}")
+
+    # Buscar pedido no Bling pelo número do pedido Shopify (loja integrada)
+    try:
+        r = requests.get(
+            "https://bling.com.br/Api/v3/pedidos/vendas",
+            params={"numeroPedido": order_num, "idLoja": BLING_SHOPIFY_LOJA_ID, "pagina": 1, "limite": 5},
+            headers=_bling_headers(bling_tok), timeout=15,
+        )
+        pedidos = r.json().get("data", []) if r.status_code == 200 else []
+        if not pedidos:
+            # Fallback: buscar por data recente
+            r2 = requests.get(
+                "https://bling.com.br/Api/v3/pedidos/vendas",
+                params={"idLoja": BLING_SHOPIFY_LOJA_ID, "pagina": 1, "limite": 50},
+                headers=_bling_headers(bling_tok), timeout=15,
+            )
+            all_pedidos = r2.json().get("data", []) if r2.status_code == 200 else []
+            pedidos = [p for p in all_pedidos if str(p.get("numero", "")) == order_num
+                       or str(p.get("numeroExterno", "")) == order_num
+                       or str(p.get("numeroExterno", "")) == str(order.get("id", ""))]
+    except Exception as e:
+        print(f"[bling_transporte] {order_name} — erro busca Bling: {e}"); return False
+
+    if not pedidos:
+        print(f"[bling_transporte] {order_name} — pedido não encontrado no Bling (num={order_num})"); return False
+
+    bling_pedido_id = pedidos[0]["id"]
+    service_map = _ME_SERVICE_TO_BLING.get(best["name"], {"nome": best["name"], "codigo": best["name"].upper()})
+
+    # Atualizar transporte no pedido Bling
+    try:
+        r3 = requests.patch(
+            f"https://bling.com.br/Api/v3/pedidos/vendas/{bling_pedido_id}",
+            json={
+                "transporte": {
+                    "transportador": {"nome": service_map["nome"]},
+                    "tipo": "D",
+                    "servico": service_map["codigo"],
+                    "prazoEntrega": int(best.get("delivery_time") or 7),
+                    "freteValor": float(best["price"]),
+                }
+            },
+            headers=_bling_headers(bling_tok), timeout=15,
+        )
+        if r3.status_code in (200, 201, 204):
+            print(f"[bling_transporte] ✅ {order_name} — transporte ME configurado no Bling (pedido {bling_pedido_id})")
+            _log_me_label(str(order.get("id","")), order_name, None,
+                          best["name"], float(best["price"]), dest_cep, "bling_transporte_ok")
+            return True
+        else:
+            print(f"[bling_transporte] {order_name} — erro PATCH Bling: {r3.status_code} {r3.text[:200]}")
+            return False
+    except Exception as e:
+        print(f"[bling_transporte] {order_name} — erro update Bling: {e}"); return False
 
 
 def _me_token() -> str:
@@ -356,6 +495,15 @@ def _log_conversion(order_id: str, valor: float, status: str):
     log_file.write_text(json.dumps(log[-200:], ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _set_bling_transporte_or_fallback(order: dict):
+    """Tenta configurar transporte ME no Bling. Se Bling indisponível, gera etiqueta ME diretamente."""
+    ok = _set_bling_transporte_me(order)
+    if not ok:
+        order_name = order.get("name", "?")
+        print(f"[bling_transporte] {order_name} — Bling indisponível, gerando etiqueta ME direto (fallback)")
+        _generate_me_label(order)
+
+
 def _verify_hmac(body: bytes, hmac_header: str) -> bool:
     secret = os.getenv("SHOPIFY_WEBHOOK_SECRET", "")
     if not secret:
@@ -384,7 +532,9 @@ async def order_paid(
         raise HTTPException(status_code=400, detail="JSON inválido")
 
     if not _is_rmsp(order):
-        background_tasks.add_task(_generate_me_label, order)
+        # Tenta configurar transporte ME no Bling (fluxo principal: NF+etiqueta juntos)
+        # Fallback: gera etiqueta ME diretamente se Bling não disponível
+        background_tasks.add_task(_set_bling_transporte_or_fallback, order)
 
     background_tasks.add_task(_upload_conversion, order)
 
@@ -407,6 +557,43 @@ def listar_etiquetas_me():
     if not log_file.exists():
         return {"etiquetas": []}
     return {"etiquetas": json.loads(log_file.read_text(encoding="utf-8"))[-50:]}
+
+
+@router.post("/configurar-transporte/{order_id}")
+def configurar_transporte(order_id: str):
+    """Busca pedido Shopify e configura o transporte ME no Bling (para emissão de NF com etiqueta)."""
+    shopify_token = os.getenv("SHOPIFY_ACCESS_TOKEN", "")
+    shopify_store = os.getenv("SHOPIFY_STORE", "pknw4n-eg.myshopify.com")
+    r = requests.get(f"https://{shopify_store}/admin/api/2024-01/orders/{order_id}.json",
+        headers={"X-Shopify-Access-Token": shopify_token}, timeout=15)
+    if r.status_code != 200:
+        return {"erro": f"Pedido não encontrado: {r.status_code}"}
+    order = r.json()["order"]
+    if _is_rmsp(order):
+        return {"aviso": f"Pedido {order.get('name')} é RMSP — transporte ME não aplicável"}
+    ok = _set_bling_transporte_me(order)
+    if ok:
+        return {"ok": True, "pedido": order.get("name"), "mensagem": "Transporte ME configurado no Bling — emita a NF para gerar a etiqueta"}
+    return {"ok": False, "pedido": order.get("name"), "mensagem": "Falha ao configurar no Bling — verifique os logs"}
+
+
+@router.post("/reenviar-etiqueta/{order_id}")
+def reenviar_etiqueta(order_id: str):
+    """Busca pedido no Shopify e gera etiqueta ME manualmente (sem HMAC)."""
+    shopify_token = os.getenv("SHOPIFY_ACCESS_TOKEN", "")
+    shopify_store = os.getenv("SHOPIFY_STORE", "pknw4n-eg.myshopify.com")
+    r = requests.get(
+        f"https://{shopify_store}/admin/api/2024-01/orders/{order_id}.json",
+        headers={"X-Shopify-Access-Token": shopify_token}, timeout=15,
+    )
+    if r.status_code != 200:
+        return {"erro": f"Pedido não encontrado: {r.status_code}"}
+    order = r.json()["order"]
+    is_rmsp = _is_rmsp(order)
+    if is_rmsp:
+        return {"aviso": f"Pedido {order.get('name')} é RMSP — etiqueta ME não aplicável"}
+    _generate_me_label(order)
+    return {"ok": True, "pedido": order.get("name"), "cep": (order.get("shipping_address") or {}).get("zip")}
 
 
 @router.post("/test-me-label")
