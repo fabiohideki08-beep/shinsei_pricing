@@ -216,8 +216,14 @@ def _build_payload(item: dict) -> dict:
     if _hair_tone_duplica:
         SKIP_ATTR_IDS = SKIP_ATTR_IDS | {"HAIR_TONE"}
 
+    def _mk_attr(a: dict) -> dict:
+        entry: dict = {"id": a["id"], "value_name": a.get("value_name")}
+        if a.get("value_id"):
+            entry["value_id"] = a["value_id"]
+        return entry
+
     atributos = [
-        {"id": a["id"], "value_name": a.get("value_name")}
+        _mk_attr(a)
         for a in (item.get("attributes") or [])
         if a.get("id") and a.get("id") not in SKIP_ATTR_IDS and a.get("value_name")
     ]
