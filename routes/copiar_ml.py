@@ -269,7 +269,10 @@ def _build_payload(item: dict) -> dict:
         # Remove " + " do family_name: famílias com esse padrão ficam bloqueadas no ML AKG
         # (o ML retorna cause:[] silencioso ao tentar criar). O título muda levemente apenas
         # para kits que usam " + " como separador (ex: "Kit Cor + Ox" → "Kit Cor Ox").
-        payload["family_name"] = family_name.strip().replace(" + ", " ")
+        fn = family_name.strip().replace(" + ", " ")
+        if len(fn) > 60:
+            fn = fn[:60].rsplit(" ", 1)[0]  # truncar na última palavra, não no meio
+        payload["family_name"] = fn
     else:
         payload["title"] = _title
 
