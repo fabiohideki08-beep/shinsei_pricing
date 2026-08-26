@@ -161,6 +161,98 @@ def _get_description(item_id: str, token: str) -> str:
     return ""
 
 
+_COLOR_CODE_RE = re.compile(
+    r'^(?:\d+[-./]\d+(?:[-./]\d+)?|[A-Z]-\d+(?:[-./]\d+)?)$'
+)
+_OX_RE = re.compile(r'\bOx(?:idante)?\s+(?:de\s+)?(\d+)\s+Vol(?:umes?)?\b', re.IGNORECASE)
+
+_KNOWN_LINES = [
+    # ordem do mais longo para o mais curto para match correto
+    'Igora ZERO AMM', 'Igora Highlifts', 'Igora Absolutes',
+    'Igora Fashion Lights', 'Igora Color 10', 'Igora Vibrance',
+    'Igora Royal', 'Igora',
+    'Color Wear', 'Evolution', 'Semi Di Lino',
+]
+_PRODUCT_TYPES = [
+    'Colorações', 'Coloração', 'Tonalizantes', 'Tonalizante',
+    'Tinta', 'Tintas', 'Kit', 'Kits',
+]
+_BRANDS_AKG = ['Alfaparf']       # incluir no título AKG
+_BRANDS_SKIP = ['Schwarzkopf']   # remover (já implícito em "Igora")
+
+
+def _smart_family_name(fn: str, max_len: int = 60) -> str:
+    """Reconstrói family_name priorizando: código > linha > tipo > ox vol > marca > descrição."""
+    if len(fn) <= max_len:
+        return fn
+
+    work = fn
+
+    # 1. Extrair código de cor (ex: 7-00, 8.4, L-66)
+    codes = [w for w in work.split() if _COLOR_CODE_RE.match(w)]
+    for c in codes:
+        work = re.sub(r'\b' + re.escape(c) + r'\b', '', work).strip()
+
+    # 2. Extrair linha de produto
+    lines_found = []
+    for line in _KNOWN_LINES:
+        if re.search(re.escape(line), work, re.IGNORECASE):
+            lines_found.append(line)
+            work = re.sub(re.escape(line), '', work, flags=re.IGNORECASE).strip()
+            break  # apenas a primeira/mais longa
+
+    # 3. Extrair tipo de produto
+    types_found = []
+    for pt in _PRODUCT_TYPES:
+        if re.search(r'\b' + re.escape(pt) + r'\b', work, re.IGNORECASE):
+            types_found.append(pt)
+            work = re.sub(r'\b' + re.escape(pt) + r'\b', '', work, flags=re.IGNORECASE).strip()
+            break
+
+    # 4. Extrair OX / oxidante (abreviar para "Ox N Vol")
+    ox_found = []
+    m = _OX_RE.search(work)
+    if m:
+        ox_found.append(f"Ox {m.group(1)} Vol")
+        work = (work[:m.start()] + work[m.end():]).strip()
+
+    # 5. Remover marcas implícitas (Schwarzkopf já está em "Igora*")
+    for brand in _BRANDS_SKIP:
+        work = re.sub(r'\b' + re.escape(brand) + r'\b', '', work, flags=re.IGNORECASE).strip()
+
+    # 5b. Extrair marcas a incluir (Alfaparf)
+    brands_found = []
+    for brand in _BRANDS_AKG:
+        if re.search(r'\b' + re.escape(brand) + r'\b', work, re.IGNORECASE):
+            brands_found.append(brand)
+            work = re.sub(r'\b' + re.escape(brand) + r'\b', '', work, flags=re.IGNORECASE).strip()
+
+    # 6. O restante é descrição de cor / outras palavras
+    remainder = re.sub(r'\s+', ' ', work).strip()
+
+    # Montar em ordem de prioridade
+    ordered = codes + lines_found + types_found + ox_found + brands_found
+    if remainder:
+        ordered.append(remainder)
+
+    result = ""
+    for part in ordered:
+        if not part:
+            continue
+        candidate = (result + " " + part).strip() if result else part
+        if len(candidate) <= max_len:
+            result = candidate
+        else:
+            # tenta encaixar palavra a palavra
+            for word in part.split():
+                candidate2 = (result + " " + word).strip() if result else word
+                if len(candidate2) <= max_len:
+                    result = candidate2
+                else:
+                    break
+    return result.strip()
+
+
 def _build_payload(item: dict) -> dict:
     """
     Monta o payload para criar o anúncio na conta AKG.
@@ -261,17 +353,11 @@ def _build_payload(item: dict) -> dict:
     # Não enviar warranty — campo depreciado no ML AKG (causa_id 410 em contas novas)
 
     # family_name é obrigatório para itens omni (colorações, etc.)
-    # Usa o family_name original para título idêntico ao Shinsei.
-    # A idempotência é garantida pelo copy_map — não há risco de família duplicada
-    # para itens que nunca foram tentados.
     family_name = item.get("family_name")
     if family_name:
-        # Remove " + " do family_name: famílias com esse padrão ficam bloqueadas no ML AKG
-        # (o ML retorna cause:[] silencioso ao tentar criar). O título muda levemente apenas
-        # para kits que usam " + " como separador (ex: "Kit Cor + Ox" → "Kit Cor Ox").
         fn = family_name.strip().replace(" + ", " ")
         if len(fn) > 60:
-            fn = fn[:60].rsplit(" ", 1)[0]  # truncar na última palavra, não no meio
+            fn = _smart_family_name(fn)
         payload["family_name"] = fn
     else:
         payload["title"] = _title
