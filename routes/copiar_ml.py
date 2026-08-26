@@ -250,8 +250,7 @@ def _build_payload(item: dict) -> dict:
         "catalog_listing":     False,
     }
 
-    if item.get("warranty"):
-        payload["warranty"] = item["warranty"]
+    # Não enviar warranty — campo depreciado no ML AKG (causa_id 410 em contas novas)
 
     # family_name é obrigatório para itens omni (colorações, etc.)
     # Usa o family_name original para título idêntico ao Shinsei.
