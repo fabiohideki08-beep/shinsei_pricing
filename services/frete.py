@@ -71,7 +71,7 @@ def salvar_config_frete(cfg: dict) -> None:
 FRETE_GRATIS_MINIMO: float = float(os.getenv("FRETE_GRATIS_MINIMO", "29.0"))
 
 MELHOR_ENVIO_TOKEN: str = os.getenv("MELHOR_ENVIO_TOKEN", "")
-MELHOR_ENVIO_SANDBOX: bool = os.getenv("MELHOR_ENVIO_SANDBOX", "true").lower() in ("1", "true", "yes")
+MELHOR_ENVIO_SANDBOX: bool = os.getenv("MELHOR_ENVIO_SANDBOX", "false").lower() in ("1", "true", "yes")
 
 _ME_BASE_PROD = "https://www.melhorenvio.com.br/api/v2"
 _ME_BASE_SANDBOX = "https://sandbox.melhorenvio.com.br/api/v2"

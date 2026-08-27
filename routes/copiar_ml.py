@@ -293,7 +293,7 @@ def _build_payload(item: dict) -> dict:
     #   o ML compõe o título como family_name + HAIR_TONE = duplicado.
     #   Solução: excluir HAIR_TONE apenas quando seu código numérico já está no family_name.
     SKIP_ATTR_IDS = {
-        "SELLER_SKU", "ITEM_CONDITION", "SELLER_ID", "CATALOG_LISTING",
+        "ITEM_CONDITION", "SELLER_ID", "CATALOG_LISTING",
         "GIFTABLE", "SELLER_PACKAGE_TYPE", "MANUAL_TITLE",
     }
 
