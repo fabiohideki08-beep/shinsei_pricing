@@ -203,6 +203,34 @@ def refresh_all_tokens():
 
 # ─── Exportar tokens Bling para Render env vars ──────────────────────────────
 
+@router.get("/bling/export-tokens")
+def bling_export_tokens():
+    """Retorna tokens Bling Shinsei do arquivo local (para bootstrap de env vars)."""
+    try:
+        import hashlib, base64
+        from bling_client import TOKEN_PATH
+        if not TOKEN_PATH.exists():
+            return {"ok": False, "erro": "Arquivo não encontrado"}
+        raw = json.loads(TOKEN_PATH.read_text())
+        if "encrypted" in raw:
+            cid = os.getenv("BLING_CLIENT_ID", "")
+            csec = os.getenv("BLING_CLIENT_SECRET", "")
+            key = hashlib.sha256((csec + (cid or "token-key")).encode()).digest()
+            enc = base64.b64decode(raw["encrypted"].encode())
+            dec = bytes(b ^ key[i % len(key)] for i, b in enumerate(enc))
+            tok_data = json.loads(dec.decode())
+        else:
+            tok_data = raw
+        return {
+            "ok": True,
+            "access_token": tok_data.get("access_token", ""),
+            "refresh_token": tok_data.get("refresh_token", ""),
+            "expires_at": tok_data.get("expires_at", 0),
+        }
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+
 @router.post("/bling/persist-tokens")
 def bling_persist_tokens():
     """Lê tokens Bling do arquivo local e salva como env vars no Render."""
