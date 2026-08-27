@@ -130,9 +130,7 @@ if bling_access and bling_refresh:
         except Exception as _e:
             pr(f"AVISO: falha ao validar bling_tokens.json ({_e}) — regenerando")
 
-    if not _bling_needs_refresh:
-        pass  # token válido, nada a fazer
-    elif _bling_needs_refresh:
+    if _bling_needs_refresh:
         # Renovar via refresh_token (primeira vez ou token expirado no volume)
         _new = None
         if bling_cid and bling_csec:
