@@ -201,6 +201,39 @@ def refresh_all_tokens():
     return {"ok": True, "renovados": ok_count, "total": len(results), "detalhes": results}
 
 
+# ─── Exportar tokens Bling para Render env vars ──────────────────────────────
+
+@router.post("/bling/persist-tokens")
+def bling_persist_tokens():
+    """Lê tokens Bling do arquivo local e salva como env vars no Render."""
+    try:
+        from bling_client import BlingClient, TOKEN_PATH
+        import hashlib, base64
+        bc = BlingClient()
+        tok_data = bc._load_tokens() if bc.has_local_tokens() else {}
+        if not tok_data:
+            # Tentar ler arquivo direto
+            if TOKEN_PATH.exists():
+                raw = json.loads(TOKEN_PATH.read_text())
+                if "encrypted" in raw:
+                    cid = os.getenv("BLING_CLIENT_ID", "")
+                    csec = os.getenv("BLING_CLIENT_SECRET", "")
+                    key = hashlib.sha256((csec + (cid or "token-key")).encode()).digest()
+                    enc = base64.b64decode(raw["encrypted"].encode())
+                    dec = bytes(b ^ key[i % len(key)] for i, b in enumerate(enc))
+                    tok_data = json.loads(dec.decode())
+                else:
+                    tok_data = raw
+        if not tok_data.get("access_token"):
+            return {"ok": False, "erro": "Token Bling não encontrado no arquivo local"}
+        from render_persistence import save_bling_tokens
+        ok = save_bling_tokens(tok_data.get("access_token", ""), tok_data.get("refresh_token", ""))
+        return {"ok": ok, "access_token_preview": tok_data.get("access_token","")[:20],
+                "has_refresh": bool(tok_data.get("refresh_token"))}
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+
 # ─── Lookup Bling pedido (CPF + dados) ────────────────────────────────────────
 
 @router.get("/bling/pedido/{pedido_id}")
