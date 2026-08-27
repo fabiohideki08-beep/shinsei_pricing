@@ -57,32 +57,33 @@ shopify_shop  = os.getenv("SHOPIFY_SHOP", "pknw4n-eg")
 
 cfg_path = DATA_DIR / "shopify_config.json"
 
-if shopify_token:
-    # Só sobrescreve se o arquivo não existe ainda (preserva token atualizado via OAuth no volume)
-    if not cfg_path.exists():
-        shopify_cfg = {
-            "access_token": shopify_token,
-            "shop": shopify_shop,
-            "shop_url": f"{shopify_shop}.myshopify.com",
-            "salvo_em": datetime.now(timezone.utc).isoformat(),
-        }
-        frete_url = os.getenv("FRETE_CALLBACK_URL", "")
-        if frete_url:
-            shopify_cfg["frete_callback_url"] = frete_url
-        cfg_path.write_text(json.dumps(shopify_cfg, indent=2, ensure_ascii=False), encoding="utf-8")
-        pr(f"shopify_config.json criado (shop={shopify_shop})")
-    else:
-        # Garante que frete_callback_url está sempre atualizado sem sobrescrever o token
-        frete_url = os.getenv("FRETE_CALLBACK_URL", "")
-        if frete_url:
-            try:
-                existing = json.loads(cfg_path.read_text(encoding="utf-8"))
-                if existing.get("frete_callback_url") != frete_url:
-                    existing["frete_callback_url"] = frete_url
-                    cfg_path.write_text(json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
-            except Exception:
-                pass
-        pr(f"shopify_config.json já existe no volume — token OAuth preservado")
+# Determina o token Shopify a usar: env var tem prioridade se o arquivo estiver com token inválido
+_shopify_token_final = shopify_token
+if cfg_path.exists():
+    try:
+        _vol_tok = json.loads(cfg_path.read_text(encoding="utf-8")).get("access_token", "")
+        # Se env var e volume divergem, env var é mais recente (admin atualizou explicitamente)
+        if shopify_token and _vol_tok and shopify_token != _vol_tok:
+            pr(f"SHOPIFY: env var difere do volume — usando env var (mais recente)")
+            _shopify_token_final = shopify_token
+        elif _vol_tok:
+            _shopify_token_final = _vol_tok  # volume tem token OAuth (mais atualizado que a env var inicial)
+    except Exception:
+        pass
+
+_frete_url = os.getenv("FRETE_CALLBACK_URL", "")
+
+if _shopify_token_final:
+    shopify_cfg = {
+        "access_token": _shopify_token_final,
+        "shop": shopify_shop,
+        "shop_url": f"{shopify_shop}.myshopify.com",
+        "salvo_em": datetime.now(timezone.utc).isoformat(),
+    }
+    if _frete_url:
+        shopify_cfg["frete_callback_url"] = _frete_url
+    cfg_path.write_text(json.dumps(shopify_cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+    pr(f"shopify_config.json atualizado (shop={shopify_shop}, token={'env' if _shopify_token_final == shopify_token else 'volume'})")
 elif not cfg_path.exists():
     pr("AVISO: SHOPIFY_ACCESS_TOKEN não definido — shopify_config.json não criado")
 
