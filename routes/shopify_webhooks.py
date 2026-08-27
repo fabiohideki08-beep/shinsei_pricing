@@ -672,7 +672,7 @@ def _checkout_converted(checkout_token: str) -> bool:
 
 def _send_abandoned_cart_email(email: str, name: str, items: list, checkout_url: str, total: str):
     """Envia e-mail de recuperação de carrinho abandonado."""
-    smtp_user = os.getenv("SMTP_USER", "atendimentoshinsei@gmail.com")
+    smtp_user = os.getenv("SMTP_USER", "b6e399001@smtp-brevo.com")
     smtp_pass = os.getenv("SMTP_PASS", "")
     if not smtp_pass:
         print(f"[carrinho] SMTP_PASS não configurada — email não enviado para {email}")
