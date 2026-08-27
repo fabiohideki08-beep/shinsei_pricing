@@ -3885,7 +3885,12 @@ def shopify_status():
 
 @app.post("/shopify/install-gtag")
 def shopify_install_gtag():
-    """Instala o pixel de conversão do Google Ads na página de confirmação de pedido."""
+    """
+    Reinstala rastreamento Google Ads em três camadas:
+    1. GCLID capture no theme.liquid (captura ?gclid= e propaga como cart attribute)
+    2. Web Pixel via API (conversão na página thank_you do novo checkout Shopify)
+    3. Asset JS + script_tag (remarketing nas páginas do tema)
+    """
     import json
     cfg = DATA_DIR / "shopify_config.json"
     if not cfg.exists():
@@ -3900,9 +3905,87 @@ def shopify_install_gtag():
     try:
         from shopify_oauth import _instalar_gtag_conversion
         info = _instalar_gtag_conversion(token)
-        return {"ok": True, "mensagem": "Script tag de conversão instalada com sucesso.", **(info or {})}
+        return {"ok": True, "mensagem": "Rastreamento Google Ads reinstalado (3 camadas).", **(info or {})}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/shopify/diagnostico-pixel")
+def shopify_diagnostico_pixel():
+    """
+    Diagnóstico completo do rastreamento Google Ads:
+    - Últimas conversões enviadas ao Google Ads
+    - Script tags instaladas
+    - GCLID capture no theme.liquid
+    - Web Pixels instalados
+    """
+    import json as _json
+    import requests as req
+    cfg = DATA_DIR / "shopify_config.json"
+    if not cfg.exists():
+        return {"erro": "Shopify não conectado"}
+    data = _json.loads(cfg.read_text(encoding="utf-8"))
+    token = data.get("access_token", "")
+    if not token:
+        return {"erro": "Token ausente"}
+
+    from shopify_oauth import SHOPIFY_STORE, _GCLID_CAPTURE_MARKER
+    TEMA_ID = 185169445169
+    base    = f"https://{SHOPIFY_STORE}.myshopify.com/admin/api/2024-01"
+    headers = {"X-Shopify-Access-Token": token}
+
+    resultado = {}
+
+    # Últimas conversões
+    conv_file = DATA_DIR / "conversoes_gads.json"
+    if conv_file.exists():
+        conversoes = _json.loads(conv_file.read_text(encoding="utf-8"))
+        resultado["conversoes_log"] = {
+            "total": len(conversoes),
+            "ultimas_5": conversoes[-5:],
+            "ok": sum(1 for c in conversoes if c.get("status","").startswith("ok")),
+            "erros": sum(1 for c in conversoes if "erro" in c.get("status","")),
+        }
+    else:
+        resultado["conversoes_log"] = {"total": 0, "aviso": "Nenhuma conversão logada ainda (arquivo não existe no Render)"}
+
+    # Script tags
+    r_tags = req.get(f"{base}/script_tags.json?limit=50", headers=headers, timeout=10)
+    tags = r_tags.json().get("script_tags", []) if r_tags.status_code == 200 else []
+    resultado["script_tags"] = {
+        "total": len(tags),
+        "shinsei": [{"id": t["id"], "src": t.get("src","")[:80], "scope": t.get("display_scope")}
+                    for t in tags if "shinsei" in t.get("src","").lower()]
+    }
+
+    # GCLID capture no theme.liquid
+    r_theme = req.get(
+        f"{base}/themes/{TEMA_ID}/assets.json",
+        params={"asset[key]": "layout/theme.liquid"},
+        headers=headers, timeout=15
+    )
+    if r_theme.status_code == 200:
+        content = r_theme.json().get("asset", {}).get("value", "")
+        resultado["gclid_capture"] = {
+            "instalado": _GCLID_CAPTURE_MARKER in content,
+            "theme_id": TEMA_ID
+        }
+    else:
+        resultado["gclid_capture"] = {"erro": r_theme.status_code}
+
+    # Web Pixels
+    r_px = req.get(f"{base}/web_pixels.json", headers=headers, timeout=10)
+    if r_px.status_code == 200:
+        pixels = r_px.json().get("web_pixels", [])
+        resultado["web_pixels"] = {
+            "total": len(pixels),
+            "lista": [{"id": p["id"], "enabled": p.get("enabled"), "settings": str(p.get("settings",""))[:60]}
+                      for p in pixels]
+        }
+    else:
+        resultado["web_pixels"] = {"status": r_px.status_code, "aviso": "Endpoint pode não ter permissão (write_pixels scope)"}
+
+    return resultado
 
 @app.get("/shopify/gtag-status")
 def shopify_gtag_status():

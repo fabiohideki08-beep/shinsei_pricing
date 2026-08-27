@@ -433,56 +433,93 @@ def _gads_client():
     })
 
 
+def _extract_gclid(order: dict) -> str:
+    """
+    Extrai GCLID do pedido Shopify.
+    O GCLID é capturado no tema (theme.liquid) via ?gclid= na URL de landing,
+    salvo em localStorage e propagado como cart attribute → note_attribute do pedido.
+    """
+    for attr in order.get("note_attributes", []):
+        name = (attr.get("name") or "").lower().strip()
+        if name in ("gclid", "wbraid", "gbraid"):
+            val = (attr.get("value") or "").strip()
+            if val:
+                return val
+    # Fallback: client_details (Shopify preenche automaticamente em alguns casos)
+    cd = order.get("client_details") or {}
+    ref = cd.get("browser_ip", "")  # apenas para log, não é GCLID
+    return ""
+
+
 def _upload_conversion(order: dict):
-    """Envia conversão de compra para o Google Ads via Offline Conversion Upload."""
+    """
+    Envia conversão de compra para o Google Ads via Offline Conversion Upload.
+
+    Estratégia de atribuição (em ordem de prioridade):
+    1. GCLID presente no note_attributes → ClickConversion com gclid (atribuição direta ao clique)
+    2. Sem GCLID → ClickConversion com user identifiers (Enhanced Conversions por email/phone)
+       Requer que Enhanced Conversions esteja ativado na conta Google Ads.
+    """
     try:
         client = _gads_client()
         svc = client.get_service("ConversionUploadService")
 
-        total_micros = order.get("total_price_usd") or order.get("total_price", "0")
-        valor = float(total_micros) if total_micros else 0.0
+        valor   = float(order.get("total_price") or "0")
+        order_id = str(order.get("id", ""))
+        email    = (order.get("email") or "").strip().lower()
+        phone    = (order.get("phone") or "").strip()
+        created  = order.get("created_at", datetime.now(timezone.utc).isoformat())
+        gclid    = _extract_gclid(order)
 
-        order_id  = str(order.get("id", ""))
-        email     = (order.get("email") or "").strip().lower()
-        phone     = (order.get("phone") or "").strip()
-        created   = order.get("created_at", datetime.now(timezone.utc).isoformat())
+        print(f"[webhook] pedido={order_id} valor=R${valor:.2f} "
+              f"gclid={'SIM ('+gclid[:12]+')' if gclid else 'NÃO — usando Enhanced Conversions'}")
 
-        # Construir conversão
         conv = client.get_type("ClickConversion")
-        conv.conversion_action  = CONVERSION_ACTION
+        conv.conversion_action    = CONVERSION_ACTION
         conv.conversion_date_time = _fmt_date(created)
-        conv.order_id           = order_id
-        conv.currency_code      = "BRL"
-        conv.conversion_value   = valor
+        conv.order_id             = order_id
+        conv.currency_code        = "BRL"
+        conv.conversion_value     = valor
 
-        # Hashed user identifiers (privacy-safe)
-        eid = client.get_type("UserIdentifier")
-        if email:
-            eid.hashed_email = hashlib.sha256(email.encode()).hexdigest()
-            conv.user_identifiers.append(eid)
-
-        if phone:
-            phone_clean = "".join(c for c in phone if c.isdigit())
-            if len(phone_clean) >= 10:
-                pid = client.get_type("UserIdentifier")
-                pid.hashed_phone_number = hashlib.sha256(
-                    f"+55{phone_clean}".encode()
-                ).hexdigest()
-                conv.user_identifiers.append(pid)
+        if gclid:
+            # Atribuição direta: GCLID capturado do clique no anúncio
+            conv.gclid = gclid
+        else:
+            # Enhanced Conversions: Google faz o match por email/phone hasheado
+            # Requer configuração em Google Ads → Conversões → Configurações → Enhanced Conversions
+            if email:
+                eid = client.get_type("UserIdentifier")
+                eid.hashed_email = hashlib.sha256(email.encode()).hexdigest()
+                conv.user_identifiers.append(eid)
+            if phone:
+                phone_clean = "".join(c for c in phone if c.isdigit())
+                if len(phone_clean) >= 10:
+                    pid = client.get_type("UserIdentifier")
+                    pid.hashed_phone_number = hashlib.sha256(
+                        f"+55{phone_clean}".encode()
+                    ).hexdigest()
+                    conv.user_identifiers.append(pid)
+            if not email and not phone:
+                print(f"[webhook] pedido={order_id} — sem GCLID, email ou phone. "
+                      "Conversão enviada mas provavelmente não será atribuída.")
 
         req = client.get_type("UploadClickConversionsRequest")
-        req.customer_id = AW_CUSTOMER_ID
+        req.customer_id  = AW_CUSTOMER_ID
         req.conversions.append(conv)
-        req.partial_failure = True
+        req.partial_failure     = True
+        req.validate_only       = False
 
         resp = svc.upload_click_conversions(request=req)
 
+        # Logar erros de partial_failure com detalhes
         if resp.partial_failure_error and resp.partial_failure_error.message:
-            print(f"[webhook] GAds conversão parcial: {resp.partial_failure_error.message}")
+            pf_msg = resp.partial_failure_error.message
+            print(f"[webhook] ⚠️ GAds partial_failure: {pf_msg}")
+            _log_conversion(order_id, valor, f"partial_failure:{pf_msg[:120]}")
         else:
-            print(f"[webhook] GAds conversão enviada: pedido={order_id} valor=R${valor:.2f}")
-
-        _log_conversion(order_id, valor, "ok")
+            status = "ok_gclid" if gclid else "ok_enhanced"
+            print(f"[webhook] ✅ GAds conversão enviada: pedido={order_id} valor=R${valor:.2f} modo={status}")
+            _log_conversion(order_id, valor, status)
 
     except Exception as e:
         print(f"[webhook] ERRO upload conversão: {e}")

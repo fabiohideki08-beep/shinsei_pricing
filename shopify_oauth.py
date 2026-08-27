@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 SHOPIFY_CLIENT_ID     = os.getenv("SHOPIFY_CLIENT_ID", "")
 SHOPIFY_CLIENT_SECRET = os.getenv("SHOPIFY_CLIENT_SECRET", "")
 SHOPIFY_STORE = "pknw4n-eg"
-SHOPIFY_SCOPES = "read_products,write_products,read_inventory,write_inventory,read_locations,read_shipping,write_shipping,read_themes,write_themes,read_script_tags,write_script_tags,read_content,write_content,write_checkouts,read_orders,write_orders"
+SHOPIFY_SCOPES = "read_products,write_products,read_inventory,write_inventory,read_locations,read_shipping,write_shipping,read_themes,write_themes,read_script_tags,write_script_tags,read_content,write_content,write_checkouts,read_orders,write_orders,write_pixels,read_pixels"
 DATA_DIR = Path(__file__).parent / "data"
 SHOPIFY_CONFIG_PATH = DATA_DIR / "shopify_config.json"
 SHOPIFY_STATE_PATH = DATA_DIR / "shopify_state.json"
@@ -82,126 +82,202 @@ def processar_callback(code: str, state: str, redirect_uri: str) -> dict:
         return {"ok": False, "erro": str(e)}
 
 
+_GCLID_CAPTURE_MARKER = "<!-- [Shinsei] GCLID-Capture -->"
+
+_GCLID_CAPTURE_SCRIPT = """<!-- [Shinsei] GCLID-Capture -->
+<script>
+(function() {
+  var KEY = 'sh_gclid', TS = 'sh_gclid_ts', TTL = 90 * 86400000;
+  try {
+    var p = new URLSearchParams(window.location.search);
+    var g = p.get('gclid') || p.get('wbraid') || p.get('gbraid');
+    if (g) { localStorage.setItem(KEY, g); localStorage.setItem(TS, Date.now()); }
+    var ts = parseInt(localStorage.getItem(TS) || '0');
+    if (Date.now() - ts > TTL) { localStorage.removeItem(KEY); localStorage.removeItem(TS); return; }
+    var stored = localStorage.getItem(KEY);
+    if (stored) {
+      fetch('/cart/update.js', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({attributes: {gclid: stored}})
+      }).catch(function(){});
+    }
+  } catch(e) {}
+})();
+</script>
+<!-- [/Shinsei] GCLID-Capture -->"""
+
+
+def _instalar_gclid_capture(token: str, tema_id: int = 185169445169) -> dict:
+    """
+    Injeta captura de GCLID no theme.liquid.
+    O GCLID é salvo em localStorage e propagado como cart attribute → note_attribute do pedido.
+    O webhook server-side lê o note_attribute e inclui o GCLID na conversão enviada ao Google Ads.
+    """
+    STORE   = f"{SHOPIFY_STORE}.myshopify.com"
+    HEADERS = {"X-Shopify-Access-Token": token, "Content-Type": "application/json"}
+
+    # Ler theme.liquid atual
+    r = requests.get(
+        f"https://{STORE}/admin/api/2024-01/themes/{tema_id}/assets.json",
+        params={"asset[key]": "layout/theme.liquid"},
+        headers=HEADERS, timeout=15
+    )
+    if r.status_code != 200:
+        raise RuntimeError(f"Não consegui ler theme.liquid: {r.status_code} {r.text[:200]}")
+
+    content = r.json().get("asset", {}).get("value", "")
+
+    # Não injetar duas vezes
+    if _GCLID_CAPTURE_MARKER in content:
+        logger.info("GCLID capture já instalado no theme.liquid — skip")
+        return {"ok": True, "already_installed": True}
+
+    # Injetar antes de </body>
+    if "</body>" in content:
+        content = content.replace("</body>", _GCLID_CAPTURE_SCRIPT + "\n</body>", 1)
+    elif "</head>" in content:
+        content = content.replace("</head>", _GCLID_CAPTURE_SCRIPT + "\n</head>", 1)
+    else:
+        content += "\n" + _GCLID_CAPTURE_SCRIPT
+
+    # Salvar theme.liquid atualizado
+    r2 = requests.put(
+        f"https://{STORE}/admin/api/2024-01/themes/{tema_id}/assets.json",
+        json={"asset": {"key": "layout/theme.liquid", "value": content}},
+        headers=HEADERS, timeout=20
+    )
+    if r2.status_code not in (200, 201):
+        raise RuntimeError(f"Erro ao salvar theme.liquid: {r2.status_code} {r2.text[:200]}")
+
+    logger.info("GCLID capture instalado no theme.liquid (tema %s)", tema_id)
+    return {"ok": True, "already_installed": False}
+
+
 def _instalar_gtag_conversion(token: str):
-    """Instala o pixel de conversão do Google Ads na página de confirmação de pedido."""
-    STORE    = f"{SHOPIFY_STORE}.myshopify.com"
-    BASE     = f"https://{STORE}/admin/api/2024-01"
-    HEADERS  = {"X-Shopify-Access-Token": token, "Content-Type": "application/json"}
-    TEMA_ID  = 185169445169
-    AW_ID    = "AW-2097362078"
-    CONV_ID  = "7227407944"  # shinseimarket.com.br — GA4 purchase (corrigido de 7604222139 que não existia)
+    """
+    Instala rastreamento de conversão Google Ads em duas camadas:
+    1. GCLID capture no theme.liquid (captura parâmetro ?gclid= e propaga via cart attribute)
+    2. Web Pixel via API (dispara gtag na página thank_you do novo checkout Shopify)
+    3. Fallback: asset JS + script_tag (funciona em páginas do tema, não no checkout novo)
 
-    # IMPORTANTE: A página de obrigado do checkout NÃO carrega o theme.liquid,
-    # então o gtag.js do tema não está disponível. O script precisa ser auto-suficiente.
-    # ATENÇÃO: Não usar "function gtag()" localmente — o minificador da Shopify renomeia
-    # e quebra o check "typeof gtag". Usar window.gtag e window.dataLayer diretamente.
-    conversion_js = f"""// Google Ads Conversion Tracking — Shinsei Market
-// Auto-suficiente: carrega gtag.js se nao disponivel no checkout thank_you page.
-// NÃO usa function gtag() local (conflito com minificador Shopify).
-(function() {{
-  if (typeof Shopify === 'undefined' || !Shopify.Checkout) return;
-  if (Shopify.Checkout.step !== 'thank_you') return;
-  if (window._gadsConvFired) return;
-  window._gadsConvFired = true;
+    Nota: o novo checkout Shopify (Checkout Extensibility, obrigatório desde 2024) NÃO executa
+    script_tags com display_scope:'all'. A conversão principal é server-side via webhook orders/paid
+    que lê o gclid do note_attribute e faz o upload via Google Ads Offline Conversion API.
+    """
+    STORE   = f"{SHOPIFY_STORE}.myshopify.com"
+    BASE    = f"https://{STORE}/admin/api/2024-01"
+    HEADERS = {"X-Shopify-Access-Token": token, "Content-Type": "application/json"}
+    TEMA_ID = 185169445169
+    AW_ID   = "AW-2097362078"
+    CONV_ID = "7227407944"
 
-  var AW = '{AW_ID}';
-  var CID = '{CONV_ID}';
+    result = {}
 
-  function disparar() {{
-    var val = (Shopify.checkout && Shopify.checkout.total_price)
-                ? (Shopify.checkout.total_price / 100).toFixed(2) : '0.00';
-    var tid = (Shopify.checkout && Shopify.checkout.order_id)
-                ? String(Shopify.checkout.order_id) : '';
-    window.dataLayer = window.dataLayer || [];
-    window.dataLayer.push('event', 'conversion', {{
-      'send_to': AW + '/' + CID,
-      'value': parseFloat(val),
-      'currency': 'BRL',
-      'transaction_id': tid
+    # ── 1. GCLID capture no theme.liquid ────────────────────────────────────
+    try:
+        result["gclid_capture"] = _instalar_gclid_capture(token, TEMA_ID)
+    except Exception as ex:
+        logger.warning("Falha ao instalar GCLID capture: %s", ex)
+        result["gclid_capture"] = {"ok": False, "erro": str(ex)}
+
+    # ── 2. Web Pixel via API (novo checkout) ────────────────────────────────
+    pixel_js = f"""
+analytics.subscribe('checkout_completed', function(event) {{
+  var order = event.data && event.data.checkout;
+  var val = order ? parseFloat(order.totalPrice && order.totalPrice.amount || '0') : 0;
+  var tid = order ? (order.order && order.order.id || '') : '';
+  // Limpar prefixo gid://shopify/Order/
+  tid = String(tid).replace(/^gid:\\/\\/[^/]+\\/[^/]+\\//, '');
+
+  // Carregar gtag.js e disparar conversão
+  browser.loadScript('https://www.googletagmanager.com/gtag/js?id={AW_ID}').then(function() {{
+    var dl = []; function gtag(){{ dl.push(arguments); }}
+    gtag('js', new Date());
+    gtag('config', '{AW_ID}', {{send_page_view: false}});
+    gtag('event', 'conversion', {{
+      send_to: '{AW_ID}/{CONV_ID}',
+      value: val,
+      currency: 'BRL',
+      transaction_id: tid
     }});
-    // Disparo via window.gtag (pode ter sido inicializado antes ou agora)
-    if (typeof window.gtag === 'function') {{
-      window.gtag('event', 'conversion', {{
-        'send_to': AW + '/' + CID,
-        'value': parseFloat(val),
-        'currency': 'BRL',
-        'transaction_id': tid
-      }});
-    }}
-    console.log('[Shinsei] Google Ads conversion fired', val, tid);
-  }}
+  }}).catch(function(e){{ console.warn('[Shinsei] gtag load error', e); }});
+}});
+"""
 
-  function carregar() {{
-    // Ja tem gtag disponivel (tema ou GA4 carregou)?
-    if (typeof window.gtag === 'function') {{
-      disparar();
-      return;
-    }}
-    // Inicializar dataLayer e window.gtag como funcao wrapper
-    window.dataLayer = window.dataLayer || [];
-    window.gtag = function() {{ window.dataLayer.push(arguments); }};
-    window.gtag('js', new Date());
-    window.gtag('config', AW);
-    // Carregar gtag.js e disparar conversao ao terminar
-    var s = document.createElement('script');
-    s.async = true;
-    s.src = 'https://www.googletagmanager.com/gtag/js?id=' + AW;
-    s.onload = disparar;
-    s.onerror = function() {{
-      console.warn('[Shinsei] gtag.js nao carregou, disparando via dataLayer');
-      disparar();
-    }};
-    document.head.appendChild(s);
-  }}
+    try:
+        # Verificar se já existe um pixel Shinsei
+        existing_pixels = requests.get(f"{BASE}/web_pixels.json", headers=HEADERS, timeout=10)
+        pixels = existing_pixels.json().get("web_pixels", []) if existing_pixels.status_code == 200 else []
+        shinsei_pixel = next((p for p in pixels if "Shinsei" in p.get("settings", {}).get("name", "")
+                              or "Shinsei" in str(p.get("settings", ""))), None)
 
-  if (document.readyState === 'loading') {{
-    document.addEventListener('DOMContentLoaded', carregar);
-  }} else {{
-    carregar();
-  }}
+        if shinsei_pixel:
+            # Atualizar pixel existente
+            pid = shinsei_pixel["id"]
+            r_upd = requests.put(
+                f"{BASE}/web_pixels/{pid}.json",
+                json={"web_pixel": {"enabled": True, "settings": json.dumps({"name": "Shinsei GAds", "code": pixel_js})}},
+                headers=HEADERS, timeout=10
+            )
+            result["web_pixel"] = {"action": "updated", "id": pid, "status": r_upd.status_code}
+        else:
+            r_px = requests.post(
+                f"{BASE}/web_pixels.json",
+                json={"web_pixel": {"enabled": True, "settings": json.dumps({"name": "Shinsei GAds", "code": pixel_js})}},
+                headers=HEADERS, timeout=10
+            )
+            result["web_pixel"] = {"action": "created", "status": r_px.status_code,
+                                   "body": r_px.json() if r_px.status_code in (200, 201) else r_px.text[:200]}
+    except Exception as ex:
+        logger.warning("Web Pixel API não disponível (pode precisar de re-auth): %s", ex)
+        result["web_pixel"] = {"ok": False, "erro": str(ex)}
+
+    # ── 3. Asset JS + Script Tag (fallback — funciona nas páginas do tema) ──
+    # O Shopify novo checkout não executa script_tags, mas mantemos para
+    # páginas de produto/carrinho/conta onde o gtag pode ser útil para remarketing.
+    gtag_js = f"""// Shinsei Market — Google Ads gtag loader (tema, não checkout)
+// Carrega gtag.js para páginas do tema (produto, carrinho, conta).
+// O checkout usa Web Pixel API; a conversão principal é server-side via webhook.
+(function() {{
+  if (window._shinseiGtagLoaded) return;
+  window._shinseiGtagLoaded = true;
+  var AW = '{AW_ID}';
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = window.gtag || function() {{ window.dataLayer.push(arguments); }};
+  window.gtag('js', new Date());
+  window.gtag('config', AW, {{send_page_view: false}});
+  var s = document.createElement('script');
+  s.async = true;
+  s.src = 'https://www.googletagmanager.com/gtag/js?id=' + AW;
+  document.head.appendChild(s);
 }})();
 """
 
-    # 1. Salvar JS como asset no tema
-    asset_body = json.dumps({
-        "asset": {"key": "assets/shinsei-ads-conversion.js", "value": conversion_js}
-    }).encode()
-    asset_req = requests.put(
+    asset_r = requests.put(
         f"https://{STORE}/admin/api/2024-01/themes/{TEMA_ID}/assets.json",
-        data=asset_body, headers=HEADERS, timeout=15
+        json={"asset": {"key": "assets/shinsei-ads-conversion.js", "value": gtag_js}},
+        headers=HEADERS, timeout=15
     )
-    if asset_req.status_code not in (200, 201):
-        raise RuntimeError(f"Erro ao salvar asset: {asset_req.status_code} {asset_req.text[:200]}")
+    if asset_r.status_code not in (200, 201):
+        logger.warning("Erro ao salvar asset JS: %s %s", asset_r.status_code, asset_r.text[:100])
+        result["asset"] = {"ok": False, "status": asset_r.status_code}
+    else:
+        public_url = asset_r.json().get("asset", {}).get("public_url", "")
+        # Remover script tags antigas duplicadas
+        st_list = requests.get(f"{BASE}/script_tags.json?limit=50", headers=HEADERS, timeout=10).json()
+        for st in st_list.get("script_tags", []):
+            if "shinsei-ads" in st.get("src", ""):
+                requests.delete(f"{BASE}/script_tags/{st['id']}.json", headers=HEADERS, timeout=10)
+        # Criar script tag atualizada
+        st_r = requests.post(
+            f"{BASE}/script_tags.json",
+            json={"script_tag": {"event": "onload", "src": public_url,
+                                 "display_scope": "online_store", "cache": False}},
+            headers=HEADERS, timeout=10
+        )
+        result["asset"] = {"ok": True, "public_url": public_url,
+                           "script_tag_status": st_r.status_code}
+        logger.info("gtag asset reinstalado: %s", public_url)
 
-    public_url = asset_req.json().get("asset", {}).get("public_url", "")
-    logger.info("gtag asset salvo: %s", public_url)
-
-    # 2. Remover script tags antigas de conversão
-    existing = requests.get(f"{BASE}/script_tags.json?limit=50", headers=HEADERS, timeout=15).json()
-    for st in existing.get("script_tags", []):
-        if "shinsei-ads" in st.get("src", "") or "AW-" in st.get("src", ""):
-            requests.delete(f"{BASE}/script_tags/{st['id']}.json", headers=HEADERS, timeout=15)
-            logger.info("Script tag antiga removida: %s", st["src"])
-
-    # 3. Criar nova script tag
-    tag_body = {
-        "script_tag": {
-            "event": "onload",
-            "src": public_url,
-            "display_scope": "all",
-            "cache": False
-        }
-    }
-    resp = requests.post(f"{BASE}/script_tags.json", json=tag_body, headers=HEADERS, timeout=15)
-    if resp.status_code not in (200, 201):
-        raise RuntimeError(f"Erro ao criar script tag: {resp.status_code} {resp.text[:200]}")
-
-    tag = resp.json().get("script_tag", {})
-    logger.info("Script tag instalada: ID=%s scope=%s src=%s",
-                tag.get("id"), tag.get("display_scope"), tag.get("src", "")[:60])
-    return {
-        "asset_url": public_url,
-        "script_tag_id": tag.get("id"),
-        "display_scope": tag.get("display_scope"),
-        "src": tag.get("src", ""),
-    }
+    return result
