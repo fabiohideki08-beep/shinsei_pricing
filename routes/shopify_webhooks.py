@@ -92,14 +92,14 @@ def _me_quote_best(dest_cep: str, weight_kg: float) -> dict | None:
         return None
 
 
-# Mapeamento nome ME → transportadora Bling (IDs configurados na conta Bling)
+# Mapeamento nome ME → serviço Bling Envios (código = ID numérico do ME, conforme tela Serviços de entrega)
 _ME_SERVICE_TO_BLING = {
-    "PAC":      {"nome": "PAC - Correios", "codigo": "PAC"},
-    "SEDEX":    {"nome": "SEDEX - Correios", "codigo": "SEDEX"},
-    ".Package": {"nome": "Jadlog .Package", "codigo": "JADLOG_PACKAGE"},
-    ".Com":     {"nome": "Jadlog .Com",     "codigo": "JADLOG_COM"},
-    "Standard": {"nome": "JeT Standard",   "codigo": "JET_STANDARD"},
-    "Mini Envios": {"nome": "Mini Envios - Correios", "codigo": "MINI_ENVIOS"},
+    "PAC":         {"nome": "PAC - Correios",          "codigo": "1"},
+    "SEDEX":       {"nome": "SEDEX - Correios",        "codigo": "2"},
+    ".Package":    {"nome": "Jadlog .Package",         "codigo": "3"},
+    ".Com":        {"nome": "Jadlog .Com",             "codigo": "4"},
+    "Mini Envios": {"nome": "Mini Envios - Correios",  "codigo": "17"},
+    "Standard":    {"nome": "JeT Standard",            "codigo": "33"},
 }
 
 
