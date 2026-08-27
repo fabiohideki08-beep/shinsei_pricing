@@ -295,6 +295,9 @@ def _build_payload(item: dict) -> dict:
     SKIP_ATTR_IDS = {
         "ITEM_CONDITION", "SELLER_ID", "CATALOG_LISTING",
         "GIFTABLE", "SELLER_PACKAGE_TYPE", "MANUAL_TITLE",
+        # GTIN/EAN excluídos: o ML vincula automaticamente ao catálogo pelo barcode
+        # e trava o título — anúncios de catálogo frequentemente não correspondem ao produto
+        "GTIN", "EAN", "GTIN_PRODUCT_IDENTIFIER",
     }
 
     # Detecta se HAIR_TONE vai duplicar no título
