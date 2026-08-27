@@ -540,21 +540,23 @@ async def calculate_freight(
     # ── Regra de mínimo: pedidos abaixo de frete_gratis_minimo não têm frete grátis ──
     # Aplica-se quando order_value é conhecido (> 0), ou seja, vem do shopify-callback.
     # Para chamadas do widget sem valor (order_value=0) a regra é aplicada client-side.
-    # RMSP é sempre grátis (entrega própria Shinsei) — não aplica regra de mínimo.
+    # RMSP abaixo do mínimo: cobra R$8,00 fixo (custo da entrega própria Shinsei).
     minimo_gratis = float(cfg_frete.get("frete_gratis_minimo", FRETE_GRATIS_MINIMO))
-    if not rmsp and order_value > 0.0 and order_value < minimo_gratis and result.is_free:
+    if order_value > 0.0 and order_value < minimo_gratis and result.is_free:
         logger.info(
             "calculate_freight: valor=R$%.2f < mínimo=R$%.2f — removendo frete grátis.",
             order_value, minimo_gratis,
         )
+        _rmsp_frete_fixo = 12.90  # valor cobrado na RMSP para pedidos abaixo do mínimo
         opts_corrigidas = []
         for opt in result.options:
             if opt.is_free and opt.price_real > 0:
+                preco_cobrado = _rmsp_frete_fixo if rmsp else opt.price_real
                 opts_corrigidas.append(FreightOption(
                     name=opt.name,
                     carrier=opt.carrier,
                     price_real=opt.price_real,
-                    price_final=opt.price_real,  # sem subsídio
+                    price_final=preco_cobrado,
                     subsidy=0.0,
                     delivery_days=opt.delivery_days,
                     is_free=False,
