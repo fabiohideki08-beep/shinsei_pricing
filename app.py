@@ -3896,12 +3896,10 @@ def shopify_install_gtag():
     if not cfg.exists():
         raise HTTPException(status_code=400, detail="Shopify não conectado.")
     data = json.loads(cfg.read_text(encoding="utf-8"))
-    token = data.get("access_token", "")
-    scope = data.get("scope", "")
+    # Token: arquivo config → env var SHOPIFY_ACCESS_TOKEN (configurada no Render)
+    token = data.get("access_token", "") or os.getenv("SHOPIFY_ACCESS_TOKEN", "")
     if not token:
-        raise HTTPException(status_code=400, detail="Token Shopify ausente.")
-    if "write_script_tags" not in scope:
-        raise HTTPException(status_code=403, detail=f"Token sem write_script_tags. Escopos: {scope}")
+        raise HTTPException(status_code=400, detail="Token Shopify ausente (config + env var).")
     try:
         from shopify_oauth import _instalar_gtag_conversion
         info = _instalar_gtag_conversion(token)
@@ -3925,9 +3923,9 @@ def shopify_diagnostico_pixel():
     if not cfg.exists():
         return {"erro": "Shopify não conectado"}
     data = _json.loads(cfg.read_text(encoding="utf-8"))
-    token = data.get("access_token", "")
+    token = data.get("access_token", "") or os.getenv("SHOPIFY_ACCESS_TOKEN", "")
     if not token:
-        return {"erro": "Token ausente"}
+        return {"erro": "Token ausente (config + env var)"}
 
     from shopify_oauth import SHOPIFY_STORE, _GCLID_CAPTURE_MARKER
     TEMA_ID = 185169445169
