@@ -94,6 +94,8 @@ from routes.estoque_sync import router as estoque_sync_router, _rebuild_caches_b
 from routes.shopify_webhooks import router as shopify_webhooks_router
 from routes.ml_ads import router as ml_ads_router
 from routes.bling_upload import router as bling_upload_router
+from routes.admin_tokens import router as admin_tokens_router
+app.include_router(admin_tokens_router)
 app.include_router(batch_router)
 from routes.mercado_livre import router as ml_page_router
 app.include_router(ml_page_router)

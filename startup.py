@@ -103,12 +103,36 @@ if bling_access and bling_refresh:
     import urllib.request as _urllib
     import urllib.parse as _urlparse
 
-    # Se já existe token no volume (salvo via OAuth), não sobrescreve.
-    # O BlingClient faz refresh automático quando expirar.
+    # Se já existe token no volume, valida se ainda é válido antes de preservar.
+    # Se expirado (ou próximo), força renovação via refresh_token da env var.
+    _bling_needs_refresh = True
     if bling_path.exists():
-        pr("bling_tokens.json já existe no volume — token OAuth preservado")
-    else:
-        # Primeira vez: tenta renovar via refresh_token para garantir token fresco
+        try:
+            import time as _time_check
+            _raw_check = json.loads(bling_path.read_text(encoding="utf-8"))
+            if "encrypted" in _raw_check and bling_cid and bling_csec:
+                import hashlib as _hs
+                _key = _hs.sha256((bling_csec + (bling_cid or "token-key")).encode()).digest()
+                _enc = base64.b64decode(_raw_check["encrypted"].encode())
+                _dec = bytes(b ^ _key[i % len(_key)] for i, b in enumerate(_enc))
+                _tok_check = json.loads(_dec.decode())
+                _exp = _tok_check.get("expires_at", 0)
+                _restante = _exp - _time_check.time()
+                if _restante > 300:  # mais de 5 min restantes → preservar
+                    pr(f"bling_tokens.json válido por mais {int(_restante/60)}min — preservado")
+                    _bling_needs_refresh = False
+                else:
+                    pr(f"bling_tokens.json expirado (restam {int(_restante)}s) — renovando via refresh_token")
+            elif "access_token" in _raw_check:  # formato não criptografado
+                _bling_needs_refresh = False
+                pr("bling_tokens.json já existe no volume — token OAuth preservado")
+        except Exception as _e:
+            pr(f"AVISO: falha ao validar bling_tokens.json ({_e}) — regenerando")
+
+    if not _bling_needs_refresh:
+        pass  # token válido, nada a fazer
+    elif _bling_needs_refresh:
+        # Renovar via refresh_token (primeira vez ou token expirado no volume)
         _new = None
         if bling_cid and bling_csec:
             try:
