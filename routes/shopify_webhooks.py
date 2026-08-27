@@ -892,17 +892,82 @@ def _log_abandoned_cart(checkout_id: str, email: str, status: str):
     log_file.write_text(json.dumps(log[-500:], ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _send_whatsapp(phone: str, message: str) -> bool:
+    """Envia mensagem WhatsApp via Z-API."""
+    instance_id  = os.getenv("ZAPI_INSTANCE_ID", "3F848712DB88C2FADEE6A6D84865BDBD")
+    token        = os.getenv("ZAPI_TOKEN", "7D0763C39F052F8A110678A9")
+    client_token = os.getenv("ZAPI_CLIENT_TOKEN", "F4bc283e090774be2abceb813e1d5c713S")
+    # Normaliza número: remove não-dígitos, garante código do país 55
+    digits = "".join(c for c in phone if c.isdigit())
+    if not digits:
+        return False
+    if not digits.startswith("55"):
+        digits = "55" + digits
+    url = f"https://api.z-api.io/instances/{instance_id}/token/{token}/send-text"
+    try:
+        r = requests.post(url, json={"phone": digits, "message": message},
+                          headers={"Client-Token": client_token, "Content-Type": "application/json"},
+                          timeout=15)
+        ok = r.status_code in (200, 201) and not r.json().get("error")
+        print(f"[zapi] {'✅' if ok else '✗'} {digits}: {r.status_code}")
+        return ok
+    except Exception as e:
+        print(f"[zapi] Erro: {e}")
+        return False
+
+
 def _delayed_cart_recovery(checkout_id: str, checkout_token: str, email: str,
-                            name: str, items: list, checkout_url: str, total: str,
+                            name: str, phone: str, items: list, checkout_url: str, total: str,
                             delay_seconds: int = 3600):
-    """Roda em thread separada: aguarda delay, verifica conversão, envia e-mail."""
+    """
+    Sequência de recuperação de carrinho:
+      1h  → e-mail
+      24h → WhatsApp (se tiver telefone)
+      72h → WhatsApp follow-up com desconto
+    Cancela tudo se o checkout for convertido em pedido.
+    """
+    first_name = name.split()[0] if name else "cliente"
+    produto_principal = items[0]["title"] if items else "seu produto"
+
+    # ── 1h: e-mail ──────────────────────────────────────────────────────────────
     time.sleep(delay_seconds)
     if _checkout_converted(checkout_token):
-        print(f"[carrinho] {checkout_id} — convertido em pedido, e-mail cancelado")
         _log_abandoned_cart(checkout_id, email, "convertido")
         return
-    ok = _send_abandoned_cart_email(email, name, items, checkout_url, total)
-    _log_abandoned_cart(checkout_id, email, "email_ok" if ok else "email_erro")
+    ok_email = _send_abandoned_cart_email(email, name, items, checkout_url, total)
+    _log_abandoned_cart(checkout_id, email, "email_ok" if ok_email else "email_erro")
+
+    # ── 24h: WhatsApp ───────────────────────────────────────────────────────────
+    time.sleep(23 * 3600)  # +23h (total 24h)
+    if _checkout_converted(checkout_token):
+        _log_abandoned_cart(checkout_id, email, "convertido_24h")
+        return
+    if phone:
+        msg_24h = (
+            f"Oi {first_name}! 👋 Aqui é a *Shinsei Market*.\n\n"
+            f"Você deixou *{produto_principal}* no carrinho e gostaríamos de te ajudar a finalizar! 🛒\n\n"
+            f"Seu carrinho ainda está guardado:\n{checkout_url}\n\n"
+            f"💚 Pagando no *PIX* você ainda ganha *5% de desconto*!\n\n"
+            f"Alguma dúvida? Estamos aqui para te ajudar 😊"
+        )
+        ok_24h = _send_whatsapp(phone, msg_24h)
+        _log_abandoned_cart(checkout_id, email, "whatsapp_24h_ok" if ok_24h else "whatsapp_24h_erro")
+
+    # ── 72h: WhatsApp follow-up ─────────────────────────────────────────────────
+    time.sleep(48 * 3600)  # +48h (total 72h)
+    if _checkout_converted(checkout_token):
+        _log_abandoned_cart(checkout_id, email, "convertido_72h")
+        return
+    if phone:
+        msg_72h = (
+            f"Oi {first_name}! 🌟 *Shinsei Market* aqui.\n\n"
+            f"Sua última chance de pegar *{produto_principal}* — estoque limitado! ⚠️\n\n"
+            f"Finalize agora e garanta o melhor preço:\n{checkout_url}\n\n"
+            f"💚 *PIX = 5% off* | Frete grátis acima de R$29,90 🚚\n\n"
+            f"Qualquer dúvida é só responder aqui! 😊"
+        )
+        ok_72h = _send_whatsapp(phone, msg_72h)
+        _log_abandoned_cart(checkout_id, email, "whatsapp_72h_ok" if ok_72h else "whatsapp_72h_erro")
 
 
 @router.post("/checkout-abandoned")
@@ -938,6 +1003,9 @@ async def checkout_abandoned(
     total          = checkout.get("total_price", "0.00")
     customer       = checkout.get("customer") or {}
     name           = (customer.get("first_name", "") + " " + customer.get("last_name", "")).strip() or email
+    phone          = (checkout.get("phone") or customer.get("phone") or
+                      (checkout.get("billing_address") or {}).get("phone") or
+                      (checkout.get("shipping_address") or {}).get("phone") or "")
 
     items = [
         {"title": li.get("title", li.get("name", "Produto")), "price": li.get("price", "0")}
@@ -957,13 +1025,14 @@ async def checkout_abandoned(
 
     t = threading.Thread(
         target=_delayed_cart_recovery,
-        args=(checkout_id, checkout_token, email, name, items, checkout_url, total),
+        args=(checkout_id, checkout_token, email, name, phone, items, checkout_url, total),
         daemon=True,
     )
     t.start()
 
-    print(f"[carrinho] {checkout_id} — agendado para {email} em 1h (itens={len(items)})")
-    return {"ok": True, "checkout_id": checkout_id, "email": email, "agendado_em": "1h"}
+    canais = "email 1h" + (", WhatsApp 24h+72h" if phone else "")
+    print(f"[carrinho] {checkout_id} — agendado para {email} via {canais} (itens={len(items)})")
+    return {"ok": True, "checkout_id": checkout_id, "email": email, "phone": bool(phone), "agendado_em": canais}
 
 
 @router.get("/carrinhos-abandonados")
@@ -973,6 +1042,13 @@ def listar_carrinhos():
     if not log_file.exists():
         return {"carrinhos": []}
     return {"carrinhos": json.loads(log_file.read_text(encoding="utf-8"))[-50:]}
+
+
+@router.post("/test-whatsapp")
+def test_whatsapp(phone: str, message: str = "Teste Shinsei Market 🛒 — WhatsApp funcionando!"):
+    """Envia mensagem WhatsApp de teste via Z-API."""
+    ok = _send_whatsapp(phone, message)
+    return {"ok": ok, "phone": phone}
 
 
 @router.post("/test-abandoned-email")
