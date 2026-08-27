@@ -181,7 +181,10 @@ def _instalar_gtag_conversion(token: str):
         logger.warning("Falha ao instalar GCLID capture: %s", ex)
         result["gclid_capture"] = {"ok": False, "erro": str(ex)}
 
-    # ── 2. Web Pixel via API (novo checkout) ────────────────────────────────
+    # ── 2. Web Pixel via API ─────────────────────────────────────────────────
+    # Nota: /web_pixels.json só funciona para pixels registrados como extensões de app.
+    # Retorna 406 para apps sem extensão registrada — não é um erro crítico,
+    # a conversão principal é server-side + order_status script_tag (camada 3).
     pixel_js = f"""
 analytics.subscribe('checkout_completed', function(event) {{
   var order = event.data && event.data.checkout;
@@ -233,16 +236,18 @@ analytics.subscribe('checkout_completed', function(event) {{
         logger.warning("Web Pixel API não disponível (pode precisar de re-auth): %s", ex)
         result["web_pixel"] = {"ok": False, "erro": str(ex)}
 
-    # ── 3. Asset JS + Script Tag (fallback — funciona nas páginas do tema) ──
-    # O Shopify novo checkout não executa script_tags, mas mantemos para
-    # páginas de produto/carrinho/conta onde o gtag pode ser útil para remarketing.
-    gtag_js = f"""// Shinsei Market — Google Ads gtag loader (tema, não checkout)
-// Carrega gtag.js para páginas do tema (produto, carrinho, conta).
-// O checkout usa Web Pixel API; a conversão principal é server-side via webhook.
+    # ── 3. Asset JS + Script Tags (online_store + order_status) ────────────
+    # Dois display_scopes:
+    # - "online_store": gtag loader para remarketing nas páginas do tema
+    # - "order_status": conversão na página de confirmação de pedido (thank_you)
+    #   O novo checkout (Checkout Extensibility) não executa script_tags nas páginas
+    #   de checkout, mas a página order_status AINDA suporta script_tags.
+    gtag_js = f"""// Shinsei Market — Google Ads gtag + conversão
 (function() {{
   if (window._shinseiGtagLoaded) return;
   window._shinseiGtagLoaded = true;
   var AW = '{AW_ID}';
+  var CONV = '{CONV_ID}';
   window.dataLayer = window.dataLayer || [];
   window.gtag = window.gtag || function() {{ window.dataLayer.push(arguments); }};
   window.gtag('js', new Date());
@@ -250,6 +255,23 @@ analytics.subscribe('checkout_completed', function(event) {{
   var s = document.createElement('script');
   s.async = true;
   s.src = 'https://www.googletagmanager.com/gtag/js?id=' + AW;
+  s.onload = function() {{
+    // Disparar conversão apenas na página order_status (thank_you)
+    if (window.Shopify && window.Shopify.Checkout && window.Shopify.Checkout.page === 'thank_you') {{
+      var val = 0;
+      var tid = '';
+      try {{
+        val = parseFloat(window.ShopifyAnalytics && window.ShopifyAnalytics.meta && window.ShopifyAnalytics.meta.checkout && window.ShopifyAnalytics.meta.checkout.total_price || 0) / 100;
+        tid = String(window.Shopify.checkout && window.Shopify.checkout.order_id || '');
+      }} catch(e) {{}}
+      window.gtag('event', 'conversion', {{
+        send_to: AW + '/' + CONV,
+        value: val,
+        currency: 'BRL',
+        transaction_id: tid
+      }});
+    }}
+  }};
   document.head.appendChild(s);
 }})();
 """
@@ -264,20 +286,32 @@ analytics.subscribe('checkout_completed', function(event) {{
         result["asset"] = {"ok": False, "status": asset_r.status_code}
     else:
         public_url = asset_r.json().get("asset", {}).get("public_url", "")
-        # Remover script tags antigas duplicadas
+        # Remover todas as script tags shinsei antigas
         st_list = requests.get(f"{BASE}/script_tags.json?limit=50", headers=HEADERS, timeout=10).json()
         for st in st_list.get("script_tags", []):
             if "shinsei-ads" in st.get("src", ""):
                 requests.delete(f"{BASE}/script_tags/{st['id']}.json", headers=HEADERS, timeout=10)
-        # Criar script tag atualizada
-        st_r = requests.post(
+        # Script tag para páginas do tema (remarketing)
+        st_online = requests.post(
             f"{BASE}/script_tags.json",
             json={"script_tag": {"event": "onload", "src": public_url,
                                  "display_scope": "online_store", "cache": False}},
             headers=HEADERS, timeout=10
         )
-        result["asset"] = {"ok": True, "public_url": public_url,
-                           "script_tag_status": st_r.status_code}
-        logger.info("gtag asset reinstalado: %s", public_url)
+        # Script tag para página de confirmação de pedido (conversão)
+        st_order = requests.post(
+            f"{BASE}/script_tags.json",
+            json={"script_tag": {"event": "onload", "src": public_url,
+                                 "display_scope": "order_status", "cache": False}},
+            headers=HEADERS, timeout=10
+        )
+        result["asset"] = {
+            "ok": True,
+            "public_url": public_url,
+            "script_tag_online_store": st_online.status_code,
+            "script_tag_order_status": st_order.status_code,
+        }
+        logger.info("gtag asset reinstalado (online_store=%s, order_status=%s)",
+                    st_online.status_code, st_order.status_code)
 
     return result
