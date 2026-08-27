@@ -13,7 +13,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-SHOPIFY_CLIENT_ID     = os.getenv("SHOPIFY_CLIENT_ID", "")
+SHOPIFY_CLIENT_ID     = os.getenv("SHOPIFY_CLIENT_ID", "3336a3010ee22d2e21018a3ce849b360")
 SHOPIFY_CLIENT_SECRET = os.getenv("SHOPIFY_CLIENT_SECRET", "")
 SHOPIFY_STORE = "pknw4n-eg"
 SHOPIFY_SCOPES = "read_products,write_products,read_inventory,write_inventory,read_locations,read_shipping,write_shipping,read_themes,write_themes,read_script_tags,write_script_tags,read_content,write_content,write_checkouts,read_orders,write_orders,write_pixels,read_pixels"
