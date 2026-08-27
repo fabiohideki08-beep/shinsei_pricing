@@ -316,57 +316,76 @@ def _generate_me_label(order: dict):
         district = addr.get("city", "Centro") or "Centro"
 
         # Carrinho ME
-        r2 = requests.post(
-            "https://melhorenvio.com.br/api/v2/me/cart",
-            json={
-                "service": best["id"],
-                "agency":  best.get("agency"),
-                "from": {
-                    "name":        "SHINSEI MARKETPLACE",
-                    "phone":       "1140040140",
-                    "email":       "fabiohideki08@gmail.com",
-                    "address":     "Rua Norma de Freitas Borges",
-                    "number":      "65",
-                    "district":    "Presidente Altino",
-                    "city":        "Osasco",
-                    "state_abbr":  "SP",
-                    "postal_code": ME_ORIGIN_CEP,
-                    "country_id":  "BR",
-                },
-                "to": {
-                    "name":        name,
-                    "phone":       phone or "11999999999",
-                    "document":    cpf_dest or None,
-                    "address":     address1,
-                    "number":      number,
-                    "complement":  complement,
-                    "district":    district,
-                    "city":        addr.get("city", ""),
-                    "state_abbr":  (addr.get("province_code") or "").replace("BR-", ""),
-                    "postal_code": dest_cep,
-                    "country_id":  "BR",
-                },
-                "products": [
-                    {"name": i.get("name", "Produto")[:50],
-                     "quantity": int(i.get("quantity", 1)),
-                     "unitary_value": float(i.get("price") or "0")}
-                    for i in items[:10]
-                ],
-                "volumes": [{"weight": weight_kg, "width": 16, "height": 10, "length": 22}],
-                "tag": [{"tag": order_name, "url": None}],
-                "options": {
-                    "receipt": False, "own_hand": False,
-                    "reverse": False, "non_commercial": False,
-                    "insurance_value": round(float(order.get("total_price") or "0") or 1.0, 2),
-                },
+        cart_payload = {
+            "service": best["id"],
+            "agency":  best.get("agency"),
+            "from": {
+                "name":        "SHINSEI MARKETPLACE",
+                "phone":       "1140040140",
+                "email":       "fabiohideki08@gmail.com",
+                "address":     "Rua Norma de Freitas Borges",
+                "number":      "65",
+                "district":    "Presidente Altino",
+                "city":        "Osasco",
+                "state_abbr":  "SP",
+                "postal_code": ME_ORIGIN_CEP,
+                "country_id":  "BR",
             },
-            headers=_me_headers(tok), timeout=15,
-        )
+            "to": {
+                "name":        name,
+                "phone":       phone or "11999999999",
+                "document":    cpf_dest or None,
+                "address":     address1,
+                "number":      number,
+                "complement":  complement,
+                "district":    district,
+                "city":        addr.get("city", ""),
+                "state_abbr":  (addr.get("province_code") or "").replace("BR-", ""),
+                "postal_code": dest_cep,
+                "country_id":  "BR",
+            },
+            "products": [
+                {"name": i.get("name", "Produto")[:50],
+                 "quantity": int(i.get("quantity", 1)),
+                 "unitary_value": float(i.get("price") or "0")}
+                for i in items[:10]
+            ],
+            "volumes": [{"weight": weight_kg, "width": 16, "height": 10, "length": 22}],
+            "tag": [{"tag": order_name, "url": None}],
+            "options": {
+                "receipt": False, "own_hand": False,
+                "reverse": False, "non_commercial": False,
+                "insurance_value": round(float(order.get("total_price") or "0") or 1.0, 2),
+            },
+        }
+        r2 = requests.post("https://melhorenvio.com.br/api/v2/me/cart",
+                           json=cart_payload, headers=_me_headers(tok), timeout=15)
         if r2.status_code not in (200, 201):
-            print(f"[me_label] {order_name} — erro carrinho: {r2.status_code} {r2.text[:300]}")
-            _log_me_label(order_id, order_name, None, best["name"],
-                          float(best["price"]), dest_cep, f"erro_cart:{r2.status_code}")
-            return
+            # 422 = CPF obrigatório no serviço mesmo sem "documents" nos requirements
+            # Tentar próximo serviço mais barato excluindo o atual
+            if r2.status_code == 422 and "CPF" in r2.text:
+                remaining_cart = [q for q in available if q["id"] != best["id"]]
+                for fallback in sorted(remaining_cart, key=lambda q: float(q["price"])):
+                    print(f"[me_label] {order_name} — {best['name']} exige CPF, tentando {fallback['name']}")
+                    cart_payload2 = dict(cart_payload)
+                    cart_payload2["service"] = fallback["id"]
+                    cart_payload2["agency"] = fallback.get("agency")
+                    r2b = requests.post("https://melhorenvio.com.br/api/v2/me/cart",
+                                        json=cart_payload2, headers=_me_headers(tok), timeout=15)
+                    if r2b.status_code in (200, 201):
+                        best = fallback
+                        r2 = r2b
+                        break
+                else:
+                    print(f"[me_label] {order_name} — todos os serviços exigem CPF")
+                    _log_me_label(order_id, order_name, None, best["name"],
+                                  float(best["price"]), dest_cep, "erro_sem_cpf")
+                    return
+            if r2.status_code not in (200, 201):
+                print(f"[me_label] {order_name} — erro carrinho: {r2.status_code} {r2.text[:300]}")
+                _log_me_label(order_id, order_name, None, best["name"],
+                              float(best["price"]), dest_cep, f"erro_cart:{r2.status_code}")
+                return
 
         cart_id = r2.json().get("id")
 
