@@ -881,6 +881,22 @@ def listar_carrinhos():
     return {"carrinhos": json.loads(log_file.read_text(encoding="utf-8"))[-50:]}
 
 
+@router.post("/test-abandoned-email")
+def test_abandoned_email(email: str = "fabiohideki08@gmail.com"):
+    """Envia e-mail de teste de carrinho abandonado (sem HMAC, apenas para debug)."""
+    ok = _send_abandoned_cart_email(
+        email=email,
+        name="Fabio Teste",
+        items=[
+            {"title": "Alfaparf Evolution Color 60g - 7.3 Louro Médio Dourado", "price": "29.90"},
+            {"title": "Ox 20 Vol 900ml - Alfaparf", "price": "19.90"},
+        ],
+        checkout_url="https://shinseimarket.com.br/checkout/test",
+        total="49,80",
+    )
+    return {"ok": ok, "email": email}
+
+
 @router.post("/test-me-label")
 def test_me_label(cep: str = "87043595", peso_kg: float = 0.6):
     """Debug síncrono: cota ME para CEP informado e retorna resultado sem comprar."""
