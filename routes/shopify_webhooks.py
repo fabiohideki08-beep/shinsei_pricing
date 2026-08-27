@@ -655,15 +655,28 @@ def listar_etiquetas_me():
     return {"etiquetas": json.loads(log_file.read_text(encoding="utf-8"))[-50:]}
 
 
+def _shopify_token() -> str:
+    """Retorna token Shopify: tenta env var, depois shopify_config.json (volume Render)."""
+    tok = os.getenv("SHOPIFY_ACCESS_TOKEN", "")
+    if not tok:
+        cfg_path = DATA_DIR / "shopify_config.json"
+        if cfg_path.exists():
+            try:
+                tok = json.loads(cfg_path.read_text(encoding="utf-8")).get("access_token", "")
+            except Exception:
+                pass
+    return tok
+
+
 @router.post("/configurar-transporte/{order_id}")
 def configurar_transporte(order_id: str):
     """Busca pedido Shopify e configura o transporte ME no Bling (para emissão de NF com etiqueta)."""
-    shopify_token = os.getenv("SHOPIFY_ACCESS_TOKEN", "")
+    shopify_token = _shopify_token()
     shopify_store = os.getenv("SHOPIFY_STORE", "pknw4n-eg.myshopify.com")
     r = requests.get(f"https://{shopify_store}/admin/api/2024-01/orders/{order_id}.json",
         headers={"X-Shopify-Access-Token": shopify_token}, timeout=15)
     if r.status_code != 200:
-        return {"erro": f"Pedido não encontrado: {r.status_code}"}
+        return {"erro": f"Pedido Shopify não encontrado: {r.status_code} — token pode estar desatualizado"}
     order = r.json()["order"]
     if _is_rmsp(order):
         return {"aviso": f"Pedido {order.get('name')} é RMSP — transporte ME não aplicável"}
@@ -671,6 +684,45 @@ def configurar_transporte(order_id: str):
     if ok:
         return {"ok": True, "pedido": order.get("name"), "mensagem": "Transporte ME configurado no Bling — emita a NF para gerar a etiqueta"}
     return {"ok": False, "pedido": order.get("name"), "mensagem": "Falha ao configurar no Bling — verifique os logs"}
+
+
+@router.post("/configurar-transporte-bling/{bling_pedido_id}")
+def configurar_transporte_bling(bling_pedido_id: str, cep: str, peso_kg: float = 0.5):
+    """
+    Configura transporte ME diretamente no pedido Bling pelo ID interno.
+    Útil quando o token Shopify está indisponível ou o pedido veio de outro canal.
+    """
+    bling_tok = _bling_token()
+    if not bling_tok:
+        return {"erro": "Token Bling não disponível"}
+
+    best = _me_quote_best(cep.replace("-", ""), peso_kg)
+    if not best:
+        return {"erro": f"Sem cotação ME para CEP {cep}"}
+
+    service_map = _ME_SERVICE_TO_BLING.get(best["name"], {"nome": best["name"], "codigo": best["name"]})
+    try:
+        r = requests.patch(
+            f"https://bling.com.br/Api/v3/pedidos/vendas/{bling_pedido_id}",
+            json={
+                "transporte": {
+                    "transportador": {"nome": service_map["nome"], "cnpj": ""},
+                    "tipo": "D",
+                    "servico": service_map["codigo"],
+                    "prazoEntrega": int(best.get("delivery_time") or 7),
+                    "freteValor": float(best["price"]),
+                    "volumes": [{"pesoBruto": peso_kg, "largura": 16, "altura": 10, "comprimento": 22}],
+                }
+            },
+            headers=_bling_headers(bling_tok), timeout=15,
+        )
+        if r.status_code in (200, 201, 204):
+            return {"ok": True, "bling_pedido_id": bling_pedido_id,
+                    "servico": best["name"], "preco": best["price"],
+                    "mensagem": "Transporte ME configurado — emita a NF para gerar a etiqueta"}
+        return {"ok": False, "status": r.status_code, "body": r.text[:300]}
+    except Exception as e:
+        return {"erro": str(e)}
 
 
 @router.post("/reenviar-etiqueta/{order_id}")
