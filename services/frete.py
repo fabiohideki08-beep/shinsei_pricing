@@ -109,6 +109,25 @@ RMSP_MUNICIPALITIES: set[str] = {
 
 RMSP_FREIGHT_VALUE: float = 8.0  # valor simbólico usado para RMSP (sempre grátis após subsídio)
 
+# Micro-região do depósito (Osasco e adjacente) — frete grátis sem mínimo de compra.
+# Bairros: Vila Yara, Vila Campesina, Adalgisa, Umuarama, Jardim D'Abril,
+#           Jaguaribe, Novo Osasco, Cipava e arredores.
+_MICROREGIAO_DEPOSITO: list[tuple[int, int]] = [
+    (6020000, 6029999),  # Vila Yara / Vila Campesina
+    (6030000, 6036999),  # Adalgisa / Umuarama (inclui 06036-003 do depósito)
+    (6040000, 6045999),  # Jardim D'Abril
+    (6050000, 6069999),  # Jaguaribe / Novo Osasco / Cipava
+]
+
+
+def is_microregiao_deposito(cep: str) -> bool:
+    """Retorna True se o CEP está na micro-região do depósito (frete grátis sem mínimo)."""
+    digits = normalize_cep(cep)
+    if len(digits) < 8:
+        return False
+    n = int(digits)
+    return any(lo <= n <= hi for lo, hi in _MICROREGIAO_DEPOSITO)
+
 _FRETE_HISTORICO_PATH = Path(__file__).parent.parent / "data" / "frete_historico.json"
 _HISTORICO_MAX = 300  # máximo de registros mantidos
 
@@ -542,7 +561,8 @@ async def calculate_freight(
     # Para chamadas do widget sem valor (order_value=0) a regra é aplicada client-side.
     # RMSP abaixo do mínimo: cobra R$8,00 fixo (custo da entrega própria Shinsei).
     minimo_gratis = float(cfg_frete.get("frete_gratis_minimo", FRETE_GRATIS_MINIMO))
-    if order_value > 0.0 and order_value < minimo_gratis and result.is_free:
+    _microregiao = is_microregiao_deposito(dest_cep)
+    if not _microregiao and order_value > 0.0 and order_value < minimo_gratis and result.is_free:
         logger.info(
             "calculate_freight: valor=R$%.2f < mínimo=R$%.2f — removendo frete grátis.",
             order_value, minimo_gratis,
