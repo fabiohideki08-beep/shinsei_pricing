@@ -672,8 +672,9 @@ def _checkout_converted(checkout_token: str) -> bool:
 
 def _send_abandoned_cart_email(email: str, name: str, items: list, checkout_url: str, total: str):
     """Envia e-mail de recuperação de carrinho abandonado."""
-    smtp_user = os.getenv("SMTP_USER", "b6e399001@smtp-brevo.com")
-    smtp_pass = os.getenv("SMTP_PASS", "")
+    smtp_login = os.getenv("SMTP_USER", "b6e399001@smtp-brevo.com")   # login Brevo
+    smtp_from  = os.getenv("SMTP_FROM", "atendimentoshinsei@gmail.com")  # remetente verificado
+    smtp_pass  = os.getenv("SMTP_PASS", "")
     if not smtp_pass:
         print(f"[carrinho] SMTP_PASS não configurada — email não enviado para {email}")
         return False
@@ -761,7 +762,7 @@ def _send_abandoned_cart_email(email: str, name: str, items: list, checkout_url:
 </html>"""
 
     msg = MIMEMultipart("alternative")
-    msg["From"] = f"Shinsei Market <{smtp_user}>"
+    msg["From"] = f"Shinsei Market <{smtp_from}>"
     msg["To"] = email
     msg["Subject"] = f"{first_name}, seu carrinho está te esperando 🛒"
     msg.attach(MIMEText(html, "html", "utf-8"))
@@ -769,8 +770,8 @@ def _send_abandoned_cart_email(email: str, name: str, items: list, checkout_url:
     try:
         with smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=30) as server:
             server.starttls()
-            server.login(smtp_user, smtp_pass)
-            server.sendmail(smtp_user, email, msg.as_string())
+            server.login(smtp_login, smtp_pass)
+            server.sendmail(smtp_from, email, msg.as_string())
         print(f"[carrinho] ✅ E-mail enviado para {email}")
         return True
     except Exception as e:
