@@ -175,6 +175,49 @@
       <h2>4. Quadro técnico</h2>
       <div id="techPanel" class="hero-empty">Nenhuma auditoria disponível.</div>
     </section>
+
+    <!-- BLOCO 5: AJUSTE UNIVERSAL DE MARGEM -->
+    <section class="card" id="secaoAjusteUniversal">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+        <div>
+          <h2 style="margin:0">5. Ajuste universal de margem</h2>
+          <p style="margin:6px 0 0;font-size:13px;color:var(--muted)">Recalcula todos os produtos com estoque positivo e envia para a fila de aprovação.</p>
+        </div>
+        <span id="auBadgeStatus" style="display:none;font-size:12px;padding:4px 10px;border-radius:8px;font-weight:700"></span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:200px 1fr;gap:16px;align-items:flex-end">
+        <div class="field">
+          <label for="auMargem">Margem desejada (%)</label>
+          <input id="auMargem" type="number" step="0.5" value="20" min="0" max="100" style="font-size:18px;font-weight:700;color:#4f8cff" />
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn" id="btnAuIniciar" onclick="auIniciar()">🚀 Iniciar ajuste universal</button>
+          <button class="btn secondary" id="btnAuContinuar" style="display:none" onclick="auContinuar()">▶ Continuar</button>
+          <button class="btn secondary sm" id="btnAuReset" style="display:none" onclick="auReset()">🔄 Reiniciar</button>
+          <a class="btn secondary sm" href="/fila">📋 Ver fila</a>
+        </div>
+      </div>
+
+      <!-- Barra de progresso -->
+      <div id="auProgressWrap" style="display:none;margin-top:18px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px">
+          <span id="auProgressLabel" style="color:var(--muted)">Aguardando...</span>
+          <span id="auProgressPct" style="font-weight:700;color:var(--accent)">0%</span>
+        </div>
+        <div style="height:10px;background:var(--card2);border-radius:99px;overflow:hidden;border:1px solid var(--line)">
+          <div id="auProgressBar" style="height:100%;background:var(--accent);border-radius:99px;width:0%;transition:width .4s ease"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px">
+          <div class="metric"><div class="label">Total produtos</div><div class="value" id="auMetTotal">—</div></div>
+          <div class="metric"><div class="label">Processados</div><div class="value" id="auMetProcessados">—</div></div>
+          <div class="metric"><div class="label">Na fila</div><div class="value" style="color:var(--ok)" id="auMetAdicionados">—</div></div>
+          <div class="metric"><div class="label">Pulados / Erros</div><div class="value" style="color:var(--warn)" id="auMetErros">—</div></div>
+        </div>
+      </div>
+
+      <div id="auNotice" style="display:none;margin-top:14px" class="notice"></div>
+    </section>
   </div>
 </div>
 
@@ -654,10 +697,121 @@ function downloadArquivo(conteudo,tipo,nome){
   URL.revokeObjectURL(url);
 }
 
+// ─── AJUSTE UNIVERSAL DE MARGEM ──────────────────────────
+let _auTimer = null;
+let _auRodando = false;
+
+async function auIniciar(){
+  const margem = parseFloat(document.getElementById('auMargem').value||'20') / 100;
+  if(isNaN(margem)||margem<=0){auNotice('Informe uma margem válida maior que 0%.','warn');return;}
+  await auReset(true); // reset silencioso
+  auNotice(`Iniciando ajuste para margem de ${(margem*100).toFixed(1)}%...`,'');
+  auMostrarProgresso();
+  document.getElementById('btnAuIniciar').disabled=true;
+  _auRodando=true;
+  auLoopLotes(margem);
+}
+
+async function auLoopLotes(margem){
+  if(!_auRodando)return;
+  try{
+    const r=await fetch(`/fila/ajuste-margem-universal?margem=${margem}&lote=30`,{method:'POST'});
+    const d=await r.json();
+    auAtualizarUI(d);
+    if(d.concluido){
+      _auRodando=false;
+      document.getElementById('btnAuContinuar').style.display='none';
+      document.getElementById('btnAuReset').style.display='inline-flex';
+      auNotice(`✅ Concluído! ${d.adicionados} produtos na fila de aprovação. ${d.pulados||0} pulados, ${d.erros||0} erros.`,'ok');
+      atualizarContadorFila();
+      return;
+    }
+    _auTimer=setTimeout(()=>auLoopLotes(margem),800);
+  }catch(e){
+    _auRodando=false;
+    auNotice(`Erro de conexão: ${e.message}. Clique em Continuar para retomar.`,'warn');
+    document.getElementById('btnAuContinuar').style.display='inline-flex';
+  }
+}
+
+async function auContinuar(){
+  const margem=parseFloat(document.getElementById('auMargem').value||'20')/100;
+  document.getElementById('btnAuContinuar').style.display='none';
+  _auRodando=true;
+  auLoopLotes(margem);
+}
+
+async function auReset(silencioso=false){
+  if(_auTimer){clearTimeout(_auTimer);_auTimer=null;}
+  _auRodando=false;
+  await fetch('/fila/ajuste-margem-universal/reset',{method:'POST'}).catch(()=>{});
+  document.getElementById('auProgressWrap').style.display='none';
+  document.getElementById('btnAuIniciar').disabled=false;
+  document.getElementById('btnAuContinuar').style.display='none';
+  document.getElementById('btnAuReset').style.display='none';
+  document.getElementById('auBadgeStatus').style.display='none';
+  document.getElementById('auNotice').style.display='none';
+  if(!silencioso)auNotice('Estado resetado. Pronto para novo ajuste.','');
+}
+
+function auMostrarProgresso(){
+  document.getElementById('auProgressWrap').style.display='block';
+  document.getElementById('btnAuReset').style.display='inline-flex';
+}
+
+function auAtualizarUI(d){
+  const pct=d.pct||0;
+  document.getElementById('auProgressBar').style.width=pct+'%';
+  document.getElementById('auProgressPct').textContent=pct.toFixed(1)+'%';
+  document.getElementById('auProgressLabel').textContent=d.msg||'';
+  document.getElementById('auMetTotal').textContent=d.total||'—';
+  document.getElementById('auMetProcessados').textContent=d.processados||0;
+  document.getElementById('auMetAdicionados').textContent=d.adicionados||0;
+  document.getElementById('auMetErros').textContent=`${d.pulados||0} / ${d.erros||0}`;
+  const badge=document.getElementById('auBadgeStatus');
+  badge.style.display='inline-block';
+  if(d.concluido){
+    badge.textContent='✅ Concluído';
+    badge.style.background='rgba(22,163,74,.2)';
+    badge.style.color='#22c55e';
+  }else{
+    badge.textContent='⏳ Processando...';
+    badge.style.background='rgba(79,140,255,.15)';
+    badge.style.color='#4f8cff';
+  }
+}
+
+function auNotice(msg,tipo){
+  const el=document.getElementById('auNotice');
+  el.style.display='block';
+  el.textContent=msg;
+  el.className='notice'+(tipo?' '+tipo:'');
+}
+
+// Verificar status ao carregar (pode haver processo em andamento)
+async function auVerificarStatus(){
+  try{
+    const r=await fetch('/fila/ajuste-margem-universal/status');
+    const d=await r.json();
+    if(d.total>0){
+      auMostrarProgresso();
+      auAtualizarUI(d);
+      if(!d.concluido){
+        auNotice(`Processo em andamento (margem ${(d.margem*100).toFixed(1)}%). Clique em Continuar para retomar.`,'warn');
+        document.getElementById('btnAuContinuar').style.display='inline-flex';
+        document.getElementById('auMargem').value=(d.margem*100).toFixed(1);
+      }else{
+        auNotice(`Último ajuste concluído: ${d.adicionados} produtos na fila.`,'ok');
+      }
+    }
+  }catch(e){}
+}
+
 // ─── INIT ────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded',()=>{
   atualizarContadorFila();
   restaurarSimulacao();
+  auVerificarStatus();
 });
 </script>
 

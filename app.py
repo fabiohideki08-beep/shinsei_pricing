@@ -2333,6 +2333,202 @@ def fila_popular_estoque_reset():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# AJUSTE UNIVERSAL DE MARGEM
+# ══════════════════════════════════════════════════════════════════════════════
+
+_MARGEM_STATE_FILE = DATA_DIR / "ajuste_margem_state.json"
+
+
+def _margem_salvar_estado(state: dict):
+    try:
+        _MARGEM_STATE_FILE.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    except Exception as e:
+        logger.warning("[MARGEM-UNIVERSAL] erro ao salvar estado: %s", e)
+
+
+def _margem_carregar_estado() -> dict:
+    try:
+        if _MARGEM_STATE_FILE.exists():
+            return json.loads(_MARGEM_STATE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+@app.post("/fila/ajuste-margem-universal")
+def fila_ajuste_margem_universal(margem: float = 0.20, lote: int = 30):
+    """
+    Popula a fila de aprovação com todos os produtos de estoque positivo,
+    calculados com a margem desejada.
+    Chame repetidamente com o mesmo ?margem= até concluido=true.
+    Uma nova margem zera o estado automaticamente.
+    """
+    import time as _time
+
+    estado = _margem_carregar_estado()
+
+    # Se margem mudou ou primeira vez: reinicia
+    if not estado.get("skus") or abs(estado.get("margem", -1) - margem) > 0.0001:
+        estado = {
+            "margem": margem,
+            "skus": [],
+            "cursor": 0,
+            "adicionados": 0,
+            "pulados": 0,
+            "erros": 0,
+            "concluido": False,
+        }
+
+        bc = BlingClient()
+        pagina = 1
+        while True:
+            try:
+                resp = bc.list_products(page=pagina, limit=100)
+                itens = resp.get("data") or []
+                if not itens:
+                    break
+                for item in itens:
+                    if item.get("situacao") not in ("A", None, ""):
+                        continue
+                    sku = item.get("codigo") or ""
+                    estoque = item.get("estoque") or {}
+                    saldo = float(
+                        estoque.get("fisico")
+                        or estoque.get("saldoFisico")
+                        or estoque.get("saldoVirtualTotal")
+                        or 0
+                    )
+                    if sku and saldo > 0:
+                        estado["skus"].append({
+                            "sku": sku,
+                            "nome": item.get("nome", "")[:80],
+                            "preco_custo": float(item.get("precoCusto") or 0),
+                        })
+                pagina += 1
+                _time.sleep(0.25)
+            except Exception as e:
+                logger.warning("[MARGEM-UNIVERSAL] erro coleta pg %s: %s", pagina, e)
+                break
+
+        _margem_salvar_estado(estado)
+        logger.info("[MARGEM-UNIVERSAL] Coletados %d produtos com estoque, margem=%.1f%%",
+                    len(estado["skus"]), margem * 100)
+
+    skus      = estado["skus"]
+    cursor    = estado.get("cursor", 0)
+    total     = len(skus)
+    adicionados = estado.get("adicionados", 0)
+    pulados   = estado.get("pulados", 0)
+    erros     = estado.get("erros", 0)
+
+    if cursor >= total:
+        estado["concluido"] = True
+        _margem_salvar_estado(estado)
+        return {
+            "ok": True, "concluido": True, "total": total,
+            "adicionados": adicionados, "pulados": pulados, "erros": erros,
+            "msg": f"Concluído: {adicionados} na fila, {pulados} pulados, {erros} erros.",
+        }
+
+    bc = BlingClient()
+    regras = carregar_regras(apenas_ativas=True)
+    _sie_score_cfg = _load_json(_MOD_DIR / "sie_score_config.json", {})
+    score_cfg = _sie_score_cfg if _sie_score_cfg.get("ajuste_ativo") else None
+
+    fim = min(cursor + lote, total)
+    for item in skus[cursor:fim]:
+        sku = item["sku"]
+        try:
+            if ja_existe_pendente(sku):
+                pulados += 1
+                continue
+            resultado = montar_precificacao_bling(
+                regras=regras, criterio="sku", valor_busca=sku,
+                embalagem="", imposto=0, quantidade=1,
+                objetivo="margem", tipo_alvo="percentual", valor_alvo=margem,
+                score_config=score_cfg,
+                regra_estoque=carregar_cfg().get("regra_estoque"),
+                preco_compra_anterior_bling=item.get("preco_custo") or None,
+            )
+            if resultado.get("erro"):
+                erros += 1
+                continue
+            itens_prec = (
+                (resultado.get("integracao") or {}).get("itens")
+                or resultado.get("itens_precificacao")
+                or resultado.get("itens")
+                or []
+            )
+            preview = {
+                "ok": True, "criterio_usado": "sku",
+                "produto": resultado.get("produto_bling") or {},
+                "melhor_canal": resultado.get("melhor_canal") or "",
+                "modo_aprovacao": "manual",
+                "marketplaces": _normalizar_marketplaces(itens_prec),
+                "auditoria": resultado.get("auditoria") or resultado,
+                "raw": resultado,
+                "_margem_universal": margem,
+            }
+            preview["diagnostico"] = _diagnostico_preview(preview)
+            item_fila = _montar_item_fila(preview, {"valor_busca": sku, "criterio": "sku"})
+            item_fila["origem"] = f"ajuste_margem_{int(margem * 100)}pct"
+            inserir_item_fila(item_fila)
+            adicionados += 1
+        except Exception as exc:
+            logger.warning("[MARGEM-UNIVERSAL] SKU=%s erro: %s", sku, exc)
+            erros += 1
+
+    estado["cursor"]      = fim
+    estado["adicionados"] = adicionados
+    estado["pulados"]     = pulados
+    estado["erros"]       = erros
+    estado["concluido"]   = fim >= total
+    _margem_salvar_estado(estado)
+
+    return {
+        "ok":         True,
+        "concluido":  estado["concluido"],
+        "total":      total,
+        "processados": fim,
+        "adicionados": adicionados,
+        "pulados":    pulados,
+        "erros":      erros,
+        "pct":        round(fim / total * 100, 1) if total else 0,
+        "msg":        f"{fim}/{total} — {adicionados} na fila, {pulados} pulados",
+    }
+
+
+@app.get("/fila/ajuste-margem-universal/status")
+def fila_ajuste_margem_status():
+    estado = _margem_carregar_estado()
+    if not estado:
+        return {"concluido": False, "total": 0, "processados": 0, "adicionados": 0,
+                "erros": 0, "pulados": 0, "margem": 0, "msg": "Nenhum processo iniciado."}
+    total = len(estado.get("skus", []))
+    cur   = estado.get("cursor", 0)
+    return {
+        "concluido":   estado.get("concluido", False),
+        "margem":      estado.get("margem", 0),
+        "total":       total,
+        "processados": cur,
+        "adicionados": estado.get("adicionados", 0),
+        "pulados":     estado.get("pulados", 0),
+        "erros":       estado.get("erros", 0),
+        "pct":         round(cur / total * 100, 1) if total else 0,
+        "msg":         f"{cur}/{total} — {estado.get('adicionados',0)} na fila",
+    }
+
+
+@app.post("/fila/ajuste-margem-universal/reset")
+def fila_ajuste_margem_reset():
+    try:
+        _MARGEM_STATE_FILE.unlink(missing_ok=True)
+    except Exception:
+        pass
+    return {"ok": True, "msg": "Estado de ajuste de margem resetado."}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # FILA DE CONFERÊNCIA DE PREÇO DE CUSTO
 # ══════════════════════════════════════════════════════════════════════════════
 
