@@ -1108,6 +1108,33 @@ def bling_callback(code: str | None = Query(None), state: str | None = Query(Non
     if not BlingClient: raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
     if error: raise HTTPException(status_code=400, detail=f"Bling OAuth retornou erro: {error}. {error_description or ''}".strip())
     if not code: raise HTTPException(status_code=400, detail="Callback do Bling sem code de autorização.")
+    # Detectar se é conta AKG pelo state file
+    _is_akg = False
+    try:
+        if _BLING_AKG_STATE_PATH.exists():
+            _akg_state_data = json.loads(_BLING_AKG_STATE_PATH.read_text(encoding="utf-8"))
+            if state and _akg_state_data.get("state") == state:
+                _is_akg = True
+    except Exception:
+        pass
+    if _is_akg:
+        import time as _time
+        import requests as _req
+        _cid, _csec = _bling_akg_creds()
+        r = _req.post("https://www.bling.com.br/Api/v3/oauth/token",
+            data={"grant_type": "authorization_code", "code": code, "redirect_uri": _BLING_AKG_REDIRECT_URI},
+            auth=(_cid, _csec), timeout=20)
+        if r.status_code != 200:
+            raise HTTPException(status_code=400, detail=f"Erro ao trocar code AKG: {r.text[:300]}")
+        tokens = r.json()
+        tokens["expires_at"] = _time.time() + tokens.get("expires_in", 3600) - 60
+        _bling_akg_save(tokens)
+        try:
+            from render_persistence import save_bling_tokens_akg as _rp_save_akg
+            _rp_save_akg(tokens.get("access_token", ""), tokens.get("refresh_token", ""))
+        except Exception as _e:
+            import logging as _lg; _lg.getLogger(__name__).warning("callback akg: render_persistence falhou: %s", _e)
+        return {"ok": True, "message": "Conta AKG conectada ao Bling com sucesso.", "expires_in": tokens.get("expires_in")}
     try:
         client = BlingClient()
         token = client.exchange_code_for_token(code, state=state)
@@ -1117,7 +1144,7 @@ def bling_callback(code: str | None = Query(None), state: str | None = Query(Non
 
 
 # ── Bling AKG (segunda conta) ─────────────────────────────────────────────────
-_BLING_AKG_REDIRECT_URI  = os.getenv("BLING_AKG_REDIRECT_URI",  "https://shinsei-pricing.onrender.com/bling/callback2")
+_BLING_AKG_REDIRECT_URI  = os.getenv("BLING_REDIRECT_URI",  "https://shinsei-pricing.onrender.com/bling/callback")
 _BLING_AKG_TOKEN_PATH    = Path("data/bling_tokens_akg.json")
 _BLING_AKG_STATE_PATH    = Path("data/bling_oauth_state_akg.json")
 _CREDENTIALS_PATH        = Path("data/credentials.json")
