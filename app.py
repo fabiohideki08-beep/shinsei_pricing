@@ -1123,15 +1123,19 @@ _BLING_AKG_STATE_PATH    = Path("data/bling_oauth_state_akg.json")
 _CREDENTIALS_PATH        = Path("data/credentials.json")
 
 def _bling_akg_creds() -> tuple[str, str]:
-    """Lê client_id e client_secret do credentials.json (salvo pela página de integrações)."""
+    """Lê client_id e client_secret — env vars têm prioridade sobre credentials.json."""
+    cid = os.getenv("BLING_AKG_CLIENT_ID", "")
+    sec = os.getenv("BLING_AKG_CLIENT_SECRET", "")
+    if cid and sec:
+        return cid, sec
     try:
         creds = json.loads(_CREDENTIALS_PATH.read_text(encoding="utf-8"))
         akg = creds.get("bling_akg", {})
-        cid = akg.get("client_id", "") or os.getenv("BLING_AKG_CLIENT_ID", "")
-        sec = akg.get("client_secret", "") or os.getenv("BLING_AKG_CLIENT_SECRET", "")
-        return cid, sec
+        cid = cid or akg.get("client_id", "")
+        sec = sec or akg.get("client_secret", "")
     except Exception:
-        return os.getenv("BLING_AKG_CLIENT_ID", ""), os.getenv("BLING_AKG_CLIENT_SECRET", "")
+        pass
+    return cid, sec
 def _bling_akg_save(data: dict):
     _BLING_AKG_TOKEN_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
