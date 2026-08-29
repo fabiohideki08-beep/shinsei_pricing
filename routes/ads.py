@@ -378,3 +378,32 @@ def ads_diagnostico():
         resultado["grupos_erro"] = str(e)
 
     return resultado
+
+
+@router.post("/campanha/{campaign_id}/maximizar-cliques")
+def ads_set_maximize_clicks(campaign_id: str, cpc_max_centavos: int = 0):
+    """Muda estratégia de lance da campanha para Maximizar Cliques."""
+    try:
+        client, customer_id = _build_client()
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+    try:
+        campaign_service = client.get_service("CampaignService")
+        campaign = client.get_type("Campaign")
+        campaign.resource_name = campaign_service.campaign_path(customer_id, campaign_id)
+        campaign.target_spend.cpc_bid_ceiling_micros = cpc_max_centavos * 10_000  # centavos → micros
+
+        op = client.get_type("CampaignOperation")
+        op.update.CopyFrom(campaign)
+        op.update_mask.paths.append("target_spend")
+        if cpc_max_centavos:
+            op.update_mask.paths.append("target_spend.cpc_bid_ceiling_micros")
+
+        response = campaign_service.mutate_campaigns(
+            customer_id=customer_id,
+            operations=[op],
+        )
+        return {"ok": True, "resource": response.results[0].resource_name, "msg": "Lance alterado para Maximizar Cliques"}
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
