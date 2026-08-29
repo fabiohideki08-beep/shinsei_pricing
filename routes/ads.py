@@ -398,6 +398,76 @@ def ads_diagnostico():
     return resultado
 
 
+@router.get("/campanha/{campaign_id}/listing-groups")
+def ads_listing_groups(campaign_id: str):
+    """Retorna listing groups e produtos elegíveis de uma campanha Shopping."""
+    try:
+        client, customer_id = _build_client()
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+    try:
+        # Listing groups
+        rows = _gaql(client, customer_id, f"""
+            SELECT
+                ad_group_criterion.resource_name,
+                ad_group_criterion.listing_group.type,
+                ad_group_criterion.listing_group.case_value.product_channel.channel,
+                ad_group_criterion.status,
+                ad_group_criterion.cpc_bid_micros,
+                metrics.impressions,
+                metrics.clicks,
+                metrics.cost_micros
+            FROM ad_group_criterion
+            WHERE campaign.id = {campaign_id}
+              AND ad_group_criterion.type = 'LISTING_GROUP'
+            ORDER BY metrics.impressions DESC
+            LIMIT 50
+        """)
+
+        grupos = []
+        for row in rows:
+            c = row.ad_group_criterion
+            m = row.metrics
+            grupos.append({
+                "tipo":    c.listing_group.type.name if hasattr(c.listing_group.type, "name") else str(c.listing_group.type),
+                "status":  c.status.name if hasattr(c.status, "name") else str(c.status),
+                "lance":   round((c.cpc_bid_micros or 0) / 1e6, 2),
+                "impr":    m.impressions or 0,
+                "cliques": m.clicks or 0,
+                "custo":   round((m.cost_micros or 0) / 1e6, 2),
+            })
+
+        # Produtos Shopping desta campanha (últimos 30 dias)
+        rows2 = _gaql(client, customer_id, f"""
+            SELECT
+                segments.product_title,
+                segments.product_item_id,
+                metrics.impressions,
+                metrics.clicks,
+                metrics.cost_micros
+            FROM shopping_performance_view
+            WHERE campaign.id = {campaign_id}
+              AND segments.date DURING LAST_30_DAYS
+            ORDER BY metrics.impressions DESC
+            LIMIT 20
+        """)
+        produtos = [
+            {
+                "titulo":  row.segments.product_title or row.segments.product_item_id or "?",
+                "item_id": row.segments.product_item_id,
+                "impr":    row.metrics.impressions or 0,
+                "cliques": row.metrics.clicks or 0,
+                "custo":   round((row.metrics.cost_micros or 0) / 1e6, 2),
+            }
+            for row in rows2
+        ]
+
+        return {"ok": True, "listing_groups": grupos, "produtos": produtos}
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+
 @router.post("/campanha/{campaign_id}/maximizar-cliques")
 def ads_set_maximize_clicks(campaign_id: str, cpc_max_centavos: int = 0):
     """Muda estratégia de lance da campanha para Maximizar Cliques."""
