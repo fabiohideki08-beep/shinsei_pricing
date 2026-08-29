@@ -22,9 +22,9 @@ YAML_PATH = BASE_DIR / "google-ads.yaml"
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _load_yaml_creds() -> dict:
-    """Lê google-ads.yaml (formato chave: valor) e retorna dict."""
+    """Lê google-ads.yaml (formato chave: valor) e retorna dict. Retorna {} se não existir."""
     if not YAML_PATH.exists():
-        raise FileNotFoundError(f"google-ads.yaml não encontrado em {YAML_PATH}")
+        return {}
     out: dict = {}
     for line in YAML_PATH.read_text(encoding="utf-8").splitlines():
         line = line.strip()
@@ -37,15 +37,19 @@ def _load_yaml_creds() -> dict:
 
 
 def _build_client():
-    """Constrói GoogleAdsClient a partir do google-ads.yaml (env vars sobrepõem o arquivo)."""
+    """Constrói GoogleAdsClient a partir de env vars (GOOGLE_ADS_*) ou google-ads.yaml como fallback."""
     import os
     from google.ads.googleads.client import GoogleAdsClient
     creds = _load_yaml_creds()
-    # Env vars override the yaml file so tokens can be rotated without rebuild
+    # Env vars sobrepõem o yaml — no Render não há arquivo, só env vars
     for key in ("refresh_token", "client_id", "client_secret", "developer_token", "login_customer_id"):
         env_val = os.environ.get(f"GOOGLE_ADS_{key.upper()}")
         if env_val:
             creds[key] = env_val
+    # Valida que as credenciais obrigatórias estão presentes
+    missing = [k for k in ("client_id", "client_secret", "refresh_token", "developer_token") if not creds.get(k)]
+    if missing:
+        raise FileNotFoundError(f"Credenciais Google Ads ausentes: {missing}. Configure env vars GOOGLE_ADS_* ou google-ads.yaml")
     config = {
         "client_id":         creds["client_id"],
         "client_secret":     creds["client_secret"],
@@ -78,7 +82,7 @@ def ads_status():
         nome = rows[0].customer.descriptive_name if rows else ""
         return {"ok": True, "customer_id": customer_id, "nome": nome, "msg": "Credenciais válidas"}
     except FileNotFoundError:
-        return {"ok": False, "msg": "google-ads.yaml não encontrado"}
+        return {"ok": False, "msg": "Credenciais Google Ads ausentes (configure env vars GOOGLE_ADS_* no Render)"}
     except Exception as e:
         return {"ok": False, "msg": str(e)}
 
@@ -95,7 +99,7 @@ def ads_diagnostico():
     try:
         client, customer_id = _build_client()
     except FileNotFoundError:
-        return {"ok": False, "erro": "google-ads.yaml não encontrado"}
+        return {"ok": False, "erro": "Credenciais Google Ads ausentes (configure env vars GOOGLE_ADS_* no Render)"}
     except Exception as e:
         return {"ok": False, "erro": f"Falha ao obter credenciais: {e}"}
 
