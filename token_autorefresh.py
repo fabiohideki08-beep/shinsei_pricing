@@ -406,7 +406,9 @@ def _renovar_ml_akg() -> bool:
 # ─── Loop principal ───────────────────────────────────────────────────────────
 
 _ultima_renovacao: dict[str, float] = {}
-COOLDOWN = 30 * 60  # não renova o mesmo canal em menos de 30 min
+COOLDOWN       = 30 * 60   # não renova o mesmo canal em menos de 30 min
+FORCA_BLING    = 3 * 3600  # FIX: refresh forçado Bling a cada 3h (independente de expiry)
+                            # Garante rotação frequente e salva par access+refresh no Render
 
 
 def _loop():
@@ -417,20 +419,35 @@ def _loop():
     while True:
         agora = time.time()
 
-        # ── Bling ──────────────────────────────────────────────────────────────
+        # ── Bling Shinsei ───────────────────────────────────────────────────────
+        # FIX: renova por expiry (90 min antecipado) OU por tempo forçado (3h)
+        # Motivo: refresh_token ROTA a cada uso — se o Render save falhar,
+        # o próximo restart fica com token antigo → invalid_grant
         try:
             restante = _checar_expiry_bling()
             ult = _ultima_renovacao.get("bling", 0)
+            renovar = False
+            razao   = ""
             if restante >= 0 and restante < LIMITE_BLING and (agora - ult) > COOLDOWN:
-                logger.info("Bling: expira em %.0f min — renovando…", restante / 60)
-                if _renovar_bling():
-                    _ultima_renovacao["bling"] = agora
-            elif restante < 0 and (agora - ult) > 4 * 3600:
-                # Sem informação de expiry: renova a cada 4h por segurança
+                renovar, razao = True, f"expira em {restante/60:.0f} min"
+            elif (agora - ult) > FORCA_BLING:
+                renovar, razao = True, "refresh forcado 3h (garantia de rotacao)"
+            if renovar:
+                logger.info("Bling Shinsei: renovando — %s", razao)
                 if _renovar_bling():
                     _ultima_renovacao["bling"] = agora
         except Exception as e:
             logger.error("Auto-refresh Bling inesperado: %s", e)
+
+        # ── Bling AKG ──────────────────────────────────────────────────────────
+        try:
+            ult = _ultima_renovacao.get("bling_akg", 0)
+            if (agora - ult) > FORCA_BLING:  # FIX: 3h em vez de 4h
+                logger.info("Bling AKG: refresh forcado 3h")
+                if _renovar_bling_akg():
+                    _ultima_renovacao["bling_akg"] = agora
+        except Exception as e:
+            logger.error("Auto-refresh Bling AKG inesperado: %s", e)
 
         # ── Shopee ─────────────────────────────────────────────────────────────
         try:
@@ -446,7 +463,7 @@ def _loop():
         # ── ML Shinsei ─────────────────────────────────────────────────────────
         try:
             ult = _ultima_renovacao.get("ml", 0)
-            if (agora - ult) > 4 * 3600:  # renova ML a cada 4h
+            if (agora - ult) > 4 * 3600:
                 if _renovar_ml():
                     _ultima_renovacao["ml"] = agora
         except Exception as e:
@@ -460,15 +477,6 @@ def _loop():
                     _ultima_renovacao["ml_akg"] = agora
         except Exception as e:
             logger.error("Auto-refresh ML AKG inesperado: %s", e)
-
-        # ── Bling AKG ──────────────────────────────────────────────────────────
-        try:
-            ult = _ultima_renovacao.get("bling_akg", 0)
-            if (agora - ult) > 4 * 3600:
-                if _renovar_bling_akg():
-                    _ultima_renovacao["bling_akg"] = agora
-        except Exception as e:
-            logger.error("Auto-refresh Bling AKG inesperado: %s", e)
 
         time.sleep(INTERVALO)
 

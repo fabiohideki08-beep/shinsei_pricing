@@ -170,6 +170,28 @@ def startup():
     migrar_json_legado()
     iniciar_scheduler_background()
     iniciar_scbot()
+    # FIX: verifica token Bling no startup — renova imediatamente se expira em < 1h
+    # Garante que o primeiro request após restart já usa token válido
+    def _startup_token_check():
+        import time as _time
+        try:
+            from token_autorefresh import _checar_expiry_bling, _renovar_bling, _renovar_bling_akg
+            restante = _checar_expiry_bling()
+            if restante < 0 or restante < 3600:
+                razao = f"expira em {restante/60:.0f} min" if restante >= 0 else "expiry desconhecido"
+                logger.info("Startup: Bling token precisa renovacao (%s) — renovando agora", razao)
+                ok = _renovar_bling()
+                logger.info("Startup: Bling Shinsei renovacao %s", "OK" if ok else "FALHOU")
+            else:
+                logger.info("Startup: Bling Shinsei OK (expira em %.0f min)", restante / 60)
+            # Bling AKG — tenta renovar sempre no startup para garantir par fresco no Render
+            ok_akg = _renovar_bling_akg()
+            logger.info("Startup: Bling AKG renovacao %s", "OK" if ok_akg else "FALHOU/sem-token")
+        except Exception as _se:
+            logger.warning("Startup token check: %s", _se)
+    import threading as _thr
+    _thr.Thread(target=_startup_token_check, daemon=True, name="startup-token-check").start()
+
     # Inicia thread de auto-refresh de tokens (Bling, Shopee, ML)
     try:
         from token_autorefresh import iniciar as iniciar_autorefresh
@@ -1092,6 +1114,96 @@ def shopee_raw_token():
                 "shop_id": t.get("shop_id", 0), "expires_at": t.get("expires_at", 0)}
     except Exception as exc:
         return {"ok": False, "erro": str(exc)}
+
+
+@app.get("/bling/token-health")
+def bling_token_health():
+    """Diagnóstico completo de saúde dos tokens Bling Shinsei e AKG.
+    Mostra: validade, tempo restante, se Render persistence está OK, última renovação."""
+    import time as _time
+    resultado = {"shinsei": {}, "akg": {}, "render_persistence": {}, "recomendacoes": []}
+
+    # ── Shinsei ──────────────────────────────────────────────────────────────
+    try:
+        from token_autorefresh import _checar_expiry_bling
+        restante = _checar_expiry_bling()
+        resultado["shinsei"] = {
+            "token_local": False, "expires_in_min": None,
+            "status": "desconhecido", "acao": None
+        }
+        if BlingClient:
+            client = BlingClient()
+            resultado["shinsei"]["token_local"] = client.has_local_tokens()
+        if restante >= 0:
+            resultado["shinsei"]["expires_in_min"] = round(restante / 60, 1)
+            if restante < 1800:
+                resultado["shinsei"]["status"] = "CRITICO"
+                resultado["shinsei"]["acao"]   = "Renovar agora em /bling/auth"
+                resultado["recomendacoes"].append("Bling Shinsei: token expira em menos de 30 min — reautorize em /bling/auth")
+            elif restante < 5400:
+                resultado["shinsei"]["status"] = "ALERTA"
+                resultado["shinsei"]["acao"]   = "Será renovado automaticamente em breve"
+            else:
+                resultado["shinsei"]["status"] = "OK"
+        else:
+            resultado["shinsei"]["status"] = "SEM_EXPIRY"
+            resultado["shinsei"]["acao"]   = "Token sem informação de expiry — auto-refresh tentará a cada 3h"
+    except Exception as e:
+        resultado["shinsei"]["erro"] = str(e)
+
+    # ── AKG ──────────────────────────────────────────────────────────────────
+    try:
+        import json as _json
+        from pathlib import Path as _Path
+        akg_path = _Path("data/bling_tokens_akg.json")
+        if akg_path.exists():
+            tok_akg = _json.loads(akg_path.read_text(encoding="utf-8"))
+            exp_akg = float(tok_akg.get("expires_at", 0) or 0)
+            restante_akg = max(-1, exp_akg - _time.time()) if exp_akg else -1
+            resultado["akg"] = {
+                "token_local": bool(tok_akg.get("access_token")),
+                "expires_in_min": round(restante_akg / 60, 1) if restante_akg >= 0 else None,
+                "status": "OK" if restante_akg > 5400 else ("ALERTA" if restante_akg > 1800 else "CRITICO") if restante_akg >= 0 else "SEM_EXPIRY"
+            }
+        else:
+            resultado["akg"] = {"token_local": False, "status": "NAO_CONECTADO", "acao": "Conectar em /bling/auth2"}
+            resultado["recomendacoes"].append("Bling AKG não conectado — acesse /bling/auth2")
+    except Exception as e:
+        resultado["akg"]["erro"] = str(e)
+
+    # ── Render Persistence ───────────────────────────────────────────────────
+    api_key    = os.getenv("RENDER_API_KEY", "")
+    service_id = os.getenv("RENDER_SERVICE_ID", "")
+    resultado["render_persistence"] = {
+        "api_key_configurada":    bool(api_key),
+        "service_id_configurado": bool(service_id),
+        "pronto": bool(api_key and service_id)
+    }
+    if not api_key:
+        resultado["recomendacoes"].append("RENDER_API_KEY ausente — tokens nao serao persistidos apos refresh → invalid_grant no proximo restart")
+    if not service_id:
+        resultado["recomendacoes"].append("RENDER_SERVICE_ID ausente — tokens nao serao persistidos")
+
+    resultado["ok"] = (resultado["shinsei"].get("status") in ("OK", "ALERTA", "SEM_EXPIRY")
+                       and resultado["render_persistence"]["pronto"])
+    return resultado
+
+
+@app.post("/bling/force-refresh")
+def bling_force_refresh():
+    """Força renovação imediata dos tokens Bling Shinsei e AKG e persiste no Render."""
+    try:
+        from token_autorefresh import _renovar_bling, _renovar_bling_akg
+        ok_shi = _renovar_bling()
+        ok_akg = _renovar_bling_akg()
+        return {
+            "ok": ok_shi or ok_akg,
+            "shinsei": "renovado" if ok_shi else "falhou",
+            "akg":     "renovado" if ok_akg else "falhou/sem-token",
+            "mensagem": "Tokens renovados e persistidos no Render." if (ok_shi and ok_akg) else "Verificar logs para detalhes."
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/bling/auth")
