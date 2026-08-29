@@ -1560,29 +1560,11 @@ def gmc_configurar_frete():
     """
     try:
         svc = _build_service()
+        # Frete grátis não é garantido por valor — depende do subsídio acumulado cobrir o ME.
+        # GMC só recebe o fixo da RMSP; demais regiões ficam como "calculado no checkout".
         shipping_settings = {
             "accountId": str(MERCHANT_ID),
             "services": [
-                # Serviço 1: Frete grátis Brasil inteiro para pedidos >= R$29,90
-                {
-                    "name": "Frete Grátis acima de R$29,90",
-                    "active": True,
-                    "shipSpeed": "medium",
-                    "currency": "BRL",
-                    "deliveryCountry": "BR",
-                    "minimumOrderValue": {"value": "29.90", "currency": "BRL"},
-                    "deliveryTime": {
-                        "minTransitTimeInDays": 2,
-                        "maxTransitTimeInDays": 10,
-                    },
-                    "rateGroups": [
-                        {
-                            "singleValue": {"flatRate": {"value": "0", "currency": "BRL"}},
-                            "name": "Grátis",
-                        }
-                    ],
-                },
-                # Serviço 2: RMSP taxa fixa R$12,90 (todos os pedidos — prazo curto)
                 {
                     "name": "Entrega RMSP - R$12,90",
                     "active": True,
