@@ -1693,6 +1693,50 @@ def bling_produto_atualizar_preco(payload: AtualizacaoCampoBlingPayload):
         raise HTTPException(status_code=400, detail=f"Falha ao atualizar custo: {exc}")
 
 
+@app.post("/bling/produto/atualizar-custo-por-gtin")
+def bling_atualizar_custo_por_gtin(payload: dict):
+    """Busca produto por GTIN/EAN e atualiza custoMedio. Body: {gtin, custo}"""
+    if not BlingClient:
+        raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
+    gtin = str(payload.get("gtin", "")).strip()
+    custo = float(payload.get("custo", -1))
+    if not gtin:
+        raise HTTPException(status_code=400, detail="gtin é obrigatório.")
+    if custo < 0:
+        raise HTTPException(status_code=400, detail="custo deve ser >= 0.")
+    try:
+        client = BlingClient()
+        # Buscar pelo GTIN
+        found = client.search_by_gtin(gtin)
+        if not found:
+            raise HTTPException(status_code=404, detail=f"Produto com GTIN {gtin} não encontrado no Bling.")
+        produto = found[0] if isinstance(found, list) else found
+        produto_id = produto.get("id")
+        nome = produto.get("nome", "")
+
+        # Atualizar custo — tenta via fornecedor, cai em override local
+        custo_r = round(custo, 2)
+        fornecedor = produto.get("fornecedor")
+        if isinstance(fornecedor, dict) and fornecedor.get("id"):
+            patch = {"id": produto_id, "fornecedor": {**fornecedor, "precoCusto": custo_r, "precoCompra": custo_r}}
+            client.update_product(produto_id, patch)
+            return {"ok": True, "produto_id": produto_id, "nome": nome, "gtin": gtin, "custo_novo": custo_r, "metodo": "bling_api"}
+        else:
+            custo_override_path = DATA_DIR / "custo_override.json"
+            overrides = _load_json(custo_override_path, {})
+            sku = produto.get("codigo") or str(produto_id)
+            entry = {"custo": custo_r, "produto_id": produto_id, "gtin": gtin, "atualizado_em": datetime.utcnow().isoformat()}
+            overrides[sku] = entry
+            overrides[str(produto_id)] = entry
+            overrides[gtin] = entry
+            _save_json(custo_override_path, overrides)
+            return {"ok": True, "produto_id": produto_id, "nome": nome, "gtin": gtin, "custo_novo": custo_r, "metodo": "local_override", "aviso": "Produto sem fornecedor no Bling — custo salvo localmente."}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Erro ao atualizar custo: {exc}")
+
+
 @app.get("/bling/debug/produto-raw/{produto_id}")
 def bling_debug_produto_raw(produto_id: int):
     """Retorna a resposta RAW do Bling para um produto. Sem auth."""
