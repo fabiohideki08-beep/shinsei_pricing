@@ -52,6 +52,7 @@ PUBLIC_PATHS = {
     "/regras",
     "/ads/auth",
     "/ads/callback",
+    "/ads/persistir-token",
     "/bling/auth",
     "/bling/callback",
     "/bling/status",

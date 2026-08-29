@@ -88,15 +88,30 @@ def ads_oauth_callback(code: str = "", error: str = ""):
     """)
 
 
-def _salvar_refresh_token_render(refresh_token: str):
+def _salvar_refresh_token_render(refresh_token: str) -> bool:
     """Salva GOOGLE_ADS_REFRESH_TOKEN nas env vars do Render."""
+    os.environ["GOOGLE_ADS_REFRESH_TOKEN"] = refresh_token
     try:
         from render_persistence import _patch_env_vars
-        _patch_env_vars({"GOOGLE_ADS_REFRESH_TOKEN": refresh_token})
-        os.environ["GOOGLE_ADS_REFRESH_TOKEN"] = refresh_token
-        logger.info("GOOGLE_ADS_REFRESH_TOKEN atualizado no Render")
+        ok = _patch_env_vars({"GOOGLE_ADS_REFRESH_TOKEN": refresh_token})
+        if ok:
+            logger.info("GOOGLE_ADS_REFRESH_TOKEN atualizado no Render")
+        else:
+            logger.warning("_patch_env_vars retornou False — token NÃO persistido no Render")
+        return bool(ok)
     except Exception as e:
         logger.warning("Falha ao salvar GOOGLE_ADS_REFRESH_TOKEN no Render: %s", e)
+        return False
+
+
+@router.post("/persistir-token")
+def ads_persistir_token():
+    """Força salvar o GOOGLE_ADS_REFRESH_TOKEN atual (memória) no Render env vars."""
+    token = os.environ.get("GOOGLE_ADS_REFRESH_TOKEN", "")
+    if not token:
+        return {"ok": False, "erro": "GOOGLE_ADS_REFRESH_TOKEN ausente em memória"}
+    ok = _salvar_refresh_token_render(token)
+    return {"ok": ok, "token_prefix": token[:20] + "...", "msg": "Token persistido no Render" if ok else "Falha ao persistir"}
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -389,16 +404,18 @@ def ads_set_maximize_clicks(campaign_id: str, cpc_max_centavos: int = 0):
         return {"ok": False, "erro": str(e)}
 
     try:
+        from google.protobuf import field_mask_pb2
         campaign_service = client.get_service("CampaignService")
-        campaign = client.get_type("Campaign")
-        campaign.resource_name = campaign_service.campaign_path(customer_id, campaign_id)
-        campaign.target_spend.cpc_bid_ceiling_micros = cpc_max_centavos * 10_000  # centavos → micros
+        resource_name = campaign_service.campaign_path(customer_id, campaign_id)
 
         op = client.get_type("CampaignOperation")
-        op.update.CopyFrom(campaign)
-        op.update_mask.paths.append("target_spend")
+        op.update.resource_name = resource_name
+        # target_spend = Maximizar Cliques
         if cpc_max_centavos:
-            op.update_mask.paths.append("target_spend.cpc_bid_ceiling_micros")
+            op.update.target_spend.cpc_bid_ceiling_micros = cpc_max_centavos * 10_000
+            op.update_mask.paths.extend(["target_spend", "target_spend.cpc_bid_ceiling_micros"])
+        else:
+            op.update_mask.paths.append("target_spend")
 
         response = campaign_service.mutate_campaigns(
             customer_id=customer_id,
