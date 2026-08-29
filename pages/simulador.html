@@ -191,12 +191,18 @@
           <label for="auMargem">Margem desejada (%)</label>
           <input id="auMargem" type="number" step="0.5" value="20" min="0" max="100" style="font-size:18px;font-weight:700;color:#4f8cff" />
         </div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
           <button class="btn" id="btnAuIniciar" onclick="auIniciar()">🚀 Iniciar ajuste universal</button>
           <button class="btn secondary" id="btnAuContinuar" style="display:none" onclick="auContinuar()">▶ Continuar</button>
           <button class="btn secondary sm" id="btnAuReset" style="display:none" onclick="auReset()">🔄 Reiniciar</button>
+          <button class="btn secondary sm" id="btnAuResetCache" onclick="auResetComCache()" title="Apaga o cache de SKUs e força recoleta completa do Bling">♻ Recoleta forçada</button>
           <a class="btn secondary sm" href="/fila">📋 Ver fila</a>
         </div>
+      </div>
+
+      <!-- Info do cache de SKUs -->
+      <div id="auCacheInfo" style="margin-top:12px;padding:10px 14px;border-radius:12px;border:1px solid var(--line);background:var(--card2);font-size:12px;color:var(--muted);display:none">
+        <span id="auCacheTexto"></span>
       </div>
 
       <!-- Barra de progresso -->
@@ -751,7 +757,40 @@ async function auReset(silencioso=false){
   document.getElementById('btnAuReset').style.display='none';
   document.getElementById('auBadgeStatus').style.display='none';
   document.getElementById('auNotice').style.display='none';
-  if(!silencioso)auNotice('Estado resetado. Pronto para novo ajuste.','');
+  if(!silencioso)auNotice('Estado resetado. Pronto para novo ajuste (cache de SKUs mantido).','');
+  auCarregarCacheInfo();
+}
+
+async function auResetComCache(){
+  if(!confirm('Isso vai apagar o cache de SKUs e forçar recoleta completa do Bling (~2 min). Confirma?')) return;
+  if(_auTimer){clearTimeout(_auTimer);_auTimer=null;}
+  _auRodando=false;
+  await fetch('/fila/ajuste-margem-universal/reset?limpar_cache=true',{method:'POST'}).catch(()=>{});
+  document.getElementById('auProgressWrap').style.display='none';
+  document.getElementById('btnAuIniciar').disabled=false;
+  document.getElementById('btnAuContinuar').style.display='none';
+  document.getElementById('btnAuReset').style.display='none';
+  document.getElementById('auBadgeStatus').style.display='none';
+  auNotice('Cache de SKUs apagado. Próximo início recoletará todos os produtos do Bling.','warn');
+  auCarregarCacheInfo();
+}
+
+async function auCarregarCacheInfo(){
+  try{
+    const r=await fetch('/fila/ajuste-margem-universal/cache-info');
+    const d=await r.json();
+    const wrap=document.getElementById('auCacheInfo');
+    const txt=document.getElementById('auCacheTexto');
+    if(!wrap||!txt) return;
+    if(d.existe){
+      wrap.style.display='block';
+      const cor=d.valido?'#22c55e':'#f59e0b';
+      txt.innerHTML=`💾 Cache de SKUs: <b style="color:${cor}">${d.total} produtos</b> salvo há ${d.idade_h}h ${d.valido?'<span style="color:#22c55e">(válido — próximo ajuste usa este cache)</span>':'<span style="color:#f59e0b">(expirado — próximo ajuste recoletará)</span>'}`;
+    }else{
+      wrap.style.display='block';
+      txt.innerHTML='💾 Cache de SKUs: <span style="color:#9fb0d9">não existe — primeiro ajuste coletará do Bling (~2 min)</span>';
+    }
+  }catch(e){}
 }
 
 function auMostrarProgresso(){
@@ -812,6 +851,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   atualizarContadorFila();
   restaurarSimulacao();
   auVerificarStatus();
+  auCarregarCacheInfo();
 });
 </script>
 

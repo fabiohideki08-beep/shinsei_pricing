@@ -2336,7 +2336,38 @@ def fila_popular_estoque_reset():
 # AJUSTE UNIVERSAL DE MARGEM
 # ══════════════════════════════════════════════════════════════════════════════
 
-_MARGEM_STATE_FILE = DATA_DIR / "ajuste_margem_state.json"
+_MARGEM_STATE_FILE  = DATA_DIR / "ajuste_margem_state.json"
+_MARGEM_SKU_CACHE   = DATA_DIR / "ajuste_margem_skus_cache.json"
+_MARGEM_SKU_TTL_H   = 24  # horas — reutiliza lista de SKUs sem recolher do Bling
+
+
+def _margem_cache_skus_valido() -> list | None:
+    """Retorna lista de SKUs do cache se existir e for recente (< TTL horas)."""
+    import time as _t
+    try:
+        if not _MARGEM_SKU_CACHE.exists():
+            return None
+        data = json.loads(_MARGEM_SKU_CACHE.read_text(encoding="utf-8"))
+        idade_h = (_t.time() - data.get("ts", 0)) / 3600
+        if idade_h > _MARGEM_SKU_TTL_H:
+            logger.info("[MARGEM-UNIVERSAL] cache SKUs expirado (%.1fh > %dh)", idade_h, _MARGEM_SKU_TTL_H)
+            return None
+        skus = data.get("skus", [])
+        logger.info("[MARGEM-UNIVERSAL] cache SKUs reutilizado: %d SKUs (%.1fh atrás)", len(skus), idade_h)
+        return skus
+    except Exception:
+        return None
+
+
+def _margem_salvar_cache_skus(skus: list):
+    import time as _t
+    try:
+        _MARGEM_SKU_CACHE.write_text(
+            json.dumps({"ts": _t.time(), "total": len(skus), "skus": skus}, ensure_ascii=False),
+            encoding="utf-8"
+        )
+    except Exception as e:
+        logger.warning("[MARGEM-UNIVERSAL] erro ao salvar cache SKUs: %s", e)
 
 
 def _margem_salvar_estado(state: dict):
@@ -2367,52 +2398,63 @@ def fila_ajuste_margem_universal(margem: float = 0.20, lote: int = 30):
 
     estado = _margem_carregar_estado()
 
-    # Se margem mudou ou primeira vez: reinicia
+    # Se margem mudou ou primeira vez: reinicia processo (mas reutiliza cache de SKUs se válido)
     if not estado.get("skus") or abs(estado.get("margem", -1) - margem) > 0.0001:
+        skus_cached = _margem_cache_skus_valido()
+
+        if skus_cached:
+            # Reutiliza lista do cache — pula a coleta lenta do Bling
+            skus_coletados = skus_cached
+            logger.info("[MARGEM-UNIVERSAL] Reutilizando %d SKUs do cache.", len(skus_coletados))
+        else:
+            # Coleta do zero no Bling
+            skus_coletados = []
+            bc = BlingClient()
+            pagina = 1
+            while True:
+                try:
+                    resp = bc.list_products(page=pagina, limit=100)
+                    itens = resp.get("data") or []
+                    if not itens:
+                        break
+                    for item in itens:
+                        if item.get("situacao") not in ("A", None, ""):
+                            continue
+                        sku = item.get("codigo") or ""
+                        estoque = item.get("estoque") or {}
+                        saldo = float(
+                            estoque.get("fisico")
+                            or estoque.get("saldoFisico")
+                            or estoque.get("saldoVirtualTotal")
+                            or 0
+                        )
+                        if sku and saldo > 0:
+                            skus_coletados.append({
+                                "sku": sku,
+                                "nome": item.get("nome", "")[:80],
+                                "preco_custo": float(item.get("precoCusto") or 0),
+                            })
+                    pagina += 1
+                    _time.sleep(0.25)
+                except Exception as e:
+                    logger.warning("[MARGEM-UNIVERSAL] erro coleta pg %s: %s", pagina, e)
+                    break
+            # Salva cache para próximas execuções (TTL 24h)
+            _margem_salvar_cache_skus(skus_coletados)
+            logger.info("[MARGEM-UNIVERSAL] Coletados %d produtos com estoque.", len(skus_coletados))
+
         estado = {
             "margem": margem,
-            "skus": [],
+            "skus": skus_coletados,
             "cursor": 0,
             "adicionados": 0,
             "pulados": 0,
             "erros": 0,
             "concluido": False,
         }
-
-        bc = BlingClient()
-        pagina = 1
-        while True:
-            try:
-                resp = bc.list_products(page=pagina, limit=100)
-                itens = resp.get("data") or []
-                if not itens:
-                    break
-                for item in itens:
-                    if item.get("situacao") not in ("A", None, ""):
-                        continue
-                    sku = item.get("codigo") or ""
-                    estoque = item.get("estoque") or {}
-                    saldo = float(
-                        estoque.get("fisico")
-                        or estoque.get("saldoFisico")
-                        or estoque.get("saldoVirtualTotal")
-                        or 0
-                    )
-                    if sku and saldo > 0:
-                        estado["skus"].append({
-                            "sku": sku,
-                            "nome": item.get("nome", "")[:80],
-                            "preco_custo": float(item.get("precoCusto") or 0),
-                        })
-                pagina += 1
-                _time.sleep(0.25)
-            except Exception as e:
-                logger.warning("[MARGEM-UNIVERSAL] erro coleta pg %s: %s", pagina, e)
-                break
-
         _margem_salvar_estado(estado)
-        logger.info("[MARGEM-UNIVERSAL] Coletados %d produtos com estoque, margem=%.1f%%",
-                    len(estado["skus"]), margem * 100)
+        logger.info("[MARGEM-UNIVERSAL] Processo iniciado: %d SKUs, margem=%.1f%%",
+                    len(skus_coletados), margem * 100)
 
     skus      = estado["skus"]
     cursor    = estado.get("cursor", 0)
@@ -2520,12 +2562,43 @@ def fila_ajuste_margem_status():
 
 
 @app.post("/fila/ajuste-margem-universal/reset")
-def fila_ajuste_margem_reset():
+def fila_ajuste_margem_reset(limpar_cache: bool = False):
+    """
+    Reseta o estado do processo. Com ?limpar_cache=true também apaga o cache de SKUs,
+    forçando recoleta completa do Bling na próxima execução.
+    """
     try:
         _MARGEM_STATE_FILE.unlink(missing_ok=True)
+        if limpar_cache:
+            _MARGEM_SKU_CACHE.unlink(missing_ok=True)
     except Exception:
         pass
-    return {"ok": True, "msg": "Estado de ajuste de margem resetado."}
+    msg = "Estado resetado."
+    if limpar_cache:
+        msg += " Cache de SKUs apagado — próxima execução recoletará do Bling."
+    return {"ok": True, "msg": msg}
+
+
+@app.get("/fila/ajuste-margem-universal/cache-info")
+def fila_ajuste_margem_cache_info():
+    """Retorna informações sobre o cache de SKUs salvo."""
+    import time as _t
+    try:
+        if not _MARGEM_SKU_CACHE.exists():
+            return {"existe": False, "total": 0, "idade_h": None, "msg": "Cache não existe."}
+        data = json.loads(_MARGEM_SKU_CACHE.read_text(encoding="utf-8"))
+        idade_h = round((_t.time() - data.get("ts", 0)) / 3600, 1)
+        valido = idade_h < _MARGEM_SKU_TTL_H
+        return {
+            "existe": True,
+            "total": data.get("total", len(data.get("skus", []))),
+            "idade_h": idade_h,
+            "ttl_h": _MARGEM_SKU_TTL_H,
+            "valido": valido,
+            "msg": f"{data.get('total',0)} SKUs em cache ({idade_h}h atrás) — {'válido' if valido else 'expirado'}.",
+        }
+    except Exception as e:
+        return {"existe": False, "total": 0, "idade_h": None, "msg": f"Erro: {e}"}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
