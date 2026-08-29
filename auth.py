@@ -50,6 +50,8 @@ PUBLIC_PATHS = {
     "/simulador",
     "/fila",
     "/regras",
+    "/ads/auth",
+    "/ads/callback",
     "/bling/auth",
     "/bling/callback",
     "/bling/status",
