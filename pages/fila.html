@@ -42,12 +42,38 @@ details{margin-top:14px} details>summary{cursor:pointer;color:#c9d7ff;font-weigh
   </div>
 
   <!-- ── Barra de ações em lote ── -->
-  <div id="bulk-bar" style="display:none;align-items:center;gap:10px;background:rgba(79,140,255,.1);border:1px solid rgba(79,140,255,.3);border-radius:14px;padding:12px 16px;margin-bottom:14px;flex-wrap:wrap">
-    <span id="bulk-count" style="font-weight:700;color:#60a5fa"></span>
-    <button class="btn success" onclick="aprovarSelecionados()" style="padding:8px 14px;font-size:13px">✅ Aprovar selecionados</button>
-    <button class="btn danger" onclick="rejeitarSelecionados()" style="padding:8px 14px;font-size:13px">❌ Rejeitar selecionados</button>
-    <button class="btn secondary" onclick="limparSelecao()" style="padding:8px 14px;font-size:13px">✕ Cancelar</button>
-    <div id="bulk-progress" style="font-size:13px;color:#9fb0d9"></div>
+  <div id="bulk-bar" style="display:none;gap:10px;background:rgba(79,140,255,.1);border:1px solid rgba(79,140,255,.3);border-radius:14px;padding:14px 16px;margin-bottom:14px;flex-wrap:wrap">
+    <!-- Linha 1: contagem + aprovação/rejeição -->
+    <div style="display:flex;align-items:center;gap:10px;width:100%;flex-wrap:wrap">
+      <span id="bulk-count" style="font-weight:700;color:#60a5fa;min-width:140px"></span>
+      <button class="btn success" onclick="aprovarSelecionados()" style="padding:8px 14px;font-size:13px">✅ Aprovar selecionados</button>
+      <button class="btn danger" onclick="rejeitarSelecionados()" style="padding:8px 14px;font-size:13px">❌ Rejeitar selecionados</button>
+      <button class="btn secondary" onclick="limparSelecao()" style="padding:8px 14px;font-size:13px">✕ Cancelar</button>
+    </div>
+    <!-- Linha 2: ações de dados em massa -->
+    <div style="display:flex;align-items:center;gap:10px;width:100%;flex-wrap:wrap;padding-top:10px;border-top:1px solid rgba(79,140,255,.2)">
+      <span style="font-size:12px;color:#9fb0d9;font-weight:600;white-space:nowrap">Atualizar em massa:</span>
+
+      <!-- Peso em massa -->
+      <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.04);border:1px solid rgba(79,140,255,.25);border-radius:10px;padding:6px 10px">
+        <label style="font-size:12px;color:#9fb0d9;white-space:nowrap">⚖ Peso (kg):</label>
+        <input id="bulk-peso" type="number" step="0.001" min="0.001" placeholder="0.300"
+          style="width:90px;background:#0d1630;border:1px solid var(--line);color:#fff;padding:6px 8px;border-radius:8px;font-size:13px;font-weight:700"
+          onkeydown="if(event.key==='Enter')aplicarPesoEmMassa()">
+        <button class="btn" onclick="aplicarPesoEmMassa()" style="padding:6px 12px;font-size:12px;background:#4f8cff">Aplicar</button>
+      </div>
+
+      <!-- Custo em massa -->
+      <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.04);border:1px solid rgba(79,140,255,.25);border-radius:10px;padding:6px 10px">
+        <label style="font-size:12px;color:#9fb0d9;white-space:nowrap">💰 Custo (R$):</label>
+        <input id="bulk-custo" type="number" step="0.01" min="0.01" placeholder="25.90"
+          style="width:90px;background:#0d1630;border:1px solid var(--line);color:#fff;padding:6px 8px;border-radius:8px;font-size:13px;font-weight:700"
+          onkeydown="if(event.key==='Enter')aplicarCustoEmMassa()">
+        <button class="btn" onclick="aplicarCustoEmMassa()" style="padding:6px 12px;font-size:12px;background:#4f8cff">Aplicar</button>
+      </div>
+
+      <div id="bulk-progress" style="font-size:12px;color:#9fb0d9"></div>
+    </div>
   </div>
 
   <!-- ── Filtros avançados ── -->
@@ -231,6 +257,48 @@ async function rejeitarSelecionados(){
   const d = await res.json();
   alert(`${d.rejeitados} item(s) rejeitado(s).`);
   limparSelecao();
+  carregarFila();
+}
+
+async function aplicarPesoEmMassa(){
+  const ids = [..._selecionados];
+  if(!ids.length){ alert('Selecione pelo menos um item.'); return; }
+  const pesoVal = parseFloat(document.getElementById('bulk-peso').value);
+  if(!pesoVal || pesoVal <= 0){ alert('Informe um peso válido em kg.'); return; }
+  const prog = document.getElementById('bulk-progress');
+  prog.textContent = `Aplicando peso ${pesoVal}kg em 0/${ids.length}...`;
+  let ok=0, erros=0;
+  for(let i=0; i<ids.length; i++){
+    try{
+      const r = await fetch(`/fila/completar/${ids[i]}`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({tipo:'peso', valor:pesoVal})});
+      if(r.ok) ok++; else erros++;
+    }catch(e){ erros++; }
+    prog.textContent = `Peso ${pesoVal}kg: ${ok+erros}/${ids.length} (${ok} ok${erros?', '+erros+' erros':''})`;
+    if(i < ids.length-1) await new Promise(r=>setTimeout(r,80));
+  }
+  prog.textContent = `✅ Peso aplicado: ${ok}/${ids.length}${erros?' | ⚠ '+erros+' erros':''}`;
+  document.getElementById('bulk-peso').value = '';
+  carregarFila();
+}
+
+async function aplicarCustoEmMassa(){
+  const ids = [..._selecionados];
+  if(!ids.length){ alert('Selecione pelo menos um item.'); return; }
+  const custoVal = parseFloat(document.getElementById('bulk-custo').value);
+  if(!custoVal || custoVal <= 0){ alert('Informe um custo válido em R$.'); return; }
+  const prog = document.getElementById('bulk-progress');
+  prog.textContent = `Aplicando custo R$${custoVal.toFixed(2)} em 0/${ids.length}...`;
+  let ok=0, erros=0;
+  for(let i=0; i<ids.length; i++){
+    try{
+      const r = await fetch(`/fila/completar/${ids[i]}`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({tipo:'custo', valor:custoVal})});
+      if(r.ok) ok++; else erros++;
+    }catch(e){ erros++; }
+    prog.textContent = `Custo R$${custoVal.toFixed(2)}: ${ok+erros}/${ids.length} (${ok} ok${erros?', '+erros+' erros':''})`;
+    if(i < ids.length-1) await new Promise(r=>setTimeout(r,80));
+  }
+  prog.textContent = `✅ Custo aplicado: ${ok}/${ids.length}${erros?' | ⚠ '+erros+' erros':''}`;
+  document.getElementById('bulk-custo').value = '';
   carregarFila();
 }
 
