@@ -1904,6 +1904,164 @@ def debug_item(item_id: str):
     return resumo
 
 
+# ── Fix family_name truncado ──────────────────────────────────────────────────
+# Itens criados antes do _smart_family_name() têm family_name exatamente 60 chars
+# (truncado pelo [:60] bruto). Precisam ser fechados e recriados com o nome correto.
+
+_fix_fn_state: dict = {}
+
+
+@router.get("/copiar-ml/fix-family-name/diagnostico")
+def fix_family_name_diagnostico():
+    """
+    Identifica itens AKG com family_name de exatamente 60 chars (truncados pelo bug antigo).
+    Cruza com o Shinsei para mostrar o nome correto que deveria ter.
+    """
+    copy_map = _load_copy_map()  # {shinsei_id: akg_id}
+    if not copy_map:
+        return {"ok": False, "erro": "copy_map vazio — rode /copiar-ml/rebuild-copy-map primeiro"}
+
+    try:
+        tok_a = _token_akg()
+        tok_s = _token_shinsei()
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+    akg_ids = list(copy_map.values())
+    truncados = []
+
+    for i in range(0, len(akg_ids), 20):
+        chunk = akg_ids[i:i + 20]
+        r = _req.get(f"{ML_API}/items",
+                     params={"ids": ",".join(chunk), "attributes": "id,family_name,seller_custom_field"},
+                     headers=_hdrs(tok_a), timeout=20)
+        if r.status_code != 200:
+            continue
+        for entry in r.json():
+            body = entry.get("body") or {}
+            fn = body.get("family_name") or ""
+            if len(fn) == 60:
+                truncados.append({
+                    "akg_id": body.get("id"),
+                    "sku": body.get("seller_custom_field"),
+                    "family_name_atual": fn,
+                })
+        time.sleep(0.1)
+
+    # Cruza com Shinsei para obter o family_name correto
+    akg_sku_to_shin = {v: k for k, v in copy_map.items()}  # akg_id → shinsei_id
+    shin_ids_needed = [akg_sku_to_shin.get(t["akg_id"]) for t in truncados if akg_sku_to_shin.get(t["akg_id"])]
+    shin_fn: dict[str, str] = {}
+
+    for i in range(0, len(shin_ids_needed), 20):
+        chunk = [s for s in shin_ids_needed[i:i + 20] if s]
+        if not chunk:
+            continue
+        r = _req.get(f"{ML_API}/items",
+                     params={"ids": ",".join(chunk), "attributes": "id,family_name"},
+                     headers=_hdrs(tok_s), timeout=20)
+        if r.status_code == 200:
+            for entry in r.json():
+                body = entry.get("body") or {}
+                shin_fn[body.get("id", "")] = body.get("family_name") or ""
+        time.sleep(0.1)
+
+    for t in truncados:
+        akg_id = t["akg_id"]
+        shin_id = akg_sku_to_shin.get(akg_id, "")
+        fn_shin = shin_fn.get(shin_id, "")
+        fn_correto = _smart_family_name(fn_shin) if fn_shin else ""
+        t["shinsei_id"] = shin_id
+        t["family_name_correto"] = fn_correto
+        t["diverge"] = fn_correto != t["family_name_atual"]
+
+    divergentes = [t for t in truncados if t.get("diverge")]
+    return {
+        "ok": True,
+        "total_truncados_60chars": len(truncados),
+        "total_divergentes": len(divergentes),
+        "amostra": divergentes[:20],
+    }
+
+
+@router.post("/copiar-ml/fix-family-name/executar")
+def fix_family_name_executar(bg: _BG):
+    """
+    Fecha todos os itens AKG com family_name de exatamente 60 chars (truncados) e
+    remove do copy_map para que o batch-faltando os recrie com o nome correto.
+    """
+    global _fix_fn_state
+    copy_map = _load_copy_map()
+    if not copy_map:
+        return {"ok": False, "erro": "copy_map vazio"}
+    _fix_fn_state = {"rodando": True, "fechados": 0, "erros": 0, "removidos_do_map": 0, "log": []}
+    bg.add_task(_fix_family_name_bg, copy_map)
+    return {"ok": True, "msg": "Executando fix de family_name em background"}
+
+
+def _fix_family_name_bg(copy_map: dict):
+    global _fix_fn_state
+    try:
+        tok_a = _token_akg()
+    except Exception as e:
+        _fix_fn_state.update({"rodando": False, "erro": str(e)})
+        return
+
+    akg_ids = list(copy_map.values())
+    to_close: list[tuple[str, str]] = []  # (shinsei_id, akg_id)
+    reverse_map = {v: k for k, v in copy_map.items()}  # akg_id → shinsei_id
+
+    _fix_fn_state["log"].append(f"Escaneando {len(akg_ids)} itens AKG...")
+
+    for i in range(0, len(akg_ids), 20):
+        chunk = akg_ids[i:i + 20]
+        r = _req.get(f"{ML_API}/items",
+                     params={"ids": ",".join(chunk), "attributes": "id,family_name"},
+                     headers=_hdrs(tok_a), timeout=20)
+        if r.status_code != 200:
+            continue
+        for entry in r.json():
+            body = entry.get("body") or {}
+            fn = body.get("family_name") or ""
+            akg_id = body.get("id") or ""
+            if len(fn) == 60 and akg_id:
+                to_close.append((reverse_map.get(akg_id, ""), akg_id))
+        time.sleep(0.1)
+
+    _fix_fn_state["log"].append(f"{len(to_close)} itens com family_name truncado (60 chars)")
+
+    fresh_map = _load_copy_map()
+    for shin_id, akg_id in to_close:
+        try:
+            r = _req.put(f"{ML_API}/items/{akg_id}",
+                         json={"status": "closed"},
+                         headers=_hdrs(tok_a), timeout=15)
+            if r.status_code in (200, 201):
+                _fix_fn_state["fechados"] += 1
+                fresh_map.pop(shin_id, None)
+                _fix_fn_state["removidos_do_map"] += 1
+                _fix_fn_state["log"].append(f"OK:{akg_id}")
+            else:
+                _fix_fn_state["erros"] += 1
+                _fix_fn_state["log"].append(f"ERR:{akg_id}:{r.status_code}:{r.text[:60]}")
+        except Exception as e:
+            _fix_fn_state["erros"] += 1
+            _fix_fn_state["log"].append(f"EXC:{akg_id}:{str(e)[:60]}")
+        time.sleep(0.3)
+
+    _save_copy_map(fresh_map)
+    _fix_fn_state.update({
+        "rodando": False,
+        "copy_map_restante": len(fresh_map),
+        "proximo_passo": "Execute /copiar-ml/batch-faltando para recriar os itens fechados",
+    })
+
+
+@router.get("/copiar-ml/fix-family-name/status")
+def fix_family_name_status():
+    return _fix_fn_state
+
+
 # ── Página HTML ───────────────────────────────────────────────────────────────
 
 @router.get("/copiar-ml", response_class=HTMLResponse)
