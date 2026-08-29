@@ -19,10 +19,10 @@ details{margin-top:14px} details>summary{cursor:pointer;color:#c9d7ff;font-weigh
   <div class="topbar">
     <div class="brand"><h1>Fila de aprovação</h1><p id="fila-subtitulo">Carregando...</p></div>
     <div class="top-actions">
-      <span class="pill" id="statsPendente" style="cursor:pointer" onclick="filtrarStatus('pendente')">Pendentes: 0</span>
-      <span class="pill" id="statsAprovado">Aprovados: 0</span>
-      <span id="statsIncompleto" style="background:#7c3aed;color:#fff;padding:4px 12px;border-radius:999px;font-size:13px;cursor:pointer" onclick="filtrarStatus('incompleto')">Incompletos: 0</span>
-      <span class="pill" id="statsRejeitado">Rejeitados: 0</span>
+      <span class="pill" id="statsPendente" style="cursor:pointer;border-color:var(--warn)" onclick="filtrarStatus('pendente')" title="Clique para filtrar">Pendentes: 0</span>
+      <span class="pill" id="statsAprovado" style="cursor:pointer;border-color:var(--ok)" onclick="filtrarStatus('aprovado')" title="Clique para filtrar">Aprovados: 0</span>
+      <span id="statsIncompleto" style="background:#7c3aed;color:#fff;padding:4px 12px;border-radius:999px;font-size:13px;cursor:pointer" onclick="filtrarStatus('incompleto')" title="Clique para filtrar">Incompletos: 0</span>
+      <span class="pill" id="statsRejeitado" style="cursor:pointer;border-color:var(--danger)" onclick="filtrarStatus('rejeitado')" title="Clique para filtrar">Rejeitados: 0</span>
       <div class="busca-wrap"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="busca" type="search" placeholder="Buscar por título, SKU ou EAN..." oninput="aplicarFiltro()"></div>
       <span id="busca-count"></span>
       <button class="btn secondary" id="btn-planilha" onclick="baixarPlanilha()" title="Exportar produtos sem peso/custo do Bling">⬇ Planilha</button>
@@ -48,6 +48,101 @@ details{margin-top:14px} details>summary{cursor:pointer;color:#c9d7ff;font-weigh
     <button class="btn danger" onclick="rejeitarSelecionados()" style="padding:8px 14px;font-size:13px">❌ Rejeitar selecionados</button>
     <button class="btn secondary" onclick="limparSelecao()" style="padding:8px 14px;font-size:13px">✕ Cancelar</button>
     <div id="bulk-progress" style="font-size:13px;color:#9fb0d9"></div>
+  </div>
+
+  <!-- ── Filtros avançados ── -->
+  <div id="filtros-wrap" style="background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:14px 18px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <span style="font-size:13px;font-weight:700;color:#c9d7ff">Filtros avançados</span>
+      <button class="btn secondary" style="padding:5px 10px;font-size:11px;border-radius:8px" onclick="limparFiltros()">Limpar filtros</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
+      <!-- Status -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;color:var(--muted)">Status</label>
+        <select id="f-status" onchange="aplicarFiltro()" style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px">
+          <option value="">Todos</option>
+          <option value="pendente">Pendentes</option>
+          <option value="incompleto">Incompletos</option>
+          <option value="aprovado">Aprovados</option>
+          <option value="rejeitado">Rejeitados</option>
+        </select>
+      </div>
+      <!-- Canal -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;color:var(--muted)">Canal (melhor)</label>
+        <select id="f-canal" onchange="aplicarFiltro()" style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px">
+          <option value="">Todos os canais</option>
+          <option value="mercado_livre">Mercado Livre</option>
+          <option value="shopify">Shopify</option>
+          <option value="shopee">Shopee</option>
+          <option value="amazon">Amazon</option>
+        </select>
+      </div>
+      <!-- Tipo de custo -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;color:var(--muted)">Tipo de custo</label>
+        <select id="f-custo" onchange="aplicarFiltro()" style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px">
+          <option value="">Todos</option>
+          <option value="simples">Simples (Bling)</option>
+          <option value="composicao">Composição / Kit</option>
+          <option value="override">Override manual</option>
+        </select>
+      </div>
+      <!-- Margem mínima -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;color:var(--muted)">Margem mín. (%)</label>
+        <input id="f-margem-min" type="number" step="1" placeholder="Ex: 10" oninput="aplicarFiltro()" style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px">
+      </div>
+      <!-- Margem máxima -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;color:var(--muted)">Margem máx. (%)</label>
+        <input id="f-margem-max" type="number" step="1" placeholder="Ex: 40" oninput="aplicarFiltro()" style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px">
+      </div>
+      <!-- Custo mínimo -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;color:var(--muted)">Custo mín. (R$)</label>
+        <input id="f-custo-min" type="number" step="0.01" placeholder="Ex: 10" oninput="aplicarFiltro()" style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px">
+      </div>
+      <!-- Custo máximo -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;color:var(--muted)">Custo máx. (R$)</label>
+        <input id="f-custo-max" type="number" step="0.01" placeholder="Ex: 100" oninput="aplicarFiltro()" style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px">
+      </div>
+      <!-- Peso -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;color:var(--muted)">Peso</label>
+        <select id="f-peso" onchange="aplicarFiltro()" style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px">
+          <option value="">Todos</option>
+          <option value="com_peso">Com peso preenchido</option>
+          <option value="sem_peso">Sem peso (=0)</option>
+        </select>
+      </div>
+      <!-- Origem -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;color:var(--muted)">Origem</label>
+        <select id="f-origem" onchange="aplicarFiltro()" style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px">
+          <option value="">Qualquer origem</option>
+          <option value="ajuste_margem">Ajuste universal de margem</option>
+          <option value="simulador">Simulador manual</option>
+        </select>
+      </div>
+      <!-- Ordenação -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;color:var(--muted)">Ordenar por</label>
+        <select id="f-ordem" onchange="aplicarFiltro()" style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px">
+          <option value="recente">Mais recente</option>
+          <option value="nome">Nome A→Z</option>
+          <option value="custo_desc">Maior custo</option>
+          <option value="custo_asc">Menor custo</option>
+          <option value="margem_desc">Maior margem</option>
+          <option value="margem_asc">Menor margem</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:10px;font-size:12px;color:var(--muted)">
+      Exibindo <b id="filtro-count" style="color:#4f8cff">0</b> de <b id="filtro-total">0</b> itens
+    </div>
   </div>
 
   <!-- ── Checkbox de seleção global ── -->
@@ -192,23 +287,100 @@ function renderItem(item){
     </div>
   </div>`;
 }
+function _getMelhorMargem(item){
+  // Retorna a melhor margem entre os canais do item
+  const mps = Object.values(item.marketplaces||{});
+  if(!mps.length) return null;
+  const margens = mps.map(mp=>{
+    const raw = mp.raw||{};
+    return Number(mp.margem||raw.margem||raw.margem_liquida_percentual||0);
+  });
+  return Math.max(...margens);
+}
+
+function limparFiltros(){
+  ['f-status','f-canal','f-custo','f-peso','f-origem','f-ordem'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  ['f-margem-min','f-margem-max','f-custo-min','f-custo-max'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('f-ordem').value='recente';
+  document.getElementById('busca').value='';
+  aplicarFiltro();
+}
+
 function aplicarFiltro(){
   const termo=(document.getElementById('busca')?.value||'').toLowerCase().trim();
+  const fStatus=(document.getElementById('f-status')?.value||'').toLowerCase();
+  const fCanal=(document.getElementById('f-canal')?.value||'').toLowerCase();
+  const fCusto=(document.getElementById('f-custo')?.value||'');
+  const fMargemMin=parseFloat(document.getElementById('f-margem-min')?.value||'');
+  const fMargemMax=parseFloat(document.getElementById('f-margem-max')?.value||'');
+  const fCustoMin=parseFloat(document.getElementById('f-custo-min')?.value||'');
+  const fCustoMax=parseFloat(document.getElementById('f-custo-max')?.value||'');
+  const fPeso=(document.getElementById('f-peso')?.value||'');
+  const fOrigem=(document.getElementById('f-origem')?.value||'');
+  const fOrdem=(document.getElementById('f-ordem')?.value||'recente');
+
   const el=document.getElementById('lista');
   if(!el) return;
-  const filtrados=termo
-    ? _todosItens.filter(i=>{
-        const titulo=(i.nome||'').toLowerCase();
-        const sku=(i.sku||(i.auditoria||{}).sku||(i.produto_bling||{}).codigo||'').toLowerCase();
-        const ean=((i.produto_bling||{}).gtin||'').toLowerCase();
-        return titulo.includes(termo)||sku.includes(termo)||ean.includes(termo);
-      })
-    : _todosItens;
+
+  let filtrados = _todosItens.filter(i=>{
+    const aud = i.auditoria||{};
+    const prod = i.produto_bling||{};
+    const nome = (i.nome||'').toLowerCase();
+    const sku = (i.sku||aud.sku||prod.codigo||'').toLowerCase();
+    const ean = (prod.gtin||'').toLowerCase();
+    const origem = (i.origem||'').toLowerCase();
+    const canal = (i.payload_original?.melhor_canal||i.melhor_canal||'').toLowerCase();
+    const tipoCusto = (aud.tipo_custo||'').toLowerCase();
+    const custo = Number(aud.custo_usado||0);
+    const peso = Number(aud.peso_usado||0);
+    const melhorMargem = _getMelhorMargem(i);
+
+    if(termo && !nome.includes(termo) && !sku.includes(termo) && !ean.includes(termo)) return false;
+    if(fStatus && (i.status||'pendente')!==fStatus) return false;
+    if(fCanal && !canal.includes(fCanal)) return false;
+    if(fCusto){
+      if(fCusto==='simples' && !tipoCusto.includes('simples') && !tipoCusto.includes('bling')) return false;
+      if(fCusto==='composicao' && !tipoCusto.includes('composicao') && !tipoCusto.includes('kit') && !tipoCusto.includes('comp')) return false;
+      if(fCusto==='override' && !tipoCusto.includes('override') && !tipoCusto.includes('manual')) return false;
+    }
+    if(!isNaN(fMargemMin) && melhorMargem!==null && melhorMargem<fMargemMin) return false;
+    if(!isNaN(fMargemMax) && melhorMargem!==null && melhorMargem>fMargemMax) return false;
+    if(!isNaN(fCustoMin) && custo<fCustoMin) return false;
+    if(!isNaN(fCustoMax) && custo>fCustoMax) return false;
+    if(fPeso==='com_peso' && peso<=0) return false;
+    if(fPeso==='sem_peso' && peso>0) return false;
+    if(fOrigem==='ajuste_margem' && !origem.includes('ajuste_margem')) return false;
+    if(fOrigem==='simulador' && origem.includes('ajuste_margem')) return false;
+    return true;
+  });
+
+  // Ordenação
+  filtrados.sort((a,b)=>{
+    const audA=a.auditoria||{}, audB=b.auditoria||{};
+    if(fOrdem==='nome') return (a.nome||'').localeCompare(b.nome||'');
+    if(fOrdem==='custo_desc') return Number(audB.custo_usado||0)-Number(audA.custo_usado||0);
+    if(fOrdem==='custo_asc') return Number(audA.custo_usado||0)-Number(audB.custo_usado||0);
+    if(fOrdem==='margem_desc') return (_getMelhorMargem(b)||0)-(_getMelhorMargem(a)||0);
+    if(fOrdem==='margem_asc') return (_getMelhorMargem(a)||0)-(_getMelhorMargem(b)||0);
+    // recente (default)
+    return new Date(b.criado_em||0)-new Date(a.criado_em||0);
+  });
+
+  // Atualizar contadores
   const countEl=document.getElementById('busca-count');
   if(countEl) countEl.textContent=termo?`${filtrados.length} de ${_todosItens.length}`:'';
+  const fcEl=document.getElementById('filtro-count');
+  const ftEl=document.getElementById('filtro-total');
+  if(fcEl) fcEl.textContent=filtrados.length;
+  if(ftEl) ftEl.textContent=_todosItens.length;
+
   if(!filtrados.length){
     el.innerHTML=_todosItens.length
-      ?'<div class="empty">Nenhum item encontrado para "<b>'+termo+'</b>".</div>'
+      ?'<div class="empty">Nenhum item encontrado com esses filtros.</div>'
       :'<div class="empty">Nenhum item na fila.</div>';
     return;
   }
@@ -481,8 +653,13 @@ async function carregarLinksCard(sku, id){
 }
 
 function filtrarStatus(status){
-  // Placeholder - poderia filtrar a lista
-  carregarFila();
+  const sel = document.getElementById('f-status');
+  if(sel){
+    sel.value = (sel.value === status) ? '' : status; // toggle
+  }
+  aplicarFiltro();
+  // Scroll até os filtros
+  document.getElementById('filtros-wrap')?.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 </script>
