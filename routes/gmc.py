@@ -1551,6 +1551,122 @@ gtag('event', 'conversion', {
     raise HTTPException(status_code=r.status_code, detail=r.text[:300])
 
 
+@router.post("/frete/configurar")
+def gmc_configurar_frete():
+    """Configura política de frete no GMC via Content API v2.1:
+    - Frete grátis para pedidos >= R$29,90 (Brasil inteiro)
+    - Taxa fixa R$12,90 para SP (RMSP)
+    - Frete grátis sem mínimo para micro-região do depósito (SP)
+    """
+    try:
+        svc = _build_service()
+        shipping_settings = {
+            "accountId": str(MERCHANT_ID),
+            "services": [
+                {
+                    "name": "Frete Grátis acima de R$29,90",
+                    "active": True,
+                    "shipSpeed": "medium",
+                    "currency": "BRL",
+                    "deliveryCountry": "BR",
+                    "deliveryTime": {
+                        "minTransitTimeInDays": 3,
+                        "maxTransitTimeInDays": 10,
+                    },
+                    "rateGroups": [
+                        {
+                            "mainTable": {
+                                "rowHeaders": {
+                                    "prices": [
+                                        {"value": "29.90", "currency": "BRL"},
+                                        {"value": "infinity", "currency": "BRL"},
+                                    ]
+                                },
+                                "rows": [
+                                    {
+                                        "cells": [
+                                            {"flatRate": {"value": "14.90", "currency": "BRL"}}
+                                        ]
+                                    },
+                                    {
+                                        "cells": [
+                                            {"flatRate": {"value": "0", "currency": "BRL"}}
+                                        ]
+                                    },
+                                ],
+                            },
+                            "name": "Frete padrão Brasil",
+                        }
+                    ],
+                },
+                {
+                    "name": "RMSP - Taxa Fixa R$12,90",
+                    "active": True,
+                    "shipSpeed": "medium",
+                    "currency": "BRL",
+                    "deliveryCountry": "BR",
+                    "deliveryTime": {
+                        "minTransitTimeInDays": 1,
+                        "maxTransitTimeInDays": 3,
+                    },
+                    "deliveryRegion": "São Paulo, SP",
+                    "rateGroups": [
+                        {
+                            "singleValue": {
+                                "flatRate": {"value": "12.90", "currency": "BRL"}
+                            },
+                            "name": "RMSP fixo",
+                        }
+                    ],
+                },
+            ],
+        }
+        result = (
+            svc.shippingsettings()
+            .update(
+                merchantId=MERCHANT_ID,
+                accountId=MERCHANT_ID,
+                body=shipping_settings,
+            )
+            .execute()
+        )
+        return {
+            "ok": True,
+            "msg": "Configurações de frete aplicadas no GMC",
+            "servicos": [s["name"] for s in result.get("services", [])],
+        }
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+
+@router.get("/frete/status")
+def gmc_frete_status():
+    """Retorna configuração atual de frete do GMC."""
+    try:
+        svc = _build_service()
+        result = (
+            svc.shippingsettings()
+            .get(merchantId=MERCHANT_ID, accountId=MERCHANT_ID)
+            .execute()
+        )
+        servicos = result.get("services", [])
+        return {
+            "ok": True,
+            "total_servicos": len(servicos),
+            "servicos": [
+                {
+                    "nome": s.get("name"),
+                    "ativo": s.get("active"),
+                    "pais": s.get("deliveryCountry"),
+                    "moeda": s.get("currency"),
+                }
+                for s in servicos
+            ],
+        }
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+
 @router.get("/", response_class=HTMLResponse)
 def gmc_page():
     html_file = BASE_DIR / "gmc.html"
