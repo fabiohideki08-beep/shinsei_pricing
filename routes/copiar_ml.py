@@ -2008,11 +2008,12 @@ def _fix_family_name_bg(copy_map: dict):
         return
 
     akg_ids = list(copy_map.values())
-    to_close: list[tuple[str, str]] = []  # (shinsei_id, akg_id)
     reverse_map = {v: k for k, v in copy_map.items()}  # akg_id → shinsei_id
 
     _fix_fn_state["log"].append(f"Escaneando {len(akg_ids)} itens AKG...")
 
+    # Coleta todos os itens com family_name de 60 chars
+    fn_60: list[tuple[str, str, str]] = []  # (akg_id, shinsei_id, family_name)
     for i in range(0, len(akg_ids), 20):
         chunk = akg_ids[i:i + 20]
         r = _req.get(f"{ML_API}/items",
@@ -2025,13 +2026,20 @@ def _fix_family_name_bg(copy_map: dict):
             fn = body.get("family_name") or ""
             akg_id = body.get("id") or ""
             if len(fn) == 60 and akg_id:
-                to_close.append((reverse_map.get(akg_id, ""), akg_id))
+                fn_60.append((akg_id, reverse_map.get(akg_id, ""), fn))
         time.sleep(0.1)
 
-    _fix_fn_state["log"].append(f"{len(to_close)} itens com family_name truncado (60 chars)")
+    # Detecta family_names compartilhados por múltiplos itens = família de kit — NÃO fechar
+    from collections import Counter
+    fn_counts = Counter(fn for _, _, fn in fn_60)
+    to_close = [(shin_id, akg_id, fn) for akg_id, shin_id, fn in fn_60 if fn_counts[fn] == 1]
+    skipped_kit = [(akg_id, fn) for akg_id, _, fn in fn_60 if fn_counts[fn] > 1]
+
+    _fix_fn_state["log"].append(f"{len(fn_60)} truncados total; {len(to_close)} únicos (fechar); {len(skipped_kit)} em família compartilhada (kit — pular)")
+    _fix_fn_state["pulados_kit"] = len(skipped_kit)
 
     fresh_map = _load_copy_map()
-    for shin_id, akg_id in to_close:
+    for shin_id, akg_id, _fn in to_close:
         try:
             r = _req.put(f"{ML_API}/items/{akg_id}",
                          json={"status": "closed"},
