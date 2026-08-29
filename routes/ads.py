@@ -7,16 +7,96 @@ developer_token, login_customer_id).
 from __future__ import annotations
 
 import logging
+import os
+import requests as _req_http
 from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter
+from fastapi.responses import RedirectResponse, HTMLResponse
 
 router = APIRouter(prefix="/ads", tags=["ads"])
 logger = logging.getLogger(__name__)
 
 BASE_DIR  = Path(__file__).parent.parent
 YAML_PATH = BASE_DIR / "google-ads.yaml"
+
+_GOOGLE_ADS_SCOPE = "https://www.googleapis.com/auth/adwords"
+_GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+_GOOGLE_AUTH_URL  = "https://accounts.google.com/o/oauth2/v2/auth"
+
+
+# ── OAuth Google Ads ──────────────────────────────────────────────────────────
+
+@router.get("/auth")
+def ads_oauth_start():
+    """Inicia OAuth Google Ads — redireciona para consentimento Google."""
+    import os
+    client_id = os.environ.get("GOOGLE_ADS_CLIENT_ID", "")
+    app_url   = os.environ.get("APP_URL", "https://shinsei-pricing.onrender.com")
+    redirect  = f"{app_url}/ads/callback"
+    if not client_id:
+        return {"ok": False, "erro": "GOOGLE_ADS_CLIENT_ID não configurado no Render"}
+    url = (
+        f"{_GOOGLE_AUTH_URL}"
+        f"?client_id={client_id}"
+        f"&redirect_uri={redirect}"
+        f"&response_type=code"
+        f"&scope={_GOOGLE_ADS_SCOPE}"
+        f"&access_type=offline"
+        f"&prompt=consent"
+    )
+    return RedirectResponse(url)
+
+
+@router.get("/callback")
+def ads_oauth_callback(code: str = "", error: str = ""):
+    """Callback OAuth Google Ads — troca code por refresh_token e salva no Render."""
+    if error:
+        return HTMLResponse(f"<h2>Erro OAuth Google Ads: {error}</h2>")
+    if not code:
+        return HTMLResponse("<h2>Código de autorização não recebido.</h2>")
+
+    client_id     = os.environ.get("GOOGLE_ADS_CLIENT_ID", "")
+    client_secret = os.environ.get("GOOGLE_ADS_CLIENT_SECRET", "")
+    app_url       = os.environ.get("APP_URL", "https://shinsei-pricing.onrender.com")
+    redirect      = f"{app_url}/ads/callback"
+
+    r = _req_http.post(_GOOGLE_TOKEN_URL, data={
+        "code": code,
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "redirect_uri": redirect,
+        "grant_type": "authorization_code",
+    }, timeout=15)
+
+    if r.status_code != 200:
+        return HTMLResponse(f"<h2>Erro ao trocar código: {r.text}</h2>")
+
+    tokens = r.json()
+    refresh_token = tokens.get("refresh_token", "")
+    if not refresh_token:
+        return HTMLResponse("<h2>refresh_token não retornado. Tente /ads/auth novamente.</h2>")
+
+    # Salva GOOGLE_ADS_REFRESH_TOKEN no Render
+    _salvar_refresh_token_render(refresh_token)
+
+    return HTMLResponse(f"""
+    <h2>✅ Google Ads reconectado!</h2>
+    <p>Novo refresh_token salvo no Render.</p>
+    <p><a href='/ads/status'>Verificar status</a></p>
+    """)
+
+
+def _salvar_refresh_token_render(refresh_token: str):
+    """Salva GOOGLE_ADS_REFRESH_TOKEN nas env vars do Render."""
+    try:
+        from render_persistence import _patch_env_vars
+        _patch_env_vars({"GOOGLE_ADS_REFRESH_TOKEN": refresh_token})
+        os.environ["GOOGLE_ADS_REFRESH_TOKEN"] = refresh_token
+        logger.info("GOOGLE_ADS_REFRESH_TOKEN atualizado no Render")
+    except Exception as e:
+        logger.warning("Falha ao salvar GOOGLE_ADS_REFRESH_TOKEN no Render: %s", e)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
