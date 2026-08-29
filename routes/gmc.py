@@ -1585,7 +1585,7 @@ def gmc_configurar_frete():
                                 "rows": [
                                     {
                                         "cells": [
-                                            {"flatRate": {"value": "14.90", "currency": "BRL"}}
+                                            {"flatRate": {"value": "12.90", "currency": "BRL"}}
                                         ]
                                     },
                                     {
