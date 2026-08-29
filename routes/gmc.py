@@ -1563,51 +1563,35 @@ def gmc_configurar_frete():
         shipping_settings = {
             "accountId": str(MERCHANT_ID),
             "services": [
+                # Serviço 1: Frete grátis Brasil inteiro para pedidos >= R$29,90
                 {
                     "name": "Frete Grátis acima de R$29,90",
                     "active": True,
                     "shipSpeed": "medium",
                     "currency": "BRL",
                     "deliveryCountry": "BR",
+                    "minimumOrderValue": {"value": "29.90", "currency": "BRL"},
                     "deliveryTime": {
-                        "minTransitTimeInDays": 3,
+                        "minTransitTimeInDays": 2,
                         "maxTransitTimeInDays": 10,
                     },
                     "rateGroups": [
                         {
-                            "mainTable": {
-                                "rowHeaders": {
-                                    "prices": [
-                                        {"value": "29.90", "currency": "BRL"},
-                                        {"value": "infinity", "currency": "BRL"},
-                                    ]
-                                },
-                                "rows": [
-                                    {
-                                        "cells": [
-                                            {"flatRate": {"value": "12.90", "currency": "BRL"}}
-                                        ]
-                                    },
-                                    {
-                                        "cells": [
-                                            {"flatRate": {"value": "0", "currency": "BRL"}}
-                                        ]
-                                    },
-                                ],
-                            },
-                            "name": "Frete padrão Brasil",
+                            "singleValue": {"flatRate": {"value": "0", "currency": "BRL"}},
+                            "name": "Grátis",
                         }
                     ],
                 },
+                # Serviço 2: RMSP taxa fixa R$12,90 (todos os pedidos — prazo curto)
                 {
-                    "name": "RMSP - Taxa Fixa R$12,90",
+                    "name": "Entrega RMSP - R$12,90",
                     "active": True,
-                    "shipSpeed": "medium",
+                    "shipSpeed": "sameDay",
                     "currency": "BRL",
                     "deliveryCountry": "BR",
                     "deliveryTime": {
-                        "minTransitTimeInDays": 1,
-                        "maxTransitTimeInDays": 3,
+                        "minTransitTimeInDays": 0,
+                        "maxTransitTimeInDays": 1,
                     },
                     "deliveryRegion": "São Paulo, SP",
                     "rateGroups": [
