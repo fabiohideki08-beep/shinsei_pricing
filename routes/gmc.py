@@ -1553,35 +1553,33 @@ gtag('event', 'conversion', {
 
 @router.post("/frete/configurar")
 def gmc_configurar_frete():
-    """Configura política de frete no GMC via Content API v2.1:
-    - Frete grátis para pedidos >= R$29,90 (Brasil inteiro)
-    - Taxa fixa R$12,90 para SP (RMSP)
-    - Frete grátis sem mínimo para micro-região do depósito (SP)
+    """Configura política de frete no GMC via Content API v2.1.
+    Frete real é calculado pelo ME + subsídio; GMC recebe taxa padrão R$12,90
+    (teto cobrado na RMSP). Restrição regional por CEP requer postalcodegroups separados.
     """
     try:
         svc = _build_service()
-        # Frete grátis não é garantido por valor — depende do subsídio acumulado cobrir o ME.
-        # GMC só recebe o fixo da RMSP; demais regiões ficam como "calculado no checkout".
         shipping_settings = {
             "accountId": str(MERCHANT_ID),
             "services": [
+                # Serviço único Brasil — R$12,90 flat (teto da RMSP, calculado no checkout para outros)
                 {
-                    "name": "Entrega RMSP - R$12,90",
+                    "name": "Frete Padrão — R$12,90",
                     "active": True,
-                    "shipSpeed": "sameDay",
                     "currency": "BRL",
                     "deliveryCountry": "BR",
                     "deliveryTime": {
-                        "minTransitTimeInDays": 0,
-                        "maxTransitTimeInDays": 1,
+                        "minHandlingTimeInDays": 0,
+                        "maxHandlingTimeInDays": 1,
+                        "minTransitTimeInDays": 1,
+                        "maxTransitTimeInDays": 10,
                     },
-                    "deliveryRegion": "São Paulo, SP",
                     "rateGroups": [
                         {
                             "singleValue": {
                                 "flatRate": {"value": "12.90", "currency": "BRL"}
                             },
-                            "name": "RMSP fixo",
+                            "name": "Padrão",
                         }
                     ],
                 },
