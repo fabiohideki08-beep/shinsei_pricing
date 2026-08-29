@@ -81,9 +81,12 @@ def ads_oauth_callback(code: str = "", error: str = ""):
     # Salva GOOGLE_ADS_REFRESH_TOKEN no Render
     _salvar_refresh_token_render(refresh_token)
 
+    render_ok = _salvar_refresh_token_render(refresh_token)
+    status_render = "✅ Salvo no Render" if render_ok else "⚠️ Falha ao salvar no Render — copie o token abaixo"
     return HTMLResponse(f"""
     <h2>✅ Google Ads reconectado!</h2>
-    <p>Novo refresh_token salvo no Render.</p>
+    <p>Status Render: {status_render}</p>
+    <p><b>refresh_token</b> (copie se necessário):<br><code style='word-break:break-all'>{refresh_token}</code></p>
     <p><a href='/ads/status'>Verificar status</a></p>
     """)
 
