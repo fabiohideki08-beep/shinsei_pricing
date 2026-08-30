@@ -45,7 +45,7 @@ def ads_oauth_start():
         f"&scope={_GOOGLE_ADS_SCOPE}"
         f"&access_type=offline"
         f"&prompt=consent"
-        f"&login_hint=fabiogoto08@gmail.com"
+        f"&login_hint=fabiohideki08@gmail.com"
     )
     return RedirectResponse(url)
 
