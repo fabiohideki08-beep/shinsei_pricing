@@ -77,9 +77,9 @@ def _shopify_rates_from_result(result: FreightResult) -> list[dict]:
         if is_same_day:
             description = "Entrega hoje! Pedidos realizados ate as 12h (seg-sab)."
         elif opt.is_free:
-            description = "Frete gratis com subsidio Shinsei!"
+            description = "Frete gratis!"
         else:
-            description = f"Subsidio R${opt.subsidy:.2f} aplicado"
+            description = ""
         rates.append(
             {
                 "service_name": _shopify_service_name(opt.name, opt.is_free),
