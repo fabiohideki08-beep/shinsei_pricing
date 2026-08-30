@@ -59,6 +59,8 @@ PUBLIC_PATHS = {
     "/bling/auth2",
     "/bling/callback2",
     "/bling/status2",
+    "/ml/auth",
+    "/ml/auth2",
     "/ml/login",
     "/ml/callback",
     "/ml/config",
