@@ -89,7 +89,17 @@
       </div>
 
       <hr class="divider"/>
-      <div class="section-title">Reconectar</div>
+      <div class="section-title">Salvar tokens manualmente</div>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 10px">Cole os tokens do Bling Shinsei para salvar no servidor e no Render. Útil após reconexão manual.</p>
+      <div class="field"><label>Access Token</label><input type="password" id="bling-sh-access" placeholder="Bling access_token" autocomplete="off"/></div>
+      <div class="field"><label>Refresh Token</label><input type="password" id="bling-sh-refresh" placeholder="Bling refresh_token" autocomplete="off"/></div>
+      <div id="notice-bling-sh" class="notice"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn success sm" onclick="salvarCredencial('bling_shinsei',['bling-sh-access','bling-sh-refresh'],['access_token','refresh_token'],'bling-sh')">💾 Salvar + Render</button>
+        <button class="btn secondary sm" onclick="toggleVisible('bling-sh-access','bling-sh-refresh')">👁 Mostrar</button>
+      </div>
+      <hr class="divider"/>
+      <div class="section-title">Reconectar via OAuth</div>
       <p style="font-size:12px;color:var(--muted);margin:0 0 12px">Clique abaixo para iniciar o fluxo OAuth do Bling e renovar o token de acesso.</p>
       <a class="btn success" href="/bling/auth" target="_blank">🔐 Conectar Bling</a>
     </div>
@@ -115,9 +125,19 @@
       </div>
 
       <hr class="divider"/>
-      <div class="section-title">Reconectar</div>
-      <p style="font-size:12px;color:var(--muted);margin:0 0 12px">Clique abaixo para iniciar o fluxo OAuth do Mercado Livre.</p>
-      <a class="btn success" href="/ml/login" target="_blank">🔐 Conectar Mercado Livre</a>
+      <div class="section-title">Salvar tokens manualmente</div>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 10px">Cole os tokens do ML Shinsei para salvar no servidor e no Render. Tokens sobrevivem a deploys automaticamente.</p>
+      <div class="field"><label>Access Token</label><input type="password" id="ml-sh-access" placeholder="APP_USR-..." autocomplete="off"/></div>
+      <div class="field"><label>Refresh Token</label><input type="password" id="ml-sh-refresh" placeholder="TG-..." autocomplete="off"/></div>
+      <div id="notice-ml-sh" class="notice"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn success sm" onclick="salvarCredencial('ml_shinsei',['ml-sh-access','ml-sh-refresh'],['access_token','refresh_token'],'ml-sh')">💾 Salvar + Render</button>
+        <button class="btn secondary sm" onclick="toggleVisible('ml-sh-access','ml-sh-refresh')">👁 Mostrar</button>
+      </div>
+      <hr class="divider"/>
+      <div class="section-title">Reconectar via OAuth</div>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 12px">Clique abaixo para iniciar o fluxo OAuth do Mercado Livre (Shinsei). Certifique-se de estar logado na conta Shinsei no ML.</p>
+      <a class="btn success" href="/ml/login" target="_blank">🔐 Conectar ML Shinsei</a>
     </div>
 
     <!-- MERCADO PAGO -->
@@ -711,6 +731,13 @@ function toggleVer(id, btn){
   if(!el) return;
   el.type = el.type === 'password' ? 'text' : 'password';
   btn.textContent = el.type === 'password' ? '👁' : '🙈';
+}
+
+function toggleVisible(...ids){
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.type = el.type === 'password' ? 'text' : 'password';
+  });
 }
 
 function salvarCredsShopee(){

@@ -15,12 +15,15 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 CREDS_PATH = DATA_DIR / "credentials.json"
 
 ALLOWED_SISTEMAS = {
+    "bling_shinsei", "ml_shinsei",
     "bling_akg", "ml_akg", "amazon_akg", "shopee_akg",
     "google_ads", "google_merchant_center", "google_analytics", "google_search_console",
     "shopee", "amazon",
 }
 
 ALLOWED_CAMPOS: dict[str, set] = {
+    "bling_shinsei": {"access_token", "refresh_token"},
+    "ml_shinsei": {"access_token", "refresh_token"},
     "bling_akg": {"client_id", "client_secret"},
     "ml_akg": {"client_id", "client_secret", "access_token", "refresh_token"},
     "amazon_akg": {"seller_id", "lwa_app_id", "lwa_client_secret", "refresh_token"},
@@ -81,5 +84,35 @@ async def post_credenciais(body: dict[str, Any]):
     if sistema in ENV_VAR_SISTEMAS:
         for k, v in campos.items():
             os.environ[k] = v
+
+    # Persistir tokens ML/Bling no Render para sobreviver a deploys
+    try:
+        if sistema == "ml_shinsei":
+            from render_persistence import save_ml_tokens_shinsei
+            save_ml_tokens_shinsei(
+                campos.get("access_token", ""),
+                campos.get("refresh_token", ""),
+                os.getenv("ML_USER_ID", "733168645"),
+            )
+        elif sistema == "ml_akg" and ("access_token" in campos or "refresh_token" in campos):
+            from render_persistence import save_ml_tokens_akg
+            creds = data.get("ml_akg", {})
+            save_ml_tokens_akg(
+                campos.get("access_token", creds.get("access_token", "")),
+                campos.get("refresh_token", creds.get("refresh_token", "")),
+                os.getenv("ML_AKG_USER_ID", "3541432733"),
+            )
+        elif sistema == "bling_shinsei":
+            from render_persistence import save_bling_tokens
+            save_bling_tokens(campos.get("access_token", ""), campos.get("refresh_token", ""))
+        elif sistema == "bling_akg" and ("access_token" in campos or "refresh_token" in campos):
+            from render_persistence import save_bling_tokens_akg
+            creds = data.get("bling_akg", {})
+            save_bling_tokens_akg(
+                campos.get("access_token", creds.get("access_token", "")),
+                campos.get("refresh_token", creds.get("refresh_token", "")),
+            )
+    except Exception:
+        pass  # Render persistence é best-effort
 
     return {"ok": True, "sistema": sistema, "campos_salvos": list(campos.keys())}
