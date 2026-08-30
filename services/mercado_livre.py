@@ -20,12 +20,28 @@ _ML_TOKENS_PATH = Path(__file__).parent.parent / "data" / "ml_tokens.json"
 
 # ── Auto-refresh do token ML ──────────────────────────────────────────────────
 
+_SHINSEI_USER_ID = "733168645"
+
+
 def _carregar_tokens_ml() -> dict:
+    # Tenta arquivo local — mas rejeita se user_id for o da AKG (3541432733)
     try:
         if _ML_TOKENS_PATH.exists():
-            return json.loads(_ML_TOKENS_PATH.read_text(encoding="utf-8"))
+            data = json.loads(_ML_TOKENS_PATH.read_text(encoding="utf-8"))
+            if str(data.get("user_id", "")) == _SHINSEI_USER_ID:
+                return data
     except Exception:
         pass
+    # Fallback: env vars (restauradas pelo startup.py após cada deploy)
+    refresh = os.getenv("ML_REFRESH_TOKEN", "")
+    access  = os.getenv("ML_ACCESS_TOKEN", "")
+    if refresh:
+        return {
+            "refresh_token": refresh,
+            "access_token":  access,
+            "client_id":     os.getenv("ML_CLIENT_ID", ""),
+            "user_id":       int(os.getenv("ML_USER_ID", "0") or 0),
+        }
     return {}
 
 

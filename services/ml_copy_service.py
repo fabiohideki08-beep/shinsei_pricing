@@ -52,7 +52,33 @@ def _shinsei_token() -> str:
 
 
 def _akg_token() -> str:
-    return _load_token(DATA_DIR / "ml_tokens_akg.json", "AKG ML")
+    # Tenta arquivo local — fallback para env vars se arquivo ausente ou user_id errado
+    path = DATA_DIR / "ml_tokens_akg.json"
+    if path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if str(data.get("user_id", "")) == "3541432733" and data.get("access_token"):
+                return data["access_token"]
+        except Exception:
+            pass
+    # Fallback: env vars
+    import os as _os
+    refresh = _os.getenv("ML_AKG_REFRESH_TOKEN", "")
+    access  = _os.getenv("ML_AKG_ACCESS_TOKEN", "")
+    if access:
+        return access
+    if refresh:
+        # Renova via refresh_token
+        import requests as _req
+        client_id = _os.getenv("ML_CLIENT_ID", "")
+        client_secret = _os.getenv("ML_CLIENT_SECRET", "")
+        r = _req.post("https://api.mercadolibre.com/oauth/token", data={
+            "grant_type": "refresh_token", "client_id": client_id,
+            "client_secret": client_secret, "refresh_token": refresh,
+        }, headers={"accept": "application/json"}, timeout=20)
+        if r.status_code == 200:
+            return r.json().get("access_token", "")
+    raise RuntimeError("Token AKG ML não disponível — reconecte via /ml/login2")
 
 
 def _headers(token: str) -> dict:
