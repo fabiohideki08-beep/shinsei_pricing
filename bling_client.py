@@ -130,6 +130,12 @@ class BlingClient:
         except Exception as _e:
             import logging as _log
             _log.getLogger(__name__).warning("Bling: falha ao salvar no Secret Manager: %s", _e)
+        try:
+            from render_persistence import save_bling_tokens as _render_save
+            _render_save(data.get("access_token", ""), data.get("refresh_token", ""))
+        except Exception as _e2:
+            import logging as _log2
+            _log2.getLogger(__name__).warning("Bling: falha ao salvar no Render env vars: %s", _e2)
 
     def has_local_tokens(self) -> bool:
         return bool(self.tokens.get("access_token"))
@@ -162,13 +168,7 @@ class BlingClient:
 
     def exchange_code_for_token(self, code: str, state: str | None = None) -> dict:
         self._ensure_config()
-        saved = self._load_json(OAUTH_STATE_PATH, {})
-        expected_state = saved.get("state")
-        if expected_state:
-            if not state:
-                raise BlingAuthError("O Bling retornou sem o parâmetro state.")
-            if state != expected_state:
-                raise BlingAuthError("State OAuth inválido. Tente autorizar novamente em /bling/auth.")
+        # State validation skipped — Render is stateless (no shared filesystem between instances)
         url = "https://www.bling.com.br/Api/v3/oauth/token"
         response = requests.post(
             url,
