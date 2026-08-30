@@ -1220,6 +1220,9 @@ def bling_callback(code: str | None = Query(None), state: str | None = Query(Non
     if not BlingClient: raise HTTPException(status_code=500, detail="bling_client.py não encontrado.")
     if error: raise HTTPException(status_code=400, detail=f"Bling OAuth retornou erro: {error}. {error_description or ''}".strip())
     if not code: raise HTTPException(status_code=400, detail="Callback do Bling sem code de autorização.")
+    # Detecta AKG pelo prefixo no state
+    if state and state.startswith("akg__"):
+        return bling_callback2(code=code, state=state, error=error, error_description=error_description)
     try:
         client = BlingClient()
         token = client.exchange_code_for_token(code, state=state)
@@ -1285,13 +1288,14 @@ def bling_auth2():
     import secrets as _sec
     import time as _time
     from urllib.parse import urlencode
-    state = _sec.token_urlsafe(32)
-    _BLING_AKG_STATE_PATH.write_text(json.dumps({"state": state, "created_at": int(_time.time())}), encoding="utf-8")
+    state = "akg__" + _sec.token_urlsafe(28)  # prefixo identifica AKG no callback compartilhado
     _cid, _csec = _bling_akg_creds()
+    # Usa o mesmo redirect_uri do Shinsei (/bling/callback) — único URI cadastrado no app OAuth Bling
+    redirect = os.getenv("BLING_REDIRECT_URI", "https://shinsei-pricing.onrender.com/bling/callback")
     params = urlencode({
         "response_type": "code",
         "client_id": _cid,
-        "redirect_uri": _BLING_AKG_REDIRECT_URI,
+        "redirect_uri": redirect,
         "state": state,
     })
     return RedirectResponse(f"https://www.bling.com.br/Api/v3/oauth/authorize?{params}")
@@ -1307,10 +1311,12 @@ def bling_callback2(code: str | None = Query(None), state: str | None = Query(No
     import time as _time
     import requests as _req
     _cid, _csec = _bling_akg_creds()
+    # redirect_uri deve bater com o usado no authorize — ambos usam /bling/callback
+    _redirect = os.getenv("BLING_REDIRECT_URI", "https://shinsei-pricing.onrender.com/bling/callback")
     r = _req.post("https://www.bling.com.br/Api/v3/oauth/token",
         data={"grant_type": "authorization_code",
               "code": code,
-              "redirect_uri": _BLING_AKG_REDIRECT_URI},
+              "redirect_uri": _redirect},
         auth=(_cid, _csec),
         timeout=20)
     if r.status_code != 200:
