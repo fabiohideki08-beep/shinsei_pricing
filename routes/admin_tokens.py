@@ -344,3 +344,48 @@ def shopify_token_sync():
         return {"ok": False, "mensagem": "Falha ao salvar no Render — verifique RENDER_API_KEY"}
     except Exception as e:
         return {"erro": str(e)}
+
+
+# ─── Salvar env vars arbitrárias no Render (página de integrações) ─────────────
+
+_ALLOWED_SAVE_ENV = {
+    "MELHOR_ENVIO_TOKEN", "SMTP_PASS",
+    "ZAPI_TOKEN", "ZAPI_CLIENT_TOKEN", "ZAPI_INSTANCE_ID",
+}
+
+
+@router.post("/tokens/save-env")
+def save_env_vars(body: dict):
+    """Salva env vars permitidas no Render e injeta no processo atual."""
+    updates = {k: v for k, v in body.items() if k in _ALLOWED_SAVE_ENV and isinstance(v, str) and v.strip()}
+    if not updates:
+        return {"ok": False, "erro": f"Nenhuma var permitida. Vars aceitas: {sorted(_ALLOWED_SAVE_ENV)}"}
+    try:
+        from render_persistence import _patch_env_vars
+        ok = _patch_env_vars(updates)
+        for k, v in updates.items():
+            os.environ[k] = v
+        return {"ok": ok, "vars_salvas": list(updates.keys())}
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+
+# ─── Disparar deploy no Render ────────────────────────────────────────────────
+
+@router.post("/deploy")
+def trigger_deploy():
+    """Dispara um novo deploy no Render via API."""
+    api_key = os.getenv("RENDER_API_KEY", "")
+    service_id = os.getenv("RENDER_SERVICE_ID", "srv-d9jhht58nd3s73beak7g")
+    if not api_key:
+        return {"ok": False, "erro": "RENDER_API_KEY não configurada"}
+    r = requests.post(
+        f"https://api.render.com/v1/services/{service_id}/deploys",
+        headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+        json={"clearCache": "do_not_clear"},
+        timeout=15,
+    )
+    if r.status_code in (200, 201):
+        d = r.json()
+        return {"ok": True, "deploy_id": d.get("id", ""), "status": d.get("status", "")}
+    return {"ok": False, "erro": f"HTTP {r.status_code}", "body": r.text[:200]}

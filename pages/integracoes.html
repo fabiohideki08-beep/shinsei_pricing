@@ -511,22 +511,115 @@
 
   </div>
 
-  <!-- NGROK / URL PÚBLICA -->
-  <div class="card">
-    <div class="card-header">
-      <div class="card-icon">🌐</div>
-      <div>
-        <div class="card-title">URL Pública (ngrok)</div>
-        <div class="card-sub">Necessária para webhooks e OAuth callbacks</div>
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- SEÇÃO: INFRAESTRUTURA                             -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div style="display:flex;align-items:center;gap:12px;margin:32px 0 16px">
+    <span style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap">⚙️ Infraestrutura</span>
+    <div style="flex:1;height:1px;background:var(--line)"></div>
+  </div>
+
+  <div class="grid">
+
+    <!-- RENDER -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">☁️</div>
+        <div>
+          <div class="card-title">Render</div>
+          <div class="card-sub">Hosting e variáveis de ambiente</div>
+        </div>
+        <div style="margin-left:auto" id="status-render">
+          <span class="status-badge unknown"><span class="dot gray"></span>—</span>
+        </div>
       </div>
-      <div style="margin-left:auto" id="status-ngrok">
-        <span class="status-badge unknown"><span class="dot gray"></span>Verificando...</span>
+      <div class="info-row"><span class="info-label">URL do serviço</span><span class="info-value"><a href="https://shinsei-pricing.onrender.com" target="_blank" style="color:var(--accent)">shinsei-pricing.onrender.com</a></span></div>
+      <div class="info-row"><span class="info-label">Service ID</span><span class="info-value" style="font-family:monospace;font-size:12px">srv-d9jhht58nd3s73beak7g</span></div>
+      <div class="info-row"><span class="info-label">Env vars ativas</span><span class="info-value" id="render-env-count">—</span></div>
+      <div class="info-row"><span class="info-label">Último deploy</span><span class="info-value" id="render-last-deploy">—</span></div>
+      <hr class="divider"/>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn secondary sm" onclick="verificarRender()">🔄 Verificar</button>
+        <a class="btn secondary sm" href="https://dashboard.render.com/web/srv-d9jhht58nd3s73beak7g" target="_blank">🔗 Dashboard</a>
+        <button class="btn primary sm" onclick="triggarDeploy()">🚀 Deploy agora</button>
+      </div>
+      <div id="notice-render" class="notice" style="margin-top:8px"></div>
+    </div>
+
+    <!-- MELHOR ENVIO -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">📬</div>
+        <div>
+          <div class="card-title">Melhor Envio</div>
+          <div class="card-sub">Cálculo e geração de etiquetas</div>
+        </div>
+        <div style="margin-left:auto" id="status-me">
+          <span class="status-badge unknown"><span class="dot gray"></span>Verificando...</span>
+        </div>
+      </div>
+      <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="me-status-text">—</span></div>
+      <hr class="divider"/>
+      <div class="section-title">Token de acesso</div>
+      <div class="field"><label>Bearer Token</label><input type="password" id="me-token-input" placeholder="eyJ0eXAiOiJKV1QiLCJh..." autocomplete="off"/></div>
+      <div id="notice-me" class="notice"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn success sm" onclick="salvarMEToken()">💾 Salvar + Render</button>
+        <button class="btn secondary sm" onclick="toggleVisible('me-token-input')">👁 Mostrar</button>
       </div>
     </div>
-    <div class="info-row"><span class="info-label">URL atual</span><span class="info-value" id="ngrok-url">—</span></div>
-    <div class="info-row"><span class="info-label">API Key</span><span class="info-value" id="api-key-display">—</span></div>
-    <hr class="divider"/>
-    <p style="font-size:12px;color:var(--muted);margin:0">Para usar webhooks e OAuth externos, o ngrok precisa estar rodando. Inicie com <code style="background:#0d1630;padding:2px 6px;border-radius:4px">ngrok http 8000</code> ou use o <code style="background:#0d1630;padding:2px 6px;border-radius:4px">iniciar.bat</code>.</p>
+
+    <!-- BREVO / SMTP -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">✉️</div>
+        <div>
+          <div class="card-title">Brevo (SMTP)</div>
+          <div class="card-sub">Email de carrinho abandonado</div>
+        </div>
+        <div style="margin-left:auto" id="status-smtp">
+          <span class="status-badge unknown"><span class="dot gray"></span>Verificando...</span>
+        </div>
+      </div>
+      <div class="info-row"><span class="info-label">Servidor</span><span class="info-value">smtp-relay.brevo.com:587</span></div>
+      <div class="info-row"><span class="info-label">Login</span><span class="info-value">b6e399001@smtp-brevo.com</span></div>
+      <div class="info-row"><span class="info-label">Remetente</span><span class="info-value">atendimentoshinsei@gmail.com</span></div>
+      <hr class="divider"/>
+      <div class="section-title">Senha SMTP</div>
+      <div class="field"><label>SMTP_PASS</label><input type="password" id="smtp-pass-input" placeholder="Senha SMTP do Brevo" autocomplete="off"/></div>
+      <div id="notice-smtp" class="notice"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn success sm" onclick="salvarSMTPPass()">💾 Salvar + Render</button>
+        <button class="btn secondary sm" onclick="toggleVisible('smtp-pass-input')">👁 Mostrar</button>
+        <button class="btn secondary sm" onclick="testarSMTP()">📧 Testar envio</button>
+      </div>
+    </div>
+
+    <!-- Z-API (WHATSAPP) -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">💬</div>
+        <div>
+          <div class="card-title">Z-API (WhatsApp)</div>
+          <div class="card-sub">Mensagens de carrinho abandonado</div>
+        </div>
+        <div style="margin-left:auto" id="status-zapi">
+          <span class="status-badge unknown"><span class="dot gray"></span>Verificando...</span>
+        </div>
+      </div>
+      <div class="info-row"><span class="info-label">Instance ID</span><span class="info-value" style="font-family:monospace;font-size:12px" id="zapi-instance">3F848712DB88C2FADEE6A6D84865BDBD</span></div>
+      <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="zapi-status-text">—</span></div>
+      <hr class="divider"/>
+      <div class="section-title">Credenciais</div>
+      <div class="field"><label>Token</label><input type="password" id="zapi-token-input" placeholder="ZAPI_TOKEN" autocomplete="off"/></div>
+      <div class="field"><label>Client Token</label><input type="password" id="zapi-client-token-input" placeholder="ZAPI_CLIENT_TOKEN" autocomplete="off"/></div>
+      <div id="notice-zapi" class="notice"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn success sm" onclick="salvarZAPI()">💾 Salvar + Render</button>
+        <button class="btn secondary sm" onclick="toggleVisible('zapi-token-input','zapi-client-token-input')">👁 Mostrar</button>
+      </div>
+    </div>
+
   </div>
 
 </div>
@@ -624,25 +717,117 @@ function toggleMPToken(){
   input.type = input.type === 'password' ? 'text' : 'password';
 }
 
-// ── NGROK / URL PÚBLICA ───────────────────────────────────
-async function verificarNgrok(){
+// ── RENDER ───────────────────────────────────────────────
+async function verificarRender(){
   try{
     const res = await fetch('/health');
     const data = await res.json();
-    const url = data.ngrok_url || data.public_url || window.location.origin;
-    document.getElementById('ngrok-url').textContent = url;
-    document.getElementById('shopify-webhook-url').textContent = url + '/shopify-flow/pricing-suggestion';
-    document.getElementById('api-key-display').textContent = data.api_key ? data.api_key.substring(0,8) + '...' : '—';
-    const isNgrok = url.includes('ngrok');
-    setStatus('status-ngrok', isNgrok, isNgrok ? 'Online' : 'Local apenas');
+    setStatus('status-render', true, 'Online');
+    document.getElementById('render-env-count').textContent = data.env_count || '—';
+    document.getElementById('render-last-deploy').textContent = data.deploy_at ? new Date(data.deploy_at).toLocaleString('pt-BR') : '—';
   }catch(e){
-    setStatus('status-ngrok', false, 'Erro');
+    setStatus('status-render', false, 'Erro');
   }
 }
 
-function copiarWebhook(){
-  const url = document.getElementById('shopify-webhook-url').textContent;
-  navigator.clipboard.writeText(url).then(() => mostrarNotice('URL copiada!','ok'));
+async function triggarDeploy(){
+  noticeCard('render','⏳ Disparando deploy...','');
+  try{
+    const res = await fetch('/admin/deploy', {method:'POST'});
+    const data = await res.json();
+    noticeCard('render', data.ok ? '✅ Deploy disparado! Aguarde ~2min.' : '❌ ' + (data.erro||'Erro'), data.ok ? 'ok' : 'err');
+  }catch(e){ noticeCard('render','❌ Erro de conexão','err'); }
+}
+
+// ── MELHOR ENVIO ─────────────────────────────────────────
+async function verificarME(){
+  try{
+    const res = await fetch('/admin/tokens/status');
+    const data = await res.json();
+    const me = data.melhor_envio || {};
+    const ok = me.token_ok === true;
+    setStatus('status-me', ok, ok ? 'Conectado' : 'Desconectado');
+    document.getElementById('me-status-text').textContent = ok ? '✅ Token válido' : '❌ Token inválido ou ausente';
+  }catch(e){
+    setStatus('status-me', null, '—');
+    document.getElementById('me-status-text').textContent = '—';
+  }
+}
+
+async function salvarMEToken(){
+  const token = document.getElementById('me-token-input').value.trim();
+  if(!token){ noticeCard('me','Cole o token do Melhor Envio.','warn'); return; }
+  try{
+    const res = await fetch('/admin/tokens/save-env', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({MELHOR_ENVIO_TOKEN: token})
+    });
+    const data = await res.json();
+    noticeCard('me', data.ok ? '✅ Token salvo no Render!' : '❌ ' + (data.erro||'Erro'), data.ok ? 'ok' : 'err');
+    if(data.ok) verificarME();
+  }catch(e){ noticeCard('me','❌ Erro de conexão','err'); }
+}
+
+// ── BREVO / SMTP ─────────────────────────────────────────
+async function verificarSMTP(){
+  const pass = ''; // não expor — só verificar se configurado
+  try{
+    const res = await fetch('/admin/tokens/status');
+    const data = await res.json();
+    const ok = data.smtp?.configurado === true;
+    setStatus('status-smtp', ok, ok ? 'Configurado' : 'Sem senha');
+  }catch(e){ setStatus('status-smtp', null, '—'); }
+}
+
+async function salvarSMTPPass(){
+  const pass = document.getElementById('smtp-pass-input').value.trim();
+  if(!pass){ noticeCard('smtp','Cole a senha SMTP do Brevo.','warn'); return; }
+  try{
+    const res = await fetch('/admin/tokens/save-env', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({SMTP_PASS: pass})
+    });
+    const data = await res.json();
+    noticeCard('smtp', data.ok ? '✅ SMTP_PASS salvo no Render!' : '❌ ' + (data.erro||'Erro'), data.ok ? 'ok' : 'err');
+  }catch(e){ noticeCard('smtp','❌ Erro de conexão','err'); }
+}
+
+async function testarSMTP(){
+  noticeCard('smtp','⏳ Enviando email de teste...','');
+  try{
+    const res = await fetch('/shopify/test-abandoned-email', {method:'POST'});
+    const data = await res.json();
+    noticeCard('smtp', data.ok ? '✅ Email enviado!' : '❌ ' + (data.detalhe||data.erro||'Falha'), data.ok ? 'ok' : 'err');
+  }catch(e){ noticeCard('smtp','❌ Erro de conexão','err'); }
+}
+
+// ── Z-API (WHATSAPP) ─────────────────────────────────────
+async function verificarZAPI(){
+  try{
+    const res = await fetch('/admin/tokens/status');
+    const data = await res.json();
+    const zapi = data.zapi || {};
+    const ok = zapi.ok === true;
+    setStatus('status-zapi', ok, ok ? 'Conectado' : 'Não verificado');
+    document.getElementById('zapi-status-text').textContent = ok ? '✅ Instância ativa' : '⚠️ Verificação manual necessária';
+  }catch(e){ setStatus('status-zapi', null, '—'); }
+}
+
+async function salvarZAPI(){
+  const token = document.getElementById('zapi-token-input').value.trim();
+  const clientToken = document.getElementById('zapi-client-token-input').value.trim();
+  if(!token && !clientToken){ noticeCard('zapi','Preencha ao menos um campo.','warn'); return; }
+  const payload = {};
+  if(token) payload.ZAPI_TOKEN = token;
+  if(clientToken) payload.ZAPI_CLIENT_TOKEN = clientToken;
+  try{
+    const res = await fetch('/admin/tokens/save-env', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    noticeCard('zapi', data.ok ? '✅ Credenciais salvas no Render!' : '❌ ' + (data.erro||'Erro'), data.ok ? 'ok' : 'err');
+  }catch(e){ noticeCard('zapi','❌ Erro de conexão','err'); }
 }
 
 // ── SHOPEE ───────────────────────────────────────────────
@@ -703,7 +888,10 @@ function verificarTodas(){
   verificarMP();
   verificarAmazon();
   verificarShopee();
-  verificarNgrok();
+  verificarRender();
+  verificarME();
+  verificarSMTP();
+  verificarZAPI();
   carregarCredenciais();
 }
 
