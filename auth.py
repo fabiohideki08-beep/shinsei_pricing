@@ -92,6 +92,7 @@ PUBLIC_PATHS = {
     "/webhooks/bling",
     "/webhooks/shopify/produto",
     "/shopify/webhook/order-paid",
+    "/shopify/webhook/checkout-abandoned",
     "/shopify/status",
     "/shopify/callback",
     "/shopify/auth",
