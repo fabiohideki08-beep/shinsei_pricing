@@ -1176,6 +1176,57 @@ def _resolve_skus_to_ml_ids(skus: set[str], tok: str, seller_id: str) -> list[st
     return matched
 
 
+def _resolve_skus_via_bling(skus: set[str]) -> list[str]:
+    """Fallback: resolve SKUs → IDs ML usando Bling Shinsei (sem precisar de token ML).
+    Usa o endpoint /anuncios do Bling que tem urlAnuncio com o MLB ID.
+    """
+    import os, re as _re
+    tok_b = os.getenv("BLING_ACCESS_TOKEN", "")
+    if not tok_b:
+        try:
+            from bling_client import BlingClient
+            tok_b = BlingClient()._get_valid_token()
+        except Exception:
+            pass
+    if not tok_b:
+        return []
+
+    headers = {"Authorization": f"Bearer {tok_b}", "Accept": "application/json"}
+    matched: list[str] = []
+    page = 1
+    _MLB_RE = _re.compile(r"(MLB\d+)", _re.IGNORECASE)
+
+    while True:
+        try:
+            r = _req.get(
+                "https://api.bling.com.br/Api/v3/anuncios",
+                params={"pagina": page, "limite": 100},
+                headers=headers,
+                timeout=20,
+            )
+        except Exception:
+            break
+        if r.status_code != 200:
+            break
+        data = r.json().get("data", [])
+        if not data:
+            break
+        for a in data:
+            sku = (a.get("produto") or {}).get("codigo") or ""
+            if sku not in skus:
+                continue
+            url = a.get("urlAnuncio") or a.get("url") or ""
+            m = _MLB_RE.search(url)
+            if m:
+                matched.append(m.group(1).upper())
+        page += 1
+        time.sleep(0.3)
+        if len(data) < 100:
+            break
+
+    return matched
+
+
 def _batch_from_faltando_bg(limit: int | None, family_only: bool = False, sort_by_family: bool = False):
     """Background: lê _faltando_akg_capilares.json, resolve IDs ML e copia.
     family_only=True: copia apenas itens omni (com family_name/variações).
@@ -1190,8 +1241,13 @@ def _batch_from_faltando_bg(limit: int | None, family_only: bool = False, sort_b
         "ok": 0, "erros": 0, "pulados": 0, "log": ["Iniciando cópia faltando AKG..."],
     })
 
+    tok_s: str | None = None
     try:
         tok_s = _token_shinsei()
+    except Exception:
+        pass
+
+    try:
         tok_a = _token_akg()
     except Exception as e:
         _batch_copy_state.update({"rodando": False, "erro": str(e)})
@@ -1205,10 +1261,19 @@ def _batch_from_faltando_bg(limit: int | None, family_only: bool = False, sort_b
     skus = {item["sku"] for item in faltando}
 
     _batch_copy_state["log"].append(f"Resolvendo {len(skus)} SKUs → IDs ML...")
-    me_r = _req.get(f"{ML_API}/users/me", headers=_hdrs(tok_s), timeout=15)
-    seller_id = str(me_r.json()["id"])
 
-    ml_ids = _resolve_skus_to_ml_ids(skus, tok_s, seller_id)
+    if tok_s:
+        try:
+            me_r = _req.get(f"{ML_API}/users/me", headers=_hdrs(tok_s), timeout=15)
+            seller_id = str(me_r.json()["id"])
+            ml_ids = _resolve_skus_to_ml_ids(skus, tok_s, seller_id)
+        except Exception:
+            tok_s = None
+            ml_ids = []
+
+    if not tok_s:
+        _batch_copy_state["log"].append("Token ML Shinsei indisponível — usando Bling Shinsei para resolver SKUs...")
+        ml_ids = _resolve_skus_via_bling(skus)
     _batch_copy_state["log"].append(f"{len(ml_ids)} IDs ML encontrados para {len(skus)} SKUs")
 
     if not ml_ids:
@@ -1223,7 +1288,7 @@ def _batch_from_faltando_bg(limit: int | None, family_only: bool = False, sort_b
             chunk = ml_ids[i:i+20]
             r = _req.get(f"{ML_API}/items",
                          params={"ids": ",".join(chunk), "attributes": "id,family_name"},
-                         headers=_hdrs(tok_s), timeout=20)
+                         headers=_hdrs(tok_s) if tok_s else {}, timeout=20)
             if r.status_code != 200:
                 continue
             for entry in r.json():
@@ -1244,7 +1309,7 @@ def _batch_from_faltando_bg(limit: int | None, family_only: bool = False, sort_b
             chunk = ml_ids[i:i+20]
             r = _req.get(f"{ML_API}/items",
                          params={"ids": ",".join(chunk), "attributes": "id,family_id"},
-                         headers=_hdrs(tok_s), timeout=20)
+                         headers=_hdrs(tok_s) if tok_s else {}, timeout=20)
             if r.status_code == 200:
                 for entry in r.json():
                     body = entry.get("body") or {}
