@@ -362,6 +362,34 @@ def ads_diagnostico():
     except Exception as e:
         resultado["conversoes_erro"] = str(e)
 
+    # ── 3b. IS loss reasons por campanha ────────────────────────────────────
+    try:
+        rows_is = _gaql(client, customer_id, """
+            SELECT
+                campaign.id,
+                campaign.name,
+                campaign.status,
+                metrics.search_impression_share,
+                metrics.search_budget_lost_impression_share,
+                metrics.search_rank_lost_impression_share
+            FROM campaign
+            WHERE segments.date DURING LAST_30_DAYS
+              AND campaign.status != 'REMOVED'
+            ORDER BY metrics.cost_micros DESC
+        """)
+        resultado["is_analise"] = [
+            {
+                "campanha": row.campaign.name,
+                "status":   row.campaign.status.name if hasattr(row.campaign.status, "name") else str(row.campaign.status),
+                "IS_%":     round((row.metrics.search_impression_share or 0) * 100, 1),
+                "perda_orcamento_%": round((row.metrics.search_budget_lost_impression_share or 0) * 100, 1),
+                "perda_rank_%":      round((row.metrics.search_rank_lost_impression_share or 0) * 100, 1),
+            }
+            for row in rows_is
+        ]
+    except Exception as e:
+        resultado["is_analise_erro"] = str(e)
+
     # ── 4. Grupos de anúncios (top 20 por gasto) ─────────────────────────────
     try:
         rows4 = _gaql(client, customer_id, """
@@ -415,14 +443,10 @@ def ads_listing_groups(campaign_id: str):
                 ad_group_criterion.listing_group.type,
                 ad_group_criterion.listing_group.case_value.product_channel.channel,
                 ad_group_criterion.status,
-                ad_group_criterion.cpc_bid_micros,
-                metrics.impressions,
-                metrics.clicks,
-                metrics.cost_micros
+                ad_group_criterion.cpc_bid_micros
             FROM ad_group_criterion
             WHERE campaign.id = {campaign_id}
               AND ad_group_criterion.type = 'LISTING_GROUP'
-            ORDER BY metrics.impressions DESC
             LIMIT 50
         """)
 
