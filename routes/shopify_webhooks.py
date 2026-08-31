@@ -311,6 +311,7 @@ def _generate_me_label(order: dict):
                         params={"numeroLoja": shopify_order_id, "idLoja": BLING_SHOPIFY_LOJA_ID, "pagina": 1, "limite": 5},
                         headers=_bling_headers(bling_tok), timeout=10,
                     )
+                    print(f"[me_label] {order_name} — Bling CPF lookup: HTTP {rb.status_code}")
                     if rb.status_code == 200:
                         peds = rb.json().get("data", [])
                         if peds:
@@ -318,8 +319,15 @@ def _generate_me_label(order: dict):
                             raw = "".join(c for c in doc if c.isdigit())
                             if 11 <= len(raw) <= 14:
                                 cpf_dest = raw
-            except Exception:
-                pass
+                                print(f"[me_label] {order_name} — CPF encontrado no Bling: {raw[:4]}***")
+                            else:
+                                print(f"[me_label] {order_name} — CPF Bling inválido: '{doc}' len={len(raw)}")
+                        else:
+                            print(f"[me_label] {order_name} — Bling: nenhum pedido encontrado")
+                else:
+                    print(f"[me_label] {order_name} — Bling token indisponível para CPF lookup")
+            except Exception as e:
+                print(f"[me_label] {order_name} — erro CPF Bling: {e}")
 
         # Sem CPF, descartar serviços que exigem documento (ex: Jadlog)
         if not cpf_dest:
