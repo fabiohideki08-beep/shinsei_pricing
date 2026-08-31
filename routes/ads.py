@@ -362,31 +362,32 @@ def ads_diagnostico():
     except Exception as e:
         resultado["conversoes_erro"] = str(e)
 
-    # ── 3b. IS loss reasons por campanha ────────────────────────────────────
+    # ── 3b. IS loss reasons por campanha (Shopping usa impression_share diferente) ──
     try:
         rows_is = _gaql(client, customer_id, """
             SELECT
                 campaign.id,
                 campaign.name,
                 campaign.status,
-                metrics.search_impression_share,
-                metrics.search_budget_lost_impression_share,
-                metrics.search_rank_lost_impression_share
+                campaign.advertising_channel_type,
+                metrics.impressions,
+                metrics.cost_micros
             FROM campaign
             WHERE segments.date DURING LAST_30_DAYS
               AND campaign.status != 'REMOVED'
             ORDER BY metrics.cost_micros DESC
         """)
-        resultado["is_analise"] = [
-            {
+        is_analise = []
+        for row in rows_is:
+            tipo = row.campaign.advertising_channel_type.name if hasattr(row.campaign.advertising_channel_type, "name") else str(row.campaign.advertising_channel_type)
+            is_analise.append({
                 "campanha": row.campaign.name,
                 "status":   row.campaign.status.name if hasattr(row.campaign.status, "name") else str(row.campaign.status),
-                "IS_%":     round((row.metrics.search_impression_share or 0) * 100, 1),
-                "perda_orcamento_%": round((row.metrics.search_budget_lost_impression_share or 0) * 100, 1),
-                "perda_rank_%":      round((row.metrics.search_rank_lost_impression_share or 0) * 100, 1),
-            }
-            for row in rows_is
-        ]
+                "tipo":     tipo,
+                "impressoes": row.metrics.impressions or 0,
+                "custo":    round((row.metrics.cost_micros or 0) / 1e6, 2),
+            })
+        resultado["is_analise"] = is_analise
     except Exception as e:
         resultado["is_analise_erro"] = str(e)
 
@@ -436,9 +437,10 @@ def ads_listing_groups(campaign_id: str):
         return {"ok": False, "erro": str(e)}
 
     try:
-        # Listing groups
+        # Listing groups — campaign.id obrigatório no SELECT quando usado no WHERE
         rows = _gaql(client, customer_id, f"""
             SELECT
+                campaign.id,
                 ad_group_criterion.resource_name,
                 ad_group_criterion.listing_group.type,
                 ad_group_criterion.listing_group.case_value.product_channel.channel,
@@ -453,14 +455,10 @@ def ads_listing_groups(campaign_id: str):
         grupos = []
         for row in rows:
             c = row.ad_group_criterion
-            m = row.metrics
             grupos.append({
-                "tipo":    c.listing_group.type.name if hasattr(c.listing_group.type, "name") else str(c.listing_group.type),
-                "status":  c.status.name if hasattr(c.status, "name") else str(c.status),
-                "lance":   round((c.cpc_bid_micros or 0) / 1e6, 2),
-                "impr":    m.impressions or 0,
-                "cliques": m.clicks or 0,
-                "custo":   round((m.cost_micros or 0) / 1e6, 2),
+                "tipo":   c.listing_group.type.name if hasattr(c.listing_group.type, "name") else str(c.listing_group.type),
+                "status": c.status.name if hasattr(c.status, "name") else str(c.status),
+                "lance":  round((c.cpc_bid_micros or 0) / 1e6, 2),
             })
 
         # Produtos Shopping desta campanha (últimos 30 dias)
