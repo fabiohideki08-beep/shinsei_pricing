@@ -75,7 +75,7 @@ def _me_quote_best(dest_cep: str, weight_kg: float) -> dict | None:
         return None
     try:
         r = requests.post(
-            "https://melhorenvio.com.br/api/v2/me/shipment/calculate",
+            "https://www.melhorenvio.com.br/api/v2/me/shipment/calculate",
             json={
                 "from": {"postal_code": ME_ORIGIN_CEP},
                 "to":   {"postal_code": dest_cep},
@@ -264,7 +264,7 @@ def _generate_me_label(order: dict):
 
         # Cotação
         r = requests.post(
-            "https://melhorenvio.com.br/api/v2/me/shipment/calculate",
+            "https://www.melhorenvio.com.br/api/v2/me/shipment/calculate",
             json={
                 "from": {"postal_code": ME_ORIGIN_CEP},
                 "to":   {"postal_code": dest_cep},
@@ -285,7 +285,7 @@ def _generate_me_label(order: dict):
                 "Destinatário")
         phone = (addr.get("phone") or "").replace(" ", "").replace("-", "")
 
-        # CPF do destinatário — tenta note_attributes, company field e customer.note
+        # CPF do destinatário — tenta note_attributes, company field, customer.note e Bling
         cpf_dest = ""
         for attr in order.get("note_attributes", []):
             if attr.get("name", "").upper() in ("CPF", "CPF/CNPJ", "CNPJ", "DOCUMENTO", "TAX_ID", "TAXID"):
@@ -300,6 +300,26 @@ def _generate_me_label(order: dict):
             raw = "".join(c for c in (order.get("customer", {}).get("note") or "") if c.isdigit())
             if 11 <= len(raw) <= 14:
                 cpf_dest = raw
+        # Fallback: buscar CPF no Bling pelo numeroLoja (Shopify order ID)
+        if not cpf_dest:
+            try:
+                bling_tok = _bling_token()
+                if bling_tok:
+                    shopify_order_id = str(order.get("id", ""))
+                    rb = requests.get(
+                        "https://bling.com.br/Api/v3/pedidos/vendas",
+                        params={"numeroLoja": shopify_order_id, "idLoja": BLING_SHOPIFY_LOJA_ID, "pagina": 1, "limite": 5},
+                        headers=_bling_headers(bling_tok), timeout=10,
+                    )
+                    if rb.status_code == 200:
+                        peds = rb.json().get("data", [])
+                        if peds:
+                            doc = peds[0].get("contato", {}).get("numeroDocumento", "")
+                            raw = "".join(c for c in doc if c.isdigit())
+                            if 11 <= len(raw) <= 14:
+                                cpf_dest = raw
+            except Exception:
+                pass
 
         # Sem CPF, descartar serviços que exigem documento (ex: Jadlog)
         if not cpf_dest:
@@ -374,7 +394,7 @@ def _generate_me_label(order: dict):
                 "insurance_value": round(float(order.get("total_price") or "0") or 1.0, 2),
             },
         }
-        r2 = requests.post("https://melhorenvio.com.br/api/v2/me/cart",
+        r2 = requests.post("https://www.melhorenvio.com.br/api/v2/me/cart",
                            json=cart_payload, headers=_me_headers(tok), timeout=15)
         if r2.status_code not in (200, 201):
             # 422 = CPF obrigatório no serviço mesmo sem "documents" nos requirements
@@ -386,7 +406,7 @@ def _generate_me_label(order: dict):
                     cart_payload2 = dict(cart_payload)
                     cart_payload2["service"] = fallback["id"]
                     cart_payload2["agency"] = fallback.get("agency")
-                    r2b = requests.post("https://melhorenvio.com.br/api/v2/me/cart",
+                    r2b = requests.post("https://www.melhorenvio.com.br/api/v2/me/cart",
                                         json=cart_payload2, headers=_me_headers(tok), timeout=15)
                     if r2b.status_code in (200, 201):
                         best = fallback
@@ -407,13 +427,13 @@ def _generate_me_label(order: dict):
 
         # Checkout — debita saldo ME e gera etiqueta
         r3 = requests.post(
-            "https://melhorenvio.com.br/api/v2/me/shipment/checkout",
+            "https://www.melhorenvio.com.br/api/v2/me/shipment/checkout",
             json={"orders": [cart_id]},
             headers=_me_headers(tok), timeout=15,
         )
         if r3.status_code not in (200, 201):
             # Remover item do carrinho e tentar próximo serviço
-            requests.delete(f"https://melhorenvio.com.br/api/v2/me/cart/{cart_id}",
+            requests.delete(f"https://www.melhorenvio.com.br/api/v2/me/cart/{cart_id}",
                             headers=_me_headers(tok), timeout=10)
             remaining = [q for q in available if q["id"] != best["id"]]
             if remaining:
@@ -421,14 +441,14 @@ def _generate_me_label(order: dict):
                 print(f"[me_label] {order_name} — retry com {best['name']} R${best['price']}")
                 cart_payload["service"] = best["id"]
                 cart_payload["agency"] = best.get("agency")
-                r2b = requests.post("https://melhorenvio.com.br/api/v2/me/cart",
+                r2b = requests.post("https://www.melhorenvio.com.br/api/v2/me/cart",
                                     json=cart_payload, headers=_me_headers(tok), timeout=15)
                 if r2b.status_code not in (200, 201):
                     _log_me_label(order_id, order_name, None, best["name"],
                                   float(best["price"]), dest_cep, f"erro_retry:{r2b.status_code}")
                     return
                 cart_id = r2b.json().get("id")
-                r3 = requests.post("https://melhorenvio.com.br/api/v2/me/shipment/checkout",
+                r3 = requests.post("https://www.melhorenvio.com.br/api/v2/me/shipment/checkout",
                                    json={"orders": [cart_id]}, headers=_me_headers(tok), timeout=15)
             if r3.status_code not in (200, 201):
                 print(f"[me_label] {order_name} — erro checkout: {r3.status_code} {r3.text[:300]}")
@@ -1076,7 +1096,7 @@ def test_me_label(cep: str = "87043595", peso_kg: float = 0.6):
         return {"erro": "Token ME não encontrado", "env_var": bool(os.getenv("MELHOR_ENVIO_TOKEN"))}
     try:
         r = requests.post(
-            "https://melhorenvio.com.br/api/v2/me/shipment/calculate",
+            "https://www.melhorenvio.com.br/api/v2/me/shipment/calculate",
             json={
                 "from": {"postal_code": ME_ORIGIN_CEP},
                 "to":   {"postal_code": cep.replace("-", "")},
