@@ -915,13 +915,149 @@ def _send_abandoned_cart_email(email: str, name: str, items: list, checkout_url:
         return False
 
 
+_FILA_CARRINHOS = DATA_DIR / "carrinhos_fila.json"
+_fila_lock = __import__("threading").Lock()
+
+
+def _fila_ler() -> list:
+    try:
+        if _FILA_CARRINHOS.exists():
+            return json.loads(_FILA_CARRINHOS.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return []
+
+
+def _fila_salvar(fila: list):
+    try:
+        _FILA_CARRINHOS.write_text(
+            json.dumps(fila[-500:], ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except Exception as e:
+        print(f"[carrinho-fila] erro ao salvar: {e}")
+
+
+def _fila_enfileirar(checkout_id: str, checkout_token: str, email: str,
+                     name: str, phone: str, items: list, checkout_url: str, total: str):
+    with _fila_lock:
+        fila = _fila_ler()
+        if any(e["checkout_id"] == checkout_id for e in fila):
+            return False  # já existe
+        fila.append({
+            "checkout_id": checkout_id,
+            "checkout_token": checkout_token,
+            "email": email,
+            "name": name,
+            "phone": phone,
+            "items": items,
+            "checkout_url": checkout_url,
+            "total": total,
+            "status": "pending",
+            "queued_at": datetime.now(timezone.utc).isoformat(),
+            "email_at": None,
+            "wapp_24h_at": None,
+            "wapp_72h_at": None,
+        })
+        _fila_salvar(fila)
+        return True
+
+
+def _fila_atualizar(checkout_id: str, **campos):
+    with _fila_lock:
+        fila = _fila_ler()
+        for e in fila:
+            if e["checkout_id"] == checkout_id:
+                e.update(campos)
+                e["updated_at"] = datetime.now(timezone.utc).isoformat()
+                break
+        _fila_salvar(fila)
+
+
+def processar_fila_carrinhos():
+    """Processa carrinhos pendentes — chamado pelo scheduler a cada ciclo."""
+    agora = datetime.now(timezone.utc)
+    with _fila_lock:
+        fila = _fila_ler()
+
+    for e in fila:
+        status = e.get("status", "")
+        if status in ("done", "convertido"):
+            continue
+
+        checkout_id    = e["checkout_id"]
+        checkout_token = e.get("checkout_token", "")
+        email          = e["email"]
+        name           = e.get("name", "")
+        phone          = e.get("phone", "")
+        items          = e.get("items", [])
+        checkout_url   = e.get("checkout_url", "")
+        total          = e.get("total", "0.00")
+
+        def _ts(key):
+            v = e.get(key)
+            return datetime.fromisoformat(v) if v else None
+
+        queued_at = _ts("queued_at")
+        email_at  = _ts("email_at")
+        wapp_24h_at = _ts("wapp_24h_at")
+
+        # ── 1h: e-mail ──────────────────────────────────────────────────
+        if status == "pending" and queued_at and (agora - queued_at).total_seconds() >= 3600:
+            if _checkout_converted(checkout_token):
+                _fila_atualizar(checkout_id, status="convertido")
+                continue
+            ok = _send_abandoned_cart_email(email, name, items, checkout_url, total)
+            now_iso = agora.isoformat()
+            _fila_atualizar(checkout_id,
+                            status="email_enviado" if ok else "email_erro",
+                            email_at=now_iso)
+            print(f"[carrinho-fila] {'✅' if ok else '✗'} email 1h para {email} (id={checkout_id})")
+
+        # ── 24h: WhatsApp ────────────────────────────────────────────────
+        elif status == "email_enviado" and email_at and (agora - email_at).total_seconds() >= 23 * 3600:
+            if _checkout_converted(checkout_token):
+                _fila_atualizar(checkout_id, status="convertido")
+                continue
+            if phone:
+                first = name.split()[0] if name else "cliente"
+                prod  = items[0]["title"] if items else "seu produto"
+                msg = (f"Oi {first}! 👋 Aqui é a *Shinsei Market*.\n\n"
+                       f"Você deixou *{prod}* no carrinho! 🛒\n\n"
+                       f"{checkout_url}\n\n"
+                       f"💚 *PIX = 5% off* | Frete grátis acima de R$29,90")
+                ok = _send_whatsapp(phone, msg)
+                _fila_atualizar(checkout_id,
+                                status="wapp_24h" if ok else "email_enviado",
+                                wapp_24h_at=agora.isoformat())
+                print(f"[carrinho-fila] WhatsApp 24h para {phone} {'✅' if ok else '✗'}")
+            else:
+                _fila_atualizar(checkout_id, status="done")
+
+        # ── 72h: follow-up ───────────────────────────────────────────────
+        elif status == "wapp_24h" and wapp_24h_at and (agora - wapp_24h_at).total_seconds() >= 48 * 3600:
+            if _checkout_converted(checkout_token):
+                _fila_atualizar(checkout_id, status="convertido")
+                continue
+            if phone:
+                first = name.split()[0] if name else "cliente"
+                prod  = items[0]["title"] if items else "seu produto"
+                msg = (f"Oi {first}! 🌟 *Shinsei Market* — última chance!\n\n"
+                       f"*{prod}* — estoque limitado ⚠️\n\n"
+                       f"{checkout_url}\n\n"
+                       f"💚 *PIX = 5% off* | Frete grátis acima de R$29,90")
+                ok = _send_whatsapp(phone, msg)
+                _fila_atualizar(checkout_id, status="done", wapp_72h_at=agora.isoformat())
+                print(f"[carrinho-fila] WhatsApp 72h para {phone} {'✅' if ok else '✗'}")
+            else:
+                _fila_atualizar(checkout_id, status="done")
+
+
 def _log_abandoned_cart(checkout_id: str, email: str, status: str):
     log_file = DATA_DIR / "carrinhos_abandonados.json"
     try:
         log = json.loads(log_file.read_text(encoding="utf-8")) if log_file.exists() else []
     except Exception:
         log = []
-    # Atualizar entry existente ou criar nova
     for entry in log:
         if entry.get("checkout_id") == checkout_id:
             entry["status"] = status
@@ -959,58 +1095,7 @@ def _send_whatsapp(phone: str, message: str) -> bool:
         return False
 
 
-def _delayed_cart_recovery(checkout_id: str, checkout_token: str, email: str,
-                            name: str, phone: str, items: list, checkout_url: str, total: str,
-                            delay_seconds: int = 3600):
-    """
-    Sequência de recuperação de carrinho:
-      1h  → e-mail
-      24h → WhatsApp (se tiver telefone)
-      72h → WhatsApp follow-up com desconto
-    Cancela tudo se o checkout for convertido em pedido.
-    """
-    first_name = name.split()[0] if name else "cliente"
-    produto_principal = items[0]["title"] if items else "seu produto"
-
-    # ── 1h: e-mail ──────────────────────────────────────────────────────────────
-    time.sleep(delay_seconds)
-    if _checkout_converted(checkout_token):
-        _log_abandoned_cart(checkout_id, email, "convertido")
-        return
-    ok_email = _send_abandoned_cart_email(email, name, items, checkout_url, total)
-    _log_abandoned_cart(checkout_id, email, "email_ok" if ok_email else "email_erro")
-
-    # ── 24h: WhatsApp ───────────────────────────────────────────────────────────
-    time.sleep(23 * 3600)  # +23h (total 24h)
-    if _checkout_converted(checkout_token):
-        _log_abandoned_cart(checkout_id, email, "convertido_24h")
-        return
-    if phone:
-        msg_24h = (
-            f"Oi {first_name}! 👋 Aqui é a *Shinsei Market*.\n\n"
-            f"Você deixou *{produto_principal}* no carrinho e gostaríamos de te ajudar a finalizar! 🛒\n\n"
-            f"Seu carrinho ainda está guardado:\n{checkout_url}\n\n"
-            f"💚 Pagando no *PIX* você ainda ganha *5% de desconto*!\n\n"
-            f"Alguma dúvida? Estamos aqui para te ajudar 😊"
-        )
-        ok_24h = _send_whatsapp(phone, msg_24h)
-        _log_abandoned_cart(checkout_id, email, "whatsapp_24h_ok" if ok_24h else "whatsapp_24h_erro")
-
-    # ── 72h: WhatsApp follow-up ─────────────────────────────────────────────────
-    time.sleep(48 * 3600)  # +48h (total 72h)
-    if _checkout_converted(checkout_token):
-        _log_abandoned_cart(checkout_id, email, "convertido_72h")
-        return
-    if phone:
-        msg_72h = (
-            f"Oi {first_name}! 🌟 *Shinsei Market* aqui.\n\n"
-            f"Sua última chance de pegar *{produto_principal}* — estoque limitado! ⚠️\n\n"
-            f"Finalize agora e garanta o melhor preço:\n{checkout_url}\n\n"
-            f"💚 *PIX = 5% off* | Frete grátis acima de R$29,90 🚚\n\n"
-            f"Qualquer dúvida é só responder aqui! 😊"
-        )
-        ok_72h = _send_whatsapp(phone, msg_72h)
-        _log_abandoned_cart(checkout_id, email, "whatsapp_72h_ok" if ok_72h else "whatsapp_72h_erro")
+# _delayed_cart_recovery removido — lógica migrada para processar_fila_carrinhos() + scheduler
 
 
 @router.post("/checkout-abandoned")
@@ -1055,26 +1140,15 @@ async def checkout_abandoned(
         for li in line_items
     ]
 
-    # Evitar duplicatas: verificar se já agendamos para este checkout
-    log_file = DATA_DIR / "carrinhos_abandonados.json"
-    try:
-        log = json.loads(log_file.read_text(encoding="utf-8")) if log_file.exists() else []
-        if any(e.get("checkout_id") == checkout_id and e.get("status") in ("agendado", "email_ok") for e in log):
-            return {"ok": True, "skipped": "já agendado"}
-    except Exception:
-        pass
-
-    _log_abandoned_cart(checkout_id, email, "agendado")
-
-    t = threading.Thread(
-        target=_delayed_cart_recovery,
-        args=(checkout_id, checkout_token, email, name, phone, items, checkout_url, total),
-        daemon=True,
+    adicionado = _fila_enfileirar(
+        checkout_id, checkout_token, email, name, phone, items, checkout_url, total
     )
-    t.start()
+    if not adicionado:
+        return {"ok": True, "skipped": "já na fila"}
 
+    _log_abandoned_cart(checkout_id, email, "enfileirado")
     canais = "email 1h" + (", WhatsApp 24h+72h" if phone else "")
-    print(f"[carrinho] {checkout_id} — agendado para {email} via {canais} (itens={len(items)})")
+    print(f"[carrinho] {checkout_id} — enfileirado para {email} via {canais} (itens={len(items)})")
     return {"ok": True, "checkout_id": checkout_id, "email": email, "phone": bool(phone), "agendado_em": canais}
 
 

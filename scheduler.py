@@ -765,6 +765,15 @@ def _ciclo_scbot() -> None:
         _ultimo_dia_scbot = hoje
 
 
+def _ciclo_carrinhos() -> None:
+    """Delega para processar_fila_carrinhos() em shopify_webhooks."""
+    try:
+        from routes.shopify_webhooks import processar_fila_carrinhos
+        processar_fila_carrinhos()
+    except Exception as e:
+        logger.exception("Erro em processar_fila_carrinhos: %s", e)
+
+
 def _ciclo_refresh_cache_produtos() -> None:
     """
     Atualiza data/all_products_cache.json às 06:00 diariamente, incluindo o campo handle.
@@ -888,6 +897,12 @@ def _loop():
             _ciclo_scbot()
         except Exception as e:
             logger.exception("Erro no ciclo SCBOT: %s", e)
+
+        # Carrinho abandonado: processa fila persistente (email 1h, WhatsApp 24h/72h)
+        try:
+            _ciclo_carrinhos()
+        except Exception as e:
+            logger.exception("Erro no ciclo de carrinhos abandonados: %s", e)
 
         # Aguarda o intervalo em fatias de 5s para poder parar rapidamente
 
