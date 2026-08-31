@@ -39,6 +39,10 @@ BLING_SHOPIFY_LOJA_ID = 205479458
 
 def _bling_token() -> str:
     """Pega token Bling Shinsei via BlingClient (com auto-refresh)."""
+    # Prioridade 1: env var (sempre disponível no Render após bootstrap)
+    tok = os.getenv("BLING_ACCESS_TOKEN", "")
+    if tok:
+        return tok
     try:
         import sys
         sys.path.insert(0, str(Path(__file__).parent.parent))
