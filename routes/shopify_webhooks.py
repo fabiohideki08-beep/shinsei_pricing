@@ -244,7 +244,7 @@ def _is_rmsp(order: dict) -> bool:
     return False
 
 
-def _generate_me_label(order: dict):
+def _generate_me_label(order: dict, cpf_override: str = ""):
     """Cota o ME e gera a etiqueta mais barata para pedidos com frete grátis fora da RMSP."""
     order_name = order.get("name", f"#{order.get('id','?')}")
     order_id   = str(order.get("id", ""))
@@ -285,8 +285,8 @@ def _generate_me_label(order: dict):
                 "Destinatário")
         phone = (addr.get("phone") or "").replace(" ", "").replace("-", "")
 
-        # CPF do destinatário — tenta note_attributes, company field, customer.note e Bling
-        cpf_dest = ""
+        # CPF do destinatário — tenta override, note_attributes, company field, customer.note e Bling
+        cpf_dest = "".join(c for c in cpf_override if c.isdigit()) if cpf_override else ""
         for attr in order.get("note_attributes", []):
             if attr.get("name", "").upper() in ("CPF", "CPF/CNPJ", "CNPJ", "DOCUMENTO", "TAX_ID", "TAXID"):
                 cpf_dest = "".join(c for c in str(attr.get("value", "")) if c.isdigit())
@@ -306,24 +306,30 @@ def _generate_me_label(order: dict):
                 bling_tok = _bling_token()
                 if bling_tok:
                     shopify_order_id = str(order.get("id", ""))
-                    rb = requests.get(
-                        "https://bling.com.br/Api/v3/pedidos/vendas",
-                        params={"numeroLoja": shopify_order_id, "idLoja": BLING_SHOPIFY_LOJA_ID, "pagina": 1, "limite": 5},
-                        headers=_bling_headers(bling_tok), timeout=10,
-                    )
-                    print(f"[me_label] {order_name} — Bling CPF lookup: HTTP {rb.status_code}")
-                    if rb.status_code == 200:
-                        peds = rb.json().get("data", [])
-                        if peds:
-                            doc = peds[0].get("contato", {}).get("numeroDocumento", "")
-                            raw = "".join(c for c in doc if c.isdigit())
-                            if 11 <= len(raw) <= 14:
-                                cpf_dest = raw
-                                print(f"[me_label] {order_name} — CPF encontrado no Bling: {raw[:4]}***")
+                    # Tenta com idLoja; fallback sem idLoja
+                    for params in [
+                        {"numeroLoja": shopify_order_id, "idLoja": BLING_SHOPIFY_LOJA_ID, "pagina": 1, "limite": 5},
+                        {"numeroLoja": shopify_order_id, "pagina": 1, "limite": 5},
+                    ]:
+                        rb = requests.get(
+                            "https://bling.com.br/Api/v3/pedidos/vendas",
+                            params=params,
+                            headers=_bling_headers(bling_tok), timeout=10,
+                        )
+                        print(f"[me_label] {order_name} — Bling CPF lookup (idLoja={'idLoja' in params}): HTTP {rb.status_code}")
+                        if rb.status_code == 200:
+                            peds = rb.json().get("data", [])
+                            if peds:
+                                doc = peds[0].get("contato", {}).get("numeroDocumento", "")
+                                raw = "".join(c for c in doc if c.isdigit())
+                                if 11 <= len(raw) <= 14:
+                                    cpf_dest = raw
+                                    print(f"[me_label] {order_name} — CPF encontrado no Bling: {raw[:4]}***")
+                                    break
+                                else:
+                                    print(f"[me_label] {order_name} — CPF Bling inválido: '{doc}' len={len(raw)}")
                             else:
-                                print(f"[me_label] {order_name} — CPF Bling inválido: '{doc}' len={len(raw)}")
-                        else:
-                            print(f"[me_label] {order_name} — Bling: nenhum pedido encontrado")
+                                print(f"[me_label] {order_name} — Bling: nenhum pedido para params={params}")
                 else:
                     print(f"[me_label] {order_name} — Bling token indisponível para CPF lookup")
             except Exception as e:
@@ -755,8 +761,12 @@ def configurar_transporte_bling(bling_pedido_id: str, cep: str, peso_kg: float =
 
 
 @router.post("/reenviar-etiqueta/{order_id}")
-def reenviar_etiqueta(order_id: str):
-    """Busca pedido no Shopify e gera etiqueta ME manualmente (sem HMAC)."""
+def reenviar_etiqueta(order_id: str, cpf: str | None = None):
+    """Busca pedido no Shopify e gera etiqueta ME manualmente (sem HMAC).
+
+    Parâmetros:
+      cpf (query param opcional): CPF/CNPJ do destinatário para forçar na etiqueta.
+    """
     shopify_token = os.getenv("SHOPIFY_ACCESS_TOKEN", "")
     shopify_store = os.getenv("SHOPIFY_STORE", "pknw4n-eg.myshopify.com")
     r = requests.get(
@@ -769,7 +779,7 @@ def reenviar_etiqueta(order_id: str):
     is_rmsp = _is_rmsp(order)
     if is_rmsp:
         return {"aviso": f"Pedido {order.get('name')} é RMSP — etiqueta ME não aplicável"}
-    _generate_me_label(order)
+    _generate_me_label(order, cpf_override=cpf or "")
     return {"ok": True, "pedido": order.get("name"), "cep": (order.get("shipping_address") or {}).get("zip")}
 
 
