@@ -135,16 +135,17 @@ def _set_bling_transporte_me(order: dict) -> bool:
     # Bling armazena: numero=pedido interno, numeroLoja=numero Shopify, numeroExterno=Shopify order_id
     shopify_order_id = str(order.get("id", ""))
     try:
-        # Tentativa 1: buscar pelo numero do pedido Shopify (ex: "1093") com filtro de loja
+        # Bling armazena o ID do pedido Shopify (ex: "7567090549041") em numeroLoja, não o número legível
+        # Tentativa 1: buscar pelo ID do pedido Shopify (campo numeroLoja no Bling)
         r = requests.get(
             "https://bling.com.br/Api/v3/pedidos/vendas",
-            params={"numeroLoja": order_num, "idLoja": BLING_SHOPIFY_LOJA_ID, "pagina": 1, "limite": 5},
+            params={"numeroLoja": shopify_order_id, "idLoja": BLING_SHOPIFY_LOJA_ID, "pagina": 1, "limite": 5},
             headers=_bling_headers(bling_tok), timeout=15,
         )
         pedidos = r.json().get("data", []) if r.status_code == 200 else []
 
         if not pedidos:
-            # Tentativa 2: buscar sem filtro de numero (pega os mais recentes da loja)
+            # Tentativa 2: buscar os mais recentes e cruzar por ID ou número
             r2 = requests.get(
                 "https://bling.com.br/Api/v3/pedidos/vendas",
                 params={"idLoja": BLING_SHOPIFY_LOJA_ID, "pagina": 1, "limite": 50},
@@ -152,10 +153,10 @@ def _set_bling_transporte_me(order: dict) -> bool:
             )
             all_pedidos = r2.json().get("data", []) if r2.status_code == 200 else []
             pedidos = [p for p in all_pedidos
-                       if str(p.get("numeroLoja", "")) == order_num
+                       if str(p.get("numeroLoja", "")) == shopify_order_id
+                       or str(p.get("numeroLoja", "")) == order_num
                        or str(p.get("numeroPedido", "")) == order_num
                        or str(p.get("numero", "")) == order_num
-                       or str(p.get("numeroExterno", "")) == order_num
                        or str(p.get("numeroExterno", "")) == shopify_order_id]
     except Exception as e:
         print(f"[bling_transporte] {order_name} — erro busca Bling: {e}"); return False
