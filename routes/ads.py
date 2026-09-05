@@ -599,7 +599,7 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
             return f"customers/{customer_id}/adGroupCriteria/{ad_group_id}~{tmp_id}"
 
         def _new_op(ad_grp, status, lg_type, parent_rn=None, bid_micros=None,
-                    pt_level=None, pt_value=None, tmp_id=None):
+                    pt_level=None, pt_value=None, others=False, tmp_id=None):
             op = client.get_type("AdGroupCriterionOperation")
             c  = op.create
             c.ad_group = ad_grp
@@ -609,9 +609,13 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
                 c.listing_group.parent_ad_group_criterion = parent_rn
             if bid_micros is not None:
                 c.cpc_bid_micros = bid_micros
-            if pt_level is not None:
+            if pt_level is not None and pt_value is not None:
                 c.listing_group.case_value.product_type.level = pt_level
                 c.listing_group.case_value.product_type.value = pt_value
+            elif others:
+                # "others" case: acessa case_value.product_type sem setar level/value
+                # envia proto vazio = "others" para o servidor
+                _ = c.listing_group.case_value.product_type
             if tmp_id is not None:
                 c.resource_name = _tmp_rn(tmp_id)
             return op
@@ -650,21 +654,19 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
             linhas_criadas.append({"linha": nome_linha, "bid": bid_reais, "l2_value": nome_linha})
             tmp_id -= 1
 
-        # e) UNIT L2 "others" (dentro de L1 Coloracao Capilar) — case_value level=L2, value="" = others
+        # e) UNIT L2 "others" (dentro de L1 Coloracao Capilar) — proto product_type vazio = others
         ops.append(_new_op(
             ad_group_rn, AGCStatus.ENABLED, LGType.UNIT,
             parent_rn=l1_rn, bid_micros=int(outros_bid * 1_000_000),
-            pt_level=PTLevel.LEVEL2, pt_value="",
-            tmp_id=tmp_id,
+            others=True, tmp_id=tmp_id,
         ))
         tmp_id -= 1
 
-        # f) UNIT L1 "others" (fora de Coloracao Capilar) — case_value level=L1, value="" = others
+        # f) UNIT L1 "others" (fora de Coloracao Capilar) — proto product_type vazio = others
         ops.append(_new_op(
             ad_group_rn, AGCStatus.ENABLED, LGType.UNIT,
             parent_rn=root_rn, bid_micros=int(outros_bid * 1_000_000),
-            pt_level=PTLevel.LEVEL1, pt_value="",
-            tmp_id=tmp_id,
+            others=True, tmp_id=tmp_id,
         ))
 
         # 5) Executar batch único (pai antes dos filhos — ordem mantida acima)
