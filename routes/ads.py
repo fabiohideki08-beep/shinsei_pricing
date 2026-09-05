@@ -592,8 +592,8 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
             ops.append(op)
 
         # b) SUBDIVISION raiz (temporary_id = -1)
-        ProductTypeEnum   = client.enums.ListingGroupTypeEnum.ListingGroupType
-        ProductTypeLvlEnum = client.enums.ProductTypeLevelEnum.ProductTypeLevel
+        ProductTypeEnum    = client.enums.ListingGroupTypeEnum
+        ProductTypeLvlEnum = client.enums.ProductTypeLevelEnum
         # Usar temporary_resource_name para criar referências antes de enviar
         tmp_id_root = -1
         root_tmp_rn = f"customers/{customer_id}/adGroupCriteria/{ad_group_id}~{tmp_id_root}"
@@ -601,7 +601,7 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
         op_root = client.get_type("AdGroupCriterionOperation")
         crit = op_root.create
         crit.ad_group = ad_group_rn
-        crit.status   = client.enums.AdGroupCriterionStatusEnum.AdGroupCriterionStatus.ENABLED
+        crit.status   = client.enums.AdGroupCriterionStatusEnum.ENABLED
         crit.listing_group.type_ = ProductTypeEnum.SUBDIVISION
         # Sem case_value = raiz "Everything"
         crit.resource_name = root_tmp_rn
@@ -617,7 +617,7 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
             op_unit = client.get_type("AdGroupCriterionOperation")
             cu = op_unit.create
             cu.ad_group = ad_group_rn
-            cu.status   = client.enums.AdGroupCriterionStatusEnum.AdGroupCriterionStatus.ENABLED
+            cu.status   = client.enums.AdGroupCriterionStatusEnum.ENABLED
             cu.cpc_bid_micros = bid_micros
             cu.listing_group.type_ = ProductTypeEnum.UNIT
             cu.listing_group.parent_ad_group_criterion = root_tmp_rn
@@ -634,7 +634,7 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
         op_outros = client.get_type("AdGroupCriterionOperation")
         co = op_outros.create
         co.ad_group = ad_group_rn
-        co.status   = client.enums.AdGroupCriterionStatusEnum.AdGroupCriterionStatus.ENABLED
+        co.status   = client.enums.AdGroupCriterionStatusEnum.ENABLED
         co.cpc_bid_micros = int(outros_bid * 1_000_000)
         co.listing_group.type_ = ProductTypeEnum.UNIT
         co.listing_group.parent_ad_group_criterion = root_tmp_rn
