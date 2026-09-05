@@ -574,16 +574,47 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
         if dry_run:
             return {"ok": True, "dry_run": True, "plano": plano}
 
-        # 4) Montar mutações:
-        #    a) Remover TODOS os listing groups existentes
-        #    b) Criar SUBDIVISION raiz (Everything)
-        #    c) Criar UNIT por product_type_l2 com bids configurados
-        #    d) Criar UNIT "__outros__" (Everything else) com bid residual
+        # 4) Montar mutações — estrutura hierárquica correta:
+        #
+        # SUBDIVISION raiz (Everything, sem case_value)  [tmp=-1]
+        # └── SUBDIVISION L1 "Coloracao Capilar"          [tmp=-2]
+        #     ├── UNIT L2 "Igora Zero Amm"  R$1,00        [tmp=-3]
+        #     ├── UNIT L2 "Alfaparf Evolution" R$0,80      [tmp=-4]
+        #     └── UNIT L2 others (sem case_value) R$0,10  [tmp=-5]
+        # └── UNIT L1 others (sem case_value) R$0,10      [tmp=-6]
+        #
+        # A API exige que product_type siga L1→L2 em ordem crescente.
         agcs = client.get_service("AdGroupCriterionService")
-        agc_type = client.get_type("AdGroupCriterionOperation")
-        ops = []
-
+        ops  = []
         ad_group_rn = client.get_service("AdGroupService").ad_group_path(customer_id, ad_group_id)
+
+        LGType   = client.enums.ListingGroupTypeEnum
+        PTLevel  = client.enums.ProductTypeLevelEnum
+        AGCStatus = client.enums.AdGroupCriterionStatusEnum
+
+        outros_bid = bids_config.get("__outros__", 0.10)
+        linhas_criadas = []
+
+        def _tmp_rn(tmp_id):
+            return f"customers/{customer_id}/adGroupCriteria/{ad_group_id}~{tmp_id}"
+
+        def _new_op(ad_grp, status, lg_type, parent_rn=None, bid_micros=None,
+                    pt_level=None, pt_value=None, tmp_id=None):
+            op = client.get_type("AdGroupCriterionOperation")
+            c  = op.create
+            c.ad_group = ad_grp
+            c.status   = status
+            c.listing_group.type_ = lg_type
+            if parent_rn:
+                c.listing_group.parent_ad_group_criterion = parent_rn
+            if bid_micros is not None:
+                c.cpc_bid_micros = bid_micros
+            if pt_level is not None:
+                c.listing_group.case_value.product_type.level = pt_level
+                c.listing_group.case_value.product_type.value = pt_value
+            if tmp_id is not None:
+                c.resource_name = _tmp_rn(tmp_id)
+            return op
 
         # a) Remove todos os LGs atuais
         for row in lg_rows:
@@ -591,63 +622,55 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
             op.remove = row.ad_group_criterion.resource_name
             ops.append(op)
 
-        # b) SUBDIVISION raiz (temporary_id = -1)
-        ProductTypeEnum    = client.enums.ListingGroupTypeEnum
-        ProductTypeLvlEnum = client.enums.ProductTypeLevelEnum
-        # Usar temporary_resource_name para criar referências antes de enviar
-        tmp_id_root = -1
-        root_tmp_rn = f"customers/{customer_id}/adGroupCriteria/{ad_group_id}~{tmp_id_root}"
+        # b) SUBDIVISION raiz (Everything)
+        root_rn = _tmp_rn(-1)
+        ops.append(_new_op(ad_group_rn, AGCStatus.ENABLED, LGType.SUBDIVISION, tmp_id=-1))
 
-        op_root = client.get_type("AdGroupCriterionOperation")
-        crit = op_root.create
-        crit.ad_group = ad_group_rn
-        crit.status   = client.enums.AdGroupCriterionStatusEnum.ENABLED
-        crit.listing_group.type_ = ProductTypeEnum.SUBDIVISION
-        # Sem case_value = raiz "Everything"
-        crit.resource_name = root_tmp_rn
-        ops.append(op_root)
+        # c) SUBDIVISION L1 "Coloracao Capilar"
+        l1_rn = _tmp_rn(-2)
+        ops.append(_new_op(
+            ad_group_rn, AGCStatus.ENABLED, LGType.SUBDIVISION,
+            parent_rn=root_rn,
+            pt_level=PTLevel.LEVEL1, pt_value="Coloracao Capilar",
+            tmp_id=-2,
+        ))
 
-        # c) UNIT por product_type_l2
-        tmp_id = -2
-        linhas_criadas = []
+        # d) UNITs L2 por linha
+        tmp_id = -3
         for nome_linha, bid_reais in bids_config.items():
             if nome_linha == "__outros__":
                 continue
             bid_micros = int(bid_reais * 1_000_000)
-            op_unit = client.get_type("AdGroupCriterionOperation")
-            cu = op_unit.create
-            cu.ad_group = ad_group_rn
-            cu.status   = client.enums.AdGroupCriterionStatusEnum.ENABLED
-            cu.cpc_bid_micros = bid_micros
-            cu.listing_group.type_ = ProductTypeEnum.UNIT
-            cu.listing_group.parent_ad_group_criterion = root_tmp_rn
-            # product_type LEVEL2: valor = "Coloracao Capilar > <Linha>"
-            cu.listing_group.case_value.product_type.level = ProductTypeLvlEnum.LEVEL2
-            cu.listing_group.case_value.product_type.value = f"Coloracao Capilar > {nome_linha}"
-            cu.resource_name = f"customers/{customer_id}/adGroupCriteria/{ad_group_id}~{tmp_id}"
-            ops.append(op_unit)
-            linhas_criadas.append({"linha": nome_linha, "bid": bid_reais, "product_type_value": f"Coloracao Capilar > {nome_linha}"})
+            ops.append(_new_op(
+                ad_group_rn, AGCStatus.ENABLED, LGType.UNIT,
+                parent_rn=l1_rn, bid_micros=bid_micros,
+                pt_level=PTLevel.LEVEL2, pt_value=nome_linha,
+                tmp_id=tmp_id,
+            ))
+            linhas_criadas.append({"linha": nome_linha, "bid": bid_reais, "l2_value": nome_linha})
             tmp_id -= 1
 
-        # d) UNIT "Everything else" (sem case_value) — bid residual
-        outros_bid = bids_config.get("__outros__", 0.10)
-        op_outros = client.get_type("AdGroupCriterionOperation")
-        co = op_outros.create
-        co.ad_group = ad_group_rn
-        co.status   = client.enums.AdGroupCriterionStatusEnum.ENABLED
-        co.cpc_bid_micros = int(outros_bid * 1_000_000)
-        co.listing_group.type_ = ProductTypeEnum.UNIT
-        co.listing_group.parent_ad_group_criterion = root_tmp_rn
-        # Sem case_value = Everything else
-        ops.append(op_outros)
+        # e) UNIT L2 "others" (dentro de L1 Coloracao Capilar)
+        ops.append(_new_op(
+            ad_group_rn, AGCStatus.ENABLED, LGType.UNIT,
+            parent_rn=l1_rn, bid_micros=int(outros_bid * 1_000_000),
+            tmp_id=tmp_id,
+        ))
+        tmp_id -= 1
 
-        # 5) Executar mutações em batch único
+        # f) UNIT L1 "others" (fora de Coloracao Capilar — bid baixo)
+        ops.append(_new_op(
+            ad_group_rn, AGCStatus.ENABLED, LGType.UNIT,
+            parent_rn=root_rn, bid_micros=int(outros_bid * 1_000_000),
+            tmp_id=tmp_id,
+        ))
+
+        # 5) Executar batch único (pai antes dos filhos — ordem mantida acima)
         response = agcs.mutate_ad_group_criteria(
             customer_id=customer_id,
             operations=ops,
         )
 
-        criados = [r.resource_name for r in response.results if r.resource_name and "~-" not in r.resource_name]
         return {
             "ok":            True,
             "removidos":     len(lg_rows),
