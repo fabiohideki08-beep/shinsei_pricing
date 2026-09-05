@@ -650,18 +650,20 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
             linhas_criadas.append({"linha": nome_linha, "bid": bid_reais, "l2_value": nome_linha})
             tmp_id -= 1
 
-        # e) UNIT L2 "others" (dentro de L1 Coloracao Capilar)
+        # e) UNIT L2 "others" (dentro de L1 Coloracao Capilar) — case_value level=L2, value="" = others
         ops.append(_new_op(
             ad_group_rn, AGCStatus.ENABLED, LGType.UNIT,
             parent_rn=l1_rn, bid_micros=int(outros_bid * 1_000_000),
+            pt_level=PTLevel.LEVEL2, pt_value="",
             tmp_id=tmp_id,
         ))
         tmp_id -= 1
 
-        # f) UNIT L1 "others" (fora de Coloracao Capilar — bid baixo)
+        # f) UNIT L1 "others" (fora de Coloracao Capilar) — case_value level=L1, value="" = others
         ops.append(_new_op(
             ad_group_rn, AGCStatus.ENABLED, LGType.UNIT,
             parent_rn=root_rn, bid_micros=int(outros_bid * 1_000_000),
+            pt_level=PTLevel.LEVEL1, pt_value="",
             tmp_id=tmp_id,
         ))
 
