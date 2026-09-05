@@ -464,6 +464,7 @@ def ads_listing_groups(campaign_id: str):
         # Produtos Shopping desta campanha (últimos 30 dias)
         rows2 = _gaql(client, customer_id, f"""
             SELECT
+                campaign.id,
                 segments.product_title,
                 segments.product_item_id,
                 metrics.impressions,
@@ -518,5 +519,168 @@ def ads_set_maximize_clicks(campaign_id: str, cpc_max_centavos: int = 0):
             operations=[op],
         )
         return {"ok": True, "resource": response.results[0].resource_name, "msg": "Lance alterado para Maximizar Cliques"}
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+
+# ── Simulador Google ADS ──────────────────────────────────────────────────────
+
+@router.get("/simulador", response_class=HTMLResponse)
+def ads_simulador_page():
+    """Serve o HTML do simulador de ADS."""
+    html_path = BASE_DIR / "pages" / "simulador_google_ads.html"
+    if html_path.exists():
+        return HTMLResponse(html_path.read_text(encoding="utf-8"))
+    return HTMLResponse("<h2>Simulador ADS não encontrado</h2>", status_code=404)
+
+
+@router.get("/buscar-produto")
+def ads_buscar_produto(q: str = "", limit: int = 10):
+    """Busca produto no Bling por SKU ou título — usado pelo simulador ADS."""
+    import sys
+    sys.path.insert(0, str(BASE_DIR))
+    try:
+        from bling_client import BlingClient
+        client = BlingClient()
+        # Tenta por código (SKU) primeiro
+        resultados = []
+        if q:
+            r = client._get("/produtos", params={"codigo": q, "limite": limit, "ativo": "S"})
+            data = r.get("data", []) if isinstance(r, dict) else []
+            if not data:
+                # Fallback: busca por nome
+                r2 = client._get("/produtos", params={"nome": q, "limite": limit, "ativo": "S"})
+                data = r2.get("data", []) if isinstance(r2, dict) else []
+            for p in data:
+                resultados.append({
+                    "id": p.get("id"),
+                    "sku": p.get("codigo", ""),
+                    "nome": p.get("nome", ""),
+                    "preco": float(p.get("preco", 0) or 0),
+                    "custo": float((p.get("custos") or {}).get("precoCusto", 0) or 0),
+                    "estoque": p.get("estoque", {}).get("saldoVirtualTotal", 0) if isinstance(p.get("estoque"), dict) else 0,
+                })
+        return {"ok": True, "produtos": resultados}
+    except Exception as e:
+        return {"ok": False, "erro": str(e), "produtos": []}
+
+
+@router.post("/simular")
+def ads_simular(payload: dict):
+    """
+    Calcula projeções de performance de ADS dado produto e parâmetros.
+    Inputs: sku, preco_produto, custo_produto, budget_tipo (nominal|percentual),
+            budget_valor, desconto_pct, meta_receita_tipo, meta_receita_valor,
+            meta_lucro_tipo, meta_lucro_valor, cpc_estimado, periodo_dias,
+            conv_rate_pct, ctr_pct
+    Outputs: impressoes, cliques, conversoes, receita, lucro, roas, is_estimado
+    """
+    from fastapi import Request
+    import math
+
+    try:
+        preco_original  = float(payload.get("preco_produto", 0) or 0)
+        custo           = float(payload.get("custo_produto", 0) or 0)
+        desconto_pct    = float(payload.get("desconto_pct", 0) or 0)
+        cpc             = float(payload.get("cpc_estimado", 0.42) or 0.42)
+        periodo_dias    = int(payload.get("periodo_dias", 30) or 30)
+        conv_rate_pct   = float(payload.get("conv_rate_pct", 1.0) or 1.0)
+        ctr_pct         = float(payload.get("ctr_pct", 1.2) or 1.2)
+
+        # Budget
+        budget_tipo  = payload.get("budget_tipo", "nominal")
+        budget_valor = float(payload.get("budget_valor", 0) or 0)
+        if budget_tipo == "percentual" and preco_original > 0:
+            # % da receita alvo
+            meta_r_val = float(payload.get("meta_receita_valor", 0) or 0)
+            budget_dia = (budget_valor / 100) * meta_r_val / periodo_dias if meta_r_val else budget_valor
+        else:
+            budget_dia = budget_valor / periodo_dias if periodo_dias else 0
+
+        budget_total = budget_dia * periodo_dias
+
+        # Preço com desconto
+        preco_com_desconto = preco_original * (1 - desconto_pct / 100)
+        ticket = preco_com_desconto if preco_com_desconto > 0 else preco_original
+
+        # Projeções
+        cliques     = budget_total / cpc if cpc > 0 else 0
+        impressoes  = cliques / (ctr_pct / 100) if ctr_pct > 0 else 0
+        conversoes  = cliques * (conv_rate_pct / 100)
+        receita     = conversoes * ticket
+        roas        = receita / budget_total if budget_total > 0 else 0
+
+        # Lucro = receita - custo total - budget
+        custo_total = conversoes * custo if custo > 0 else 0
+        lucro_bruto = receita - custo_total - budget_total
+
+        # IS estimado (benchmark: mercado beleza ~1.2M impr/mês)
+        is_estimado = min((impressoes / 30) / 40_000 * 100, 100)  # 40k impr/dia = 100% IS
+
+        # Meta receita check
+        meta_receita_val = float(payload.get("meta_receita_valor", 0) or 0)
+        meta_receita_tipo = payload.get("meta_receita_tipo", "nominal")
+        meta_receita_atingida = False
+        if meta_receita_val and meta_receita_tipo == "nominal":
+            meta_receita_atingida = receita >= meta_receita_val
+        elif meta_receita_val and meta_receita_tipo == "percentual" and preco_original > 0:
+            meta_receita_atingida = (receita / (preco_original * periodo_dias)) * 100 >= meta_receita_val
+
+        # Meta lucro check
+        meta_lucro_val = float(payload.get("meta_lucro_valor", 0) or 0)
+        meta_lucro_tipo = payload.get("meta_lucro_tipo", "nominal")
+        meta_lucro_atingida = False
+        if meta_lucro_val and meta_lucro_tipo == "nominal":
+            meta_lucro_atingida = lucro_bruto >= meta_lucro_val
+        elif meta_lucro_val and meta_lucro_tipo == "percentual" and receita > 0:
+            meta_lucro_atingida = (lucro_bruto / receita) * 100 >= meta_lucro_val
+
+        # Cenários de desconto
+        cenarios = []
+        for d in [0, 5, 10, 15, 20, 25, 30]:
+            p = preco_original * (1 - d / 100)
+            c = cliques
+            conv_c = c * (conv_rate_pct / 100)
+            rec_c = conv_c * p
+            roas_c = rec_c / budget_total if budget_total > 0 else 0
+            lucro_c = rec_c - (conv_c * custo if custo > 0 else 0) - budget_total
+            cenarios.append({
+                "desconto": d,
+                "preco": round(p, 2),
+                "roas": round(roas_c, 2),
+                "receita": round(rec_c, 2),
+                "lucro": round(lucro_c, 2),
+                "conversoes": round(conv_c, 1),
+            })
+
+        return {
+            "ok": True,
+            "inputs": {
+                "ticket": round(ticket, 2),
+                "budget_dia": round(budget_dia, 2),
+                "budget_total": round(budget_total, 2),
+                "cpc": cpc,
+                "conv_rate_pct": conv_rate_pct,
+                "ctr_pct": ctr_pct,
+                "periodo_dias": periodo_dias,
+            },
+            "outputs": {
+                "impressoes": round(impressoes),
+                "cliques": round(cliques),
+                "conversoes": round(conversoes, 1),
+                "receita": round(receita, 2),
+                "lucro_bruto": round(lucro_bruto, 2),
+                "roas": round(roas, 2),
+                "is_estimado": round(is_estimado, 1),
+                "custo_por_conversao": round(budget_total / conversoes, 2) if conversoes > 0 else 0,
+            },
+            "metas": {
+                "receita_atingida": meta_receita_atingida,
+                "lucro_atingido": meta_lucro_atingida,
+                "roas_20x_atingido": roas >= 20,
+                "roas_breakeven": round(20 * budget_total, 2),
+            },
+            "cenarios_desconto": cenarios,
+        }
     except Exception as e:
         return {"ok": False, "erro": str(e)}

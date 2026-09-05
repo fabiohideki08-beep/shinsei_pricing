@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Simulador Google ADS — Shinsei</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;
+  --line:#263458;--accent:#4f8cff;--danger:#ef4444;--ok:#16a34a;--warn:#f5b301;
+  --gold:#ffd700;--purple:#a78bfa;
+}
+@media(prefers-color-scheme:light){:root:not([data-theme=dark]){
+  --bg:#f0f4ff;--card:#fff;--card2:#e8eeff;--text:#0b1020;--muted:#4a5680;
+  --line:#c8d3f0;--accent:#2563eb;
+}}
+[data-theme=light]{--bg:#f0f4ff;--card:#fff;--card2:#e8eeff;--text:#0b1020;--muted:#4a5680;--line:#c8d3f0;--accent:#2563eb;}
+[data-theme=dark]{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;}
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.wrap{max-width:1400px;margin:0 auto;padding:20px 16px}
+
+/* TOPBAR */
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;
+  background:var(--card);border:1px solid var(--line);border-radius:18px;
+  padding:14px 18px;margin-bottom:20px;position:sticky;top:12px;z-index:50}
+.brand h1{font-size:22px;font-weight:800}
+.brand p{color:var(--muted);font-size:13px;margin-top:3px}
+.topbar-right{display:flex;gap:10px;align-items:center}
+.btn{border:none;background:var(--accent);color:#fff;padding:10px 14px;border-radius:11px;
+  font-weight:700;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
+.btn.sec{background:transparent;border:1px solid var(--line);color:var(--text)}
+.btn.ok{background:var(--ok)}
+.btn.sm{padding:7px 10px;font-size:12px;border-radius:9px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* LAYOUT */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:0}
+.card-title{font-size:16px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+
+/* SEARCH */
+.search-row{display:flex;gap:10px;align-items:stretch;margin-bottom:12px}
+.search-row input{flex:1;padding:11px 13px;border-radius:12px;border:1px solid var(--line);
+  background:var(--card2);color:var(--text);font-size:14px;outline:none}
+.search-row input:focus{border-color:var(--accent)}
+.produto-info{padding:12px 14px;background:var(--card2);border:1px solid var(--line);border-radius:12px;font-size:13px;display:none}
+.produto-info.visible{display:block}
+.pi-nome{font-weight:700;font-size:15px;margin-bottom:6px}
+.pi-row{display:flex;gap:20px;flex-wrap:wrap}
+.pi-item{color:var(--muted);font-size:12px} .pi-item strong{color:var(--text);font-size:14px;display:block}
+
+/* INPUTS */
+.field{display:flex;flex-direction:column;gap:5px}
+label{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.3px}
+input[type=number],input[type=text],select{
+  width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);
+  background:var(--card2);color:var(--text);font-size:14px;outline:none}
+input:focus,select:focus{border-color:var(--accent)}
+.toggle-row{display:flex;gap:6px}
+.toggle-btn{flex:1;padding:8px 6px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;
+  border:1px solid var(--line);background:var(--card2);color:var(--muted);transition:all .15s}
+.toggle-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* METRIC TILES */
+.metric{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:14px}
+.metric .lbl{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+.metric .val{font-size:26px;font-weight:800;margin-top:6px;font-variant-numeric:tabular-nums}
+.metric .sub{font-size:12px;color:var(--muted);margin-top:3px}
+.metric.ok .val{color:#4ade80}
+.metric.warn .val{color:var(--warn)}
+.metric.danger .val{color:var(--danger)}
+.metric.gold .val{color:var(--gold)}
+
+/* ROAS BADGE */
+.roas-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;font-weight:800;font-size:18px;margin-top:4px}
+.roas-badge.great{background:rgba(74,222,128,.15);color:#4ade80;border:1px solid rgba(74,222,128,.3)}
+.roas-badge.ok{background:rgba(79,140,255,.15);color:#7ab4ff;border:1px solid rgba(79,140,255,.3)}
+.roas-badge.bad{background:rgba(239,68,68,.12);color:#f87171;border:1px solid rgba(239,68,68,.3)}
+
+/* META STATUS */
+.meta-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;
+  border:1px solid var(--line);font-size:13px;background:var(--card2)}
+.meta-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.meta-dot.ok{background:#4ade80}
+.meta-dot.bad{background:#f87171}
+
+/* CENÁRIOS TABLE */
+.tbl-wrap{overflow-x:auto;border-radius:12px;border:1px solid var(--line)}
+table{width:100%;border-collapse:collapse;min-width:560px}
+th{background:var(--card2);padding:10px 12px;font-size:12px;color:var(--muted);font-weight:700;text-align:left;border-bottom:1px solid var(--line)}
+td{padding:10px 12px;font-size:13px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+tr.highlight td{background:rgba(79,140,255,.07)}
+tr.current td{background:rgba(255,215,0,.06);font-weight:700}
+.tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;margin-left:4px}
+.tag.ok{background:rgba(74,222,128,.2);color:#4ade80}
+.tag.warn{background:rgba(245,179,1,.2);color:var(--warn)}
+.tag.bad{background:rgba(239,68,68,.2);color:#f87171}
+
+/* LOADING */
+.loading{display:none;text-align:center;padding:30px;color:var(--muted);font-size:14px}
+.loading.show{display:block}
+
+/* EMPTY STATE */
+.empty{text-align:center;padding:40px;color:var(--muted);font-size:14px;border:1px dashed var(--line);border-radius:14px}
+
+/* CHART */
+.chart-box{position:relative;height:240px}
+
+.sep{height:18px}
+
+@media(max-width:1100px){.grid4{grid-template-columns:1fr 1fr}}
+@media(max-width:760px){.grid2,.grid3,.grid4{grid-template-columns:1fr}.topbar{flex-direction:column;align-items:flex-start}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="brand">
+      <h1>📊 Simulador Google ADS</h1>
+      <p>Projete ROAS, impressões, cliques e conversões por produto com dados reais da conta</p>
+    </div>
+    <div class="topbar-right">
+      <a class="btn sec" href="/">Início</a>
+      <a class="btn sec" href="/simulador">💰 Pricing</a>
+    </div>
+  </div>
+
+  <div class="grid2" style="align-items:start;gap:20px">
+
+    <!-- COLUNA ESQUERDA: INPUTS -->
+    <div style="display:flex;flex-direction:column;gap:16px">
+
+      <!-- BUSCA -->
+      <div class="card">
+        <div class="card-title">🔍 1. Produto</div>
+        <div class="search-row">
+          <input id="q" type="text" placeholder="SKU ou nome do produto..." onkeydown="if(event.key==='Enter')buscar()"/>
+          <button class="btn" onclick="buscar()">Buscar</button>
+        </div>
+        <div id="loading-busca" class="loading">Buscando...</div>
+        <div id="lista-produtos" style="display:none;margin-bottom:10px">
+          <select id="select-produto" style="width:100%" size="4" onchange="selecionarProduto()" title="Selecione um produto"></select>
+        </div>
+        <div id="produto-info" class="produto-info">
+          <div class="pi-nome" id="pi-nome">—</div>
+          <div class="pi-row">
+            <div class="pi-item"><span>SKU</span><strong id="pi-sku">—</strong></div>
+            <div class="pi-item"><span>Preço</span><strong id="pi-preco">—</strong></div>
+            <div class="pi-item"><span>Custo</span><strong id="pi-custo">—</strong></div>
+            <div class="pi-item"><span>Estoque</span><strong id="pi-estoque">—</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BUDGET & DESCONTO -->
+      <div class="card">
+        <div class="card-title">💰 2. Budget & Desconto</div>
+        <div class="grid2" style="gap:12px;margin-bottom:12px">
+          <div class="field">
+            <label>Tipo de orçamento</label>
+            <div class="toggle-row">
+              <button class="toggle-btn active" id="t-budget-nominal" onclick="setBudgetTipo('nominal')">R$ nominal</button>
+              <button class="toggle-btn" id="t-budget-percentual" onclick="setBudgetTipo('percentual')">% meta</button>
+            </div>
+          </div>
+          <div class="field">
+            <label id="lbl-budget">Orçamento total (R$)</label>
+            <input type="number" id="budget_valor" value="900" min="0" step="10"/>
+          </div>
+        </div>
+        <div class="grid2" style="gap:12px">
+          <div class="field">
+            <label>Período (dias)</label>
+            <input type="number" id="periodo_dias" value="30" min="1" max="365"/>
+          </div>
+          <div class="field">
+            <label>Desconto sobre preço (%)</label>
+            <input type="number" id="desconto_pct" value="0" min="0" max="80" step="1"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- METAS -->
+      <div class="card">
+        <div class="card-title">🎯 3. Metas</div>
+        <div class="grid2" style="gap:12px;margin-bottom:12px">
+          <div class="field">
+            <label>Meta de receita</label>
+            <div class="toggle-row">
+              <button class="toggle-btn active" id="t-receita-nominal" onclick="setReceitaTipo('nominal')">R$ nominal</button>
+              <button class="toggle-btn" id="t-receita-percentual" onclick="setReceitaTipo('percentual')">% crescimento</button>
+            </div>
+          </div>
+          <div class="field">
+            <label id="lbl-receita">Meta receita (R$)</label>
+            <input type="number" id="meta_receita_valor" value="18000" min="0" step="100"/>
+          </div>
+        </div>
+        <div class="grid2" style="gap:12px">
+          <div class="field">
+            <label>Meta de lucro</label>
+            <div class="toggle-row">
+              <button class="toggle-btn active" id="t-lucro-nominal" onclick="setLucroTipo('nominal')">R$ nominal</button>
+              <button class="toggle-btn" id="t-lucro-percentual" onclick="setLucroTipo('percentual')">% margem</button>
+            </div>
+          </div>
+          <div class="field">
+            <label id="lbl-lucro">Meta lucro (R$)</label>
+            <input type="number" id="meta_lucro_valor" value="5000" min="0" step="100"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- AVANÇADO -->
+      <div class="card">
+        <div class="card-title">⚙️ 4. Parâmetros avançados
+          <span style="font-size:11px;font-weight:400;color:var(--muted)">(benchmarks da sua conta)</span>
+        </div>
+        <div class="grid3" style="gap:12px">
+          <div class="field">
+            <label>CPC estimado (R$)</label>
+            <input type="number" id="cpc_estimado" value="0.42" step="0.01" min="0.05"/>
+          </div>
+          <div class="field">
+            <label>Taxa de conv. (%)</label>
+            <input type="number" id="conv_rate_pct" value="1.0" step="0.1" min="0.1"/>
+          </div>
+          <div class="field">
+            <label>CTR estimado (%)</label>
+            <input type="number" id="ctr_pct" value="1.2" step="0.1" min="0.1"/>
+          </div>
+        </div>
+        <div style="margin-top:10px;padding:10px;background:var(--card2);border-radius:10px;font-size:12px;color:var(--muted)">
+          📌 Dados reais da conta (60d): CPC médio R$0,42 · Conv rate 0,27% (atual) / 1,0%+ (otimizado) · CTR 1,2%
+        </div>
+      </div>
+
+      <button class="btn ok" style="padding:14px;font-size:15px" onclick="simular()">▶ Calcular projeção</button>
+    </div>
+
+    <!-- COLUNA DIREITA: OUTPUTS -->
+    <div style="display:flex;flex-direction:column;gap:16px">
+
+      <div id="outputs-empty" class="empty">
+        Preencha os parâmetros e clique em <strong>Calcular projeção</strong>
+      </div>
+
+      <div id="outputs-section" style="display:none;flex-direction:column;gap:16px">
+
+        <!-- KPIs principais -->
+        <div class="card">
+          <div class="card-title">📈 Resultado projetado</div>
+          <div id="roas-display" style="margin-bottom:14px">
+            <span style="font-size:13px;color:var(--muted)">ROAS projetado</span>
+            <div id="roas-badge" class="roas-badge ok">— x</div>
+          </div>
+          <div class="grid4">
+            <div class="metric" id="m-impressoes"><div class="lbl">Impressões</div><div class="val" id="v-impressoes">—</div><div class="sub" id="s-impressoes"></div></div>
+            <div class="metric" id="m-cliques"><div class="lbl">Cliques</div><div class="val" id="v-cliques">—</div><div class="sub" id="s-cliques"></div></div>
+            <div class="metric" id="m-conversoes"><div class="lbl">Conversões</div><div class="val" id="v-conversoes">—</div><div class="sub" id="s-conversoes"></div></div>
+            <div class="metric" id="m-cpa"><div class="lbl">Custo/conv.</div><div class="val" id="v-cpa">—</div><div class="sub">por pedido</div></div>
+          </div>
+          <div class="grid2" style="gap:12px;margin-top:12px">
+            <div class="metric gold" id="m-receita"><div class="lbl">Receita projetada</div><div class="val" id="v-receita">—</div><div class="sub" id="s-receita"></div></div>
+            <div class="metric" id="m-lucro"><div class="lbl">Lucro bruto</div><div class="val" id="v-lucro">—</div><div class="sub" id="s-lucro"></div></div>
+          </div>
+        </div>
+
+        <!-- Metas -->
+        <div class="card">
+          <div class="card-title">🎯 Status das metas</div>
+          <div style="display:flex;flex-direction:column;gap:8px" id="metas-list"></div>
+        </div>
+
+        <!-- Gráfico ROAS por desconto -->
+        <div class="card">
+          <div class="card-title">📊 ROAS × Desconto</div>
+          <div class="chart-box"><canvas id="chartRoas"></canvas></div>
+        </div>
+
+        <!-- Cenários de desconto -->
+        <div class="card">
+          <div class="card-title">🧪 Cenários de desconto</div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr>
+                <th>Desconto</th><th>Preço</th><th>ROAS</th>
+                <th>Receita</th><th>Lucro</th><th>Pedidos</th>
+              </tr></thead>
+              <tbody id="tbl-cenarios"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Budget diário vs mensal -->
+        <div class="card">
+          <div class="card-title">💼 Resumo de budget</div>
+          <div class="grid4" id="budget-summary"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const BASE = '';
+let produtoSelecionado = null;
+let chartRoas = null;
+let budgetTipo = 'nominal';
+let receitaTipo = 'nominal';
+let lucroTipo = 'nominal';
+
+function setBudgetTipo(tipo) {
+  budgetTipo = tipo;
+  document.getElementById('t-budget-nominal').classList.toggle('active', tipo === 'nominal');
+  document.getElementById('t-budget-percentual').classList.toggle('active', tipo === 'percentual');
+  document.getElementById('lbl-budget').textContent = tipo === 'nominal' ? 'Orçamento total (R$)' : 'Budget (% da meta receita)';
+}
+function setReceitaTipo(tipo) {
+  receitaTipo = tipo;
+  document.getElementById('t-receita-nominal').classList.toggle('active', tipo === 'nominal');
+  document.getElementById('t-receita-percentual').classList.toggle('active', tipo === 'percentual');
+  document.getElementById('lbl-receita').textContent = tipo === 'nominal' ? 'Meta receita (R$)' : 'Crescimento meta (%)';
+}
+function setLucroTipo(tipo) {
+  lucroTipo = tipo;
+  document.getElementById('t-lucro-nominal').classList.toggle('active', tipo === 'nominal');
+  document.getElementById('t-lucro-percentual').classList.toggle('active', tipo === 'percentual');
+  document.getElementById('lbl-lucro').textContent = tipo === 'nominal' ? 'Meta lucro (R$)' : 'Margem alvo (%)';
+}
+
+async function buscar() {
+  const q = document.getElementById('q').value.trim();
+  if (!q) return;
+  document.getElementById('loading-busca').classList.add('show');
+  document.getElementById('lista-produtos').style.display = 'none';
+  document.getElementById('produto-info').classList.remove('visible');
+  produtoSelecionado = null;
+
+  const r = await fetch(`${BASE}/ads/buscar-produto?q=${encodeURIComponent(q)}&limit=10`);
+  const data = await r.json();
+  document.getElementById('loading-busca').classList.remove('show');
+
+  if (!data.ok || !data.produtos?.length) {
+    alert('Produto não encontrado. Tente outro SKU ou nome.');
+    return;
+  }
+
+  const sel = document.getElementById('select-produto');
+  sel.innerHTML = '';
+  data.produtos.forEach((p, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `${p.sku ? p.sku + ' — ' : ''}${p.nome} (R$${p.preco.toFixed(2)})`;
+    opt._prod = p;
+    sel.appendChild(opt);
+  });
+  sel._produtos = data.produtos;
+  document.getElementById('lista-produtos').style.display = data.produtos.length > 1 ? 'block' : 'none';
+  if (data.produtos.length === 1) {
+    selecionarProdutoObj(data.produtos[0]);
+  } else {
+    sel.selectedIndex = 0;
+    selecionarProdutoObj(data.produtos[0]);
+  }
+}
+
+function selecionarProduto() {
+  const sel = document.getElementById('select-produto');
+  const idx = parseInt(sel.value);
+  selecionarProdutoObj(sel._produtos[idx]);
+}
+
+function selecionarProdutoObj(p) {
+  produtoSelecionado = p;
+  document.getElementById('pi-nome').textContent = p.nome;
+  document.getElementById('pi-sku').textContent = p.sku || '—';
+  document.getElementById('pi-preco').textContent = 'R$' + p.preco.toFixed(2);
+  document.getElementById('pi-custo').textContent = p.custo > 0 ? 'R$' + p.custo.toFixed(2) : '—';
+  document.getElementById('pi-estoque').textContent = p.estoque != null ? p.estoque : '—';
+  document.getElementById('produto-info').classList.add('visible');
+}
+
+async function simular() {
+  if (!produtoSelecionado && parseFloat(document.getElementById('cpc_estimado').value) <= 0) {
+    alert('Selecione um produto ou configure os parâmetros.');
+    return;
+  }
+
+  const payload = {
+    preco_produto: produtoSelecionado?.preco || 0,
+    custo_produto: produtoSelecionado?.custo || 0,
+    budget_tipo: budgetTipo,
+    budget_valor: parseFloat(document.getElementById('budget_valor').value) || 0,
+    desconto_pct: parseFloat(document.getElementById('desconto_pct').value) || 0,
+    meta_receita_tipo: receitaTipo,
+    meta_receita_valor: parseFloat(document.getElementById('meta_receita_valor').value) || 0,
+    meta_lucro_tipo: lucroTipo,
+    meta_lucro_valor: parseFloat(document.getElementById('meta_lucro_valor').value) || 0,
+    cpc_estimado: parseFloat(document.getElementById('cpc_estimado').value) || 0.42,
+    periodo_dias: parseInt(document.getElementById('periodo_dias').value) || 30,
+    conv_rate_pct: parseFloat(document.getElementById('conv_rate_pct').value) || 1.0,
+    ctr_pct: parseFloat(document.getElementById('ctr_pct').value) || 1.2,
+  };
+
+  const r = await fetch(`${BASE}/ads/simular`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload),
+  });
+  const data = await r.json();
+  if (!data.ok) { alert('Erro: ' + data.erro); return; }
+  renderOutputs(data, payload);
+}
+
+function fmt(n) { return (n||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function fmtInt(n) { return Math.round(n||0).toLocaleString('pt-BR'); }
+
+function renderOutputs(data, payload) {
+  const o = data.outputs;
+  const i = data.inputs;
+  const m = data.metas;
+  const roas = o.roas;
+
+  // ROAS badge
+  const badge = document.getElementById('roas-badge');
+  badge.textContent = roas.toFixed(1) + 'x';
+  badge.className = 'roas-badge ' + (roas >= 20 ? 'great' : roas >= 5 ? 'ok' : 'bad');
+
+  // Métricas
+  document.getElementById('v-impressoes').textContent = fmtInt(o.impressoes);
+  document.getElementById('s-impressoes').textContent = `IS est. ${o.is_estimado}%`;
+  document.getElementById('v-cliques').textContent = fmtInt(o.cliques);
+  document.getElementById('s-cliques').textContent = `CTR ${i.ctr_pct}%`;
+  document.getElementById('v-conversoes').textContent = fmtInt(o.conversoes);
+  document.getElementById('s-conversoes').textContent = `Conv rate ${i.conv_rate_pct}%`;
+  document.getElementById('v-cpa').textContent = 'R$' + fmt(o.custo_por_conversao);
+
+  const recEl = document.getElementById('m-receita');
+  document.getElementById('v-receita').textContent = 'R$' + fmt(o.receita);
+  document.getElementById('s-receita').textContent = `R$${fmt(i.budget_total)} investido · ROAS ${roas.toFixed(1)}x`;
+
+  const lucEl = document.getElementById('m-lucro');
+  const lucro = o.lucro_bruto;
+  document.getElementById('v-lucro').textContent = 'R$' + fmt(lucro);
+  lucEl.className = 'metric ' + (lucro >= 0 ? 'ok' : 'danger');
+
+  // Metas
+  const mLst = document.getElementById('metas-list');
+  const roas20b = m.roas_breakeven;
+  mLst.innerHTML = [
+    {ok: m.roas_20x_atingido, txt: `ROAS ≥ 20x (breakeven 5% verba) — projetado ${roas.toFixed(1)}x`, sub: m.roas_20x_atingido ? '✅ Sustentável' : `Receita necessária: R$${fmt(roas20b)}`},
+    {ok: m.receita_atingida, txt: `Meta de receita — projetada R$${fmt(o.receita)}`, sub: m.receita_atingida ? '✅ Meta atingida' : '⚠ Abaixo da meta'},
+    {ok: m.lucro_atingido, txt: `Meta de lucro — projetado R$${fmt(lucro)}`, sub: m.lucro_atingido ? '✅ Meta atingida' : '⚠ Abaixo da meta'},
+  ].map(m => `<div class="meta-row"><div class="meta-dot ${m.ok ? 'ok' : 'bad'}"></div><div><div style="font-weight:600">${m.txt}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${m.sub}</div></div></div>`).join('');
+
+  // Gráfico ROAS x desconto
+  const cenarios = data.cenarios_desconto;
+  const labels = cenarios.map(c => c.desconto + '%');
+  const roasVals = cenarios.map(c => c.roas);
+  const recVals = cenarios.map(c => c.receita);
+  const ctx = document.getElementById('chartRoas').getContext('2d');
+  if (chartRoas) chartRoas.destroy();
+  chartRoas = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'ROAS',
+          data: roasVals,
+          backgroundColor: roasVals.map(r => r >= 20 ? 'rgba(74,222,128,.7)' : r >= 5 ? 'rgba(79,140,255,.6)' : 'rgba(239,68,68,.5)'),
+          borderRadius: 6,
+          yAxisID: 'y',
+        },
+        {
+          label: 'Receita (R$)',
+          data: recVals,
+          type: 'line',
+          borderColor: '#ffd700',
+          backgroundColor: 'rgba(255,215,0,.1)',
+          tension: 0.3,
+          yAxisID: 'y2',
+          pointBackgroundColor: '#ffd700',
+          pointRadius: 5,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {legend: {labels: {color: '#9fb0d9', font: {size: 11}}}},
+      scales: {
+        x: {ticks: {color: '#9fb0d9'}, grid: {color: 'rgba(38,52,88,.5)'}},
+        y: {ticks: {color: '#9fb0d9', callback: v => v.toFixed(0) + 'x'}, grid: {color: 'rgba(38,52,88,.5)'}, position: 'left', title: {display: true, text: 'ROAS', color: '#9fb0d9'}},
+        y2: {ticks: {color: '#ffd700', callback: v => 'R$' + (v/1000).toFixed(0) + 'k'}, grid: {display: false}, position: 'right', title: {display: true, text: 'Receita', color: '#ffd700'}},
+      },
+    },
+  });
+
+  // Linha horizontal ROAS 20x
+  chartRoas.options.plugins.annotation = {};  // não usa annotation plugin
+
+  // Tabela cenários
+  const tbody = document.getElementById('tbl-cenarios');
+  const descAtual = parseFloat(document.getElementById('desconto_pct').value) || 0;
+  tbody.innerHTML = cenarios.map(c => {
+    const isCurrent = c.desconto === descAtual;
+    const cls = isCurrent ? 'current' : (c.roas >= 20 ? 'highlight' : '');
+    const tag = c.roas >= 20 ? '<span class="tag ok">20x ✓</span>' : c.roas >= 10 ? '<span class="tag warn">Crescendo</span>' : '<span class="tag bad">Abaixo</span>';
+    return `<tr class="${cls}">
+      <td>${c.desconto}%${isCurrent ? ' <span class="tag ok">atual</span>' : ''}</td>
+      <td>R$${fmt(c.preco)}</td>
+      <td>${c.roas.toFixed(1)}x${tag}</td>
+      <td>R$${fmt(c.receita)}</td>
+      <td style="color:${c.lucro >= 0 ? '#4ade80' : '#f87171'}">R$${fmt(c.lucro)}</td>
+      <td>${Math.round(c.conversoes)}</td>
+    </tr>`;
+  }).join('');
+
+  // Budget summary
+  document.getElementById('budget-summary').innerHTML = `
+    <div class="metric"><div class="lbl">Budget/dia</div><div class="val" style="font-size:20px">R$${fmt(i.budget_dia)}</div></div>
+    <div class="metric"><div class="lbl">Budget total</div><div class="val" style="font-size:20px">R$${fmt(i.budget_total)}</div></div>
+    <div class="metric"><div class="lbl">Ticket (c/ desc.)</div><div class="val" style="font-size:20px">R$${fmt(i.ticket)}</div></div>
+    <div class="metric"><div class="lbl">Período</div><div class="val" style="font-size:20px">${i.periodo_dias}d</div></div>
+  `;
+
+  document.getElementById('outputs-empty').style.display = 'none';
+  document.getElementById('outputs-section').style.display = 'flex';
+}
+</script>
+</body>
+</html>
