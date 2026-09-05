@@ -456,9 +456,12 @@ def ads_listing_groups(campaign_id: str):
         for row in rows:
             c = row.ad_group_criterion
             grupos.append({
-                "tipo":   c.listing_group.type.name if hasattr(c.listing_group.type, "name") else str(c.listing_group.type),
-                "status": c.status.name if hasattr(c.status, "name") else str(c.status),
-                "lance":  round((c.cpc_bid_micros or 0) / 1e6, 2),
+                "tipo":          c.listing_group.type.name if hasattr(c.listing_group.type, "name") else str(c.listing_group.type),
+                "status":        c.status.name if hasattr(c.status, "name") else str(c.status),
+                "lance":         round((c.cpc_bid_micros or 0) / 1e6, 2),
+                "resource_name": c.resource_name,
+                "criterion_id":  c.criterion_id,
+                "parent":        c.listing_group.parent_ad_group_criterion,
             })
 
         # Produtos Shopping desta campanha (últimos 30 dias)
@@ -760,9 +763,11 @@ def ads_restringir_itens(campaign_id: str, payload: dict = {}):
             ad_group_id = rows[0].ad_group.id
 
         lg_rows = _gaql(client, customer_id, f"""
-            SELECT ad_group_criterion.criterion_id, ad_group_criterion.resource_name
+            SELECT ad_group_criterion.criterion_id, ad_group_criterion.resource_name,
+                   ad_group.id
             FROM ad_group_criterion
-            WHERE ad_group.id = {ad_group_id}
+            WHERE campaign.id = {campaign_id}
+              AND ad_group.id = {ad_group_id}
               AND ad_group_criterion.type = 'LISTING_GROUP'
         """)
 
