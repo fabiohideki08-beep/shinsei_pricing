@@ -617,6 +617,10 @@ _ultima_limpeza_kits: Optional[float] = None
 _INTERVALO_SYNC_DESCONTOS = int(os.getenv("INTERVALO_SYNC_DESCONTOS", str(3600)))
 _ultima_sync_descontos: Optional[float] = None
 
+# Intervalo para auto-ocultar produtos sem estoque (padrão: 4 horas)
+_INTERVALO_ESTOQUE_AUTO = int(os.getenv("INTERVALO_ESTOQUE_AUTO", str(4 * 3600)))
+_ultima_estoque_auto: Optional[float] = None
+
 # Intervalo para sync de estoque Amazon (padrão: 2 horas)
 
 # Intervalo para scan GMC (padrão: 15 minutos)
@@ -703,6 +707,33 @@ def _ciclo_sync_descontos() -> None:
         logger.exception("[DESCONTOS] Erro no sync: %s", e)
         _ultima_sync_descontos = agora
 
+
+
+def _ciclo_estoque_auto() -> None:
+    """
+    A cada 4h: oculta produtos com estoque=0 (draft) e restaura os que voltaram
+    a ter estoque (active). Afeta Shopify + GMC automaticamente.
+    """
+    global _ultima_estoque_auto
+
+    agora = time.time()
+    if _ultima_estoque_auto and (agora - _ultima_estoque_auto) < _INTERVALO_ESTOQUE_AUTO:
+        return
+
+    logger.info("[ESTOQUE-AUTO] Iniciando ciclo de visibilidade por estoque...")
+    try:
+        from services.shopify_estoque_auto import executar
+        resultado = executar(dry_run=False)
+        logger.info(
+            "[ESTOQUE-AUTO] Ciclo concluído — ocultados: %d | restaurados: %d | erros: %d",
+            len(resultado.get("ocultados", [])),
+            len(resultado.get("restaurados", [])),
+            len(resultado.get("erros", [])),
+        )
+        _ultima_estoque_auto = agora
+    except Exception as e:
+        logger.exception("[ESTOQUE-AUTO] Erro no ciclo: %s", e)
+        _ultima_estoque_auto = agora  # evita loop de retentativas
 
 
 def _ciclo_limpeza_kits() -> None:
@@ -873,6 +904,12 @@ def _loop():
         except Exception as e:
 
             logger.exception("Erro inesperado no ciclo do scheduler: %s", e)
+
+        # Auto-ocultar produtos sem estoque (a cada 4h)
+        try:
+            _ciclo_estoque_auto()
+        except Exception as e:
+            logger.exception("Erro no ciclo de estoque auto: %s", e)
 
         # Limpeza semanal de barcodes de kits (anti-tobacco GMC)
         try:

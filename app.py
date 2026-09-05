@@ -119,6 +119,8 @@ from routes.copiar_ml import router as copiar_ml_router
 app.include_router(copiar_ml_router)
 from routes.controle_anuncios import router as controle_anuncios_router
 app.include_router(controle_anuncios_router)
+from routes.shopify_estoque import router as shopify_estoque_router
+app.include_router(shopify_estoque_router)
 try:
     from routes.frete import router as frete_router
     app.include_router(frete_router)
