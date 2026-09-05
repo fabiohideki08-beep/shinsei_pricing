@@ -764,7 +764,7 @@ def ads_restringir_itens(campaign_id: str, payload: dict = {}):
 
         lg_rows = _gaql(client, customer_id, f"""
             SELECT ad_group_criterion.criterion_id, ad_group_criterion.resource_name,
-                   ad_group.id
+                   ad_group_criterion.listing_group.type, ad_group.id
             FROM ad_group_criterion
             WHERE campaign.id = {campaign_id}
               AND ad_group.id = {ad_group_id}
@@ -777,6 +777,7 @@ def ads_restringir_itens(campaign_id: str, payload: dict = {}):
                 "ad_group_id": ad_group_id,
                 "existentes": len(lg_rows),
                 "novos_itens": len(item_ids),
+                "rns": [r.ad_group_criterion.resource_name for r in lg_rows],
             }
 
         # Obter access_token via REST
@@ -798,8 +799,15 @@ def ads_restringir_itens(campaign_id: str, payload: dict = {}):
         def _rn(tmp_id):
             return f"customers/{customer_id}/adGroupCriteria/{ad_group_id}~{tmp_id}"
 
+        # Remover folhas (UNIT) antes de pais (SUBDIVISION) — evita cascade-delete errôneo
+        def _lg_type_name(row):
+            t = row.ad_group_criterion.listing_group.type
+            return t.name if hasattr(t, "name") else str(t)
+
+        units_first = sorted(lg_rows, key=lambda r: 0 if _lg_type_name(r) == "UNIT" else 1)
+
         operations = []
-        for row in lg_rows:
+        for row in units_first:
             operations.append({"remove": row.ad_group_criterion.resource_name})
 
         root_rn = _rn(-1)
