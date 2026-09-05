@@ -578,22 +578,23 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
         if dry_run:
             return {"ok": True, "dry_run": True, "plano": plano}
 
-        # 4) Montar mutações — estrutura hierárquica correta:
-        #
-        # SUBDIVISION raiz (Everything, sem case_value)  [tmp=-1]
-        # └── SUBDIVISION L1 "Coloracao Capilar"          [tmp=-2]
-        #     ├── UNIT L2 "Igora Zero Amm"  R$1,00        [tmp=-3]
-        #     ├── UNIT L2 "Alfaparf Evolution" R$0,80      [tmp=-4]
-        #     └── UNIT L2 others (sem case_value) R$0,10  [tmp=-5]
-        # └── UNIT L1 others (sem case_value) R$0,10      [tmp=-6]
-        #
-        # A API exige que product_type siga L1→L2 em ordem crescente.
-        agcs = client.get_service("AdGroupCriterionService")
-        ops  = []
-        ad_group_rn = client.get_service("AdGroupService").ad_group_path(customer_id, ad_group_id)
-
-        LGType    = client.enums.ListingGroupTypeEnum
-        AGCStatus = client.enums.AdGroupCriterionStatusEnum
+        # 4) Obter access_token via refresh para chamar REST API diretamente.
+        # O SDK proto-plus serializa product_brand.value="" como TOO_SHORT;
+        # via REST, "productBrand": {} (objeto vazio) é aceito como "others" case.
+        token_resp = _req_http.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "client_id":     os.environ.get("GOOGLE_ADS_CLIENT_ID"),
+                "client_secret": os.environ.get("GOOGLE_ADS_CLIENT_SECRET"),
+                "refresh_token": os.environ.get("GOOGLE_ADS_REFRESH_TOKEN"),
+                "grant_type":    "refresh_token",
+            },
+            timeout=10,
+        )
+        if not token_resp.ok:
+            return {"ok": False, "erro": f"Falha ao obter access_token: {token_resp.text}"}
+        access_token = token_resp.json()["access_token"]
+        dev_token    = os.environ.get("GOOGLE_ADS_DEVELOPER_TOKEN", "")
 
         outros_bid   = bids_config.get("__outros__", 0.10)
         linhas_criadas = []
@@ -601,86 +602,89 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
         def _tmp_rn(tmp_id):
             return f"customers/{customer_id}/adGroupCriteria/{ad_group_id}~{tmp_id}"
 
-        def _op_subdivision(ad_grp, parent_rn=None, tmp_id=None):
-            """SUBDIVISION raiz sem case_value."""
-            op = client.get_type("AdGroupCriterionOperation")
-            c  = op.create
-            c.ad_group = ad_grp
-            c.status   = AGCStatus.ENABLED
-            c.listing_group.type_ = LGType.SUBDIVISION
-            if parent_rn:
-                c.listing_group.parent_ad_group_criterion = parent_rn
-            if tmp_id is not None:
-                c.resource_name = _tmp_rn(tmp_id)
-            return op
+        ad_group_rn = f"customers/{customer_id}/adGroups/{ad_group_id}"
 
-        def _op_unit_brand(ad_grp, parent_rn, brand_value, bid_micros, tmp_id):
-            """UNIT com case_value.listing_brand — específico para uma marca."""
-            op = client.get_type("AdGroupCriterionOperation")
-            c  = op.create
-            c.ad_group = ad_grp
-            c.status   = AGCStatus.ENABLED
-            c.cpc_bid_micros = bid_micros
-            c.listing_group.type_ = LGType.UNIT
-            c.listing_group.parent_ad_group_criterion = parent_rn
-            c.listing_group.case_value.product_brand.value = brand_value
-            c.resource_name = _tmp_rn(tmp_id)
-            return op
+        # 5) Montar operações JSON (REST):
+        # SUBDIVISION raiz [tmp=-1]
+        # ├── UNIT brand "Schwarzkopf"    [tmp=-2]
+        # ├── UNIT brand "Alfaparf Milano" [tmp=-3]
+        # └── UNIT others (productBrand:{}) [tmp=-4]  ← objeto vazio = "everything else"
+        operations = []
 
-        def _op_unit_others(ad_grp, parent_rn, bid_micros, tmp_id):
-            """UNIT 'others' — usa unknown_listing_dimension (campo vazio = catch-all).
-            product_brand com value="" dá TOO_SHORT; a forma correta de representar
-            'everything else' no Google Ads é através de unknown_listing_dimension.
-            """
-            op = client.get_type("AdGroupCriterionOperation")
-            c  = op.create
-            c.ad_group = ad_grp
-            c.status   = AGCStatus.ENABLED
-            c.cpc_bid_micros = bid_micros
-            c.listing_group.type_ = LGType.UNIT
-            c.listing_group.parent_ad_group_criterion = parent_rn
-            # Ativa o campo unknown_listing_dimension no oneof (mensagem vazia = "others")
-            _ = c.listing_group.case_value.unknown_listing_dimension
-            c.resource_name = _tmp_rn(tmp_id)
-            return op
-
-        # a) Remove todos os LGs atuais
+        # a) Removes
         for row in lg_rows:
-            op = client.get_type("AdGroupCriterionOperation")
-            op.remove = row.ad_group_criterion.resource_name
-            ops.append(op)
+            operations.append({"remove": row.ad_group_criterion.resource_name})
 
-        # b) SUBDIVISION raiz (Everything)
+        # b) SUBDIVISION raiz
         root_rn = _tmp_rn(-1)
-        ops.append(_op_subdivision(ad_group_rn, tmp_id=-1))
+        operations.append({
+            "create": {
+                "resourceName": root_rn,
+                "adGroup":      ad_group_rn,
+                "status":       "ENABLED",
+                "listingGroup": {"type": "SUBDIVISION"},
+            }
+        })
 
-        # c) UNITs por brand + "others"
+        # c) UNIT por brand
         tmp_id = -2
         for marca, bid_reais in bids_config.items():
             if marca == "__outros__":
                 continue
-            bid_micros = int(bid_reais * 1_000_000)
-            ops.append(_op_unit_brand(ad_group_rn, root_rn, marca, bid_micros, tmp_id))
+            operations.append({
+                "create": {
+                    "resourceName":  _tmp_rn(tmp_id),
+                    "adGroup":       ad_group_rn,
+                    "status":        "ENABLED",
+                    "cpcBidMicros":  str(int(bid_reais * 1_000_000)),
+                    "listingGroup": {
+                        "type":                     "UNIT",
+                        "parentAdGroupCriterion":   root_rn,
+                        "caseValue": {"productBrand": {"value": marca}},
+                    },
+                }
+            })
             linhas_criadas.append({"marca": marca, "bid": bid_reais})
             tmp_id -= 1
 
-        # d) UNIT "others" — tudo que não é Schwarzkopf nem Alfaparf Milano
-        ops.append(_op_unit_others(ad_group_rn, root_rn, int(outros_bid * 1_000_000), tmp_id))
+        # d) UNIT "others" — productBrand:{} (sem value) = "everything else"
+        operations.append({
+            "create": {
+                "resourceName":  _tmp_rn(tmp_id),
+                "adGroup":       ad_group_rn,
+                "status":        "ENABLED",
+                "cpcBidMicros":  str(int(outros_bid * 1_000_000)),
+                "listingGroup": {
+                    "type":                   "UNIT",
+                    "parentAdGroupCriterion": root_rn,
+                    "caseValue":              {"productBrand": {}},
+                },
+            }
+        })
 
-        # 5) Executar batch único
-        response = agcs.mutate_ad_group_criteria(
-            customer_id=customer_id,
-            operations=ops,
-        )
+        # 6) Chamar REST API
+        url = f"https://googleads.googleapis.com/v24/customers/{customer_id}/adGroupCriteria:mutate"
+        headers_rest = {
+            "Authorization":    f"Bearer {access_token}",
+            "developer-token":  dev_token,
+            "login-customer-id": str(customer_id),
+            "Content-Type":     "application/json",
+        }
+        resp = _req_http.post(url, headers=headers_rest, json={"operations": operations}, timeout=30)
+        if not resp.ok:
+            return {"ok": False, "erro": resp.text, "status_code": resp.status_code}
+
+        result = resp.json()
+        criados = len(result.get("results", []))
 
         return {
-            "ok":         True,
-            "dimensao":   "brand",
-            "removidos":  len(lg_rows),
-            "criados":    len(response.results),
-            "linhas":        linhas_criadas,
-            "outros_bid":    outros_bid,
-            "results":       [r.resource_name for r in response.results],
+            "ok":          True,
+            "dimensao":    "brand",
+            "removidos":   len(lg_rows),
+            "criados":     criados,
+            "linhas":      linhas_criadas,
+            "outros_bid":  outros_bid,
+            "results":     result.get("results", []),
         }
     except Exception as e:
         import traceback
