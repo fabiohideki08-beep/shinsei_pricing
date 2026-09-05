@@ -628,7 +628,7 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
             return op
 
         def _op_unit_others(ad_grp, parent_rn, bid_micros, tmp_id):
-            """UNIT 'others' — sem case_value (Everything else no nível do pai)."""
+            """UNIT 'others' para product_brand — case_value.product_brand.value="" é o sentinel correto."""
             op = client.get_type("AdGroupCriterionOperation")
             c  = op.create
             c.ad_group = ad_grp
@@ -636,6 +636,7 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
             c.cpc_bid_micros = bid_micros
             c.listing_group.type_ = LGType.UNIT
             c.listing_group.parent_ad_group_criterion = parent_rn
+            c.listing_group.case_value.product_brand.value = ""
             c.resource_name = _tmp_rn(tmp_id)
             return op
 
