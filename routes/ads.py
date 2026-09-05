@@ -623,7 +623,7 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
             c.cpc_bid_micros = bid_micros
             c.listing_group.type_ = LGType.UNIT
             c.listing_group.parent_ad_group_criterion = parent_rn
-            c.listing_group.case_value.listing_brand.value = brand_value
+            c.listing_group.case_value.product_brand.value = brand_value
             c.resource_name = _tmp_rn(tmp_id)
             return op
 
