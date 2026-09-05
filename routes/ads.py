@@ -499,9 +499,13 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
     Usado para criar bids diferenciados por linha (Zero Amm, Evolution, etc.) na campanha Stars.
 
     Payload (opcional):
-      bids: { "Igora Zero Amm": 1.00, "Alfaparf Evolution": 0.80, "__outros__": 0.10 }
+      bids: { "Schwarzkopf": 1.00, "Alfaparf Milano": 0.80, "__outros__": 0.10 }
       ad_group_id: int  (se omitido, busca o primeiro ad group da campanha)
       dry_run: bool     (se True, retorna o plano sem executar)
+      dimensao: "brand" (default) | "product_type_l1"
+
+    Usa brand como dimensão (mais estável): Schwarzkopf → Zero Amm R$1,00,
+    Alfaparf Milano → Evolution R$0,80, outros → R$0,10.
     """
     try:
         client, customer_id = _build_client()
@@ -588,36 +592,51 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
         ops  = []
         ad_group_rn = client.get_service("AdGroupService").ad_group_path(customer_id, ad_group_id)
 
-        LGType   = client.enums.ListingGroupTypeEnum
-        PTLevel  = client.enums.ProductTypeLevelEnum
+        LGType    = client.enums.ListingGroupTypeEnum
         AGCStatus = client.enums.AdGroupCriterionStatusEnum
 
-        outros_bid = bids_config.get("__outros__", 0.10)
+        outros_bid   = bids_config.get("__outros__", 0.10)
         linhas_criadas = []
 
         def _tmp_rn(tmp_id):
             return f"customers/{customer_id}/adGroupCriteria/{ad_group_id}~{tmp_id}"
 
-        def _new_op(ad_grp, status, lg_type, parent_rn=None, bid_micros=None,
-                    pt_level=None, pt_value=None, others=False, tmp_id=None):
+        def _op_subdivision(ad_grp, parent_rn=None, tmp_id=None):
+            """SUBDIVISION raiz sem case_value."""
             op = client.get_type("AdGroupCriterionOperation")
             c  = op.create
             c.ad_group = ad_grp
-            c.status   = status
-            c.listing_group.type_ = lg_type
+            c.status   = AGCStatus.ENABLED
+            c.listing_group.type_ = LGType.SUBDIVISION
             if parent_rn:
                 c.listing_group.parent_ad_group_criterion = parent_rn
-            if bid_micros is not None:
-                c.cpc_bid_micros = bid_micros
-            if pt_level is not None and pt_value is not None:
-                c.listing_group.case_value.product_type.level = pt_level
-                c.listing_group.case_value.product_type.value = pt_value
-            elif others:
-                # "others" case: acessa case_value.product_type sem setar level/value
-                # envia proto vazio = "others" para o servidor
-                _ = c.listing_group.case_value.product_type
             if tmp_id is not None:
                 c.resource_name = _tmp_rn(tmp_id)
+            return op
+
+        def _op_unit_brand(ad_grp, parent_rn, brand_value, bid_micros, tmp_id):
+            """UNIT com case_value.listing_brand — específico para uma marca."""
+            op = client.get_type("AdGroupCriterionOperation")
+            c  = op.create
+            c.ad_group = ad_grp
+            c.status   = AGCStatus.ENABLED
+            c.cpc_bid_micros = bid_micros
+            c.listing_group.type_ = LGType.UNIT
+            c.listing_group.parent_ad_group_criterion = parent_rn
+            c.listing_group.case_value.listing_brand.value = brand_value
+            c.resource_name = _tmp_rn(tmp_id)
+            return op
+
+        def _op_unit_others(ad_grp, parent_rn, bid_micros, tmp_id):
+            """UNIT 'others' — sem case_value (Everything else no nível do pai)."""
+            op = client.get_type("AdGroupCriterionOperation")
+            c  = op.create
+            c.ad_group = ad_grp
+            c.status   = AGCStatus.ENABLED
+            c.cpc_bid_micros = bid_micros
+            c.listing_group.type_ = LGType.UNIT
+            c.listing_group.parent_ad_group_criterion = parent_rn
+            c.resource_name = _tmp_rn(tmp_id)
             return op
 
         # a) Remove todos os LGs atuais
@@ -628,57 +647,32 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
 
         # b) SUBDIVISION raiz (Everything)
         root_rn = _tmp_rn(-1)
-        ops.append(_new_op(ad_group_rn, AGCStatus.ENABLED, LGType.SUBDIVISION, tmp_id=-1))
+        ops.append(_op_subdivision(ad_group_rn, tmp_id=-1))
 
-        # c) SUBDIVISION L1 "Coloracao Capilar"
-        l1_rn = _tmp_rn(-2)
-        ops.append(_new_op(
-            ad_group_rn, AGCStatus.ENABLED, LGType.SUBDIVISION,
-            parent_rn=root_rn,
-            pt_level=PTLevel.LEVEL1, pt_value="Coloracao Capilar",
-            tmp_id=-2,
-        ))
-
-        # d) UNITs L2 por linha
-        tmp_id = -3
-        for nome_linha, bid_reais in bids_config.items():
-            if nome_linha == "__outros__":
+        # c) UNITs por brand + "others"
+        tmp_id = -2
+        for marca, bid_reais in bids_config.items():
+            if marca == "__outros__":
                 continue
             bid_micros = int(bid_reais * 1_000_000)
-            ops.append(_new_op(
-                ad_group_rn, AGCStatus.ENABLED, LGType.UNIT,
-                parent_rn=l1_rn, bid_micros=bid_micros,
-                pt_level=PTLevel.LEVEL2, pt_value=nome_linha,
-                tmp_id=tmp_id,
-            ))
-            linhas_criadas.append({"linha": nome_linha, "bid": bid_reais, "l2_value": nome_linha})
+            ops.append(_op_unit_brand(ad_group_rn, root_rn, marca, bid_micros, tmp_id))
+            linhas_criadas.append({"marca": marca, "bid": bid_reais})
             tmp_id -= 1
 
-        # e) UNIT L2 "others" (dentro de L1 Coloracao Capilar) — proto product_type vazio = others
-        ops.append(_new_op(
-            ad_group_rn, AGCStatus.ENABLED, LGType.UNIT,
-            parent_rn=l1_rn, bid_micros=int(outros_bid * 1_000_000),
-            others=True, tmp_id=tmp_id,
-        ))
-        tmp_id -= 1
+        # d) UNIT "others" — tudo que não é Schwarzkopf nem Alfaparf Milano
+        ops.append(_op_unit_others(ad_group_rn, root_rn, int(outros_bid * 1_000_000), tmp_id))
 
-        # f) UNIT L1 "others" (fora de Coloracao Capilar) — proto product_type vazio = others
-        ops.append(_new_op(
-            ad_group_rn, AGCStatus.ENABLED, LGType.UNIT,
-            parent_rn=root_rn, bid_micros=int(outros_bid * 1_000_000),
-            others=True, tmp_id=tmp_id,
-        ))
-
-        # 5) Executar batch único (pai antes dos filhos — ordem mantida acima)
+        # 5) Executar batch único
         response = agcs.mutate_ad_group_criteria(
             customer_id=customer_id,
             operations=ops,
         )
 
         return {
-            "ok":            True,
-            "removidos":     len(lg_rows),
-            "criados":       len(response.results),
+            "ok":         True,
+            "dimensao":   "brand",
+            "removidos":  len(lg_rows),
+            "criados":    len(response.results),
             "linhas":        linhas_criadas,
             "outros_bid":    outros_bid,
             "results":       [r.resource_name for r in response.results],
