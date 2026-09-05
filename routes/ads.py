@@ -722,6 +722,146 @@ def ads_set_maximize_clicks(campaign_id: str, cpc_max_centavos: int = 0):
         return {"ok": False, "erro": str(e)}
 
 
+@router.post("/campanha/{campaign_id}/restringir-itens")
+def ads_restringir_itens(campaign_id: str, payload: dict = {}):
+    """
+    Substitui o listing group da campanha por uma estrutura que serve APENAS
+    os item_ids informados. Tudo mais recebe bid mínimo (R$0,01).
+
+    Payload:
+      item_ids: ["shopify_zz_10781580624177_55923953631537", ...]
+      bid_reais: 1.00        (bid para os itens permitidos, default 1.00)
+      outros_bid_reais: 0.01 (bid para o resto, default 0.01)
+      ad_group_id: int       (opcional — busca automaticamente)
+      dry_run: bool
+    """
+    try:
+        client, customer_id = _build_client()
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+    try:
+        item_ids     = payload.get("item_ids", [])
+        bid_reais    = float(payload.get("bid_reais", 1.00))
+        outros_bid   = float(payload.get("outros_bid_reais", 0.01))
+        dry_run      = payload.get("dry_run", False)
+
+        if not item_ids:
+            return {"ok": False, "erro": "item_ids obrigatório"}
+
+        ad_group_id = payload.get("ad_group_id")
+        if not ad_group_id:
+            rows = _gaql(client, customer_id, f"""
+                SELECT ad_group.id FROM ad_group
+                WHERE campaign.id = {campaign_id} LIMIT 1
+            """)
+            if not rows:
+                return {"ok": False, "erro": "Nenhum ad group encontrado"}
+            ad_group_id = rows[0].ad_group.id
+
+        lg_rows = _gaql(client, customer_id, f"""
+            SELECT ad_group_criterion.criterion_id, ad_group_criterion.resource_name
+            FROM ad_group_criterion
+            WHERE ad_group.id = {ad_group_id}
+              AND ad_group_criterion.type = 'LISTING_GROUP'
+        """)
+
+        if dry_run:
+            return {
+                "ok": True, "dry_run": True,
+                "ad_group_id": ad_group_id,
+                "existentes": len(lg_rows),
+                "novos_itens": len(item_ids),
+            }
+
+        # Obter access_token via REST
+        token_resp = _req_http.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "client_id":     os.environ.get("GOOGLE_ADS_CLIENT_ID"),
+                "client_secret": os.environ.get("GOOGLE_ADS_CLIENT_SECRET"),
+                "refresh_token": os.environ.get("GOOGLE_ADS_REFRESH_TOKEN"),
+                "grant_type":    "refresh_token",
+            },
+            timeout=10,
+        )
+        access_token = token_resp.json()["access_token"]
+        dev_token    = os.environ.get("GOOGLE_ADS_DEVELOPER_TOKEN", "")
+
+        ad_group_rn = f"customers/{customer_id}/adGroups/{ad_group_id}"
+
+        def _rn(tmp_id):
+            return f"customers/{customer_id}/adGroupCriteria/{ad_group_id}~{tmp_id}"
+
+        operations = []
+        for row in lg_rows:
+            operations.append({"remove": row.ad_group_criterion.resource_name})
+
+        root_rn = _rn(-1)
+        operations.append({
+            "create": {
+                "resourceName": root_rn,
+                "adGroup": ad_group_rn,
+                "status": "ENABLED",
+                "listingGroup": {"type": "SUBDIVISION"},
+            }
+        })
+
+        tmp_id = -2
+        for item_id in item_ids:
+            operations.append({
+                "create": {
+                    "resourceName": _rn(tmp_id),
+                    "adGroup": ad_group_rn,
+                    "status": "ENABLED",
+                    "cpcBidMicros": str(int(bid_reais * 1_000_000)),
+                    "listingGroup": {
+                        "type": "UNIT",
+                        "parentAdGroupCriterion": root_rn,
+                        "caseValue": {"productItemId": {"value": item_id}},
+                    },
+                }
+            })
+            tmp_id -= 1
+
+        operations.append({
+            "create": {
+                "resourceName": _rn(tmp_id),
+                "adGroup": ad_group_rn,
+                "status": "ENABLED",
+                "cpcBidMicros": str(int(outros_bid * 1_000_000)),
+                "listingGroup": {
+                    "type": "UNIT",
+                    "parentAdGroupCriterion": root_rn,
+                    "caseValue": {"productItemId": {}},
+                },
+            }
+        })
+
+        url = f"https://googleads.googleapis.com/v24/customers/{customer_id}/adGroupCriteria:mutate"
+        headers_rest = {
+            "Authorization":     f"Bearer {access_token}",
+            "developer-token":   dev_token,
+            "login-customer-id": str(customer_id),
+            "Content-Type":      "application/json",
+        }
+        resp = _req_http.post(url, headers=headers_rest, json={"operations": operations}, timeout=60)
+        if not resp.ok:
+            return {"ok": False, "erro": resp.text, "status_code": resp.status_code}
+
+        result = resp.json()
+        return {
+            "ok": True,
+            "removidos": len(lg_rows),
+            "criados": len(result.get("results", [])),
+            "itens_bid": len(item_ids),
+            "bid_reais": bid_reais,
+            "outros_bid": outros_bid,
+        }
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+
 @router.post("/campanha/{campaign_id}/budget")
 def ads_alterar_budget(campaign_id: str, payload: dict = {}):
     """Altera o budget diário da campanha. payload: {budget_diario_reais: 30}"""
