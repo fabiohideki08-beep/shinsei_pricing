@@ -645,7 +645,6 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
         response = agcs.mutate_ad_group_criteria(
             customer_id=customer_id,
             operations=ops,
-            partial_failure=False,
         )
 
         criados = [r.resource_name for r in response.results if r.resource_name and "~-" not in r.resource_name]
