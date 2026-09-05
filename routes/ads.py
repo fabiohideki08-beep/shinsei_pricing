@@ -722,6 +722,27 @@ def ads_set_maximize_clicks(campaign_id: str, cpc_max_centavos: int = 0):
         return {"ok": False, "erro": str(e)}
 
 
+@router.post("/campanha/{campaign_id}/ativar")
+def ads_ativar_campanha(campaign_id: str, payload: dict = {}):
+    """Ativa (ENABLED) ou pausa (PAUSED) a campanha. payload: {status: 'ENABLED'|'PAUSED'}"""
+    try:
+        client, customer_id = _build_client()
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+    try:
+        novo_status = payload.get("status", "ENABLED").upper()
+        campaign_service = client.get_service("CampaignService")
+        resource_name = campaign_service.campaign_path(customer_id, campaign_id)
+        op = client.get_type("CampaignOperation")
+        op.update.resource_name = resource_name
+        op.update.status = client.enums.CampaignStatusEnum[novo_status]
+        op.update_mask.paths.append("status")
+        response = campaign_service.mutate_campaigns(customer_id=customer_id, operations=[op])
+        return {"ok": True, "status": novo_status, "resource": response.results[0].resource_name}
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+
 # ── Simulador Google ADS ──────────────────────────────────────────────────────
 
 @router.get("/simulador", response_class=HTMLResponse)
