@@ -1245,6 +1245,37 @@ def fix_log():
     return {"fix": _fix, "log": _fix.get("log", [])}
 
 
+# ── Search endpoint ──────────────────────────────────────────────────────────
+
+@router.get("/buscar-produto")
+def gmc_buscar_produto(q: str, max_results: int = 50):
+    """Busca produtos no GMC por título (substring, case-insensitive). Retorna id, title, excludedDestinations."""
+    try:
+        service = _build_service()
+        merchant_id = MERCHANT_ID
+        todos = []
+        page_token = None
+        while True:
+            kw = dict(merchantId=merchant_id, maxResults=250)
+            if page_token:
+                kw["pageToken"] = page_token
+            resp = service.products().list(**kw).execute()
+            for p in resp.get("resources", []):
+                if q.lower() in p.get("title", "").lower():
+                    todos.append({
+                        "id": p["id"],
+                        "title": p.get("title"),
+                        "availability": p.get("availability"),
+                        "excludedDestinations": p.get("excludedDestinations", []),
+                    })
+            page_token = resp.get("nextPageToken")
+            if not page_token or len(todos) >= max_results:
+                break
+        return {"ok": True, "total": len(todos), "produtos": todos[:max_results]}
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+
 # ── Blacklist endpoints ───────────────────────────────────────────────────────
 
 @router.get("/blacklist")
