@@ -722,6 +722,48 @@ def ads_set_maximize_clicks(campaign_id: str, cpc_max_centavos: int = 0):
         return {"ok": False, "erro": str(e)}
 
 
+@router.post("/campanha/{campaign_id}/budget")
+def ads_alterar_budget(campaign_id: str, payload: dict = {}):
+    """Altera o budget diário da campanha. payload: {budget_diario_reais: 30}"""
+    try:
+        client, customer_id = _build_client()
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+    try:
+        novo_budget_reais = float(payload.get("budget_diario_reais", 0))
+        if novo_budget_reais <= 0:
+            return {"ok": False, "erro": "budget_diario_reais deve ser > 0"}
+
+        # Buscar budget_id atual da campanha via GAQL
+        rows = _gaql(client, customer_id, f"""
+            SELECT campaign.id, campaign_budget.id, campaign_budget.amount_micros
+            FROM campaign
+            WHERE campaign.id = {campaign_id}
+            LIMIT 1
+        """)
+        if not rows:
+            return {"ok": False, "erro": "Campanha não encontrada"}
+
+        budget_id = rows[0].campaign_budget.id
+        budget_svc = client.get_service("CampaignBudgetService")
+        budget_rn  = budget_svc.campaign_budget_path(customer_id, budget_id)
+
+        op = client.get_type("CampaignBudgetOperation")
+        op.update.resource_name   = budget_rn
+        op.update.amount_micros   = int(novo_budget_reais * 1_000_000)
+        op.update_mask.paths.append("amount_micros")
+
+        resp = budget_svc.mutate_campaign_budgets(customer_id=customer_id, operations=[op])
+        return {
+            "ok": True,
+            "budget_id": budget_id,
+            "novo_budget_reais": novo_budget_reais,
+            "resource": resp.results[0].resource_name,
+        }
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+
 @router.post("/campanha/{campaign_id}/ativar")
 def ads_ativar_campanha(campaign_id: str, payload: dict = {}):
     """Ativa (ENABLED) ou pausa (PAUSED) a campanha. payload: {status: 'ENABLED'|'PAUSED'}"""
