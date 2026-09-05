@@ -628,7 +628,11 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
             return op
 
         def _op_unit_others(ad_grp, parent_rn, bid_micros, tmp_id):
-            """UNIT 'others' para product_brand — case_value.product_brand.value="" é o sentinel correto."""
+            """UNIT 'others' para product_brand.
+            O campo product_brand deve existir no oneof mas sem value setado
+            (optional string não serializado = sentinel "everything else").
+            """
+            from google.ads.googleads.v24.common.types.listing_criteria import ProductBrandInfo
             op = client.get_type("AdGroupCriterionOperation")
             c  = op.create
             c.ad_group = ad_grp
@@ -636,7 +640,8 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
             c.cpc_bid_micros = bid_micros
             c.listing_group.type_ = LGType.UNIT
             c.listing_group.parent_ad_group_criterion = parent_rn
-            c.listing_group.case_value.product_brand.value = ""
+            # ProductBrandInfo() sem value setado = "others" (optional field ausente)
+            c.listing_group.case_value.product_brand = ProductBrandInfo()
             c.resource_name = _tmp_rn(tmp_id)
             return op
 
