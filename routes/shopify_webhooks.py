@@ -31,7 +31,7 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 
 # MelhorEnvio
 ME_ORIGIN_CEP = "06036003"  # SHINSEI MARKETPLACE, Osasco SP
-ME_SERVICES   = "1,2,3,4,17,33"  # PAC, SEDEX, Jadlog .Package/.Com, Mini Envios, JeT Standard
+ME_SERVICES   = "1,2,3,4,31,34"  # PAC, SEDEX, Jadlog .Package/.Com, Loggi Express, Loggi Ponto
 
 # Bling — loja Shopify (idLoja 205479458 = Shopify; 206160746 = ML/Shopee)
 BLING_SHOPIFY_LOJA_ID = 205479458
@@ -98,12 +98,14 @@ def _me_quote_best(dest_cep: str, weight_kg: float) -> dict | None:
 
 # Mapeamento nome ME → serviço Bling Envios (código = ID numérico do ME, conforme tela Serviços de entrega)
 _ME_SERVICE_TO_BLING = {
-    "PAC":         {"nome": "PAC - Correios",          "codigo": "1"},
-    "SEDEX":       {"nome": "SEDEX - Correios",        "codigo": "2"},
-    ".Package":    {"nome": "Jadlog .Package",         "codigo": "3"},
-    ".Com":        {"nome": "Jadlog .Com",             "codigo": "4"},
-    "Mini Envios": {"nome": "Mini Envios - Correios",  "codigo": "17"},
-    "Standard":    {"nome": "JeT Standard",            "codigo": "33"},
+    "PAC":           {"nome": "PAC - Correios",          "codigo": "1"},
+    "SEDEX":         {"nome": "SEDEX - Correios",        "codigo": "2"},
+    ".Package":      {"nome": "Jadlog .Package",         "codigo": "3"},
+    ".Com":          {"nome": "Jadlog .Com",             "codigo": "4"},
+    "Mini Envios":   {"nome": "Mini Envios - Correios",  "codigo": "17"},
+    "Standard":      {"nome": "JeT Standard",            "codigo": "33"},
+    "Loggi Express": {"nome": "Loggi Express",           "codigo": "31"},
+    "Loggi Ponto":   {"nome": "Loggi Ponto",             "codigo": "34"},
 }
 
 
@@ -142,7 +144,7 @@ def _set_bling_transporte_me(order: dict) -> bool:
         # Bling armazena o ID do pedido Shopify (ex: "7567090549041") em numeroLoja, não o número legível
         # Tentativa 1: buscar pelo ID do pedido Shopify (campo numeroLoja no Bling)
         r = requests.get(
-            "https://bling.com.br/Api/v3/pedidos/vendas",
+            "https://api.bling.com.br/Api/v3/pedidos/vendas",
             params={"numeroLoja": shopify_order_id, "idLoja": BLING_SHOPIFY_LOJA_ID, "pagina": 1, "limite": 5},
             headers=_bling_headers(bling_tok), timeout=15,
         )
@@ -151,7 +153,7 @@ def _set_bling_transporte_me(order: dict) -> bool:
         if not pedidos:
             # Tentativa 2: buscar os mais recentes e cruzar por ID ou número
             r2 = requests.get(
-                "https://bling.com.br/Api/v3/pedidos/vendas",
+                "https://api.bling.com.br/Api/v3/pedidos/vendas",
                 params={"idLoja": BLING_SHOPIFY_LOJA_ID, "pagina": 1, "limite": 50},
                 headers=_bling_headers(bling_tok), timeout=15,
             )
@@ -176,7 +178,7 @@ def _set_bling_transporte_me(order: dict) -> bool:
     # Quando a NF for emitida, o Bling usa o token ME próprio + CPF do contato para gerar a etiqueta
     try:
         r3 = requests.patch(
-            f"https://bling.com.br/Api/v3/pedidos/vendas/{bling_pedido_id}",
+            f"https://api.bling.com.br/Api/v3/pedidos/vendas/{bling_pedido_id}",
             json={
                 "transporte": {
                     "transportador": {
@@ -316,7 +318,7 @@ def _generate_me_label(order: dict, cpf_override: str = ""):
                         {"numeroLoja": shopify_order_id, "pagina": 1, "limite": 5},
                     ]:
                         rb = requests.get(
-                            "https://bling.com.br/Api/v3/pedidos/vendas",
+                            "https://api.bling.com.br/Api/v3/pedidos/vendas",
                             params=params,
                             headers=_bling_headers(bling_tok), timeout=10,
                         )
@@ -627,16 +629,13 @@ def _set_bling_transporte_or_fallback(order: dict):
     """
     Configura transporte ME no Bling para que a etiqueta seja gerada automaticamente
     quando a NF for emitida (integração nativa Bling + ME).
-    O Bling usa o token ME próprio + CPF do contato do pedido — sem precisar extrair CPF do webhook.
+    Fallback: se Bling indisponível, gera etiqueta ME diretamente (debita saldo ME imediatamente).
     """
     ok = _set_bling_transporte_me(order)
     if not ok:
         order_name = order.get("name", "?")
-        print(f"[bling_transporte] {order_name} — falha ao configurar no Bling. "
-              f"Acesse o pedido no Bling e emita a NF — o ME gerará a etiqueta com o CPF do contato.")
-        _log_me_label(str(order.get("id", "")), order_name, None, "", 0,
-                      (order.get("shipping_address") or {}).get("zip", ""),
-                      "bling_config_falhou_verificar_manual")
+        print(f"[bling_transporte] {order_name} — falha Bling. Gerando etiqueta ME diretamente (fallback).")
+        _generate_me_label(order)
 
 
 def _verify_hmac(body: bytes, hmac_header: str) -> bool:
@@ -742,7 +741,7 @@ def configurar_transporte_bling(bling_pedido_id: str, cep: str, peso_kg: float =
     service_map = _ME_SERVICE_TO_BLING.get(best["name"], {"nome": best["name"], "codigo": best["name"]})
     try:
         r = requests.patch(
-            f"https://bling.com.br/Api/v3/pedidos/vendas/{bling_pedido_id}",
+            f"https://api.bling.com.br/Api/v3/pedidos/vendas/{bling_pedido_id}",
             json={
                 "transporte": {
                     "transportador": {"nome": service_map["nome"], "cnpj": ""},
