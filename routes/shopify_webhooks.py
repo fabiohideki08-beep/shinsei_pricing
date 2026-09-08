@@ -173,36 +173,75 @@ def _set_bling_transporte_me(order: dict) -> bool:
     bling_pedido_id = pedidos[0]["id"]
     service_map = _ME_SERVICE_TO_BLING.get(best["name"], {"nome": best["name"], "codigo": best["name"].upper()})
 
-    # Atualizar transporte no pedido Bling com ME como transportadora
-    # O ME precisa estar integrado no Bling (Configurações → Integrações → Mercado Envios)
-    # Quando a NF for emitida, o Bling usa o token ME próprio + CPF do contato para gerar a etiqueta
+    # Bling v3 não tem PATCH /pedidos/vendas/{id} — usa PUT com corpo completo.
+    # Busca o pedido completo primeiro, monta o payload e faz PUT.
     try:
-        r3 = requests.patch(
+        rget = requests.get(
             f"https://api.bling.com.br/Api/v3/pedidos/vendas/{bling_pedido_id}",
-            json={
-                "transporte": {
-                    "transportador": {
-                        "nome": service_map["nome"],
-                        "cnpj": "",
-                    },
-                    "tipo": "D",
-                    "servico": service_map["codigo"],
-                    "prazoEntrega": int(best.get("delivery_time") or 7),
-                    "freteValor": float(best["price"]),
-                    "volumes": [
-                        {"pesoBruto": weight_kg, "largura": 16, "altura": 10, "comprimento": 22}
-                    ],
-                }
-            },
             headers=_bling_headers(bling_tok), timeout=15,
         )
+        if rget.status_code != 200:
+            print(f"[bling_transporte] {order_name} — erro GET pedido Bling: {rget.status_code}"); return False
+
+        ped = rget.json().get("data", {})
+        # Monta payload PUT com todos os campos obrigatórios preservados
+        transporte_novo = {
+            "fretePorConta": 1,
+            "frete": float(best["price"]),
+            "prazoEntrega": int(best.get("delivery_time") or 7),
+            "contato": {"id": 0, "nome": service_map["nome"]},
+            "volumes": [{"pesoBruto": weight_kg, "largura": 16, "altura": 10, "comprimento": 22}],
+            "etiqueta": ped.get("transporte", {}).get("etiqueta", {}),
+        }
+        put_payload = {
+            "data": ped.get("data"),
+            "dataSaida": ped.get("dataSaida") or ped.get("data"),
+            "contato": {"id": ped.get("contato", {}).get("id")},
+            "situacao": {"id": ped.get("situacao", {}).get("id")},
+            "loja": {"id": ped.get("loja", {}).get("id")},
+            "numeroPedidoCompra": ped.get("numeroPedidoCompra") or "",
+            "outrasDespesas": ped.get("outrasDespesas") or 0,
+            "desconto": ped.get("desconto") or {"tipo": "%", "valor": 0},
+            "observacoes": ped.get("observacoes") or "",
+            "observacoesInternas": ped.get("observacoesInternas") or "",
+            "itens": [
+                {
+                    "codigo": i.get("codigo") or "",
+                    "descricao": i.get("descricao") or i.get("nome") or "Produto",
+                    "quantidade": i.get("quantidade") or 1,
+                    "valor": i.get("valor") or 0,
+                    "tipo": i.get("tipo") or "P",
+                    "unidade": i.get("unidade") or "UN",
+                    **({"produto": {"id": i["produto"]["id"]}} if i.get("produto", {}).get("id") else {}),
+                }
+                for i in ped.get("itens", [])
+            ],
+            # parcelas omitidas: podem ter data=0000-00-00 que Bling rejeita com 400
+            "transporte": transporte_novo,
+        }
+        if ped.get("categoria", {}).get("id"):
+            put_payload["categoria"] = {"id": ped["categoria"]["id"]}
+
+        r3 = requests.put(
+            f"https://api.bling.com.br/Api/v3/pedidos/vendas/{bling_pedido_id}",
+            json=put_payload,
+            headers=_bling_headers(bling_tok), timeout=20,
+        )
         if r3.status_code in (200, 201, 204):
-            print(f"[bling_transporte] ✅ {order_name} — transporte ME configurado no Bling (pedido {bling_pedido_id})")
+            # Verificar se o Bling retornou aviso de "bloqueada para edição"
+            # (pedidos importados de marketplace retornam HTTP 200 mas NÃO salvam o transporte)
+            resp_body = r3.json() if r3.text else {}
+            warnings = (resp_body.get("data", {}).get("warnings") or [])
+            is_blocked = any("bloqueada" in str(w).lower() for w in warnings)
+            if is_blocked:
+                print(f"[bling_transporte] {order_name} — pedido bloqueado no Bling (marketplace), transporte não salvo. Usando fallback ME direto.")
+                return False
+            print(f"[bling_transporte] OK {order_name} — transporte {service_map['nome']} configurado no Bling (pedido {bling_pedido_id})")
             _log_me_label(str(order.get("id","")), order_name, None,
                           best["name"], float(best["price"]), dest_cep, "bling_transporte_ok")
             return True
         else:
-            print(f"[bling_transporte] {order_name} — erro PATCH Bling: {r3.status_code} {r3.text[:200]}")
+            print(f"[bling_transporte] {order_name} — erro PUT Bling: {r3.status_code} {r3.text[:300]}")
             return False
     except Exception as e:
         print(f"[bling_transporte] {order_name} — erro update Bling: {e}"); return False
