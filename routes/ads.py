@@ -712,7 +712,7 @@ def ads_set_maximize_clicks(campaign_id: str, cpc_max_centavos: int = 0):
         # target_spend = Maximizar Cliques
         if cpc_max_centavos:
             op.update.target_spend.cpc_bid_ceiling_micros = cpc_max_centavos * 10_000
-            op.update_mask.paths.extend(["target_spend", "target_spend.cpc_bid_ceiling_micros"])
+            op.update_mask.paths.append("target_spend.cpc_bid_ceiling_micros")
         else:
             op.update_mask.paths.append("target_spend")
 
