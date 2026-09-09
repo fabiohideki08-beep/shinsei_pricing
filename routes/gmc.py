@@ -197,13 +197,38 @@ def _content_id_to_merchant_name(product_id: str) -> str:
     return product_id.replace(":", "~")
 
 
-def _merchant_delete(product_id: str) -> dict:
+def _get_primary_datasource() -> str:
+    """Retorna o nome do dataSource primário da conta para uso no Merchant API."""
+    token = _get_merchant_token()
+    url = f"https://merchantapi.googleapis.com/datasources/v1/accounts/{MERCHANT_ID}/dataSources"
+    r = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=30)
+    if r.status_code == 200:
+        data = r.json()
+        sources = data.get("dataSources", [])
+        # Preferir primary feed (type = PRIMARY)
+        for s in sources:
+            if s.get("primaryProductDataSource") is not None:
+                return s["name"]
+        # Fallback: primeiro da lista
+        if sources:
+            return sources[0]["name"]
+    return f"accounts/{MERCHANT_ID}/dataSources/primary"
+
+
+def _merchant_delete(product_id: str, data_source: str | None = None) -> dict:
     """Deleta produto do GMC via Merchant API v1 (productInputs)."""
     try:
         token = _get_merchant_token()
         name = _content_id_to_merchant_name(product_id)
+        if not data_source:
+            data_source = _get_primary_datasource()
         url = f"{MERCHANT_API_BASE}/productInputs/{name}"
-        r = requests.delete(url, headers={"Authorization": f"Bearer {token}"}, timeout=30)
+        r = requests.delete(
+            url,
+            headers={"Authorization": f"Bearer {token}"},
+            params={"dataSource": data_source},
+            timeout=30,
+        )
         if r.status_code in (200, 204):
             return {"ok": True, "action": "deleted_merchant_api"}
         return {"ok": False, "action": "delete_failed", "status": r.status_code, "body": r.text[:300]}
