@@ -1370,6 +1370,20 @@ def gmc_buscar_produto(q: str, max_results: int = 50):
         return {"ok": False, "erro": str(e)}
 
 
+@router.get("/datasources")
+def listar_datasources():
+    """Lista os dataSources disponíveis na conta Merchant (para diagnóstico)."""
+    try:
+        token = _get_merchant_token()
+        url = f"https://merchantapi.googleapis.com/datasources/v1/accounts/{MERCHANT_ID}/dataSources"
+        r = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=30)
+        if r.status_code == 200:
+            return {"ok": True, "data": r.json()}
+        return {"ok": False, "status": r.status_code, "body": r.text[:500]}
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+
 @router.post("/registrar-desenvolvedor")
 def registrar_desenvolvedor(developer_email: str = "fabiohideki08@gmail.com"):
     """Registra o projeto GCP com a Merchant API via developerRegistration:registerGcp."""
