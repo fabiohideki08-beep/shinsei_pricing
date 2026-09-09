@@ -1345,6 +1345,25 @@ def gmc_buscar_produto(q: str, max_results: int = 50):
         return {"ok": False, "erro": str(e)}
 
 
+@router.post("/registrar-desenvolvedor")
+def registrar_desenvolvedor(developer_email: str = "fabiohideki08@gmail.com"):
+    """Registra o projeto GCP com a Merchant API via developerRegistration:registerGcp."""
+    try:
+        token = _get_merchant_token()
+        url = f"https://merchantapi.googleapis.com/accounts/v1/accounts/{MERCHANT_ID}/developerRegistration:registerGcp"
+        r = requests.post(
+            url,
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json={"developerEmail": developer_email},
+            timeout=30,
+        )
+        if r.status_code in (200, 201):
+            return {"ok": True, "registro": r.json()}
+        return {"ok": False, "status": r.status_code, "body": r.text[:500]}
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+
 @router.post("/deletar-orfaos")
 def deletar_orfaos(background_tasks: BackgroundTasks):
     """Deleta do GMC os 90 produtos com 'Missing product price' (órfãos do Shopify)."""
