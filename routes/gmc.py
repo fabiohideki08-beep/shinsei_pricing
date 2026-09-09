@@ -29,7 +29,7 @@ MERCHANT_ID      = 5071388981
 SCOPES           = ["https://www.googleapis.com/auth/content"]
 
 # Merchant API v1 (substitui Content API sunset em 18/08/2026)
-MERCHANT_API_BASE = f"https://merchantapi.googleapis.com/products/v1beta/accounts/{MERCHANT_ID}"
+MERCHANT_API_BASE = f"https://merchantapi.googleapis.com/products/v1/accounts/{MERCHANT_ID}"
 
 # Categorias que são excluídas automaticamente do GMC após cada scan
 AUTO_DELETE_CATEGORIES: set[str] = {"adult_legit", "adult_false"}
