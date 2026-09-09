@@ -28,6 +28,9 @@ BLACKLIST_PATH   = DATA_DIR / "gmc_blacklist.json"
 MERCHANT_ID      = 5071388981
 SCOPES           = ["https://www.googleapis.com/auth/content"]
 
+# Merchant API v1 (substitui Content API sunset em 18/08/2026)
+MERCHANT_API_BASE = f"https://merchantapi.googleapis.com/products/v1beta/accounts/{MERCHANT_ID}"
+
 # Categorias que são excluídas automaticamente do GMC após cada scan
 AUTO_DELETE_CATEGORIES: set[str] = {"adult_legit", "adult_false"}
 
@@ -165,6 +168,83 @@ def _clean(product: dict) -> dict:
     return {k: v for k, v in product.items() if k not in READONLY_FIELDS}
 
 
+# ── Merchant API v1 helpers (substitui Content API sunset 18/08/2026) ─────────
+
+def _get_merchant_token() -> str:
+    """Retorna access token OAuth para uso direto na Merchant API v1."""
+    import google.auth.transport.requests
+    from google.oauth2 import service_account
+
+    sa_json_env = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+    if sa_json_env:
+        import base64
+        try:
+            sa_info = json.loads(sa_json_env)
+        except Exception:
+            sa_info = json.loads(base64.b64decode(sa_json_env).decode())
+        creds = service_account.Credentials.from_service_account_info(sa_info, scopes=SCOPES)
+    else:
+        creds = service_account.Credentials.from_service_account_file(str(SA_FILE), scopes=SCOPES)
+    creds.refresh(google.auth.transport.requests.Request())
+    return creds.token
+
+
+def _content_id_to_merchant_name(product_id: str) -> str:
+    """Converte product_id Content API → nome recurso Merchant API.
+
+    'online:pt:BR:12345' → 'online~pt~BR~12345'
+    """
+    return product_id.replace(":", "~")
+
+
+def _merchant_delete(product_id: str) -> dict:
+    """Deleta produto do GMC via Merchant API v1 (productInputs)."""
+    try:
+        token = _get_merchant_token()
+        name = _content_id_to_merchant_name(product_id)
+        url = f"{MERCHANT_API_BASE}/productInputs/{name}"
+        r = requests.delete(url, headers={"Authorization": f"Bearer {token}"}, timeout=30)
+        if r.status_code in (200, 204):
+            return {"ok": True, "action": "deleted_merchant_api"}
+        return {"ok": False, "action": "delete_failed", "status": r.status_code, "body": r.text[:300]}
+    except Exception as e:
+        return {"ok": False, "action": "delete_failed", "error": str(e)}
+
+
+def _merchant_get(product_id: str) -> dict | None:
+    """Busca produto no GMC via Merchant API v1."""
+    try:
+        token = _get_merchant_token()
+        name = _content_id_to_merchant_name(product_id)
+        url = f"{MERCHANT_API_BASE}/products/{name}"
+        r = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=30)
+        if r.status_code == 200:
+            return r.json()
+        return None
+    except Exception:
+        return None
+
+
+def _merchant_list_products(page_token: str | None = None, page_size: int = 250) -> dict:
+    """Lista produtos via Merchant API v1."""
+    try:
+        token = _get_merchant_token()
+        params: dict = {"pageSize": page_size}
+        if page_token:
+            params["pageToken"] = page_token
+        r = requests.get(
+            f"{MERCHANT_API_BASE}/products",
+            headers={"Authorization": f"Bearer {token}"},
+            params=params,
+            timeout=60,
+        )
+        if r.status_code == 200:
+            return r.json()
+        return {"error": r.text[:300], "status": r.status_code}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 # ── Blacklist ─────────────────────────────────────────────────────────────────
 
 def _load_blacklist() -> dict:
@@ -268,12 +348,8 @@ def _enqueue_reprovado(product: dict):
 # ── GMC helpers ───────────────────────────────────────────────────────────────
 
 def _delete_from_gmc(service, product_id: str) -> dict:
-    """Exclui permanentemente um produto do GMC."""
-    try:
-        service.products().delete(merchantId=MERCHANT_ID, productId=product_id).execute()
-        return {"ok": True, "action": "deleted_permanently"}
-    except Exception as e:
-        return {"ok": False, "action": "delete_failed", "error": str(e)}
+    """Exclui permanentemente um produto do GMC via Merchant API v1."""
+    return _merchant_delete(product_id)
 
 
 def _is_shopping_blocked(product: dict) -> bool:
@@ -601,49 +677,32 @@ def _fix_shopify(gmc_product_id: str, category: str, title: str) -> dict:
 # ── GMC fix ───────────────────────────────────────────────────────────────────
 
 def _exclude_from_gmc(service, product_id: str) -> dict:
-    """Exclude a product from all GMC shopping destinations (product not found in Shopify)."""
-    try:
-        product = service.products().get(
-            merchantId=MERCHANT_ID, productId=product_id
-        ).execute()
-        product["excludedDestinations"] = ["Shopping ads", "Shopping"]
-        service.products().update(
-            merchantId=MERCHANT_ID, productId=product_id, body=_clean(product)
-        ).execute()
-        return {"ok": True, "action": "excluded_not_in_shopify"}
-    except Exception as e:
-        return {"ok": False, "action": "exclude_failed", "error": str(e)}
+    """Remove produto do GMC (órfão do Shopify) via Merchant API v1.
+
+    Antes excluía destinations via products().update (Content API sunset 18/08/2026).
+    Agora deleta diretamente — produto não existe no Shopify, não há motivo para manter.
+    """
+    return _merchant_delete(product_id)
 
 
 def _fix_gmc(service, product_id: str, category: str, title: str) -> dict:
-    """Apply the GMC-side fix for the given category."""
-    try:
-        product = service.products().get(
-            merchantId=MERCHANT_ID, productId=product_id
-        ).execute()
-    except Exception as e:
-        return {"ok": False, "action": "get_failed", "error": str(e)}
+    """Apply the GMC-side fix for the given category via Merchant API v1."""
+    # adult_legit e recalled → deletar do GMC (não devem existir)
+    if category in ("adult_legit", "recalled"):
+        return _merchant_delete(product_id)
+
+    # adult_false, caps, gtin → buscar produto atual e reconstruir via productInputs:insert
+    product = _merchant_get(product_id)
+    if not product:
+        return {"ok": False, "action": "get_failed", "error": "produto não encontrado via Merchant API"}
 
     changed = False
     action  = "none"
 
-    if category in ("adult_legit", "recalled"):
-        product["excludedDestinations"] = ["Shopping ads", "Shopping"]
-        changed = True
-        action  = "excluded_from_shopping"
-
-    elif category == "adult_false":
+    if category == "adult_false":
         product["adult"] = False
         t = title.lower()
-        if "esmalte" in t or "nail" in t:
-            product["googleProductCategory"] = "2975"
-        elif "óleo" in t or "oleo" in t:
-            product["googleProductCategory"] = "2975"
-        elif "creme" in t and ("corpo" in t or "corporal" in t):
-            product["googleProductCategory"] = "567"
-        elif "kit" in t or "linha" in t:
-            product["googleProductCategory"] = "2975"
-        elif "shampoo" in t or "condicionador" in t:
+        if any(k in t for k in ("esmalte", "nail", "óleo", "oleo", "creme", "kit", "linha", "shampoo", "condicionador")):
             product["googleProductCategory"] = "2975"
         changed = True
         action  = "adult_false_set"
@@ -660,16 +719,29 @@ def _fix_gmc(service, product_id: str, category: str, title: str) -> dict:
         changed = True
         action  = "identifier_exists_false"
 
-    if changed:
-        try:
-            service.products().update(
-                merchantId=MERCHANT_ID, productId=product_id, body=_clean(product)
-            ).execute()
-            return {"ok": True, "action": action}
-        except Exception as e:
-            return {"ok": False, "action": action, "error": str(e)}
+    if not changed:
+        return {"ok": True, "action": "no_change_needed"}
 
-    return {"ok": True, "action": "no_change_needed"}
+    # Atualiza via productInputs:insert (Merchant API v1)
+    # Nota: requer dataSource — usa o produto como referência para reconstruir o input
+    try:
+        token = _get_merchant_token()
+        # Merchant API usa productInputs para escrita; name format: channel~lang~country~offerId
+        name = _content_id_to_merchant_name(product_id)
+        payload = {k: v for k, v in product.items() if k not in READONLY_FIELDS}
+        # dataSource primário da conta (sem datasource específico, usa primário)
+        r = requests.post(
+            f"{MERCHANT_API_BASE}/productInputs:insert",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            params={"dataSource": f"accounts/{MERCHANT_ID}/dataSources/primary"},
+            json=payload,
+            timeout=30,
+        )
+        if r.status_code in (200, 201):
+            return {"ok": True, "action": action}
+        return {"ok": False, "action": action, "status": r.status_code, "body": r.text[:300]}
+    except Exception as e:
+        return {"ok": False, "action": action, "error": str(e)}
 
 
 # ── Background fix ────────────────────────────────────────────────────────────
@@ -1249,24 +1321,21 @@ def fix_log():
 
 @router.get("/buscar-produto")
 def gmc_buscar_produto(q: str, max_results: int = 50):
-    """Busca produtos no GMC por título (substring, case-insensitive). Retorna id, title, excludedDestinations."""
+    """Busca produtos no GMC por título via Merchant API v1."""
     try:
-        service = _build_service()
-        merchant_id = MERCHANT_ID
         todos = []
         page_token = None
         while True:
-            kw = dict(merchantId=merchant_id, maxResults=250)
-            if page_token:
-                kw["pageToken"] = page_token
-            resp = service.products().list(**kw).execute()
-            for p in resp.get("resources", []):
+            resp = _merchant_list_products(page_token=page_token)
+            if "error" in resp:
+                return {"ok": False, "erro": resp["error"]}
+            for p in resp.get("products", []):
                 if q.lower() in p.get("title", "").lower():
                     todos.append({
-                        "id": p["id"],
+                        "id": p.get("name", ""),
                         "title": p.get("title"),
                         "availability": p.get("availability"),
-                        "excludedDestinations": p.get("excludedDestinations", []),
+                        "price": p.get("price", {}),
                     })
             page_token = resp.get("nextPageToken")
             if not page_token or len(todos) >= max_results:
@@ -1274,6 +1343,53 @@ def gmc_buscar_produto(q: str, max_results: int = 50):
         return {"ok": True, "total": len(todos), "produtos": todos[:max_results]}
     except Exception as e:
         return {"ok": False, "erro": str(e)}
+
+
+@router.post("/deletar-orfaos")
+def deletar_orfaos(background_tasks: BackgroundTasks):
+    """Deleta do GMC os 90 produtos com 'Missing product price' (órfãos do Shopify)."""
+    resultado = _scan.get("resultado")
+    if not resultado:
+        raise HTTPException(status_code=404, detail="Execute /gmc/scan primeiro.")
+
+    # Coleta produtos com issue Missing product price
+    orphans = []
+    for p in resultado.get("disapproved", []):
+        has_price_issue = any(
+            "price" in i.get("description", "").lower() or "missing" in i.get("description", "").lower()
+            for i in p.get("issues", [])
+        )
+        if has_price_issue:
+            orphans.append(p["product_id"])
+
+    if not orphans:
+        return {"ok": True, "message": "Nenhum órfão encontrado no último scan.", "total": 0}
+
+    background_tasks.add_task(_delete_orphans_bg, orphans)
+    return {"ok": True, "message": f"Deleção iniciada para {len(orphans)} produtos órfãos.", "total": len(orphans)}
+
+
+_orphan_del: dict = {"rodando": False, "total": 0, "ok": 0, "erros": 0, "log": []}
+
+
+def _delete_orphans_bg(product_ids: list[str]):
+    global _orphan_del
+    _orphan_del = {"rodando": True, "total": len(product_ids), "ok": 0, "erros": 0, "log": []}
+    for pid in product_ids:
+        result = _merchant_delete(pid)
+        if result.get("ok"):
+            _orphan_del["ok"] += 1
+        else:
+            _orphan_del["erros"] += 1
+            _orphan_del["log"].append(f"ERRO {pid}: {result}")
+        time.sleep(0.3)
+    _orphan_del["rodando"] = False
+
+
+@router.get("/deletar-orfaos/status")
+def deletar_orfaos_status():
+    """Status da deleção de órfãos em background."""
+    return _orphan_del
 
 
 # ── Blacklist endpoints ───────────────────────────────────────────────────────
