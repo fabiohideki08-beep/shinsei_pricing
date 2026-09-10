@@ -923,6 +923,13 @@ def _loop():
         except Exception as e:
             logger.exception("Erro no sync de descontos: %s", e)
 
+        # Correção de estoque multiempresa venda a venda (a cada 10 min via ciclo)
+        try:
+            from services.multiempresa_correcao import job_multiempresa
+            job_multiempresa()
+        except Exception as e:
+            logger.exception("Erro no job multiempresa: %s", e)
+
         # Refresh do cache de produtos Shopify às 06:00 (necessário para o SCBOT)
         try:
             _ciclo_refresh_cache_produtos()

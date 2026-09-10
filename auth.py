@@ -90,6 +90,8 @@ PUBLIC_PATHS = {
     "/openapi.json",
     "/redoc",
     "/webhooks/bling",
+    "/multiempresa/webhook/bling/shinsei",
+    "/multiempresa/webhook/bling/akg",
     "/webhooks/shopify/produto",
     "/shopify/webhook/order-paid",
     "/shopify/webhook/checkout-abandoned",
