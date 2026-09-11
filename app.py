@@ -145,6 +145,13 @@ try:
 except Exception as _vml_exc:
     logger.warning("Ferramenta de vínculo ML não carregada: %s", _vml_exc)
 
+try:
+    from routes.tiktok_shop import router as tiktok_router
+    app.include_router(tiktok_router)
+    logger.info("TikTok Shop API registrada em /tiktok")
+except Exception as _tiktok_exc:
+    logger.warning("TikTok Shop não carregado: %s", _tiktok_exc)
+
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     return await verificar_api_key(request, call_next)
