@@ -143,6 +143,20 @@ def init_db():
     CREATE INDEX IF NOT EXISTS ix_me_rotas_sku         ON me_rotas(sku);
     """)
     conn.commit()
+
+    # Garante rota padrão: qualquer SKU da Shinsei → AKG Geral
+    existe = conn.execute("SELECT 1 FROM me_rotas WHERE empresa_vendedora='shinsei' AND sku IS NULL AND canal_venda IS NULL AND deposito_venda IS NULL AND ativo=1").fetchone()
+    if not existe:
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute("""
+            INSERT INTO me_rotas (empresa_vendedora, empresa_fornecedora,
+                deposito_fornecedor_id, deposito_fornecedor_nome, obs, criado_em)
+            VALUES ('shinsei', 'akg', ?, 'Geral AKG',
+                'Rota padrao: Shinsei vende -> estoque sai da AKG Geral', ?)
+        """, (DEP_AKG_GERAL, now))
+        conn.commit()
+        logger.info("me_rotas: rota padrão shinsei→AKG criada automaticamente")
+
     conn.close()
     logger.info("me_*: tabelas inicializadas")
 
