@@ -319,6 +319,98 @@ def status_lote(_=Depends(verificar_api_key)):
     return _job
 
 
+@router.get("/anuncios/preview-lote")
+def preview_lote(
+    limite: int = 300,
+    dias_vendas: int = 90,
+    _=Depends(verificar_api_key),
+):
+    """
+    Retorna a lista dos produtos que seriam publicados no TikTok, ordenados por liquidez.
+    NÃO publica nada — apenas simula a seleção para revisão.
+    Inclui: posição, SKU, nome, qtd vendida nos últimos N dias, custo, preço TikTok.
+    """
+    import requests as _req
+    from bling_client import BlingClient
+
+    client = BlingClient()
+    token = client.access_token
+    hdrs = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    BASE = "https://api.bling.com.br/Api/v3"
+
+    # 1. Listar todos os produtos ativos
+    produtos_raw = []
+    pagina = 1
+    while True:
+        r = _req.get(f"{BASE}/produtos", params={"pagina": pagina, "limite": 100, "situacao": "A"}, headers=hdrs, timeout=30)
+        data = r.json().get("data", [])
+        produtos_raw.extend(data)
+        if len(data) < 100:
+            break
+        pagina += 1
+        time.sleep(0.25)
+
+    # 2. Ranking de vendas
+    ranking = _ranking_vendas_bling(hdrs, _req, dias=dias_vendas)
+
+    # 3. Ordenar por liquidez e cortar no limite
+    produtos_raw.sort(key=lambda p: ranking.get(p["id"], 0), reverse=True)
+    selecionados = produtos_raw[:limite]
+
+    # 4. Para cada produto, buscar custo e calcular preço TikTok
+    resultado = []
+    embalagem = 0.50
+    imposto = 4.0
+    markup = 1.33
+
+    for pos, prod in enumerate(selecionados, start=1):
+        prod_id = prod["id"]
+        sku = prod.get("codigo", "")
+        nome = prod.get("nome", "")
+        qtd_vendida = ranking.get(prod_id, 0)
+
+        custo = 0.0
+        preco_tiktok = None
+        obs = ""
+        try:
+            r_det = _req.get(f"{BASE}/produtos/{prod_id}", headers=hdrs, timeout=20)
+            prod_det = r_det.json().get("data", {})
+            situacao = (prod_det.get("situacao") or {}).get("valor", "A")
+            if situacao != "A":
+                obs = f"situação={situacao}"
+            custo = _extrair_custo_bling(prod_det, hdrs, _req)
+            if custo > 0:
+                preco_tiktok = round((custo + embalagem) * (1 + imposto / 100) * markup, 2)
+            else:
+                obs = obs or "sem custo"
+        except Exception as e:
+            obs = str(e)
+        time.sleep(0.2)
+
+        resultado.append({
+            "pos": pos,
+            "sku": sku,
+            "nome": nome,
+            "qtd_vendida_90d": int(qtd_vendida),
+            "custo": round(custo, 2),
+            "preco_tiktok": preco_tiktok,
+            "obs": obs,
+        })
+
+    sem_custo = sum(1 for r in resultado if not r["preco_tiktok"])
+    descontinuados = [r for r in resultado if r["obs"] and r["obs"].startswith("situação=")]
+
+    return {
+        "total_ativos_bling": len(produtos_raw),
+        "selecionados": len(resultado),
+        "sem_custo": sem_custo,
+        "possiveis_descontinuados": len(descontinuados),
+        "formula": f"(custo + {embalagem}) * {1 + imposto/100:.4f} * {markup}",
+        "dias_vendas": dias_vendas,
+        "produtos": resultado,
+    }
+
+
 @router.get("/pedidos")
 def listar_pedidos(
     pagina: int = 1,
