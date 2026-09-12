@@ -185,16 +185,22 @@ def _preview_lote_bg(limite: int, dias_vendas: int):
 
 def _extrair_custo_bling_client(prod_det: dict, client) -> float:
     """Resolve custo via BlingClient nas 3 camadas: composição > fornecedor > estoque."""
-    # Camada 1: composição (kit)
-    componentes = (prod_det.get("estrutura") or {}).get("componentes") or []
-    if componentes:
+    # Camada 1: composição (kit) — estrutura pode ser dict ou string "P"/"K"
+    estrutura = prod_det.get("estrutura") or {}
+    if not isinstance(estrutura, dict):
+        estrutura = {}
+    componentes = estrutura.get("componentes") or []
+    if isinstance(componentes, list) and componentes:
         total = 0.0
         for comp in componentes:
+            if not isinstance(comp, dict):
+                continue
             custo_unit = float(comp.get("precoCusto") or 0)
             qtde = float(comp.get("quantidade") or 1)
-            if custo_unit == 0 and (comp.get("produto") or {}).get("id"):
+            prod_comp = comp.get("produto") or {}
+            if custo_unit == 0 and isinstance(prod_comp, dict) and prod_comp.get("id"):
                 try:
-                    det2 = client._get(f"/produtos/{comp['produto']['id']}")
+                    det2 = client._get(f"/produtos/{prod_comp['id']}")
                     custo_unit = _extrair_custo_simples_client(det2.get("data", {}))
                 except Exception:
                     pass
@@ -206,19 +212,33 @@ def _extrair_custo_bling_client(prod_det: dict, client) -> float:
 
 def _extrair_custo_simples_client(prod: dict) -> float:
     """Camadas 2 e 3: fornecedor padrão e estoque/NF."""
-    for forn in (prod.get("fornecedores") or []):
+    if not isinstance(prod, dict):
+        return 0.0
+    fornecedores = prod.get("fornecedores") or []
+    if not isinstance(fornecedores, list):
+        fornecedores = []
+    # Fornecedor padrão primeiro
+    for forn in fornecedores:
+        if not isinstance(forn, dict):
+            continue
         if forn.get("padrao") or forn.get("padrão"):
             c = float(forn.get("precoCusto") or 0)
             if c > 0:
                 return c
-    for forn in (prod.get("fornecedores") or []):
+    # Qualquer fornecedor com custo
+    for forn in fornecedores:
+        if not isinstance(forn, dict):
+            continue
         c = float(forn.get("precoCusto") or 0)
         if c > 0:
             return c
+    # Estoque (última NF)
     estoque = prod.get("estoque") or {}
-    c = float(estoque.get("precoCusto") or estoque.get("precoCompra") or 0)
-    if c > 0:
-        return c
+    if isinstance(estoque, dict):
+        c = float(estoque.get("precoCusto") or estoque.get("precoCompra") or 0)
+        if c > 0:
+            return c
+    # Campos raiz
     return float(prod.get("precoCusto") or prod.get("precoCompra") or 0)
 
 
