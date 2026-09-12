@@ -13,17 +13,58 @@ Endpoints:
   POST /tiktok/anuncios/lote         — publicar vários produtos em lote
   GET  /tiktok/pedidos               — listar pedidos TikTok
   GET  /tiktok/anuncios/status       — status do job de publicação em lote
+  POST /tiktok/precos-override        — definir preços TikTok fixos por SKU (bypass fórmula)
+  GET  /tiktok/precos-override        — listar todos os overrides de preço
+  DELETE /tiktok/precos-override/{sku} — remover override de um SKU
 """
 import logging
+import sqlite3
 import time
 import threading
-from typing import Optional, List
+from pathlib import Path
+from typing import Optional, List, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, Body
 from pydantic import BaseModel
 
 from auth import api_key_dep as verificar_api_key
 import services.tiktok_shop as tiktok
+
+# ── Banco de dados de overrides de preço ─────────────────────────────────
+_DB_PATH = Path(__file__).parent.parent / "data" / "tiktok_price_overrides.db"
+_DB_PATH.parent.mkdir(exist_ok=True)
+
+
+def _get_db():
+    conn = sqlite3.connect(str(_DB_PATH))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _init_db():
+    with _get_db() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS price_overrides (
+                sku TEXT PRIMARY KEY,
+                nome TEXT,
+                preco_tiktok REAL NOT NULL,
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        conn.commit()
+
+
+_init_db()
+
+
+def _load_overrides() -> Dict[str, float]:
+    """Retorna dict {sku: preco_tiktok} de todos os overrides."""
+    try:
+        with _get_db() as conn:
+            rows = conn.execute("SELECT sku, preco_tiktok FROM price_overrides").fetchall()
+            return {r["sku"]: r["preco_tiktok"] for r in rows}
+    except Exception:
+        return {}
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tiktok", tags=["TikTok Shop"])
@@ -326,6 +367,63 @@ def atualizar_preco(anuncio_id: int, body: AtualizarPrecoRequest, _=Depends(veri
         raise HTTPException(500, str(e))
 
 
+# ── Endpoints de override de preço ───────────────────────────────────────
+
+class OverrideRequest(BaseModel):
+    overrides: Dict[str, float]          # {sku: preco_tiktok}
+    nomes: Optional[Dict[str, str]] = None  # {sku: nome} — opcional, para referência
+
+
+@router.post("/precos-override")
+def salvar_overrides(body: OverrideRequest, _=Depends(verificar_api_key)):
+    """Salva overrides de preço TikTok. Esses preços são usados diretamente no lote, bypass da fórmula."""
+    if not body.overrides:
+        raise HTTPException(400, "Nenhum override fornecido")
+    nomes = body.nomes or {}
+    with _get_db() as conn:
+        for sku, preco in body.overrides.items():
+            conn.execute(
+                """INSERT INTO price_overrides (sku, nome, preco_tiktok, updated_at)
+                   VALUES (?, ?, ?, datetime('now'))
+                   ON CONFLICT(sku) DO UPDATE SET
+                     preco_tiktok=excluded.preco_tiktok,
+                     nome=excluded.nome,
+                     updated_at=excluded.updated_at""",
+                (str(sku), nomes.get(sku, ""), float(preco))
+            )
+        conn.commit()
+    return {"ok": True, "salvos": len(body.overrides)}
+
+
+@router.get("/precos-override")
+def listar_overrides(_=Depends(verificar_api_key)):
+    """Lista todos os overrides de preço TikTok configurados."""
+    with _get_db() as conn:
+        rows = conn.execute(
+            "SELECT sku, nome, preco_tiktok, updated_at FROM price_overrides ORDER BY updated_at DESC"
+        ).fetchall()
+    return {"total": len(rows), "data": [dict(r) for r in rows]}
+
+
+@router.delete("/precos-override/{sku}")
+def remover_override(sku: str, _=Depends(verificar_api_key)):
+    """Remove override de preço para um SKU específico."""
+    with _get_db() as conn:
+        conn.execute("DELETE FROM price_overrides WHERE sku=?", (sku,))
+        conn.commit()
+    return {"ok": True, "sku": sku}
+
+
+@router.delete("/precos-override")
+def limpar_overrides(_=Depends(verificar_api_key)):
+    """Remove TODOS os overrides de preço."""
+    with _get_db() as conn:
+        count = conn.execute("SELECT COUNT(*) FROM price_overrides").fetchone()[0]
+        conn.execute("DELETE FROM price_overrides")
+        conn.commit()
+    return {"ok": True, "removidos": count}
+
+
 class LoteRequest(BaseModel):
     skus: Optional[List[str]] = None            # Se vazio, processa todos os produtos ativos
     excluir_skus: Optional[List[str]] = None    # SKUs a excluir do lote mesmo que estejam ativos
@@ -494,11 +592,26 @@ def _publicar_lote_bg(skus: Optional[List[str]], excluir_skus: Optional[List[str
         _job["limite_aplicado"] = limite
         logger.info(f"TikTok lote: {len(ids_para_processar)} produtos a precificar (top {limite} por liquidez)")
 
+        # Carregar overrides de preço (bypass da fórmula para produtos precificados manualmente)
+        price_overrides = _load_overrides()
+        override_count = sum(1 for item in ids_para_processar if item.get("sku") in price_overrides)
+        logger.info(f"TikTok lote: {override_count} produtos com preço override (bypass fórmula)")
+
         for item in ids_para_processar:
             prod_id = item["id"]
             sku = item["sku"]
 
             try:
+                # Verificar override primeiro — bypassa completamente a fórmula
+                if sku and sku in price_overrides:
+                    preco_tiktok = round(float(price_overrides[sku]), 2)
+                    tiktok.criar_anuncio(prod_id, preco_tiktok)
+                    _job["publicados"] += 1
+                    logger.debug(f"TikTok [{sku}] OVERRIDE → R${preco_tiktok:.2f}")
+                    _job["processados"] += 1
+                    time.sleep(0.3)
+                    continue
+
                 # Busca detalhes completos via BlingClient (fornecedores + estoque + estrutura)
                 det = client._get(f"/produtos/{prod_id}")
                 prod_det = det.get("data", {})
