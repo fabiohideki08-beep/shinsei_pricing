@@ -146,7 +146,8 @@ def _preview_lote_bg(limite: int, dias_vendas: int):
                 # Busca detalhe completo via BlingClient (fornecedores + estoque + estrutura)
                 det = client._get(f"/produtos/{prod_id}")
                 prod_det = det.get("data", {})
-                situacao = (prod_det.get("situacao") or {}).get("valor", "A")
+                sit_raw = prod_det.get("situacao")
+                situacao = sit_raw.get("valor", "A") if isinstance(sit_raw, dict) else str(sit_raw or "A")
                 if situacao != "A":
                     obs = f"situação={situacao}"
                 # Resolver custo pelas 3 camadas
