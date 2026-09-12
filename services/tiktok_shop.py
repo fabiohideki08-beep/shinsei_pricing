@@ -1,228 +1,152 @@
 """
-TikTok Shop Open Platform API — cliente com HMAC-SHA256 signing
-Docs: https://partner.tiktokshop.com/docv2/page/product
+TikTok Shop — integração via Bling API v3
+idLoja TikTok Shop Shinsei: 206293681
+tipoIntegracao: "TikTok Shop"
+
+Todos os produtos, anúncios e pedidos TikTok são gerenciados pelo Bling Shinsei.
 """
-import hashlib
-import hmac
-import json
 import logging
 import os
 import time
-from typing import Any, Optional
+from typing import Optional
 import requests
 
 logger = logging.getLogger(__name__)
 
-TIKTOK_BASE_URL = "https://open-api.tiktokglobalshop.com"
-TIKTOK_AUTH_URL = "https://services.us.tiktokshop.com/open/authorize"
+BLING_BASE = "https://api.bling.com.br/Api/v3"
+TIKTOK_LOJA_ID   = int(os.environ.get("TIKTOK_BLING_LOJA_ID", "206293681"))
+TIKTOK_TIPO      = os.environ.get("TIKTOK_BLING_TIPO", "TikTok Shop")
 
 
-class TikTokShopClient:
+def _bling_headers() -> dict:
+    """Busca token Bling Shinsei via BlingClient."""
+    try:
+        from bling_client import BlingClient
+        client = BlingClient()
+        token = client.access_token or client.tokens.get("access_token", "")
+    except Exception:
+        token = os.environ.get("BLING_ACCESS_TOKEN", "")
+    return {"Authorization": f"Bearer {token}", "Accept": "application/json"}
 
-    def __init__(self):
-        self.app_key    = os.environ.get("TIKTOK_APP_KEY", "")
-        self.app_secret = os.environ.get("TIKTOK_APP_SECRET", "")
-        self.access_token = os.environ.get("TIKTOK_ACCESS_TOKEN", "")
-        self.shop_id    = os.environ.get("TIKTOK_SHOP_ID", "")
 
-    def _sign(self, path: str, params: dict) -> str:
-        """
-        Gera assinatura HMAC-SHA256 para chamadas TikTok Shop API v2.
-        Regra: HMAC-SHA256(app_secret, app_secret + sorted_params_string + app_secret)
-        """
-        # Remove campos que não entram na assinatura
-        exclude = {"sign", "access_token"}
-        sorted_params = sorted(
-            [(k, str(v)) for k, v in params.items() if k not in exclude]
-        )
-        param_str = "".join(f"{k}{v}" for k, v in sorted_params)
-        base_str = f"{self.app_secret}{path}{param_str}{self.app_secret}"
-        sig = hmac.new(
-            self.app_secret.encode("utf-8"),
-            base_str.encode("utf-8"),
-            hashlib.sha256,
-        ).hexdigest()
-        return sig
+# ── Anúncios (produtos TikTok no Bling) ──────────────────────────────────
 
-    def _get(self, path: str, extra_params: Optional[dict] = None) -> dict:
-        params = {
-            "app_key":      self.app_key,
-            "timestamp":    int(time.time()),
-            "version":      "202309",
-            "access_token": self.access_token,
-            "shop_id":      self.shop_id,
-        }
-        if extra_params:
-            params.update(extra_params)
-        params["sign"] = self._sign(path, params)
-        r = requests.get(f"{TIKTOK_BASE_URL}{path}", params=params, timeout=30)
-        r.raise_for_status()
-        return r.json()
+def listar_anuncios(pagina: int = 1, limite: int = 100) -> dict:
+    """Lista anúncios TikTok Shop cadastrados no Bling Shinsei."""
+    hdrs = _bling_headers()
+    r = requests.get(
+        f"{BLING_BASE}/anuncios",
+        params={
+            "tipoIntegracao": TIKTOK_TIPO,
+            "idLoja": TIKTOK_LOJA_ID,
+            "pagina": pagina,
+            "limite": limite,
+        },
+        headers=hdrs,
+        timeout=30,
+    )
+    r.raise_for_status()
+    return r.json()
 
-    def _post(self, path: str, body: dict, extra_params: Optional[dict] = None) -> dict:
-        params = {
-            "app_key":      self.app_key,
-            "timestamp":    int(time.time()),
-            "version":      "202309",
-            "access_token": self.access_token,
-            "shop_id":      self.shop_id,
-        }
-        if extra_params:
-            params.update(extra_params)
-        params["sign"] = self._sign(path, params)
-        r = requests.post(
-            f"{TIKTOK_BASE_URL}{path}",
-            params=params,
-            json=body,
-            headers={"Content-Type": "application/json"},
-            timeout=30,
-        )
-        r.raise_for_status()
-        return r.json()
 
-    def _put(self, path: str, body: dict, extra_params: Optional[dict] = None) -> dict:
-        params = {
-            "app_key":      self.app_key,
-            "timestamp":    int(time.time()),
-            "version":      "202309",
-            "access_token": self.access_token,
-            "shop_id":      self.shop_id,
-        }
-        if extra_params:
-            params.update(extra_params)
-        params["sign"] = self._sign(path, params)
-        r = requests.put(
-            f"{TIKTOK_BASE_URL}{path}",
-            params=params,
-            json=body,
-            headers={"Content-Type": "application/json"},
-            timeout=30,
-        )
-        r.raise_for_status()
-        return r.json()
+def listar_todos_anuncios() -> list:
+    """Coleta todos os anúncios TikTok paginando automaticamente."""
+    todos = []
+    pagina = 1
+    while True:
+        resp = listar_anuncios(pagina=pagina, limite=100)
+        data = resp.get("data", [])
+        todos.extend(data)
+        if len(data) < 100:
+            break
+        pagina += 1
+        time.sleep(0.3)
+    return todos
 
-    # ── OAuth ────────────────────────────────────────────────────────────
 
-    def get_auth_url(self, redirect_uri: str, state: str = "") -> str:
-        return (
-            f"{TIKTOK_AUTH_URL}"
-            f"?app_key={self.app_key}"
-            f"&redirect_uri={redirect_uri}"
-            f"&state={state}"
-        )
+def buscar_anuncio(anuncio_id: int) -> dict:
+    r = requests.get(
+        f"{BLING_BASE}/anuncios/{anuncio_id}",
+        headers=_bling_headers(),
+        timeout=30,
+    )
+    r.raise_for_status()
+    return r.json()
 
-    def exchange_code(self, code: str) -> dict:
-        path = "/api/token/getByCode"
-        params = {
-            "app_key":   self.app_key,
-            "timestamp": int(time.time()),
-            "version":   "202309",
-        }
-        body = {
-            "app_key":    self.app_key,
-            "app_secret": self.app_secret,
-            "auth_code":  code,
-            "grant_type": "authorized_code",
-        }
-        params["sign"] = self._sign(path, params)
-        r = requests.post(
-            f"{TIKTOK_BASE_URL}{path}",
-            params=params,
-            json=body,
-            headers={"Content-Type": "application/json"},
-            timeout=30,
-        )
-        r.raise_for_status()
-        return r.json()
 
-    def refresh_token(self, refresh_token: str) -> dict:
-        path = "/api/token/refresh"
-        params = {
-            "app_key":   self.app_key,
-            "timestamp": int(time.time()),
-            "version":   "202309",
-        }
-        body = {
-            "app_key":       self.app_key,
-            "app_secret":    self.app_secret,
-            "refresh_token": refresh_token,
-            "grant_type":    "refresh_token",
-        }
-        params["sign"] = self._sign(path, params)
-        r = requests.post(
-            f"{TIKTOK_BASE_URL}{path}",
-            params=params,
-            json=body,
-            headers={"Content-Type": "application/json"},
-            timeout=30,
-        )
-        r.raise_for_status()
-        return r.json()
+def criar_anuncio(produto_id: int, preco: float, titulo: Optional[str] = None) -> dict:
+    """Publica produto do Bling no TikTok Shop."""
+    hdrs = _bling_headers()
+    body = {
+        "integracao": {"tipo": TIKTOK_TIPO},
+        "loja": {"id": TIKTOK_LOJA_ID},
+        "produto": {"id": produto_id},
+        "preco": preco,
+    }
+    if titulo:
+        body["titulo"] = titulo
+    r = requests.post(f"{BLING_BASE}/anuncios", json=body, headers=hdrs, timeout=30)
+    r.raise_for_status()
+    return r.json()
 
-    # ── Produtos ─────────────────────────────────────────────────────────
 
-    def listar_produtos(self, page_size: int = 100, page_token: str = "") -> dict:
-        body = {"page_size": page_size}
-        if page_token:
-            body["page_token"] = page_token
-        return self._post("/api/products/search", body)
+def atualizar_anuncio(anuncio_id: int, payload: dict) -> dict:
+    r = requests.put(
+        f"{BLING_BASE}/anuncios/{anuncio_id}",
+        json=payload,
+        headers=_bling_headers(),
+        timeout=30,
+    )
+    r.raise_for_status()
+    return r.json()
 
-    def buscar_produto(self, product_id: str) -> dict:
-        return self._get(f"/api/products/{product_id}")
 
-    def atualizar_produto(self, product_id: str, payload: dict) -> dict:
-        return self._put(f"/api/products/{product_id}", payload)
+def atualizar_preco_anuncio(anuncio_id: int, preco: float) -> dict:
+    return atualizar_anuncio(anuncio_id, {"preco": preco})
 
-    def atualizar_marca_produto(self, product_id: str, brand_id: str) -> dict:
-        return self.atualizar_produto(product_id, {"brand_id": brand_id})
 
-    # ── Marcas ───────────────────────────────────────────────────────────
+# ── Pedidos TikTok ────────────────────────────────────────────────────────
 
-    def listar_marcas(self, brand_name: str = "") -> dict:
-        params = {}
-        if brand_name:
-            params["brand_name"] = brand_name
-        return self._get("/api/brands", extra_params=params)
+def listar_pedidos_tiktok(pagina: int = 1, limite: int = 100, situacao: Optional[int] = None) -> dict:
+    """Lista pedidos de venda originados do TikTok Shop."""
+    params = {"pagina": pagina, "limite": limite, "idLoja": TIKTOK_LOJA_ID}
+    if situacao:
+        params["situacao"] = situacao
+    r = requests.get(
+        f"{BLING_BASE}/pedidos/vendas",
+        params=params,
+        headers=_bling_headers(),
+        timeout=30,
+    )
+    r.raise_for_status()
+    return r.json()
 
-    def buscar_id_outras_marcas(self) -> Optional[str]:
-        """Retorna o brand_id de 'Outras marcas' / 'Others' no sistema TikTok."""
-        resp = self.listar_marcas("Outras marcas")
-        brands = resp.get("data", {}).get("brands", [])
-        for b in brands:
-            name = b.get("name", "").lower()
-            if "outras" in name or "other" in name:
-                return str(b.get("id"))
-        # Tenta em inglês
-        resp2 = self.listar_marcas("Others")
-        brands2 = resp2.get("data", {}).get("brands", [])
-        for b in brands2:
-            name = b.get("name", "").lower()
-            if "other" in name or "outras" in name:
-                return str(b.get("id"))
-        return None
 
-    # ── Lojas ────────────────────────────────────────────────────────────
+# ── Produtos Bling para vincular ao TikTok ────────────────────────────────
 
-    def listar_lojas(self) -> dict:
-        path = "/api/seller/shops"
-        params = {
-            "app_key":      self.app_key,
-            "timestamp":    int(time.time()),
-            "version":      "202309",
-            "access_token": self.access_token,
-        }
-        params["sign"] = self._sign(path, params)
-        r = requests.get(f"{TIKTOK_BASE_URL}{path}", params=params, timeout=30)
-        r.raise_for_status()
-        return r.json()
+def buscar_produto_bling(sku: str) -> Optional[dict]:
+    r = requests.get(
+        f"{BLING_BASE}/produtos",
+        params={"codigo": sku, "limite": 1},
+        headers=_bling_headers(),
+        timeout=30,
+    )
+    r.raise_for_status()
+    data = r.json().get("data", [])
+    return data[0] if data else None
 
-    def status(self) -> dict:
-        """Verifica se as credenciais estão configuradas e funcionando."""
-        ok = bool(self.app_key and self.app_secret and self.access_token)
+
+# ── Status ────────────────────────────────────────────────────────────────
+
+def status() -> dict:
+    try:
+        resp = listar_anuncios(pagina=1, limite=1)
         return {
-            "app_key_ok":      bool(self.app_key),
-            "app_secret_ok":   bool(self.app_secret),
-            "access_token_ok": bool(self.access_token),
-            "shop_id_ok":      bool(self.shop_id),
-            "pronto":          ok,
+            "ok": True,
+            "loja_id": TIKTOK_LOJA_ID,
+            "tipo_integracao": TIKTOK_TIPO,
+            "total_anuncios_sample": len(resp.get("data", [])),
+            "canal": "Bling Shinsei → TikTok Shop",
         }
+    except Exception as e:
+        return {"ok": False, "erro": str(e), "loja_id": TIKTOK_LOJA_ID}
