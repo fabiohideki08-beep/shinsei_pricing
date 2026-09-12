@@ -94,7 +94,7 @@ def _preview_lote_bg(limite: int, dias_vendas: int):
         produtos_raw = []
         pagina = 1
         while True:
-            resp = _get("produtos", {"pagina": pagina, "limite": 100, "situacao": "A"})
+            resp = _get("/produtos", {"pagina": pagina, "limite": 100, "situacao": "A"})
             data = resp.get("data", [])
             produtos_raw.extend(data)
             if len(data) < 100:
@@ -110,7 +110,7 @@ def _preview_lote_bg(limite: int, dias_vendas: int):
         ranking: dict = {}
         for pag in range(1, 21):
             try:
-                r = _get("pedidos/vendas", {"pagina": pag, "limite": 100, "dataInicio": data_ini})
+                r = _get("/pedidos/vendas", {"pagina": pag, "limite": 100, "dataInicio": data_ini})
                 pedidos = r.get("data", [])
                 if not pedidos:
                     break
@@ -144,7 +144,7 @@ def _preview_lote_bg(limite: int, dias_vendas: int):
             obs = ""
             try:
                 # Busca detalhe completo via BlingClient (fornecedores + estoque + estrutura)
-                det = client._get(f"produtos/{prod_id}")
+                det = client._get(f"/produtos/{prod_id}")
                 prod_det = det.get("data", {})
                 situacao = (prod_det.get("situacao") or {}).get("valor", "A")
                 if situacao != "A":
@@ -194,7 +194,7 @@ def _extrair_custo_bling_client(prod_det: dict, client) -> float:
             qtde = float(comp.get("quantidade") or 1)
             if custo_unit == 0 and (comp.get("produto") or {}).get("id"):
                 try:
-                    det2 = client._get(f"produtos/{comp['produto']['id']}")
+                    det2 = client._get(f"/produtos/{comp['produto']['id']}")
                     custo_unit = _extrair_custo_simples_client(det2.get("data", {}))
                 except Exception:
                     pass
@@ -398,17 +398,13 @@ def _publicar_lote_bg(skus: Optional[List[str]], embalagem: float, imposto: floa
     try:
         from bling_client import BlingClient
         client = BlingClient()
-        token = client.access_token
-        hdrs = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
-        BASE = "https://api.bling.com.br/Api/v3"
 
-        # 1. Listar todos os produtos ativos (paginando)
+        # 1. Listar todos os produtos ativos via BlingClient
         ids_para_processar = []
         pagina = 1
         while True:
-            params = {"pagina": pagina, "limite": 100, "situacao": "A"}
-            r = _req.get(f"{BASE}/produtos", params=params, headers=hdrs, timeout=30)
-            data = r.json().get("data", [])
+            resp = client._get("/produtos", {"pagina": pagina, "limite": 100, "situacao": "A"})
+            data = resp.get("data", [])
             for p in data:
                 if skus and p.get("codigo") not in skus:
                     continue
@@ -418,14 +414,29 @@ def _publicar_lote_bg(skus: Optional[List[str]], embalagem: float, imposto: floa
             pagina += 1
             time.sleep(0.3)
 
-        # 2. Ranking de liquidez (vendas últimos 90 dias) para priorizar os 300 slots
+        # 2. Ranking de liquidez (vendas últimos 90 dias) via BlingClient
         logger.info("TikTok lote: buscando ranking de vendas para ordenar por liquidez...")
-        ranking = _ranking_vendas_bling(hdrs, _req, dias=90)
-        ids_para_processar.sort(
-            key=lambda x: ranking.get(x["id"], 0),
-            reverse=True,
-        )
-        # Aplica limite de anúncios (300 para contas novas TikTok BR)
+        from datetime import datetime, timedelta
+        data_ini = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
+        ranking: dict = {}
+        for pag in range(1, 21):
+            try:
+                r = client._get("/pedidos/vendas", {"pagina": pag, "limite": 100, "dataInicio": data_ini})
+                pedidos = r.get("data", [])
+                if not pedidos:
+                    break
+                for p in pedidos:
+                    for item in (p.get("itens") or []):
+                        pid = (item.get("produto") or {}).get("id")
+                        if pid:
+                            ranking[pid] = ranking.get(pid, 0) + float(item.get("quantidade") or 1)
+                if len(pedidos) < 100:
+                    break
+                time.sleep(0.25)
+            except Exception:
+                break
+
+        ids_para_processar.sort(key=lambda x: ranking.get(x["id"], 0), reverse=True)
         if len(ids_para_processar) > limite:
             logger.info(f"TikTok lote: limitando {len(ids_para_processar)} → {limite} mais líquidos")
             ids_para_processar = ids_para_processar[:limite]
@@ -439,11 +450,11 @@ def _publicar_lote_bg(skus: Optional[List[str]], embalagem: float, imposto: floa
             sku = item["sku"]
 
             try:
-                # Busca detalhes completos (fornecedores + estoque + estrutura)
-                r_det = _req.get(f"{BASE}/produtos/{prod_id}", headers=hdrs, timeout=20)
-                prod_det = r_det.json().get("data", {})
+                # Busca detalhes completos via BlingClient (fornecedores + estoque + estrutura)
+                det = client._get(f"/produtos/{prod_id}")
+                prod_det = det.get("data", {})
 
-                custo = _extrair_custo_bling(prod_det, hdrs, _req)
+                custo = _extrair_custo_bling_client(prod_det, client)
 
                 if custo <= 0:
                     _job["sem_custo"] += 1
