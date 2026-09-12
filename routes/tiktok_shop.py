@@ -96,20 +96,84 @@ def atualizar_preco(anuncio_id: int, body: AtualizarPrecoRequest, _=Depends(veri
 
 
 class LoteRequest(BaseModel):
-    skus: Optional[List[str]] = None       # Se vazio, busca todos os produtos Bling
-    margem_tiktok: float = 0.10            # Margem adicional sobre preço Bling (10% padrão)
+    skus: Optional[List[str]] = None   # Se vazio, processa todos os produtos ativos
+    embalagem: float = 0.50            # Custo embalagem por produto (R$)
+    imposto: float = 4.0               # Imposto % (ex: 4.0 = 4%)
+    markup: float = 1.33               # Multiplicador de markup (ex: 1.33 = 33%)
 
 
-def _publicar_lote_bg(skus: Optional[List[str]], margem: float):
+def _extrair_custo_bling(prod_detail: dict, hdrs: dict, req) -> float:
+    """
+    3 camadas de custo (ordem de prioridade):
+    1. Composição (kit): soma precoCusto * qtde de cada componente
+    2. Fornecedor padrão: fornecedores[padrão=true].precoCusto
+    3. Estoque (última NF): estoque.precoCusto
+    """
+    BASE = "https://api.bling.com.br/Api/v3"
+
+    # Camada 3: composição — estrutura do produto
+    estrutura = prod_detail.get("estrutura") or {}
+    componentes = estrutura.get("componentes") or []
+    if componentes:
+        total = 0.0
+        for comp in componentes:
+            custo_unit = float(comp.get("precoCusto") or 0)
+            qtde = float(comp.get("quantidade") or 1)
+            # Se o componente não tem custo direto, busca pelo id
+            if custo_unit == 0 and comp.get("produto", {}).get("id"):
+                try:
+                    r2 = req.get(f"{BASE}/produtos/{comp['produto']['id']}", headers=hdrs, timeout=20)
+                    comp_det = r2.json().get("data", {})
+                    custo_unit = _extrair_custo_simples(comp_det, hdrs, req)
+                except Exception:
+                    pass
+            total += custo_unit * qtde
+        if total > 0:
+            return total
+
+    return _extrair_custo_simples(prod_detail, hdrs, req)
+
+
+def _extrair_custo_simples(prod: dict, hdrs: dict, req) -> float:
+    """Camadas 1 e 2 para produto simples."""
+    # Camada 2: fornecedor padrão
+    for forn in (prod.get("fornecedores") or []):
+        if forn.get("padrao") or forn.get("padrão"):
+            custo = float(forn.get("precoCusto") or 0)
+            if custo > 0:
+                return custo
+    # Qualquer fornecedor com custo preenchido
+    for forn in (prod.get("fornecedores") or []):
+        custo = float(forn.get("precoCusto") or 0)
+        if custo > 0:
+            return custo
+
+    # Camada 1: estoque.precoCusto (última NF entrada)
+    estoque = prod.get("estoque") or {}
+    custo = float(estoque.get("precoCusto") or estoque.get("precoCompra") or 0)
+    if custo > 0:
+        return custo
+
+    # Fallback: campos raiz
+    return float(prod.get("precoCusto") or prod.get("precoCompra") or 0)
+
+
+def _publicar_lote_bg(skus: Optional[List[str]], embalagem: float, imposto: float, markup: float):
+    """
+    Precifica e publica produtos no TikTok Shop via Bling.
+    Fórmula: preco_venda = (custo + embalagem) * (1 + imposto/100) * markup
+    Custo: 3 camadas — composição > fornecedor padrão > estoque/NF
+    """
     global _job
     import requests as _req
 
     with _job_lock:
         _job.update({
             "rodando": True, "concluido": False, "erro": None,
-            "processados": 0, "publicados": 0, "erros_n": 0,
-            "erros_lista": [],
+            "total": 0, "processados": 0, "publicados": 0, "erros_n": 0,
+            "sem_custo": 0, "erros_lista": [],
             "iniciado_em": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "formula": f"(custo + {embalagem}) * {1 + imposto/100:.4f} * {markup}",
         })
 
     try:
@@ -117,56 +181,71 @@ def _publicar_lote_bg(skus: Optional[List[str]], margem: float):
         client = BlingClient()
         token = client.access_token
         hdrs = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+        BASE = "https://api.bling.com.br/Api/v3"
 
-        # Buscar produtos Bling (todos ou filtrado por SKU)
-        produtos = []
+        # 1. Listar todos os produtos ativos (paginando)
+        ids_para_processar = []
         pagina = 1
         while True:
-            params = {"pagina": pagina, "limite": 100, "tipo": "P"}
-            r = _req.get("https://api.bling.com.br/Api/v3/produtos", params=params, headers=hdrs, timeout=30)
+            params = {"pagina": pagina, "limite": 100, "situacao": "A"}
+            r = _req.get(f"{BASE}/produtos", params=params, headers=hdrs, timeout=30)
             data = r.json().get("data", [])
-            if skus:
-                data = [p for p in data if p.get("codigo", "") in skus]
-            produtos.extend(data)
-            if len(r.json().get("data", [])) < 100:
+            for p in data:
+                if skus and p.get("codigo") not in skus:
+                    continue
+                ids_para_processar.append({"id": p["id"], "sku": p.get("codigo"), "nome": p.get("nome", "")})
+            if len(data) < 100:
                 break
             pagina += 1
             time.sleep(0.3)
 
-        _job["total"] = len(produtos)
-        logger.info(f"TikTok lote: {len(produtos)} produtos para publicar")
+        _job["total"] = len(ids_para_processar)
+        logger.info(f"TikTok lote: {len(ids_para_processar)} produtos a precificar")
 
-        for prod in produtos:
-            prod_id = prod["id"]
-            preco_base = float(prod.get("preco", 0) or 0)
-            preco_tiktok = round(preco_base * (1 + margem), 2)
-
-            if preco_tiktok <= 0:
-                _job["erros_n"] += 1
-                _job["erros_lista"].append({"sku": prod.get("codigo"), "erro": "preço zero"})
-                _job["processados"] += 1
-                continue
+        for item in ids_para_processar:
+            prod_id = item["id"]
+            sku = item["sku"]
 
             try:
+                # Busca detalhes completos (fornecedores + estoque + estrutura)
+                r_det = _req.get(f"{BASE}/produtos/{prod_id}", headers=hdrs, timeout=20)
+                prod_det = r_det.json().get("data", {})
+
+                custo = _extrair_custo_bling(prod_det, hdrs, _req)
+
+                if custo <= 0:
+                    _job["sem_custo"] += 1
+                    _job["erros_lista"].append({"sku": sku, "erro": "sem custo no Bling"})
+                    _job["processados"] += 1
+                    time.sleep(0.2)
+                    continue
+
+                # Fórmula TikTok: (custo + embalagem) * (1 + imposto%) * markup
+                preco_tiktok = round((custo + embalagem) * (1 + imposto / 100) * markup, 2)
+
                 tiktok.criar_anuncio(prod_id, preco_tiktok)
                 _job["publicados"] += 1
+                logger.debug(f"TikTok [{sku}] custo={custo:.2f} → R${preco_tiktok:.2f}")
+
             except Exception as e:
                 _job["erros_n"] += 1
-                _job["erros_lista"].append({"sku": prod.get("codigo"), "erro": str(e)})
+                _job["erros_lista"].append({"sku": sku, "erro": str(e)})
 
             _job["processados"] += 1
             time.sleep(0.4)
 
         _job.update({
-            "rodando": False,
-            "concluido": True,
+            "rodando": False, "concluido": True,
             "concluido_em": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         })
-        logger.info(f"TikTok lote concluído: {_job['publicados']} publicados, {_job['erros_n']} erros")
+        logger.info(
+            f"TikTok lote concluído: {_job['publicados']} publicados, "
+            f"{_job['sem_custo']} sem custo, {_job['erros_n']} erros"
+        )
 
     except Exception as e:
         _job.update({"rodando": False, "erro": str(e)})
-        logger.error(f"TikTok lote erro: {e}")
+        logger.error(f"TikTok lote erro fatal: {e}")
 
 
 @router.post("/anuncios/lote")
@@ -177,10 +256,14 @@ def publicar_lote(
 ):
     if _job["rodando"]:
         raise HTTPException(409, "Job de publicação em lote já está rodando")
-    background_tasks.add_task(_publicar_lote_bg, body.skus, body.margem_tiktok)
+    background_tasks.add_task(
+        _publicar_lote_bg,
+        body.skus, body.embalagem, body.imposto, body.markup,
+    )
     return {
         "ok": True,
         "loja_id": tiktok.TIKTOK_LOJA_ID,
+        "formula": f"(custo + {body.embalagem}) * {1 + body.imposto/100:.4f} * {body.markup}",
         "mensagem": "Publicação em lote iniciada. Consulte GET /tiktok/anuncios/status",
     }
 
