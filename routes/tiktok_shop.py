@@ -327,11 +327,12 @@ def atualizar_preco(anuncio_id: int, body: AtualizarPrecoRequest, _=Depends(veri
 
 
 class LoteRequest(BaseModel):
-    skus: Optional[List[str]] = None   # Se vazio, processa todos os produtos ativos
-    embalagem: float = 0.50            # Custo embalagem por produto (R$)
-    imposto: float = 4.0               # Imposto % (ex: 4.0 = 4%)
-    markup: float = 1.33               # Multiplicador de markup (ex: 1.33 = 33%)
-    limite: int = 300                  # Limite de anúncios (TikTok BR: 300 para contas novas)
+    skus: Optional[List[str]] = None            # Se vazio, processa todos os produtos ativos
+    excluir_skus: Optional[List[str]] = None    # SKUs a excluir do lote mesmo que estejam ativos
+    embalagem: float = 0.50                     # Custo embalagem por produto (R$)
+    imposto: float = 4.0                        # Imposto % (ex: 4.0 = 4%)
+    markup: float = 1.33                        # Multiplicador de markup (ex: 1.33 = 33%)
+    limite: int = 300                           # Limite de anúncios (TikTok BR: 300 para contas novas)
 
 
 def _extrair_custo_bling(prod_detail: dict, hdrs: dict, req) -> float:
@@ -422,7 +423,7 @@ def _ranking_vendas_bling(hdrs: dict, req, dias: int = 90) -> dict:
     return ranking
 
 
-def _publicar_lote_bg(skus: Optional[List[str]], embalagem: float, imposto: float, markup: float, limite: int):
+def _publicar_lote_bg(skus: Optional[List[str]], excluir_skus: Optional[List[str]], embalagem: float, imposto: float, markup: float, limite: int):
     """
     Precifica e publica produtos no TikTok Shop via Bling.
     Fórmula: preco_venda = (custo + embalagem) * (1 + imposto/100) * markup
@@ -451,9 +452,12 @@ def _publicar_lote_bg(skus: Optional[List[str]], embalagem: float, imposto: floa
             resp = client._get("/produtos", {"pagina": pagina, "limite": 100, "situacao": "A"})
             data = resp.get("data", [])
             for p in data:
-                if skus and p.get("codigo") not in skus:
+                sku = p.get("codigo")
+                if skus and sku not in skus:
                     continue
-                ids_para_processar.append({"id": p["id"], "sku": p.get("codigo"), "nome": p.get("nome", "")})
+                if excluir_skus and sku in excluir_skus:
+                    continue
+                ids_para_processar.append({"id": p["id"], "sku": sku, "nome": p.get("nome", "")})
             if len(data) < 100:
                 break
             pagina += 1
@@ -546,7 +550,7 @@ def publicar_lote(
         raise HTTPException(409, "Job de publicação em lote já está rodando")
     background_tasks.add_task(
         _publicar_lote_bg,
-        body.skus, body.embalagem, body.imposto, body.markup, body.limite,
+        body.skus, body.excluir_skus, body.embalagem, body.imposto, body.markup, body.limite,
     )
     return {
         "ok": True,
