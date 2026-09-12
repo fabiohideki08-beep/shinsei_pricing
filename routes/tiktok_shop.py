@@ -100,6 +100,7 @@ class LoteRequest(BaseModel):
     embalagem: float = 0.50            # Custo embalagem por produto (R$)
     imposto: float = 4.0               # Imposto % (ex: 4.0 = 4%)
     markup: float = 1.33               # Multiplicador de markup (ex: 1.33 = 33%)
+    limite: int = 300                  # Limite de anúncios (TikTok BR: 300 para contas novas)
 
 
 def _extrair_custo_bling(prod_detail: dict, hdrs: dict, req) -> float:
@@ -158,7 +159,39 @@ def _extrair_custo_simples(prod: dict, hdrs: dict, req) -> float:
     return float(prod.get("precoCusto") or prod.get("precoCompra") or 0)
 
 
-def _publicar_lote_bg(skus: Optional[List[str]], embalagem: float, imposto: float, markup: float):
+def _ranking_vendas_bling(hdrs: dict, req, dias: int = 90) -> dict:
+    """Retorna dict {produto_id: qtd_vendida} com ranking dos últimos N dias."""
+    from datetime import datetime, timedelta
+    BASE = "https://api.bling.com.br/Api/v3"
+    data_ini = (datetime.now() - timedelta(days=dias)).strftime("%Y-%m-%d")
+    ranking: dict = {}
+    pagina = 1
+    while pagina <= 20:  # max 2000 pedidos
+        try:
+            r = req.get(
+                f"{BASE}/pedidos/vendas",
+                params={"pagina": pagina, "limite": 100, "dataInicio": data_ini},
+                headers=hdrs, timeout=30,
+            )
+            pedidos = r.json().get("data", [])
+            if not pedidos:
+                break
+            for p in pedidos:
+                for item in (p.get("itens") or []):
+                    pid = (item.get("produto") or {}).get("id")
+                    qtd = float(item.get("quantidade") or 1)
+                    if pid:
+                        ranking[pid] = ranking.get(pid, 0) + qtd
+            if len(pedidos) < 100:
+                break
+            pagina += 1
+            time.sleep(0.25)
+        except Exception:
+            break
+    return ranking
+
+
+def _publicar_lote_bg(skus: Optional[List[str]], embalagem: float, imposto: float, markup: float, limite: int):
     """
     Precifica e publica produtos no TikTok Shop via Bling.
     Fórmula: preco_venda = (custo + embalagem) * (1 + imposto/100) * markup
@@ -199,8 +232,21 @@ def _publicar_lote_bg(skus: Optional[List[str]], embalagem: float, imposto: floa
             pagina += 1
             time.sleep(0.3)
 
+        # 2. Ranking de liquidez (vendas últimos 90 dias) para priorizar os 300 slots
+        logger.info("TikTok lote: buscando ranking de vendas para ordenar por liquidez...")
+        ranking = _ranking_vendas_bling(hdrs, _req, dias=90)
+        ids_para_processar.sort(
+            key=lambda x: ranking.get(x["id"], 0),
+            reverse=True,
+        )
+        # Aplica limite de anúncios (300 para contas novas TikTok BR)
+        if len(ids_para_processar) > limite:
+            logger.info(f"TikTok lote: limitando {len(ids_para_processar)} → {limite} mais líquidos")
+            ids_para_processar = ids_para_processar[:limite]
+
         _job["total"] = len(ids_para_processar)
-        logger.info(f"TikTok lote: {len(ids_para_processar)} produtos a precificar")
+        _job["limite_aplicado"] = limite
+        logger.info(f"TikTok lote: {len(ids_para_processar)} produtos a precificar (top {limite} por liquidez)")
 
         for item in ids_para_processar:
             prod_id = item["id"]
@@ -258,7 +304,7 @@ def publicar_lote(
         raise HTTPException(409, "Job de publicação em lote já está rodando")
     background_tasks.add_task(
         _publicar_lote_bg,
-        body.skus, body.embalagem, body.imposto, body.markup,
+        body.skus, body.embalagem, body.imposto, body.markup, body.limite,
     )
     return {
         "ok": True,
