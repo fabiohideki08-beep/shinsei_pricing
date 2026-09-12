@@ -22,7 +22,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel
 
-from auth import verificar_api_key
+from auth import api_key_dep as verificar_api_key
 import services.tiktok_shop as tiktok
 
 logger = logging.getLogger(__name__)
