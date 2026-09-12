@@ -73,7 +73,12 @@ _preview_lock = threading.Lock()
 
 
 def _preview_lote_bg(limite: int, dias_vendas: int):
-    """Roda em background: rankeia por liquidez, resolve custo das 3 camadas via BlingClient."""
+    """
+    Roda em background: rankeia por liquidez, resolve custo via 2 estratégias:
+    1. precoCusto da listagem (campo direto) — sem calls individuais
+    2. Para custo=0 na lista: GET /produtos/{id} com 3 camadas (composição > fornecedor > estoque)
+    Ranking: detalhe dos últimos 3 páginas de pedidos (itens estão só no detalhe, não na lista).
+    """
     global _preview_job
     with _preview_lock:
         _preview_job.update({
@@ -85,50 +90,86 @@ def _preview_lote_bg(limite: int, dias_vendas: int):
     try:
         from bling_client import BlingClient
         client = BlingClient()
-        BASE = "https://api.bling.com.br/Api/v3"
 
-        def _get(path, params=None):
-            return client._get(path, params=params or {})
-
-        # 1. Listar todos os produtos ativos via BlingClient
+        # 1. Listar todos os produtos ativos — precoCusto JÁ VEM na listagem
         produtos_raw = []
         pagina = 1
         while True:
-            resp = _get("/produtos", {"pagina": pagina, "limite": 100, "situacao": "A"})
-            data = resp.get("data", [])
+            resp = client._get("/produtos", {"pagina": pagina, "limite": 100, "situacao": "A"})
+            data = resp.get("data", []) if isinstance(resp, dict) else []
             produtos_raw.extend(data)
             if len(data) < 100:
                 break
             pagina += 1
-            time.sleep(0.25)
+            time.sleep(0.2)
 
         _preview_job["total_ativos"] = len(produtos_raw)
 
-        # 2. Ranking de vendas (últimos N dias) via BlingClient
+        # 2. Ranking de vendas — busca detalhe dos pedidos (itens só vêm no detalhe)
         from datetime import datetime, timedelta
         data_ini = (datetime.now() - timedelta(days=dias_vendas)).strftime("%Y-%m-%d")
         ranking: dict = {}
-        for pag in range(1, 21):
+        for pag in range(1, 4):  # 3 páginas = até 300 pedidos recentes
             try:
-                r = _get("/pedidos/vendas", {"pagina": pag, "limite": 100, "dataInicio": data_ini})
-                pedidos = r.get("data", [])
+                r = client._get("/pedidos/vendas", {"pagina": pag, "limite": 100, "dataInicio": data_ini})
+                pedidos = r.get("data", []) if isinstance(r, dict) else []
                 if not pedidos:
                     break
                 for p in pedidos:
-                    for item in (p.get("itens") or []):
-                        pid = (item.get("produto") or {}).get("id")
-                        qtd = float(item.get("quantidade") or 1)
-                        if pid:
-                            ranking[pid] = ranking.get(pid, 0) + qtd
+                    try:
+                        det = client._get(f"/pedidos/vendas/{p['id']}")
+                        itens = (det.get("data") or {}).get("itens") or []
+                        for item in itens:
+                            pid = (item.get("produto") or {}).get("id")
+                            qtd = float(item.get("quantidade") or 1)
+                            if pid:
+                                ranking[pid] = ranking.get(pid, 0) + qtd
+                        time.sleep(0.1)
+                    except Exception:
+                        pass
                 if len(pedidos) < 100:
                     break
-                time.sleep(0.25)
+                time.sleep(0.2)
             except Exception:
                 break
 
-        # 3. Ordenar por liquidez e cortar no limite
-        produtos_raw.sort(key=lambda p: ranking.get(p["id"], 0), reverse=True)
-        selecionados = produtos_raw[:limite]
+        # 3. Filtrar produtos com custo direto na listagem (precoCusto > 0)
+        #    Produtos sem custo na lista (kits virtuais, etc.) recebem custo via detalhe
+        produtos_com_custo = []
+        sem_custo_lista = []
+        for prod in produtos_raw:
+            custo_lista = float(prod.get("precoCusto") or 0)
+            if custo_lista > 0:
+                produtos_com_custo.append({**prod, "_custo_direto": custo_lista})
+            else:
+                sem_custo_lista.append(prod)
+
+        logger.info(f"TikTok preview: {len(produtos_com_custo)} com custo na lista, "
+                    f"{len(sem_custo_lista)} sem custo na lista")
+
+        # 4. Para produtos sem custo na lista, tentar detalhe (3 camadas) até completar o limite
+        #    Limita a 200 calls de detalhe extra para não extrapolar o tempo
+        MAX_DETALHE_EXTRA = 200
+        detalhe_feitos = 0
+        for prod in sem_custo_lista:
+            if len(produtos_com_custo) >= limite * 3:  # já temos candidatos suficientes
+                break
+            if detalhe_feitos >= MAX_DETALHE_EXTRA:
+                break
+            try:
+                det = client._get(f"/produtos/{prod['id']}")
+                prod_det = det.get("data", {}) if isinstance(det, dict) else {}
+                custo = _extrair_custo_bling_client(prod_det, client)
+                if custo > 0:
+                    produtos_com_custo.append({**prod, "_custo_direto": custo})
+                detalhe_feitos += 1
+                time.sleep(0.15)
+            except Exception:
+                detalhe_feitos += 1
+
+        # 5. Ordenar por vendas (liquidez) e cortar no limite
+        produtos_com_custo.sort(key=lambda p: ranking.get(p["id"], 0), reverse=True)
+        selecionados = produtos_com_custo[:limite]
 
         embalagem, imposto, markup = 0.50, 4.0, 1.33
         resultado = []
@@ -138,27 +179,9 @@ def _preview_lote_bg(limite: int, dias_vendas: int):
             sku = prod.get("codigo", "")
             nome = prod.get("nome", "")
             qtd_vendida = ranking.get(prod_id, 0)
-
-            custo = 0.0
-            preco_tiktok = None
-            obs = ""
-            try:
-                # Busca detalhe completo via BlingClient (fornecedores + estoque + estrutura)
-                det = client._get(f"/produtos/{prod_id}")
-                prod_det = det.get("data", {})
-                sit_raw = prod_det.get("situacao")
-                situacao = sit_raw.get("valor", "A") if isinstance(sit_raw, dict) else str(sit_raw or "A")
-                if situacao != "A":
-                    obs = f"situação={situacao}"
-                # Resolver custo pelas 3 camadas
-                custo = _extrair_custo_bling_client(prod_det, client)
-                if custo > 0:
-                    preco_tiktok = round((custo + embalagem) * (1 + imposto / 100) * markup, 2)
-                else:
-                    obs = obs or "sem custo"
-            except Exception as e:
-                obs = str(e)
-            time.sleep(0.2)
+            custo = float(prod.get("_custo_direto", 0))
+            preco_tiktok = round((custo + embalagem) * (1 + imposto / 100) * markup, 2) if custo > 0 else None
+            obs = "" if custo > 0 else "sem custo"
 
             resultado.append({
                 "pos": pos, "sku": sku, "nome": nome,
@@ -173,8 +196,9 @@ def _preview_lote_bg(limite: int, dias_vendas: int):
             "rodando": False, "concluido": True,
             "concluido_em": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "produtos": resultado,
+            "com_custo_lista": len(produtos_com_custo),
             "sem_custo": sum(1 for r in resultado if not r["preco_tiktok"]),
-            "possiveis_descontinuados": sum(1 for r in resultado if r["obs"].startswith("situação=")),
+            "possiveis_descontinuados": 0,
             "formula": f"(custo + {embalagem}) * {1 + imposto/100:.4f} * {markup}",
         })
         logger.info(f"TikTok preview-lote concluído: {len(resultado)} produtos")
