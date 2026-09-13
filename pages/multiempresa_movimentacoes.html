@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Movimentações Multiempresa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  --bg:        #080B12;
+  --surface:   #0F1520;
+  --surface2:  #141C2E;
+  --border:    #1E2D45;
+  --border2:   #243550;
+  --text:      #E2E8F4;
+  --muted:     #7A8BA8;
+  --faint:     #3A4F6A;
+
+  --green:     #10D078;
+  --green-bg:  rgba(16,208,120,0.10);
+  --red:       #FF3D5A;
+  --red-bg:    rgba(255,61,90,0.10);
+  --amber:     #F59E0B;
+  --amber-bg:  rgba(245,158,11,0.10);
+  --blue:      #3B82F6;
+  --blue-bg:   rgba(59,130,246,0.10);
+  --purple:    #A855F7;
+  --purple-bg: rgba(168,85,247,0.10);
+  --gray-bg:   rgba(122,139,168,0.10);
+
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Inter', system-ui, sans-serif;
+  --radius: 8px;
+  --radius-sm: 5px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── TOPBAR ─────────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+  height: 52px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.topbar-brand .dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  animation: pulse 2s infinite;
+  flex-shrink: 0;
+}
+.topbar-brand .dot.offline { background: var(--red); box-shadow: 0 0 6px var(--red); animation: none; }
+@keyframes pulse {
+  0%,100% { opacity:1; }
+  50%      { opacity:.4; }
+}
+.topbar-stats {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.topbar-stats::-webkit-scrollbar { display: none; }
+.stat-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border2);
+  background: var(--surface2);
+  font-size: 11.5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: border-color .2s;
+}
+.stat-pill .val {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 12.5px;
+}
+.stat-pill.green  { border-color: var(--green);  background: var(--green-bg); }
+.stat-pill.red    { border-color: var(--red);    background: var(--red-bg);   }
+.stat-pill.amber  { border-color: var(--amber);  background: var(--amber-bg); }
+.stat-pill.blue   { border-color: var(--blue);   background: var(--blue-bg);  }
+.stat-pill.green .val  { color: var(--green);  }
+.stat-pill.red .val    { color: var(--red);    }
+.stat-pill.amber .val  { color: var(--amber);  }
+.stat-pill.blue .val   { color: var(--blue);   }
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.last-update {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.btn-icon {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--muted);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all .15s;
+}
+.btn-icon:hover { color: var(--text); border-color: var(--faint); }
+
+/* ── MAIN LAYOUT ─────────────────────────────────────────── */
+.main {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── FEED ────────────────────────────────────────────────── */
+.feed-wrap {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  min-height: 0;
+  overflow: hidden;
+}
+.feed-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 8px;
+}
+.feed-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.filter-row {
+  display: flex;
+  gap: 4px;
+}
+.filter-btn {
+  padding: 3px 9px;
+  border-radius: 20px;
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all .15s;
+  font-family: var(--sans);
+}
+.filter-btn:hover { color: var(--text); border-color: var(--faint); }
+.filter-btn.active { border-color: var(--blue); color: var(--blue); background: var(--blue-bg); }
+.filter-btn.active.g { border-color: var(--green); color: var(--green); background: var(--green-bg); }
+.filter-btn.active.r { border-color: var(--red);   color: var(--red);   background: var(--red-bg);   }
+.filter-btn.active.a { border-color: var(--amber);  color: var(--amber);  background: var(--amber-bg);  }
+
+.feed {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  scroll-behavior: smooth;
+}
+.feed::-webkit-scrollbar { width: 4px; }
+.feed::-webkit-scrollbar-track { background: transparent; }
+.feed::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+
+.entry {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: start;
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  transition: border-color .15s, opacity .3s;
+  animation: slideIn .2s ease;
+}
+@keyframes slideIn {
+  from { opacity:0; transform: translateY(-4px); }
+  to   { opacity:1; transform: translateY(0); }
+}
+.entry:hover { border-color: var(--border2); }
+.entry.concluido { border-left: 2px solid var(--green); }
+.entry.erro      { border-left: 2px solid var(--red);   }
+.entry.pendente_configuracao_de_rota { border-left: 2px solid var(--amber); }
+.entry.hidden { display: none; }
+
+.entry-ts {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+  padding-top: 1px;
+  min-width: 72px;
+}
+.entry-body { min-width: 0; }
+.entry-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 3px;
+}
+.sku {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -.01em;
+}
+.canal {
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--gray-bg);
+  border: 1px solid var(--border2);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-family: var(--mono);
+}
+.entry-flow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+.empresa-tag {
+  padding: 1px 7px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.empresa-tag.shinsei { background: var(--blue-bg);   color: var(--blue);   border: 1px solid rgba(59,130,246,.25); }
+.empresa-tag.akg     { background: var(--purple-bg); color: var(--purple); border: 1px solid rgba(168,85,247,.25); }
+.arrow { color: var(--faint); }
+.qty {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+}
+.entry-error {
+  font-size: 10.5px;
+  color: var(--red);
+  font-family: var(--mono);
+  word-break: break-all;
+  opacity: .8;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+.entry-error::before { content: '↳ '; }
+.pedido-link {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  text-decoration: none;
+}
+.pedido-link:hover { color: var(--blue); }
+
+.badge {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.badge.concluido { background: var(--green-bg); color: var(--green); }
+.badge.erro      { background: var(--red-bg);   color: var(--red);   }
+.badge.pendente  { background: var(--amber-bg); color: var(--amber); }
+.badge.proc      { background: var(--blue-bg);  color: var(--blue);  }
+
+.feed-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.feed-empty .icon { font-size: 28px; opacity: .3; }
+
+/* ── SIDEBAR ─────────────────────────────────────────────── */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+  background: var(--surface);
+}
+.sidebar::-webkit-scrollbar { width: 3px; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border2); }
+
+.panel {
+  border-bottom: 1px solid var(--border);
+  padding: 14px 16px;
+}
+.panel-title {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+/* processar manual */
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.form-label { font-size: 11px; color: var(--muted); }
+.form-input {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 6px 9px;
+  outline: none;
+  width: 100%;
+  transition: border-color .15s;
+}
+.form-input:focus { border-color: var(--blue); }
+.form-select {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 12px;
+  padding: 6px 9px;
+  outline: none;
+  width: 100%;
+  cursor: pointer;
+}
+.btn {
+  width: 100%;
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  border: none;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .15s, transform .1s;
+}
+.btn:active { transform: scale(.98); }
+.btn-primary { background: var(--blue); color: #fff; }
+.btn-primary:hover { opacity: .88; }
+.btn-danger { background: var(--red); color: #fff; }
+.btn-danger:hover { opacity: .88; }
+.btn-job {
+  background: var(--green-bg);
+  color: var(--green);
+  border: 1px solid rgba(16,208,120,.3);
+}
+.btn-job:hover { background: rgba(16,208,120,.2); }
+.btn-job:disabled { opacity: .4; cursor: default; }
+
+.result-box {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  word-break: break-word;
+  display: none;
+}
+.result-box.ok    { border-color: var(--green); color: var(--green); }
+.result-box.error { border-color: var(--red);   color: var(--red);   }
+.result-box.show  { display: block; }
+
+/* rotas */
+.rota-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.rota-item {
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.rota-info { min-width: 0; }
+.rota-label {
+  font-size: 11px;
+  color: var(--text);
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+.rota-sub { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+.rota-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  flex-shrink: 0;
+}
+
+/* pending list */
+.pending-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.pending-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--amber-bg);
+  border: 1px solid rgba(245,158,11,.2);
+}
+.pending-sku { font-family: var(--mono); font-size: 11px; color: var(--amber); }
+.pending-qty { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+
+/* ── TOOLTIPS ─────────────────────────────────────────────── */
+.tag-mov {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+/* ── RESPONSIVE ───────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .main { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="dot" id="liveDot"></div>
+    Multiempresa · Estoque
+  </div>
+  <div class="topbar-stats" id="topStats">
+    <div class="stat-pill green"><span class="val" id="sConcluido">–</span> concluídos</div>
+    <div class="stat-pill red"><span class="val" id="sErro">–</span> erros</div>
+    <div class="stat-pill amber"><span class="val" id="sSemRota">–</span> sem rota</div>
+    <div class="stat-pill blue"><span class="val" id="sVendas">–</span> vendas</div>
+    <div class="stat-pill"><span class="val" id="sRotas">–</span> rotas ativas</div>
+  </div>
+  <div class="topbar-right">
+    <span class="last-update" id="lastUpdate">–</span>
+    <button class="btn-icon" onclick="toggleScroll()" title="Auto-scroll">↓</button>
+    <button class="btn-icon" onclick="clearFeed()" title="Limpar feed">⊘</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- FEED -->
+  <div class="feed-wrap">
+    <div class="feed-header">
+      <span class="feed-title">Feed ao vivo · ajustes de estoque</span>
+      <div class="filter-row">
+        <button class="filter-btn active" id="f-all"       onclick="setFilter('all')">Todos</button>
+        <button class="filter-btn"        id="f-concluido" onclick="setFilter('concluido')">✓ OK</button>
+        <button class="filter-btn"        id="f-erro"      onclick="setFilter('erro')">✗ Erro</button>
+        <button class="filter-btn"        id="f-pendente"  onclick="setFilter('pendente')">⚠ Sem rota</button>
+      </div>
+    </div>
+    <div class="feed" id="feed">
+      <div class="feed-empty" id="emptyState">
+        <div class="icon">⟳</div>
+        <div>Aguardando movimentações…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <!-- Processar -->
+    <div class="panel">
+      <div class="panel-title">Processar pedido</div>
+      <div class="form-row">
+        <label class="form-label">Empresa</label>
+        <select class="form-select" id="selEmpresa">
+          <option value="shinsei">Shinsei</option>
+          <option value="akg">AKG</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="form-label">ID do Pedido Bling</label>
+        <input class="form-input" id="inpPedido" placeholder="ex: 26857531314" type="text">
+      </div>
+      <button class="btn btn-primary" onclick="processarPedido()">▶ Processar</button>
+      <div class="result-box" id="resProcessar"></div>
+    </div>
+
+    <!-- Estornar -->
+    <div class="panel">
+      <div class="panel-title">Estornar pedido</div>
+      <div class="form-row">
+        <label class="form-label">Empresa</label>
+        <select class="form-select" id="selEmpresaEst">
+          <option value="shinsei">Shinsei</option>
+          <option value="akg">AKG</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="form-label">ID do Pedido Bling</label>
+        <input class="form-input" id="inpPedidoEst" placeholder="ex: 26857531314" type="text">
+      </div>
+      <button class="btn btn-danger" onclick="estornarPedido()">↩ Estornar</button>
+      <div class="result-box" id="resEstornar"></div>
+    </div>
+
+    <!-- Job -->
+    <div class="panel">
+      <div class="panel-title">Job periódico</div>
+      <button class="btn btn-job" id="btnJob" onclick="dispararJob()">⚡ Disparar job completo</button>
+      <div class="result-box" id="resJob"></div>
+    </div>
+
+    <!-- Rotas -->
+    <div class="panel">
+      <div class="panel-title">Rotas ativas</div>
+      <div class="rota-list" id="rotaList">
+        <div style="color:var(--muted);font-size:11px">Carregando…</div>
+      </div>
+    </div>
+
+    <!-- Pendentes -->
+    <div class="panel">
+      <div class="panel-title">SKUs sem rota <span id="pendenteBadge"></span></div>
+      <div class="pending-list" id="pendingList">
+        <div style="color:var(--muted);font-size:11px">Carregando…</div>
+      </div>
+    </div>
+
+  </div><!-- /sidebar -->
+</div><!-- /main -->
+
+<script>
+// ── CONFIG ───────────────────────────────────────────────────────────
+const API_KEY   = '768eb742a1770a633552d98a28ad7bfde8ed7d3d046d9d4a';
+const POLL_MS   = 3000;
+const MAX_ITEMS = 200;
+
+const headers = { 'X-API-Key': API_KEY, 'Content-Type': 'application/json' };
+
+let seenIds     = new Set();
+let autoScroll  = true;
+let activeFilter = 'all';
+let pollTimer;
+
+// ── UTILS ────────────────────────────────────────────────────────────
+function ts(isoStr) {
+  if (!isoStr) return '–';
+  const d = new Date(isoStr);
+  return d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+function fmtMini(isoStr) {
+  if (!isoStr) return '–';
+  const d = new Date(isoStr);
+  return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) + ' ' +
+         d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+}
+function statusClass(s) {
+  if (s === 'concluido') return 'concluido';
+  if (s === 'erro')      return 'erro';
+  return 'pendente_configuracao_de_rota';
+}
+function badgeClass(s) {
+  if (s === 'concluido') return 'badge concluido';
+  if (s === 'erro')      return 'badge erro';
+  return 'badge pendente';
+}
+function badgeLabel(s) {
+  if (s === 'concluido') return '✓ OK';
+  if (s === 'erro')      return '✗ ERRO';
+  return '⚠ sem rota';
+}
+function hiddenByFilter(s) {
+  if (activeFilter === 'all') return false;
+  if (activeFilter === 'concluido') return s !== 'concluido';
+  if (activeFilter === 'erro')      return s !== 'erro';
+  if (activeFilter === 'pendente')  return s !== 'pendente_configuracao_de_rota';
+  return false;
+}
+
+// ── FEED ─────────────────────────────────────────────────────────────
+function buildEntry(a) {
+  const sc    = statusClass(a.status);
+  const hid   = hiddenByFilter(a.status) ? ' hidden' : '';
+  const err   = a.erro_detalhe
+    ? `<div class="entry-error">${a.erro_detalhe.replace(/</g,'&lt;').substring(0,120)}${a.erro_detalhe.length>120?'…':''}</div>`
+    : '';
+  const movTag = a.id_mov_saida_bling
+    ? `<span class="tag-mov">mov ${a.id_mov_saida_bling}</span>`
+    : '';
+
+  return `
+    <div class="entry ${sc}${hid}" data-id="${a.id}" data-status="${a.status}">
+      <div class="entry-ts">${ts(a.criado_em)}</div>
+      <div class="entry-body">
+        <div class="entry-top">
+          <span class="sku">${a.sku || '–'}</span>
+          ${a.canal_venda ? `<span class="canal">${a.canal_venda}</span>` : ''}
+          ${movTag}
+        </div>
+        <div class="entry-flow">
+          <span class="empresa-tag ${a.empresa_vendedora}">${a.empresa_vendedora?.toUpperCase() || '–'}</span>
+          <span class="arrow">→ saída</span>
+          <span class="empresa-tag ${a.empresa_fornecedora}">${a.empresa_fornecedora?.toUpperCase() || '–'}</span>
+          <span class="qty">× ${a.quantidade ?? '?'}</span>
+        </div>
+        <div style="font-size:10px;color:var(--muted)">
+          <a class="pedido-link" href="#" onclick="return false">pedido ${a.id_pedido_bling}</a>
+          ${a.aplicado_em ? `· aplicado ${fmtMini(a.aplicado_em)}` : ''}
+        </div>
+        ${err}
+      </div>
+      <div><span class="${badgeClass(a.status)}">${badgeLabel(a.status)}</span></div>
+    </div>`;
+}
+
+function prependEntry(a) {
+  const feed = document.getElementById('feed');
+  const empty = document.getElementById('emptyState');
+  if (empty) empty.remove();
+
+  const tmp = document.createElement('div');
+  tmp.innerHTML = buildEntry(a);
+  const el = tmp.firstElementChild;
+  feed.insertBefore(el, feed.firstChild);
+
+  // limitar tamanho
+  const entries = feed.querySelectorAll('.entry');
+  if (entries.length > MAX_ITEMS) {
+    entries[entries.length - 1].remove();
+  }
+}
+
+// ── POLLING ──────────────────────────────────────────────────────────
+async function poll() {
+  try {
+    const [adjRes, statRes] = await Promise.all([
+      fetch('/multiempresa/ajustes?limit=50', { headers }),
+      fetch('/multiempresa/status',           { headers }),
+    ]);
+
+    if (!adjRes.ok || !statRes.ok) throw new Error('HTTP error');
+
+    const adjData  = await adjRes.json();
+    const statData = await statRes.json();
+
+    // stats
+    document.getElementById('sConcluido').textContent = statData.ajustes_concluidos ?? '–';
+    document.getElementById('sErro').textContent      = statData.ajustes_erro       ?? '–';
+    document.getElementById('sSemRota').textContent   = statData.ajustes_sem_rota   ?? '–';
+    document.getElementById('sVendas').textContent    = (statData.vendas_concluidas ?? 0) + (statData.vendas_erro ?? 0);
+    document.getElementById('sRotas').textContent     = statData.rotas_ativas       ?? '–';
+
+    // feed — inserir novos no topo
+    const ajustes = (adjData.data || []).reverse(); // oldest→newest
+    let hasNew = false;
+    for (const a of ajustes) {
+      if (!seenIds.has(a.id)) {
+        seenIds.add(a.id);
+        prependEntry(a);
+        hasNew = true;
+      }
+    }
+
+    if (autoScroll && hasNew) {
+      document.getElementById('feed').scrollTop = 0;
+    }
+
+    // status online
+    document.getElementById('liveDot').className = 'dot';
+    document.getElementById('lastUpdate').textContent = ts(new Date().toISOString());
+
+  } catch(e) {
+    document.getElementById('liveDot').className = 'dot offline';
+  }
+}
+
+async function pollRotas() {
+  try {
+    const res  = await fetch('/multiempresa/rotas', { headers });
+    const data = await res.json();
+    const list = document.getElementById('rotaList');
+    const rotas = data.data || [];
+    if (rotas.length === 0) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:11px">Nenhuma rota cadastrada</div>';
+      return;
+    }
+    list.innerHTML = rotas.map(r => `
+      <div class="rota-item">
+        <div class="rota-info">
+          <div class="rota-label">${r.empresa_vendedora?.toUpperCase() || 'QUALQUER'} → ${r.empresa_fornecedora?.toUpperCase()}</div>
+          <div class="rota-sub">${r.canal_venda || 'qualquer canal'} · dep ${r.deposito_fornecedor_nome || r.deposito_fornecedor_id}</div>
+        </div>
+        <div class="rota-dot"></div>
+      </div>`).join('');
+  } catch(e) { /* silencioso */ }
+}
+
+async function pollPendentes() {
+  try {
+    const res  = await fetch('/multiempresa/pendentes', { headers });
+    const data = await res.json();
+    const list = document.getElementById('pendingList');
+    const items = data.data || [];
+    document.getElementById('pendenteBadge').textContent = items.length > 0 ? `(${items.length})` : '';
+    if (items.length === 0) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:11px">Nenhum SKU pendente ✓</div>';
+      return;
+    }
+    list.innerHTML = items.map(p => `
+      <div class="pending-item">
+        <span class="pending-sku">${p.sku}</span>
+        <span class="pending-qty">${p.total_vendas}× · ${p.total_qtd}un</span>
+      </div>`).join('');
+  } catch(e) { /* silencioso */ }
+}
+
+// ── FILTROS ──────────────────────────────────────────────────────────
+function setFilter(f) {
+  activeFilter = f;
+  const btns = { all:'f-all', concluido:'f-concluido', erro:'f-erro', pendente:'f-pendente' };
+  const cls  = { concluido:'g', erro:'r', pendente:'a' };
+  Object.entries(btns).forEach(([k, id]) => {
+    const el = document.getElementById(id);
+    el.className = 'filter-btn' + (k === f ? ` active ${cls[k]||''}` : '');
+  });
+  // aplicar nos items existentes
+  document.querySelectorAll('.entry').forEach(el => {
+    el.classList.toggle('hidden', hiddenByFilter(el.dataset.status));
+  });
+}
+
+function toggleScroll() {
+  autoScroll = !autoScroll;
+}
+
+function clearFeed() {
+  seenIds.clear();
+  const feed = document.getElementById('feed');
+  feed.innerHTML = '<div class="feed-empty" id="emptyState"><div class="icon">⟳</div><div>Feed limpo — aguardando novos eventos…</div></div>';
+}
+
+// ── AÇÕES ────────────────────────────────────────────────────────────
+function showResult(id, text, ok) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = `result-box show ${ok ? 'ok' : 'error'}`;
+}
+
+async function processarPedido() {
+  const empresa  = document.getElementById('selEmpresa').value;
+  const id_pedido = document.getElementById('inpPedido').value.trim();
+  if (!id_pedido) return showResult('resProcessar', 'Informe o ID do pedido.', false);
+
+  showResult('resProcessar', '…processando', true);
+  try {
+    const res  = await fetch(`/multiempresa/processar/${empresa}/${id_pedido}`, { method:'POST', headers });
+    const data = await res.json();
+    const ok   = data.status === 'concluido' || data.status === 'concluido_parcial' || data.ok > 0;
+    const txt  = `${data.status} · ✓${data.ok ?? 0} ✗${data.erro ?? 0} ⚠${data.sem_rota ?? 0}`;
+    showResult('resProcessar', txt, ok);
+    // força repoll imediato
+    clearTimeout(pollTimer);
+    poll();
+    pollTimer = setInterval(poll, POLL_MS);
+  } catch(e) {
+    showResult('resProcessar', 'Erro de rede: ' + e.message, false);
+  }
+}
+
+async function estornarPedido() {
+  const empresa   = document.getElementById('selEmpresaEst').value;
+  const id_pedido = document.getElementById('inpPedidoEst').value.trim();
+  if (!id_pedido) return showResult('resEstornar', 'Informe o ID do pedido.', false);
+
+  showResult('resEstornar', '…estornando', true);
+  try {
+    const res  = await fetch(`/multiempresa/estornar/${empresa}/${id_pedido}`, { method:'POST', headers });
+    const data = await res.json();
+    const ok   = data.status === 'concluido';
+    showResult('resEstornar', `${data.status} · ${data.estornos_ok ?? 0} estornos`, ok);
+  } catch(e) {
+    showResult('resEstornar', 'Erro: ' + e.message, false);
+  }
+}
+
+async function dispararJob() {
+  const btn = document.getElementById('btnJob');
+  btn.disabled = true;
+  showResult('resJob', '⚡ Job disparado em background…', true);
+  try {
+    await fetch('/multiempresa/job', { method:'POST', headers });
+    setTimeout(() => {
+      btn.disabled = false;
+      clearTimeout(pollTimer);
+      poll();
+      pollTimer = setInterval(poll, POLL_MS);
+    }, 5000);
+  } catch(e) {
+    showResult('resJob', 'Erro: ' + e.message, false);
+    btn.disabled = false;
+  }
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────
+poll();
+pollRotas();
+pollPendentes();
+pollTimer = setInterval(poll, POLL_MS);
+setInterval(pollRotas,    15000);
+setInterval(pollPendentes, 10000);
+</script>
+</body>
+</html>

@@ -1154,6 +1154,63 @@ def analise_shopping_disapproved():
     }
 
 
+@router.get("/datafeeds")
+def gmc_listar_datafeeds():
+    """Lista todos os datafeeds configurados no Merchant Center."""
+    service = _build_service()
+    try:
+        result = service.datafeeds().list(merchantId=MERCHANT_ID).execute()
+        feeds = result.get("resources", [])
+        return {
+            "total": len(feeds),
+            "datafeeds": [
+                {
+                    "id":       f.get("id"),
+                    "name":     f.get("name"),
+                    "fileName": f.get("fileName"),
+                    "fetchSchedule": f.get("fetchSchedule"),
+                }
+                for f in feeds
+            ],
+        }
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+
+@router.post("/feed/refresh")
+def gmc_feed_refresh(datafeed_id: str | None = None):
+    """
+    Força re-fetch imediato de um datafeed no GMC (datafeeds.fetchNow).
+    Se datafeed_id não for passado, tenta fetchNow em todos os feeds.
+    Útil para forçar re-crawl de produtos com 'Product page unavailable'.
+    """
+    service = _build_service()
+    try:
+        # Listar feeds disponíveis
+        result = service.datafeeds().list(merchantId=MERCHANT_ID).execute()
+        feeds = result.get("resources", [])
+        if not feeds:
+            return {"ok": False, "msg": "Nenhum datafeed encontrado"}
+
+        resultados = []
+        for feed in feeds:
+            fid = feed.get("id")
+            fname = feed.get("name", "")
+            if datafeed_id and str(fid) != str(datafeed_id):
+                continue
+            try:
+                r = service.datafeeds().fetchnow(
+                    merchantId=MERCHANT_ID, datafeedId=fid
+                ).execute()
+                resultados.append({"id": fid, "name": fname, "ok": True, "result": r})
+            except Exception as e:
+                resultados.append({"id": fid, "name": fname, "ok": False, "erro": str(e)})
+
+        return {"ok": True, "total": len(resultados), "resultados": resultados}
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+
 @router.get("/ads-link-status")
 def gmc_ads_link_status():
     """

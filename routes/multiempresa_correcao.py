@@ -58,6 +58,11 @@ def _db():
 # CRUD Rotas
 # ─────────────────────────────────────────────────────────────────────────────
 
+@router.get("/multiempresa", response_class=HTMLResponse)
+def get_page():
+    return HTMLResponse((PAGES_DIR / "multiempresa_movimentacoes.html").read_text(encoding="utf-8"))
+
+
 @router.get("/multiempresa/rotas")
 def get_rotas(todas: bool = False):
     init_db()
