@@ -163,6 +163,7 @@ class BlingClient:
             "client_id": self.client_id,
             "redirect_uri": self.redirect_uri,
             "state": state,
+            "scope": "todos",
         }
         return f"https://www.bling.com.br/Api/v3/oauth/authorize?{urlencode(params)}"
 
