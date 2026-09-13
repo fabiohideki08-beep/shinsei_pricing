@@ -88,7 +88,8 @@ def criar_anuncio(produto_id: int, preco: float, titulo: Optional[str] = None) -
     if titulo:
         body["titulo"] = titulo
     r = requests.post(f"{BLING_BASE}/anuncios", json=body, headers=hdrs, timeout=30)
-    r.raise_for_status()
+    if not r.ok:
+        raise Exception(f"{r.status_code} {r.reason} — {r.text[:300]}")
     return r.json()
 
 
