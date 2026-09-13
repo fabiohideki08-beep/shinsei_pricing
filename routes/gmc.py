@@ -1441,6 +1441,44 @@ def listar_datasources():
         return {"ok": False, "erro": str(e)}
 
 
+@router.post("/datasources/fetch")
+def datasource_fetch(datasource_id: str | None = None):
+    """
+    Força fetch imediato de um dataSource via Merchant API v1.
+    Se datasource_id não informado, busca todos e tenta fetch em cada um.
+    dataSource Shopify padrão: 10623833941
+    """
+    try:
+        token = _get_merchant_token()
+        h = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+        # Buscar datasources se ID não informado
+        if not datasource_id:
+            url_list = f"https://merchantapi.googleapis.com/datasources/v1/accounts/{MERCHANT_ID}/dataSources"
+            r = requests.get(url_list, headers=h, timeout=30)
+            if r.status_code != 200:
+                return {"ok": False, "erro": f"Listar datasources: HTTP {r.status_code}: {r.text[:300]}"}
+            data_sources = r.json().get("dataSources", [])
+        else:
+            data_sources = [{"name": f"accounts/{MERCHANT_ID}/dataSources/{datasource_id}"}]
+
+        resultados = []
+        for ds in data_sources:
+            name = ds.get("name", "")
+            fetch_url = f"https://merchantapi.googleapis.com/datasources/v1/{name}:fetch"
+            rf = requests.post(fetch_url, headers=h, json={}, timeout=30)
+            resultados.append({
+                "datasource": name,
+                "http": rf.status_code,
+                "ok": rf.status_code in (200, 204),
+                "body": rf.text[:200] if rf.status_code not in (200, 204) else "ok",
+            })
+
+        return {"ok": True, "total": len(resultados), "resultados": resultados}
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+
 @router.post("/registrar-desenvolvedor")
 def registrar_desenvolvedor(developer_email: str = "fabiohideki08@gmail.com"):
     """Registra o projeto GCP com a Merchant API via developerRegistration:registerGcp."""
