@@ -19,14 +19,16 @@ TIKTOK_TIPO      = os.environ.get("TIKTOK_BLING_TIPO", "TikTok Shop")
 
 
 def _bling_headers() -> dict:
-    """Busca token Bling Shinsei via BlingClient."""
+    """Busca token Bling Shinsei via BlingClient com auto-refresh."""
     try:
         from bling_client import BlingClient
         client = BlingClient()
-        token = client.access_token or client.tokens.get("access_token", "")
+        hdrs = client._get_headers()  # auto-refresh se expirado
+        hdrs["Accept"] = "application/json"
+        return hdrs
     except Exception:
         token = os.environ.get("BLING_ACCESS_TOKEN", "")
-    return {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+        return {"Authorization": f"Bearer {token}", "Accept": "application/json"}
 
 
 # ── Anúncios (produtos TikTok no Bling) ──────────────────────────────────
