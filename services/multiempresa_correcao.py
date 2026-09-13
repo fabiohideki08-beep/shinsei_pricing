@@ -274,31 +274,33 @@ def _buscar_id_produto(empresa: str, sku: str) -> int | None:
 
 
 def _movimentar(empresa: str, id_produto: int, deposito_id: int,
-                operacao: str, quantidade: float, obs: str) -> str | None:
+                operacao: str, quantidade: float, obs: str) -> tuple[str | None, str | None]:
     """
-    POST /estoques/movimentacoes.
+    POST /estoques  (endpoint correto — /estoques/movimentacoes não existe).
     operacao: 'E' (entrada) ou 'S' (saída).
-    Retorna ID da movimentação criada ou None em caso de erro.
+    campo correto: tipoOperacao (não operacao).
+    Retorna (id_mov, erro_detalhe) — id_mov=None indica falha.
     """
     hdrs = _hdrs(empresa)
     payload = {
-        "produto":    {"id": id_produto},
-        "deposito":   {"id": deposito_id},
-        "operacao":   operacao,
-        "quantidade": quantidade,
-        "observacoes": obs[:250],
+        "produto":       {"id": id_produto},
+        "deposito":      {"id": deposito_id},
+        "tipoOperacao":  operacao,
+        "quantidade":    quantidade,
+        "observacoes":   obs[:250],
     }
     resp = requests.post(
-        f"{BLING_API}/estoques/movimentacoes",
+        f"{BLING_API}/estoques",
         headers={**hdrs, "Content-Type": "application/json"},
-        json=payload, timeout=20
+        json=payload, timeout=30
     )
     if not resp.ok:
+        detalhe = resp.text[:500]
         logger.error("movimentar [%s/%s op=%s] HTTP %s: %s",
-                     empresa, id_produto, operacao, resp.status_code, resp.text[:300])
-        return None
+                     empresa, id_produto, operacao, resp.status_code, detalhe)
+        return None, f"HTTP {resp.status_code}: {detalhe}"
     data = resp.json().get("data") or {}
-    return str(data.get("id") or "ok")
+    return str(data.get("id") or "ok"), None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -433,16 +435,18 @@ def processar_pedido(empresa_vendedora: str, pedido: dict) -> dict:
 
         # Passo 3: saída no fornecedor
         obs_saida = f"{chave}|etapa=saida|forn={emp_forn}"
-        id_mov_saida = _movimentar(emp_forn, id_prod_forn, dep_forn, "S", qtd, obs_saida)
+        id_mov_saida, erro_saida = _movimentar(emp_forn, id_prod_forn, dep_forn, "S", qtd, obs_saida)
         time.sleep(0.35)
 
         # Passo 4: entrada/ajuste no vendedor (se empresa diferente)
         id_mov_entrada = None
+        erro_entrada = None
         if emp_forn != empresa_vendedora and id_prod_vend:
             obs_entrada = f"{chave}|etapa=entrada|vend={empresa_vendedora}"
-            id_mov_entrada = _movimentar(empresa_vendedora, id_prod_vend, dep_vend_id, "E", qtd, obs_entrada)
+            id_mov_entrada, erro_entrada = _movimentar(empresa_vendedora, id_prod_vend, dep_vend_id, "E", qtd, obs_entrada)
             time.sleep(0.35)
 
+        erro_detalhe = erro_saida or erro_entrada
         status_item = "concluido" if id_mov_saida else "erro"
         if status_item == "concluido":
             n_ok += 1
@@ -455,13 +459,13 @@ def processar_pedido(empresa_vendedora: str, pedido: dict) -> dict:
                 canal_venda, deposito_venda, sku, id_item_bling,
                 quantidade, id_rota, empresa_fornecedora, deposito_fornecedor_id,
                 status, id_mov_saida_bling, id_mov_entrada_bling,
-                chave_idempotencia, criado_em, aplicado_em)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                chave_idempotencia, erro_detalhe, criado_em, aplicado_em)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (id_ctrl, id_pedido, empresa_vendedora,
              canal, dep_venda, sku, id_item,
              qtd, rota["id"], emp_forn, dep_forn,
              status_item, id_mov_saida, id_mov_entrada,
-             chave, _agora(), _agora() if status_item == "concluido" else None)
+             chave, erro_detalhe, _agora(), _agora() if status_item == "concluido" else None)
         )
         conn.commit()
         resultados.append({
@@ -537,15 +541,15 @@ def estornar_pedido(empresa_vendedora: str, id_pedido: str) -> dict:
         # Inverso passo 3: entrada no fornecedor
         id_mov_ef = None
         if id_prod_forn:
-            id_mov_ef = _movimentar(emp_forn, id_prod_forn, dep_forn, "E", qtd,
-                                    f"{chave}|etapa=estorno_saida_forn")
+            id_mov_ef, _ = _movimentar(emp_forn, id_prod_forn, dep_forn, "E", qtd,
+                                       f"{chave}|etapa=estorno_saida_forn")
             time.sleep(0.35)
 
         # Inverso passo 4: saída no vendedor
         id_mov_sv = None
         if emp_forn != empresa_vendedora and id_prod_vend:
-            id_mov_sv = _movimentar(empresa_vendedora, id_prod_vend, dep_vend, "S", qtd,
-                                    f"{chave}|etapa=estorno_entrada_vend")
+            id_mov_sv, _ = _movimentar(empresa_vendedora, id_prod_vend, dep_vend, "S", qtd,
+                                       f"{chave}|etapa=estorno_entrada_vend")
             time.sleep(0.35)
 
         status_est = "concluido" if id_mov_ef else "erro"
