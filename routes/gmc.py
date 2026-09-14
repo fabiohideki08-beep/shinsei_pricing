@@ -1479,6 +1479,140 @@ def datasource_fetch(datasource_id: str | None = None):
         return {"ok": False, "erro": str(e)}
 
 
+@router.post("/corrigir-unavailable")
+def corrigir_product_page_unavailable(dry_run: bool = False):
+    """
+    Busca produtos reprovados por 'Product page unavailable' via Merchant API v1
+    productStatuses e re-insere via productInputs.insert para forçar re-avaliação.
+
+    dry_run=true apenas lista os afetados sem resubmeter.
+    """
+    try:
+        token = _get_merchant_token()
+        h = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+        # 1) Listar productStatuses paginado — filtramos disapproved com issue "page unavailable"
+        PAGE_UNAVAIL_PHRASES = [
+            "product page unavailable",
+            "página do produto indisponível",
+            "landing page unavailable",
+        ]
+        afetados: list[dict] = []
+        page_token: str | None = None
+        paginas = 0
+
+        while True:
+            params: dict = {"pageSize": 250}
+            if page_token:
+                params["pageToken"] = page_token
+            r = requests.get(
+                f"{MERCHANT_API_BASE}/productStatuses",
+                headers=h, params=params, timeout=60,
+            )
+            if r.status_code != 200:
+                return {"ok": False, "erro": f"productStatuses HTTP {r.status_code}: {r.text[:400]}"}
+
+            data = r.json()
+            paginas += 1
+            for ps in data.get("productStatuses", []):
+                issues = ps.get("itemLevelIssues", [])
+                for issue in issues:
+                    desc = issue.get("description", "").lower()
+                    if any(p in desc for p in PAGE_UNAVAIL_PHRASES):
+                        afetados.append({
+                            "name": ps.get("name", ""),
+                            "product_id": ps.get("name", "").split("/products/")[-1],
+                            "title": ps.get("title", ""),
+                            "issue": issue.get("description", ""),
+                            "servability": issue.get("servability", ""),
+                        })
+                        break  # um issue por produto basta
+
+            page_token = data.get("nextPageToken")
+            if not page_token:
+                break
+
+        if dry_run or not afetados:
+            return {
+                "ok": True,
+                "dry_run": True,
+                "paginas_varridas": paginas,
+                "total_afetados": len(afetados),
+                "produtos": afetados,
+            }
+
+        # 2) Para cada produto afetado, buscar dados completos e re-inserir
+        # Datasource Shopify API: 10623833941
+        # Merchant API v1 insert: POST /productInputs:insert?dataSource=accounts/.../dataSources/...
+        datasource_name = f"accounts/{MERCHANT_ID}/dataSources/10623833941"
+
+        resultados = []
+        erros = []
+        for item in afetados:
+            prod_name = item["name"]
+            # Buscar produto completo
+            rg = requests.get(
+                f"https://merchantapi.googleapis.com/products/v1/{prod_name}",
+                headers=h, timeout=30,
+            )
+            if rg.status_code != 200:
+                erros.append({"produto": prod_name, "erro": f"GET {rg.status_code}: {rg.text[:200]}"})
+                continue
+
+            produto = rg.json()
+
+            # Construir payload mínimo para re-inserção — mantém offer_id e atributos
+            # offerId = último segmento do name (ex: online~pt~BR~offer-123)
+            offer_id = prod_name.split("/products/")[-1].replace("~", ":")
+            attributes = produto.get("attributes", {})
+
+            # Campos read-only que NÃO devem ir no insert
+            READONLY_INSERT = {
+                "name", "productStatus", "versionNumber",
+                "dataSourceId", "feedLabel", "contentLanguage",
+                "channel", "targetCountry",
+            }
+            clean_attrs = {k: v for k, v in attributes.items() if k not in READONLY_INSERT}
+
+            payload = {
+                "name": prod_name,
+                "offerId": offer_id,
+                "attributes": clean_attrs,
+            }
+
+            ri = requests.post(
+                f"https://merchantapi.googleapis.com/products/v1/accounts/{MERCHANT_ID}/productInputs:insert",
+                headers=h,
+                params={"dataSource": datasource_name},
+                json=payload,
+                timeout=30,
+            )
+            ok = ri.status_code in (200, 201)
+            entry = {
+                "produto": prod_name,
+                "titulo": item.get("title", ""),
+                "http": ri.status_code,
+                "ok": ok,
+            }
+            if not ok:
+                entry["body"] = ri.text[:300]
+                erros.append(entry)
+            else:
+                resultados.append(entry)
+
+        return {
+            "ok": True,
+            "dry_run": False,
+            "paginas_varridas": paginas,
+            "total_afetados": len(afetados),
+            "resubmetidos": len(resultados),
+            "erros": len(erros),
+            "detalhes_erro": erros[:10],
+        }
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+
 @router.post("/registrar-desenvolvedor")
 def registrar_desenvolvedor(developer_email: str = "fabiohideki08@gmail.com"):
     """Registra o projeto GCP com a Merchant API via developerRegistration:registerGcp."""
