@@ -240,6 +240,7 @@ PUBLIC_PATHS = {
     "/fila-custo/pular",
     "/fila-custo/reset",
     # Multiempresas — auditoria Shinsei × AKG
+    "/multiempresa",
     "/multiempresas",
     "/multiempresas/diagnostico",
     "/multiempresas/auditoria/iniciar",
