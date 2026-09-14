@@ -211,6 +211,7 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
     dry_run=true (padrão): apenas lista, não altera.
     """
     import re
+    import time
     from datetime import datetime
 
     DEP_SHINSEI = 14636070822
@@ -235,6 +236,7 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
         prods = r.json().get("data", [])
         if not prods:
             break
+        time.sleep(0.35)
         for p in prods:
             est = p.get("estoque") or {}
             saldo_total = float(est.get("saldoVirtualTotal", 0) or 0)
@@ -242,6 +244,7 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
                 continue
             # Confirmar saldo no depósito específico
             pid = p["id"]
+            time.sleep(0.4)  # Bling rate limit: 3 req/s
             rs = _req.get(f"{base}/estoques/saldos", headers=hdrs_s,
                           params={"produto": pid, "deposito": DEP_SHINSEI},
                           timeout=20)
@@ -278,6 +281,7 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
         pedidos = r.json().get("data", [])
         if not pedidos:
             break
+        time.sleep(0.35)
         for ped in pedidos:
             sit_id = (ped.get("situacao") or {}).get("id", 0)
             if int(sit_id or 0) not in SITUACOES_OK:
@@ -361,6 +365,7 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
         entry = {"sku": t["sku"], "nome": t["nome"], "qtd": qtd}
 
         # Entrada Shinsei Geral
+        time.sleep(0.4)
         r_e = _req.post(f"{base}/estoques", headers=hdrs_s, json={
             "produto": {"id": pid_s}, "deposito": {"id": DEP_SHINSEI},
             "operacao": "E", "quantidade": qtd, "observacoes": OBS,
@@ -373,6 +378,7 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
         # Saída AKG Geral
         saida_ok, saida_err = False, "SKU não encontrado na AKG"
         if pid_a:
+            time.sleep(0.4)
             r_s = _req.post(f"{base}/estoques", headers=hdrs_a, json={
                 "produto": {"id": pid_a}, "deposito": {"id": DEP_AKG},
                 "operacao": "S", "quantidade": qtd, "observacoes": OBS,
