@@ -1488,49 +1488,44 @@ def corrigir_product_page_unavailable(dry_run: bool = False):
     dry_run=true apenas lista os afetados sem resubmeter.
     """
     try:
-        token = _get_merchant_token()
-        h = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-
-        # 1) Listar productStatuses paginado — filtramos disapproved com issue "page unavailable"
+        # 1) Listar via Content API productstatuses (ainda funciona pós-sunset)
         PAGE_UNAVAIL_PHRASES = [
             "product page unavailable",
             "página do produto indisponível",
             "landing page unavailable",
         ]
+        service = _build_service()
         afetados: list[dict] = []
         page_token: str | None = None
         paginas = 0
 
         while True:
-            params: dict = {"pageSize": 250}
+            kwargs: dict = {"merchantId": MERCHANT_ID, "maxResults": 250}
             if page_token:
-                params["pageToken"] = page_token
-            r = requests.get(
-                f"{MERCHANT_API_BASE}/productStatuses",
-                headers=h, params=params, timeout=60,
-            )
-            if r.status_code != 200:
-                return {"ok": False, "erro": f"productStatuses HTTP {r.status_code}: {r.text[:400]}"}
-
-            data = r.json()
+                kwargs["pageToken"] = page_token
+            resp = service.productstatuses().list(**kwargs).execute()
             paginas += 1
-            for ps in data.get("productStatuses", []):
+
+            for ps in resp.get("resources", []):
                 issues = ps.get("itemLevelIssues", [])
                 for issue in issues:
                     desc = issue.get("description", "").lower()
                     if any(p in desc for p in PAGE_UNAVAIL_PHRASES):
                         afetados.append({
-                            "name": ps.get("name", ""),
-                            "product_id": ps.get("name", "").split("/products/")[-1],
+                            "product_id": ps.get("productId", ""),
                             "title": ps.get("title", ""),
+                            "link": ps.get("link", ""),
                             "issue": issue.get("description", ""),
                             "servability": issue.get("servability", ""),
                         })
-                        break  # um issue por produto basta
+                        break
 
-            page_token = data.get("nextPageToken")
+            page_token = resp.get("nextPageToken")
             if not page_token:
                 break
+
+        token = _get_merchant_token()
+        h = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
         if dry_run or not afetados:
             return {
@@ -1549,21 +1544,21 @@ def corrigir_product_page_unavailable(dry_run: bool = False):
         resultados = []
         erros = []
         for item in afetados:
-            prod_name = item["name"]
-            # Buscar produto completo
+            # product_id Content API format: "online:pt:BR:offer-123"
+            # Merchant API v1 resource name: "online~pt~BR~offer-123"
+            pid = item["product_id"]
+            prod_name = f"accounts/{MERCHANT_ID}/products/" + pid.replace(":", "~")
+
+            # Buscar produto completo via Merchant API v1
             rg = requests.get(
                 f"https://merchantapi.googleapis.com/products/v1/{prod_name}",
                 headers=h, timeout=30,
             )
             if rg.status_code != 200:
-                erros.append({"produto": prod_name, "erro": f"GET {rg.status_code}: {rg.text[:200]}"})
+                erros.append({"produto": pid, "erro": f"GET {rg.status_code}: {rg.text[:200]}"})
                 continue
 
             produto = rg.json()
-
-            # Construir payload mínimo para re-inserção — mantém offer_id e atributos
-            # offerId = último segmento do name (ex: online~pt~BR~offer-123)
-            offer_id = prod_name.split("/products/")[-1].replace("~", ":")
             attributes = produto.get("attributes", {})
 
             # Campos read-only que NÃO devem ir no insert
@@ -1576,7 +1571,7 @@ def corrigir_product_page_unavailable(dry_run: bool = False):
 
             payload = {
                 "name": prod_name,
-                "offerId": offer_id,
+                "offerId": pid,
                 "attributes": clean_attrs,
             }
 
@@ -1589,7 +1584,7 @@ def corrigir_product_page_unavailable(dry_run: bool = False):
             )
             ok = ri.status_code in (200, 201)
             entry = {
-                "produto": prod_name,
+                "produto": pid,
                 "titulo": item.get("title", ""),
                 "http": ri.status_code,
                 "ok": ok,
