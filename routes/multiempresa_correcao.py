@@ -195,6 +195,96 @@ def get_pendentes():
     return {"data": [dict(r) for r in rows], "total": len(rows)}
 
 
+@router.post("/multiempresa/zerar-negativos")
+def zerar_estoques_negativos(dry_run: bool = True, deposito_id: int = 14636070822):
+    """
+    Lista SKUs com saldo negativo no depósito Shinsei Geral e zera via POST /estoques.
+
+    dry_run=true (padrão): apenas lista, não altera.
+    dry_run=false: aplica os ajustes (operacao=B, quantidade=0).
+
+    Depósito padrão: 14636070822 (Shinsei Geral).
+    """
+    hdrs = _hdrs(EMPRESA_SHINSEI)
+    base = "https://api.bling.com.br/Api/v3"
+
+    # 1) Varrer saldos do depósito paginado
+    negativos: list[dict] = []
+    pagina = 1
+    while True:
+        r = _req.get(
+            f"{base}/estoques/saldos",
+            headers=hdrs,
+            params={"pagina": pagina, "limite": 100, "deposito": deposito_id},
+            timeout=30,
+        )
+        if r.status_code == 401:
+            # tentar refresh e uma nova tentativa
+            hdrs = _hdrs(EMPRESA_SHINSEI)
+            r = _req.get(
+                f"{base}/estoques/saldos",
+                headers=hdrs,
+                params={"pagina": pagina, "limite": 100, "deposito": deposito_id},
+                timeout=30,
+            )
+        if not r.ok:
+            return {"ok": False, "erro": f"estoques/saldos HTTP {r.status_code}: {r.text[:300]}"}
+
+        itens = r.json().get("data", [])
+        if not itens:
+            break
+
+        for it in itens:
+            saldo = it.get("saldoVirtualTotal", 0)
+            if saldo < 0:
+                negativos.append({
+                    "produto_id": it.get("produto", {}).get("id"),
+                    "sku": it.get("produto", {}).get("codigo", ""),
+                    "nome": it.get("produto", {}).get("nome", ""),
+                    "saldo_atual": saldo,
+                })
+        pagina += 1
+
+    if dry_run or not negativos:
+        return {
+            "ok": True,
+            "dry_run": True,
+            "total_negativos": len(negativos),
+            "deposito_id": deposito_id,
+            "itens": negativos,
+        }
+
+    # 2) Zerar cada negativo via POST /estoques (operacao=B = balanço/saldo absoluto)
+    corrigidos = []
+    erros = []
+    for item in negativos:
+        pid = item["produto_id"]
+        if not pid:
+            erros.append({**item, "erro": "produto_id ausente"})
+            continue
+        payload = {
+            "produto": {"id": pid},
+            "deposito": {"id": deposito_id},
+            "operacao": "B",
+            "quantidade": 0,
+            "observacoes": "Correcao estoque negativo multiempresa bug 04/09/2026",
+        }
+        rp = _req.post(f"{base}/estoques", headers=hdrs, json=payload, timeout=20)
+        if rp.ok:
+            corrigidos.append({**item, "novo_saldo": 0})
+        else:
+            erros.append({**item, "erro": f"HTTP {rp.status_code}: {rp.text[:200]}"})
+
+    return {
+        "ok": True,
+        "dry_run": False,
+        "total_negativos": len(negativos),
+        "corrigidos": len(corrigidos),
+        "erros": len(erros),
+        "detalhes_erro": erros[:10],
+    }
+
+
 @router.get("/multiempresa/status")
 def get_status():
     init_db()
