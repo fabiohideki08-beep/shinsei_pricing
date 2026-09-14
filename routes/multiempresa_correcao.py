@@ -195,93 +195,189 @@ def get_pendentes():
     return {"data": [dict(r) for r in rows], "total": len(rows)}
 
 
-@router.post("/multiempresa/zerar-negativos")
-def zerar_estoques_negativos(dry_run: bool = True, deposito_id: int = 14636070822):
+@router.post("/multiempresa/transferir-akg-shinsei")
+def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09-04"):
     """
-    Lista SKUs com saldo negativo no depósito Shinsei Geral e zera via POST /estoques.
+    Corrige o bug multiempresa transferindo estoque AKG Geral → Shinsei Geral.
+
+    Apenas as quantidades vendidas na Shinsei APÓS data_corte (padrão: 04/09/2026,
+    data da última nota da General Corporate na AKG). Não cobre negativos históricos.
+
+    Para cada SKU afetado:
+      qtd_transferir = min(qty_vendida_após_corte, abs(saldo_negativo_shinsei))
+      1. ENTRADA no Shinsei Geral (zera o negativo causado pela venda)
+      2. SAÍDA no AKG Geral (debita de onde o estoque realmente saiu)
 
     dry_run=true (padrão): apenas lista, não altera.
-    dry_run=false: aplica os ajustes (operacao=B, quantidade=0).
-
-    Depósito padrão: 14636070822 (Shinsei Geral).
     """
-    hdrs = _hdrs(EMPRESA_SHINSEI)
-    base = "https://api.bling.com.br/Api/v3"
+    import re
+    from datetime import datetime
 
-    # 1) Varrer saldos do depósito paginado
-    negativos: list[dict] = []
+    DEP_SHINSEI = 14636070822
+    DEP_AKG     = 14889056234
+    base        = "https://api.bling.com.br/Api/v3"
+    OBS         = f"Correcao bug multiempresa pos {data_corte} — AKG Geral -> Shinsei Geral"
+
+    hdrs_s = _hdrs(EMPRESA_SHINSEI)
+    hdrs_a = _hdrs(EMPRESA_AKG)
+
+    # ── 1) Saldos negativos atuais no Shinsei Geral ────────────────────────────
+    saldo_negativo: dict[str, dict] = {}   # sku → {produto_id, nome, saldo}
     pagina = 1
     while True:
-        r = _req.get(
-            f"{base}/estoques/saldos",
-            headers=hdrs,
-            params={"pagina": pagina, "limite": 100, "deposito": deposito_id},
-            timeout=30,
-        )
-        if r.status_code == 401:
-            # tentar refresh e uma nova tentativa
-            hdrs = _hdrs(EMPRESA_SHINSEI)
-            r = _req.get(
-                f"{base}/estoques/saldos",
-                headers=hdrs,
-                params={"pagina": pagina, "limite": 100, "deposito": deposito_id},
-                timeout=30,
-            )
+        r = _req.get(f"{base}/estoques/saldos", headers=hdrs_s,
+                     params={"pagina": pagina, "limite": 100, "deposito": DEP_SHINSEI},
+                     timeout=30)
         if not r.ok:
-            return {"ok": False, "erro": f"estoques/saldos HTTP {r.status_code}: {r.text[:300]}"}
-
+            return {"ok": False, "erro": f"Shinsei saldos HTTP {r.status_code}: {r.text[:300]}"}
         itens = r.json().get("data", [])
         if not itens:
             break
-
         for it in itens:
             saldo = it.get("saldoVirtualTotal", 0)
             if saldo < 0:
-                negativos.append({
-                    "produto_id": it.get("produto", {}).get("id"),
-                    "sku": it.get("produto", {}).get("codigo", ""),
-                    "nome": it.get("produto", {}).get("nome", ""),
-                    "saldo_atual": saldo,
-                })
+                sku = it.get("produto", {}).get("codigo", "")
+                if sku:
+                    saldo_negativo[sku] = {
+                        "produto_id_shinsei": it["produto"]["id"],
+                        "nome": it["produto"].get("nome", ""),
+                        "saldo_shinsei": saldo,
+                    }
         pagina += 1
 
-    if dry_run or not negativos:
+    if not saldo_negativo:
+        return {"ok": True, "msg": "Nenhum saldo negativo no Shinsei Geral.", "total": 0}
+
+    # ── 2) Pedidos de venda Shinsei confirmados após data_corte ───────────────
+    # situacoes confirmadas: 9=Atendido, 12=Em andamento, 15=Em andamento
+    SITUACOES_OK = {9, 12, 15}
+    vendas_pos_corte: dict[str, int] = {}   # sku → qtd vendida após corte
+
+    pagina = 1
+    while True:
+        r = _req.get(f"{base}/pedidos/vendas", headers=hdrs_s,
+                     params={"pagina": pagina, "limite": 100,
+                             "dataInicial": data_corte, "dataFinal": "2099-12-31"},
+                     timeout=30)
+        if not r.ok:
+            break
+        pedidos = r.json().get("data", [])
+        if not pedidos:
+            break
+        for ped in pedidos:
+            sit_id = (ped.get("situacao") or {}).get("id", 0)
+            if int(sit_id or 0) not in SITUACOES_OK:
+                continue
+            for item in (ped.get("itens") or []):
+                sku = item.get("codigo", "")
+                qtd = float(item.get("quantidade", 0))
+                if sku and qtd > 0:
+                    vendas_pos_corte[sku] = vendas_pos_corte.get(sku, 0) + int(qtd)
+        pagina += 1
+
+    # ── 3) Calcular quantidade a transferir por SKU ────────────────────────────
+    transferencias: list[dict] = []
+    for sku, info in saldo_negativo.items():
+        vendido = vendas_pos_corte.get(sku, 0)
+        if vendido == 0:
+            continue  # negativo histórico — pula
+        qtd = min(vendido, abs(info["saldo_shinsei"]))
+        if qtd > 0:
+            transferencias.append({
+                "sku": sku,
+                "nome": info["nome"],
+                "produto_id_shinsei": info["produto_id_shinsei"],
+                "saldo_shinsei": info["saldo_shinsei"],
+                "vendido_pos_corte": vendido,
+                "qtd_transferir": qtd,
+                "produto_id_akg": None,
+            })
+
+    if not transferencias:
+        return {
+            "ok": True,
+            "msg": "Nenhum SKU negativo com vendas após data_corte encontrado.",
+            "negativos_total": len(saldo_negativo),
+            "negativos_historicos": len(saldo_negativo),
+        }
+
+    # ── 4) Buscar IDs AKG para os SKUs afetados ───────────────────────────────
+    skus_afetados = {t["sku"] for t in transferencias}
+    sku_to_akg_id: dict[str, int] = {}
+    pagina = 1
+    while True:
+        r = _req.get(f"{base}/produtos", headers=hdrs_a,
+                     params={"pagina": pagina, "limite": 100, "situacao": "A"},
+                     timeout=30)
+        if not r.ok:
+            break
+        prods = r.json().get("data", [])
+        if not prods:
+            break
+        for p in prods:
+            cod = p.get("codigo", "")
+            if cod in skus_afetados:
+                sku_to_akg_id[cod] = p["id"]
+        if len(sku_to_akg_id) == len(skus_afetados):
+            break  # já encontrou todos
+        pagina += 1
+
+    for t in transferencias:
+        t["produto_id_akg"] = sku_to_akg_id.get(t["sku"])
+
+    if dry_run:
+        sem_akg = [t for t in transferencias if not t["produto_id_akg"]]
         return {
             "ok": True,
             "dry_run": True,
-            "total_negativos": len(negativos),
-            "deposito_id": deposito_id,
-            "itens": negativos,
+            "data_corte": data_corte,
+            "negativos_total": len(saldo_negativo),
+            "negativos_historicos_ignorados": len(saldo_negativo) - len(transferencias),
+            "a_transferir": len(transferencias),
+            "sem_id_akg": len(sem_akg),
+            "itens": transferencias,
         }
 
-    # 2) Zerar cada negativo via POST /estoques (operacao=B = balanço/saldo absoluto)
-    corrigidos = []
-    erros = []
-    for item in negativos:
-        pid = item["produto_id"]
-        if not pid:
-            erros.append({**item, "erro": "produto_id ausente"})
+    # ── 5) Aplicar movimentações ───────────────────────────────────────────────
+    corrigidos, erros = [], []
+    for t in transferencias:
+        pid_s = t["produto_id_shinsei"]
+        pid_a = t["produto_id_akg"]
+        qtd   = t["qtd_transferir"]
+        entry = {"sku": t["sku"], "nome": t["nome"], "qtd": qtd}
+
+        # Entrada Shinsei Geral
+        r_e = _req.post(f"{base}/estoques", headers=hdrs_s, json={
+            "produto": {"id": pid_s}, "deposito": {"id": DEP_SHINSEI},
+            "operacao": "E", "quantidade": qtd, "observacoes": OBS,
+        }, timeout=20)
+        if not r_e.ok:
+            erros.append({**entry, "etapa": "entrada_shinsei",
+                          "erro": f"HTTP {r_e.status_code}: {r_e.text[:150]}"})
             continue
-        payload = {
-            "produto": {"id": pid},
-            "deposito": {"id": deposito_id},
-            "operacao": "B",
-            "quantidade": 0,
-            "observacoes": "Correcao estoque negativo multiempresa bug 04/09/2026",
-        }
-        rp = _req.post(f"{base}/estoques", headers=hdrs, json=payload, timeout=20)
-        if rp.ok:
-            corrigidos.append({**item, "novo_saldo": 0})
-        else:
-            erros.append({**item, "erro": f"HTTP {rp.status_code}: {rp.text[:200]}"})
+
+        # Saída AKG Geral
+        saida_ok, saida_err = False, "SKU não encontrado na AKG"
+        if pid_a:
+            r_s = _req.post(f"{base}/estoques", headers=hdrs_a, json={
+                "produto": {"id": pid_a}, "deposito": {"id": DEP_AKG},
+                "operacao": "S", "quantidade": qtd, "observacoes": OBS,
+            }, timeout=20)
+            saida_ok  = r_s.ok
+            saida_err = "" if saida_ok else f"HTTP {r_s.status_code}: {r_s.text[:150]}"
+
+        corrigidos.append({**entry, "entrada_shinsei": True,
+                           "saida_akg": saida_ok, "saida_akg_err": saida_err})
 
     return {
         "ok": True,
         "dry_run": False,
-        "total_negativos": len(negativos),
+        "data_corte": data_corte,
+        "total_transferencias": len(transferencias),
         "corrigidos": len(corrigidos),
         "erros": len(erros),
         "detalhes_erro": erros[:10],
+        "detalhes": corrigidos[:30],
     }
 
 
