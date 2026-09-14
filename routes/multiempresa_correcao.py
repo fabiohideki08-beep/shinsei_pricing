@@ -221,27 +221,41 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
     hdrs_s = _hdrs(EMPRESA_SHINSEI)
     hdrs_a = _hdrs(EMPRESA_AKG)
 
-    # ── 1) Saldos negativos atuais no Shinsei Geral ────────────────────────────
+    # ── 1) Listar produtos Shinsei com saldo total negativo ────────────────────
+    # /produtos retorna estoque.saldoVirtualTotal (total geral); depois confirmamos por depósito
     saldo_negativo: dict[str, dict] = {}   # sku → {produto_id, nome, saldo}
     pagina = 1
     while True:
-        r = _req.get(f"{base}/estoques/saldos", headers=hdrs_s,
-                     params={"pagina": pagina, "limite": 100, "deposito": DEP_SHINSEI},
+        r = _req.get(f"{base}/produtos", headers=hdrs_s,
+                     params={"pagina": pagina, "limite": 100, "situacao": "A",
+                             "tipo": "P"},  # tipo P = produto simples
                      timeout=30)
         if not r.ok:
-            return {"ok": False, "erro": f"Shinsei saldos HTTP {r.status_code}: {r.text[:300]}"}
-        itens = r.json().get("data", [])
-        if not itens:
+            return {"ok": False, "erro": f"Shinsei produtos HTTP {r.status_code}: {r.text[:300]}"}
+        prods = r.json().get("data", [])
+        if not prods:
             break
-        for it in itens:
-            saldo = it.get("saldoVirtualTotal", 0)
-            if saldo < 0:
-                sku = it.get("produto", {}).get("codigo", "")
+        for p in prods:
+            est = p.get("estoque") or {}
+            saldo_total = float(est.get("saldoVirtualTotal", 0) or 0)
+            if saldo_total >= 0:
+                continue
+            # Confirmar saldo no depósito específico
+            pid = p["id"]
+            rs = _req.get(f"{base}/estoques/saldos", headers=hdrs_s,
+                          params={"produto": pid, "deposito": DEP_SHINSEI},
+                          timeout=20)
+            if not rs.ok:
+                continue
+            saldos = rs.json().get("data", [])
+            saldo_dep = float((saldos[0].get("saldoVirtualTotal", 0) if saldos else 0) or 0)
+            if saldo_dep < 0:
+                sku = p.get("codigo", "")
                 if sku:
                     saldo_negativo[sku] = {
-                        "produto_id_shinsei": it["produto"]["id"],
-                        "nome": it["produto"].get("nome", ""),
-                        "saldo_shinsei": saldo,
+                        "produto_id_shinsei": pid,
+                        "nome": p.get("nome", ""),
+                        "saldo_shinsei": saldo_dep,
                     }
         pagina += 1
 
