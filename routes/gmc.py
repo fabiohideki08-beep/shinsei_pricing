@@ -1524,9 +1524,6 @@ def corrigir_product_page_unavailable(dry_run: bool = False):
             if not page_token:
                 break
 
-        token = _get_merchant_token()
-        h = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-
         if dry_run or not afetados:
             return {
                 "ok": True,
@@ -1536,64 +1533,46 @@ def corrigir_product_page_unavailable(dry_run: bool = False):
                 "produtos": afetados,
             }
 
-        # 2) Para cada produto afetado, buscar dados completos e re-inserir
-        # Datasource Shopify API: 10623833941
-        # Merchant API v1 insert: POST /productInputs:insert?dataSource=accounts/.../dataSources/...
-        datasource_name = f"accounts/{MERCHANT_ID}/dataSources/10623833941"
-
+        # 2) Re-inserir via Content API products.insert — força re-avaliação do link pelo Google
         resultados = []
         erros = []
         for item in afetados:
-            # product_id Content API format: "online:pt:BR:offer-123"
-            # Merchant API v1 resource name: "online~pt~BR~offer-123"
             pid = item["product_id"]
-            prod_name = f"accounts/{MERCHANT_ID}/products/" + pid.replace(":", "~")
 
-            # Buscar produto completo via Merchant API v1
-            rg = requests.get(
-                f"https://merchantapi.googleapis.com/products/v1/{prod_name}",
-                headers=h, timeout=30,
-            )
-            if rg.status_code != 200:
-                erros.append({"produto": pid, "erro": f"GET {rg.status_code}: {rg.text[:200]}"})
+            # Buscar produto completo via Content API
+            try:
+                produto = service.products().get(
+                    merchantId=MERCHANT_ID, productId=pid
+                ).execute()
+            except Exception as e:
+                erros.append({"produto": pid, "titulo": item.get("title", ""), "erro": f"GET: {e}"})
                 continue
 
-            produto = rg.json()
-            attributes = produto.get("attributes", {})
-
-            # Campos read-only que NÃO devem ir no insert
+            # Remover campos read-only antes do re-insert
             READONLY_INSERT = {
-                "name", "productStatus", "versionNumber",
-                "dataSourceId", "feedLabel", "contentLanguage",
-                "channel", "targetCountry",
+                "id", "kind", "source", "warnings", "destinations",
+                "status", "customAttributes",
             }
-            clean_attrs = {k: v for k, v in attributes.items() if k not in READONLY_INSERT}
+            clean = {k: v for k, v in produto.items() if k not in READONLY_INSERT}
 
-            payload = {
-                "name": prod_name,
-                "offerId": pid,
-                "attributes": clean_attrs,
-            }
-
-            ri = requests.post(
-                f"https://merchantapi.googleapis.com/products/v1/accounts/{MERCHANT_ID}/productInputs:insert",
-                headers=h,
-                params={"dataSource": datasource_name},
-                json=payload,
-                timeout=30,
-            )
-            ok = ri.status_code in (200, 201)
-            entry = {
-                "produto": pid,
-                "titulo": item.get("title", ""),
-                "http": ri.status_code,
-                "ok": ok,
-            }
-            if not ok:
-                entry["body"] = ri.text[:300]
-                erros.append(entry)
-            else:
-                resultados.append(entry)
+            # Re-inserir o produto — força Google a re-avaliar link e status
+            try:
+                res = service.products().insert(
+                    merchantId=MERCHANT_ID, body=clean
+                ).execute()
+                resultados.append({
+                    "produto": pid,
+                    "titulo": item.get("title", ""),
+                    "offer_id": res.get("id", ""),
+                    "ok": True,
+                })
+            except Exception as e:
+                erros.append({
+                    "produto": pid,
+                    "titulo": item.get("title", ""),
+                    "erro": str(e)[:300],
+                    "ok": False,
+                })
 
         return {
             "ok": True,
