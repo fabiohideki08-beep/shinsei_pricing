@@ -367,7 +367,8 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
         rd = _bling_get(f"{base}/produtos/{prod_id}", hdrs)
         if not rd.ok:
             return []
-        comps = rd.json().get("data", {}).get("componentes", []) or []
+        estrutura = rd.json().get("data", {}).get("estrutura", {}) or {}
+        comps = estrutura.get("componentes", []) or []
         return [{"id": c["produto"]["id"], "qtd_por_kit": float(c.get("quantidade", 1))}
                 for c in comps if c.get("produto", {}).get("id")]
 
