@@ -281,11 +281,13 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
     SITUACOES_OK = {9, 12, 15}
     vendas_pos_corte: dict[str, int] = {}   # sku → qtd vendida após corte
 
+    # Bling limita período a 366 dias — usar hoje+1 como dataFinal
+    data_final = (datetime.now() + __import__("datetime").timedelta(days=1)).strftime("%Y-%m-%d")
     pagina = 1
     while True:
         r = _bling_get(f"{base}/pedidos/vendas", hdrs_s,
                        params={"pagina": pagina, "limite": 100,
-                               "dataInicial": data_corte, "dataFinal": "2099-12-31"})
+                               "dataInicial": data_corte, "dataFinal": data_final})
         if not r.ok:
             break
         pedidos = r.json().get("data", [])
