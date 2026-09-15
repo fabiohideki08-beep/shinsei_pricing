@@ -352,6 +352,54 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
     for t in transferencias:
         t["produto_id_akg"] = sku_to_akg_id.get(t["sku"])
 
+    def _get_componentes(prod_id, hdrs):
+        """Retorna lista de {id, quantidade} dos componentes de um kit. Vazio se produto simples."""
+        time.sleep(0.4)
+        rd = _bling_get(f"{base}/produtos/{prod_id}", hdrs)
+        if not rd.ok:
+            return []
+        comps = rd.json().get("data", {}).get("componentes", []) or []
+        return [{"id": c["produto"]["id"], "qtd_por_kit": float(c.get("quantidade", 1))}
+                for c in comps if c.get("produto", {}).get("id")]
+
+    def _ajustar_estoque(prod_id, deposito, operacao, qtd, hdrs):
+        """POST /estoques para produto simples. Retorna (ok, err_msg)."""
+        time.sleep(0.4)
+        r = _req.post(f"{base}/estoques", headers=hdrs, json={
+            "produto": {"id": prod_id}, "deposito": {"id": deposito},
+            "operacao": operacao, "quantidade": qtd, "observacoes": OBS,
+        }, timeout=20)
+        return r.ok, ("" if r.ok else f"HTTP {r.status_code}: {r.text[:150]}")
+
+    # ── 5) Buscar componentes de kits e expandir lista de ajustes ─────────────
+    # Para cada transferência, descobre se é kit (tem componentes) ou produto simples.
+    # Kits: ajusta cada componente × qtd_por_kit. Simples: ajusta diretamente.
+    ajustes: list[dict] = []  # {sku, nome, prod_id_s, prod_id_a, qtd, componentes:[]}
+    for t in transferencias:
+        comps_s = _get_componentes(t["produto_id_shinsei"], hdrs_s)
+        if comps_s:
+            # Kit — mapear componentes na AKG também
+            comps_a: list[dict] = []
+            if t["produto_id_akg"]:
+                comps_a = _get_componentes(t["produto_id_akg"], hdrs_a)
+            # Índice por posição (assumindo mesma ordem)
+            for i, cs in enumerate(comps_s):
+                ca_id = comps_a[i]["id"] if i < len(comps_a) else None
+                qtd_comp = int(cs["qtd_por_kit"] * t["qtd_transferir"])
+                if qtd_comp > 0:
+                    ajustes.append({
+                        "sku": t["sku"], "nome": t["nome"],
+                        "prod_id_s": cs["id"], "prod_id_a": ca_id,
+                        "qtd": qtd_comp, "tipo": "componente",
+                    })
+        else:
+            # Produto simples
+            ajustes.append({
+                "sku": t["sku"], "nome": t["nome"],
+                "prod_id_s": t["produto_id_shinsei"], "prod_id_a": t["produto_id_akg"],
+                "qtd": t["qtd_transferir"], "tipo": "simples",
+            })
+
     if dry_run:
         sem_akg = [t for t in transferencias if not t["produto_id_akg"]]
         return {
@@ -362,38 +410,26 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
             "negativos_historicos_ignorados": len(saldo_negativo) - len(transferencias),
             "a_transferir": len(transferencias),
             "sem_id_akg": len(sem_akg),
+            "ajustes_expandidos": len(ajustes),
             "itens": transferencias,
+            "ajustes": ajustes[:50],
         }
 
-    # ── 5) Aplicar movimentações ───────────────────────────────────────────────
+    # ── 6) Aplicar movimentações ───────────────────────────────────────────────
     corrigidos, erros = [], []
-    for t in transferencias:
-        pid_s = t["produto_id_shinsei"]
-        pid_a = t["produto_id_akg"]
-        qtd   = t["qtd_transferir"]
-        entry = {"sku": t["sku"], "nome": t["nome"], "qtd": qtd}
+    for aj in ajustes:
+        entry = {"sku": aj["sku"], "nome": aj["nome"], "qtd": aj["qtd"], "tipo": aj["tipo"]}
 
         # Entrada Shinsei Geral
-        time.sleep(0.4)
-        r_e = _req.post(f"{base}/estoques", headers=hdrs_s, json={
-            "produto": {"id": pid_s}, "deposito": {"id": DEP_SHINSEI},
-            "operacao": "E", "quantidade": qtd, "observacoes": OBS,
-        }, timeout=20)
-        if not r_e.ok:
-            erros.append({**entry, "etapa": "entrada_shinsei",
-                          "erro": f"HTTP {r_e.status_code}: {r_e.text[:150]}"})
+        ok_e, err_e = _ajustar_estoque(aj["prod_id_s"], DEP_SHINSEI, "E", aj["qtd"], hdrs_s)
+        if not ok_e:
+            erros.append({**entry, "etapa": "entrada_shinsei", "erro": err_e})
             continue
 
         # Saída AKG Geral
-        saida_ok, saida_err = False, "SKU não encontrado na AKG"
-        if pid_a:
-            time.sleep(0.4)
-            r_s = _req.post(f"{base}/estoques", headers=hdrs_a, json={
-                "produto": {"id": pid_a}, "deposito": {"id": DEP_AKG},
-                "operacao": "S", "quantidade": qtd, "observacoes": OBS,
-            }, timeout=20)
-            saida_ok  = r_s.ok
-            saida_err = "" if saida_ok else f"HTTP {r_s.status_code}: {r_s.text[:150]}"
+        saida_ok, saida_err = False, "componente AKG não mapeado"
+        if aj["prod_id_a"]:
+            saida_ok, saida_err = _ajustar_estoque(aj["prod_id_a"], DEP_AKG, "S", aj["qtd"], hdrs_a)
 
         corrigidos.append({**entry, "entrada_shinsei": True,
                            "saida_akg": saida_ok, "saida_akg_err": saida_err})
