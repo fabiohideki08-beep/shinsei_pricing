@@ -316,10 +316,50 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
             if sku and qtd > 0:
                 vendas_pos_corte[sku] = vendas_pos_corte.get(sku, 0) + int(qtd)
 
-    # ── 3) Calcular quantidade a transferir por SKU ────────────────────────────
+    def _get_componentes(prod_id, hdrs):
+        """Retorna lista de {id, qtd_por_kit} dos componentes físicos. Vazio se produto simples."""
+        time.sleep(0.4)
+        rd = _bling_get(f"{base}/produtos/{prod_id}", hdrs)
+        if not rd.ok:
+            return []
+        estrutura = rd.json().get("data", {}).get("estrutura", {}) or {}
+        comps = estrutura.get("componentes", []) or []
+        return [{"id": c["produto"]["id"], "qtd_por_kit": float(c.get("quantidade", 1))}
+                for c in comps if c.get("produto", {}).get("id")]
+
+    # ── 3) Identificar kits e propagar vendas para componentes físicos ─────────
+    # Produtos virtuais (kits) não têm estoque próprio — o débito ocorre nos componentes.
+    # O mesmo físico pode ser componente de centenas de kits; ajustar o kit expandido
+    # duplicaria a correção se o físico também aparecer na lista de negativos.
+    # Solução: propagar vendas dos kits para os IDs dos componentes, ajustar só físicos.
+    _comp_cache: dict[int, list] = {}  # prod_id → [componentes]
+    vendas_fisico_extra: dict[int, int] = {}  # prod_id_componente → qtd adicional via kits
+
+    for sku, info in saldo_negativo.items():
+        qtd_kit_vendida = vendas_pos_corte.get(sku, 0)
+        if qtd_kit_vendida == 0:
+            continue
+        prod_id = info["produto_id_shinsei"]
+        comps = _get_componentes(prod_id, hdrs_s)
+        _comp_cache[prod_id] = comps
+        if comps:
+            # Kit virtual — propagar vendas para componentes físicos
+            info["eh_kit"] = True
+            for c in comps:
+                qtd_comp = int(c["qtd_por_kit"] * qtd_kit_vendida)
+                vendas_fisico_extra[c["id"]] = vendas_fisico_extra.get(c["id"], 0) + qtd_comp
+
+    # ── 4) Calcular quantidade a transferir — apenas físicos ──────────────────
+    # Kits virtuais são pulados; seus componentes físicos recebem as vendas propagadas
+    prod_id_to_sku = {v["produto_id_shinsei"]: k for k, v in saldo_negativo.items()}
     transferencias: list[dict] = []
     for sku, info in saldo_negativo.items():
-        vendido = vendas_pos_corte.get(sku, 0)
+        if info.get("eh_kit"):
+            continue  # kit virtual — ajuste vai nos componentes físicos
+        prod_id = info["produto_id_shinsei"]
+        vendas_diretas = vendas_pos_corte.get(sku, 0)
+        vendas_via_kit = vendas_fisico_extra.get(prod_id, 0)
+        vendido = vendas_diretas + vendas_via_kit
         if vendido == 0:
             continue  # negativo histórico — pula
         qtd = min(vendido, abs(info["saldo_shinsei"]))
@@ -327,8 +367,10 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
             transferencias.append({
                 "sku": sku,
                 "nome": info["nome"],
-                "produto_id_shinsei": info["produto_id_shinsei"],
+                "produto_id_shinsei": prod_id,
                 "saldo_shinsei": info["saldo_shinsei"],
+                "vendido_direto": vendas_diretas,
+                "vendido_via_kit": vendas_via_kit,
                 "vendido_pos_corte": vendido,
                 "qtd_transferir": qtd,
                 "produto_id_akg": None,
@@ -342,12 +384,11 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
             "negativos_historicos": len(saldo_negativo),
         }
 
-    # ── 4) Buscar IDs AKG para os SKUs afetados ───────────────────────────────
+    # ── 5) Buscar IDs AKG para os SKUs afetados ───────────────────────────────
     # Renovar token AKG (pode ter expirado durante saldo checks longos)
     hdrs_a = _hdrs(EMPRESA_AKG)
     skus_afetados = {t["sku"] for t in transferencias}
     sku_to_akg_id: dict[str, int] = {}
-    # Busca direta por ?codigo= — evita paginar 5000 produtos e token expirar
     for sku in skus_afetados:
         time.sleep(0.4)
         r = _bling_get(f"{base}/produtos", hdrs_a,
@@ -361,19 +402,8 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
     for t in transferencias:
         t["produto_id_akg"] = sku_to_akg_id.get(t["sku"])
 
-    def _get_componentes(prod_id, hdrs):
-        """Retorna lista de {id, quantidade} dos componentes de um kit. Vazio se produto simples."""
-        time.sleep(0.4)
-        rd = _bling_get(f"{base}/produtos/{prod_id}", hdrs)
-        if not rd.ok:
-            return []
-        estrutura = rd.json().get("data", {}).get("estrutura", {}) or {}
-        comps = estrutura.get("componentes", []) or []
-        return [{"id": c["produto"]["id"], "qtd_por_kit": float(c.get("quantidade", 1))}
-                for c in comps if c.get("produto", {}).get("id")]
-
     def _ajustar_estoque(prod_id, deposito, operacao, qtd, hdrs):
-        """POST /estoques para produto simples. Retorna (ok, err_msg)."""
+        """POST /estoques para produto físico. Retorna (ok, err_msg)."""
         time.sleep(0.4)
         r = _req.post(f"{base}/estoques", headers=hdrs, json={
             "produto": {"id": prod_id}, "deposito": {"id": deposito},
@@ -381,35 +411,17 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
         }, timeout=20)
         return r.ok, ("" if r.ok else f"HTTP {r.status_code}: {r.text[:150]}")
 
-    # ── 5) Buscar componentes de kits e expandir lista de ajustes ─────────────
-    # Para cada transferência, descobre se é kit (tem componentes) ou produto simples.
-    # Kits: ajusta cada componente × qtd_por_kit. Simples: ajusta diretamente.
-    ajustes: list[dict] = []  # {sku, nome, prod_id_s, prod_id_a, qtd, componentes:[]}
+    # ── 6) Construir lista de ajustes — apenas físicos ────────────────────────
+    # Todos os produtos em transferencias já são físicos (kits foram pulados na etapa 4)
+    ajustes: list[dict] = []
     for t in transferencias:
-        comps_s = _get_componentes(t["produto_id_shinsei"], hdrs_s)
-        if comps_s:
-            # Kit — mapear componentes na AKG também
-            comps_a: list[dict] = []
-            if t["produto_id_akg"]:
-                comps_a = _get_componentes(t["produto_id_akg"], hdrs_a)
-            # Índice por posição (assumindo mesma ordem)
-            for i, cs in enumerate(comps_s):
-                ca_id = comps_a[i]["id"] if i < len(comps_a) else None
-                qtd_comp = int(cs["qtd_por_kit"] * t["qtd_transferir"])
-                if qtd_comp > 0:
-                    ajustes.append({
-                        "sku": t["sku"], "nome": t["nome"],
-                        "prod_id_s": cs["id"], "prod_id_a": ca_id,
-                        "qtd": qtd_comp, "tipo": "componente",
-                    })
-        else:
-            # Produto simples
-            ajustes.append({
-                "sku": t["sku"], "nome": t["nome"],
-                "prod_id_s": t["produto_id_shinsei"], "prod_id_a": t["produto_id_akg"],
-                "qtd": t["qtd_transferir"], "tipo": "simples",
-            })
+        ajustes.append({
+            "sku": t["sku"], "nome": t["nome"],
+            "prod_id_s": t["produto_id_shinsei"], "prod_id_a": t["produto_id_akg"],
+            "qtd": t["qtd_transferir"], "tipo": "fisico",
+        })
 
+    kits_ignorados = sum(1 for info in saldo_negativo.values() if info.get("eh_kit"))
     if dry_run:
         sem_akg = [t for t in transferencias if not t["produto_id_akg"]]
         return {
@@ -417,18 +429,17 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
             "dry_run": True,
             "data_corte": data_corte,
             "negativos_total": len(saldo_negativo),
-            "negativos_historicos_ignorados": len(saldo_negativo) - len(transferencias),
+            "negativos_kits_ignorados": kits_ignorados,
+            "negativos_historicos_ignorados": len(saldo_negativo) - kits_ignorados - len(transferencias),
             "a_transferir": len(transferencias),
             "sem_id_akg": len(sem_akg),
-            "ajustes_expandidos": len(ajustes),
             "itens": transferencias,
-            "ajustes": ajustes[:50],
         }
 
-    # ── 6) Aplicar movimentações ───────────────────────────────────────────────
+    # ── 7) Aplicar movimentações ───────────────────────────────────────────────
     corrigidos, erros = [], []
     for aj in ajustes:
-        entry = {"sku": aj["sku"], "nome": aj["nome"], "qtd": aj["qtd"], "tipo": aj["tipo"]}
+        entry = {"sku": aj["sku"], "nome": aj["nome"], "qtd": aj["qtd"]}
 
         # Entrada Shinsei Geral
         ok_e, err_e = _ajustar_estoque(aj["prod_id_s"], DEP_SHINSEI, "E", aj["qtd"], hdrs_s)
@@ -437,7 +448,7 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
             continue
 
         # Saída AKG Geral
-        saida_ok, saida_err = False, "componente AKG não mapeado"
+        saida_ok, saida_err = False, "produto não encontrado na AKG"
         if aj["prod_id_a"]:
             saida_ok, saida_err = _ajustar_estoque(aj["prod_id_a"], DEP_AKG, "S", aj["qtd"], hdrs_a)
 
@@ -448,7 +459,7 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
         "ok": True,
         "dry_run": False,
         "data_corte": data_corte,
-        "total_transferencias": len(transferencias),
+        "total_fisicos": len(transferencias),
         "corrigidos": len(corrigidos),
         "erros": len(erros),
         "detalhes_erro": erros[:10],
