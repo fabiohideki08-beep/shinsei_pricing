@@ -405,11 +405,14 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
     def _ajustar_estoque(prod_id, deposito, operacao, qtd, hdrs):
         """POST /estoques para produto físico. Retorna (ok, err_msg)."""
         time.sleep(0.4)
-        r = _req.post(f"{base}/estoques", headers=hdrs, json={
-            "produto": {"id": prod_id}, "deposito": {"id": deposito},
-            "operacao": operacao, "quantidade": qtd, "observacoes": OBS,
-        }, timeout=20)
-        return r.ok, ("" if r.ok else f"HTTP {r.status_code}: {r.text[:150]}")
+        try:
+            r = _req.post(f"{base}/estoques", headers=hdrs, json={
+                "produto": {"id": prod_id}, "deposito": {"id": deposito},
+                "tipoOperacao": operacao, "quantidade": int(qtd), "observacoes": OBS,
+            }, timeout=30)
+            return r.ok, ("" if r.ok else f"HTTP {r.status_code}: {r.text[:150]}")
+        except Exception as exc:
+            return False, str(exc)[:150]
 
     # ── 6) Construir lista de ajustes — apenas físicos ────────────────────────
     # Todos os produtos em transferencias já são físicos (kits foram pulados na etapa 4)
@@ -464,6 +467,226 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
         "erros": len(erros),
         "detalhes_erro": erros[:10],
         "detalhes": corrigidos[:30],
+    }
+
+
+@router.post("/multiempresa/transferir-shinsei-akg")
+def transferir_shinsei_para_akg(dry_run: bool = True, data_corte: str = "2026-09-04"):
+    """
+    Direção inversa: vendas AKG que debitaram do AKG Geral indevidamente,
+    quando o estoque real estava no Shinsei Geral.
+
+    ENTRADA AKG Geral + SAÍDA Shinsei Geral para os físicos negativos na AKG
+    com vendas após data_corte.
+    """
+    import time
+    import datetime as _dt
+
+    DEP_SHINSEI = 14636070822
+    DEP_AKG     = 14889056234
+    base        = "https://api.bling.com.br/Api/v3"
+    OBS         = f"Correcao bug multiempresa pos {data_corte} — Shinsei Geral -> AKG Geral"
+
+    hdrs_s = _hdrs(EMPRESA_SHINSEI)
+    hdrs_a = _hdrs(EMPRESA_AKG)
+
+    def _bling_get(url, headers, params=None, retries=5):
+        for i in range(retries):
+            r = _req.get(url, headers=headers, params=params, timeout=30)
+            if r.status_code == 429:
+                time.sleep(2 ** i)
+                continue
+            return r
+        return r
+
+    def _get_componentes(prod_id, hdrs):
+        time.sleep(0.4)
+        rd = _bling_get(f"{base}/produtos/{prod_id}", hdrs)
+        if not rd.ok:
+            return []
+        estrutura = rd.json().get("data", {}).get("estrutura", {}) or {}
+        comps = estrutura.get("componentes", []) or []
+        return [{"id": c["produto"]["id"], "qtd_por_kit": float(c.get("quantidade", 1))}
+                for c in comps if c.get("produto", {}).get("id")]
+
+    def _ajustar_estoque(prod_id, deposito, operacao, qtd, hdrs):
+        time.sleep(0.4)
+        try:
+            r = _req.post(f"{base}/estoques", headers=hdrs, json={
+                "produto": {"id": prod_id}, "deposito": {"id": deposito},
+                "tipoOperacao": operacao, "quantidade": int(qtd), "observacoes": OBS,
+            }, timeout=30)
+            return r.ok, ("" if r.ok else f"HTTP {r.status_code}: {r.text[:150]}")
+        except Exception as exc:
+            return False, str(exc)[:150]
+
+    # 1) Negativos na AKG
+    saldo_negativo: dict[str, dict] = {}
+    pagina = 1
+    while True:
+        r = _bling_get(f"{base}/produtos", hdrs_a,
+                       params={"pagina": pagina, "limite": 100, "situacao": "A", "tipo": "P"})
+        if not r.ok:
+            return {"ok": False, "erro": f"AKG produtos HTTP {r.status_code}: {r.text[:300]}"}
+        prods = r.json().get("data", [])
+        if not prods:
+            break
+        time.sleep(0.35)
+        for p in prods:
+            est = p.get("estoque") or {}
+            saldo_total = float(est.get("saldoVirtualTotal", 0) or 0)
+            if saldo_total >= 0:
+                continue
+            prod_id = p["id"]
+            time.sleep(0.4)
+            rs = _bling_get(f"{base}/estoques/saldos", hdrs_a,
+                            params={"produto": prod_id, "deposito": DEP_AKG})
+            if rs.ok:
+                saldos = rs.json().get("data", [])
+                saldo_dep = float((saldos[0].get("saldoVirtualTotal", 0) if saldos else 0) or 0)
+            else:
+                saldo_dep = saldo_total
+            if saldo_dep < 0:
+                sku = p.get("codigo", "")
+                if sku:
+                    saldo_negativo[sku] = {
+                        "produto_id_akg": prod_id,
+                        "nome": p.get("nome", ""),
+                        "saldo_akg": saldo_dep,
+                    }
+        pagina += 1
+
+    if not saldo_negativo:
+        return {"ok": True, "msg": "Nenhum saldo negativo na AKG Geral.", "total": 0}
+
+    # 2) Pedidos AKG confirmados após data_corte
+    SITUACOES_OK = {9, 12, 15}
+    vendas_pos_corte: dict[str, int] = {}
+    data_final = (_dt.datetime.now() + _dt.timedelta(days=1)).strftime("%Y-%m-%d")
+    pagina = 1
+    ids_confirmados: list[int] = []
+    while True:
+        r = _bling_get(f"{base}/pedidos/vendas", hdrs_a,
+                       params={"pagina": pagina, "limite": 100,
+                               "dataInicial": data_corte, "dataFinal": data_final})
+        if not r.ok:
+            break
+        pedidos = r.json().get("data", [])
+        if not pedidos:
+            break
+        time.sleep(0.35)
+        for ped in pedidos:
+            sit_id = (ped.get("situacao") or {}).get("id", 0)
+            if int(sit_id or 0) in SITUACOES_OK:
+                ids_confirmados.append(ped["id"])
+        pagina += 1
+
+    for ped_id in ids_confirmados:
+        time.sleep(0.4)
+        rd = _bling_get(f"{base}/pedidos/vendas/{ped_id}", hdrs_a)
+        if not rd.ok:
+            continue
+        for item in (rd.json().get("data", {}).get("itens") or []):
+            sku = item.get("codigo", "")
+            qtd = float(item.get("quantidade", 0))
+            if sku and qtd > 0:
+                vendas_pos_corte[sku] = vendas_pos_corte.get(sku, 0) + int(qtd)
+
+    # 3) Propagar vendas de kits para componentes físicos
+    _comp_cache: dict[int, list] = {}
+    vendas_fisico_extra: dict[int, int] = {}
+    for sku, info in saldo_negativo.items():
+        qtd_kit_vendida = vendas_pos_corte.get(sku, 0)
+        if qtd_kit_vendida == 0:
+            continue
+        prod_id = info["produto_id_akg"]
+        comps = _get_componentes(prod_id, hdrs_a)
+        _comp_cache[prod_id] = comps
+        if comps:
+            info["eh_kit"] = True
+            for c in comps:
+                qtd_comp = int(c["qtd_por_kit"] * qtd_kit_vendida)
+                vendas_fisico_extra[c["id"]] = vendas_fisico_extra.get(c["id"], 0) + qtd_comp
+
+    # 4) Transferências — apenas físicos AKG
+    transferencias: list[dict] = []
+    for sku, info in saldo_negativo.items():
+        if info.get("eh_kit"):
+            continue
+        prod_id = info["produto_id_akg"]
+        vendas_diretas = vendas_pos_corte.get(sku, 0)
+        vendas_via_kit = vendas_fisico_extra.get(prod_id, 0)
+        vendido = vendas_diretas + vendas_via_kit
+        if vendido == 0:
+            continue
+        qtd = min(vendido, abs(info["saldo_akg"]))
+        if qtd > 0:
+            transferencias.append({
+                "sku": sku, "nome": info["nome"],
+                "produto_id_akg": prod_id,
+                "saldo_akg": info["saldo_akg"],
+                "vendido_direto": vendas_diretas,
+                "vendido_via_kit": vendas_via_kit,
+                "vendido_pos_corte": vendido,
+                "qtd_transferir": qtd,
+                "produto_id_shinsei": None,
+            })
+
+    if not transferencias:
+        kits_ign = sum(1 for i in saldo_negativo.values() if i.get("eh_kit"))
+        return {
+            "ok": True,
+            "msg": "Nenhum SKU negativo AKG com vendas após data_corte.",
+            "negativos_total": len(saldo_negativo),
+            "negativos_kits_ignorados": kits_ign,
+            "negativos_historicos": len(saldo_negativo) - kits_ign,
+        }
+
+    # 5) Buscar IDs Shinsei
+    hdrs_s = _hdrs(EMPRESA_SHINSEI)
+    for t in transferencias:
+        time.sleep(0.4)
+        r = _bling_get(f"{base}/produtos", hdrs_s,
+                       params={"codigo": t["sku"], "situacao": "A"})
+        if not r.ok:
+            continue
+        prods = r.json().get("data", [])
+        if prods:
+            t["produto_id_shinsei"] = prods[0]["id"]
+
+    kits_ignorados = sum(1 for i in saldo_negativo.values() if i.get("eh_kit"))
+    if dry_run:
+        sem_shinsei = [t for t in transferencias if not t["produto_id_shinsei"]]
+        return {
+            "ok": True, "dry_run": True, "data_corte": data_corte,
+            "negativos_total": len(saldo_negativo),
+            "negativos_kits_ignorados": kits_ignorados,
+            "negativos_historicos_ignorados": len(saldo_negativo) - kits_ignorados - len(transferencias),
+            "a_transferir": len(transferencias),
+            "sem_id_shinsei": len(sem_shinsei),
+            "itens": transferencias,
+        }
+
+    # 6) Aplicar movimentações
+    corrigidos, erros = [], []
+    for t in transferencias:
+        entry = {"sku": t["sku"], "nome": t["nome"], "qtd": t["qtd_transferir"]}
+        ok_e, err_e = _ajustar_estoque(t["produto_id_akg"], DEP_AKG, "E", t["qtd_transferir"], hdrs_a)
+        if not ok_e:
+            erros.append({**entry, "etapa": "entrada_akg", "erro": err_e})
+            continue
+        saida_ok, saida_err = False, "produto não encontrado na Shinsei"
+        if t["produto_id_shinsei"]:
+            saida_ok, saida_err = _ajustar_estoque(t["produto_id_shinsei"], DEP_SHINSEI, "S",
+                                                    t["qtd_transferir"], hdrs_s)
+        corrigidos.append({**entry, "entrada_akg": True,
+                           "saida_shinsei": saida_ok, "saida_shinsei_err": saida_err})
+
+    return {
+        "ok": True, "dry_run": False, "data_corte": data_corte,
+        "total_fisicos": len(transferencias),
+        "corrigidos": len(corrigidos), "erros": len(erros),
+        "detalhes_erro": erros[:10], "detalhes": corrigidos[:30],
     }
 
 
