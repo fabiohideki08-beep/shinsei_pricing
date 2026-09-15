@@ -252,20 +252,22 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
             saldo_total = float(est.get("saldoVirtualTotal", 0) or 0)
             if saldo_total >= 0:
                 continue
-            # Confirmar saldo no depósito específico
-            pid = p["id"]
+            # Confirmar saldo no depósito específico (kits tipo=P não têm registro por depósito)
+            prod_id = p["id"]
             time.sleep(0.4)  # Bling rate limit: 3 req/s
             rs = _bling_get(f"{base}/estoques/saldos", hdrs_s,
-                            params={"produto": pid, "deposito": DEP_SHINSEI})
-            if not rs.ok:
-                continue
-            saldos = rs.json().get("data", [])
-            saldo_dep = float((saldos[0].get("saldoVirtualTotal", 0) if saldos else 0) or 0)
+                            params={"produto": prod_id, "deposito": DEP_SHINSEI})
+            if rs.ok:
+                saldos = rs.json().get("data", [])
+                saldo_dep = float((saldos[0].get("saldoVirtualTotal", 0) if saldos else 0) or 0)
+            else:
+                # Kits ou produtos sem registro de depósito: usar saldo total como proxy
+                saldo_dep = saldo_total
             if saldo_dep < 0:
                 sku = p.get("codigo", "")
                 if sku:
                     saldo_negativo[sku] = {
-                        "produto_id_shinsei": pid,
+                        "produto_id_shinsei": prod_id,
                         "nome": p.get("nome", ""),
                         "saldo_shinsei": saldo_dep,
                     }
