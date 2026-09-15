@@ -343,24 +343,20 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
         }
 
     # ── 4) Buscar IDs AKG para os SKUs afetados ───────────────────────────────
+    # Renovar token AKG (pode ter expirado durante saldo checks longos)
+    hdrs_a = _hdrs(EMPRESA_AKG)
     skus_afetados = {t["sku"] for t in transferencias}
     sku_to_akg_id: dict[str, int] = {}
-    pagina = 1
-    while True:
+    # Busca direta por ?codigo= — evita paginar 5000 produtos e token expirar
+    for sku in skus_afetados:
+        time.sleep(0.4)
         r = _bling_get(f"{base}/produtos", hdrs_a,
-                       params={"pagina": pagina, "limite": 100, "situacao": "A"})
+                       params={"codigo": sku, "situacao": "A"})
         if not r.ok:
-            break
+            continue
         prods = r.json().get("data", [])
-        if not prods:
-            break
-        for p in prods:
-            cod = p.get("codigo", "")
-            if cod in skus_afetados:
-                sku_to_akg_id[cod] = p["id"]
-        if len(sku_to_akg_id) == len(skus_afetados):
-            break  # já encontrou todos
-        pagina += 1
+        if prods:
+            sku_to_akg_id[sku] = prods[0]["id"]
 
     for t in transferencias:
         t["produto_id_akg"] = sku_to_akg_id.get(t["sku"])
