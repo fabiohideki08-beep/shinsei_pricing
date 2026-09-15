@@ -222,15 +222,25 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
     hdrs_s = _hdrs(EMPRESA_SHINSEI)
     hdrs_a = _hdrs(EMPRESA_AKG)
 
+    def _bling_get(url, headers, params=None, retries=5):
+        """GET com retry exponencial em 429."""
+        for i in range(retries):
+            r = _req.get(url, headers=headers, params=params, timeout=30)
+            if r.status_code == 429:
+                wait = 2 ** i  # 1s, 2s, 4s, 8s, 16s
+                time.sleep(wait)
+                continue
+            return r
+        return r
+
     # ── 1) Listar produtos Shinsei com saldo total negativo ────────────────────
     # /produtos retorna estoque.saldoVirtualTotal (total geral); depois confirmamos por depósito
     saldo_negativo: dict[str, dict] = {}   # sku → {produto_id, nome, saldo}
     pagina = 1
     while True:
-        r = _req.get(f"{base}/produtos", headers=hdrs_s,
-                     params={"pagina": pagina, "limite": 100, "situacao": "A",
-                             "tipo": "P"},  # tipo P = produto simples
-                     timeout=30)
+        r = _bling_get(f"{base}/produtos", hdrs_s,
+                       params={"pagina": pagina, "limite": 100, "situacao": "A",
+                               "tipo": "P"})
         if not r.ok:
             return {"ok": False, "erro": f"Shinsei produtos HTTP {r.status_code}: {r.text[:300]}"}
         prods = r.json().get("data", [])
@@ -245,9 +255,8 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
             # Confirmar saldo no depósito específico
             pid = p["id"]
             time.sleep(0.4)  # Bling rate limit: 3 req/s
-            rs = _req.get(f"{base}/estoques/saldos", headers=hdrs_s,
-                          params={"produto": pid, "deposito": DEP_SHINSEI},
-                          timeout=20)
+            rs = _bling_get(f"{base}/estoques/saldos", hdrs_s,
+                            params={"produto": pid, "deposito": DEP_SHINSEI})
             if not rs.ok:
                 continue
             saldos = rs.json().get("data", [])
@@ -272,10 +281,9 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
 
     pagina = 1
     while True:
-        r = _req.get(f"{base}/pedidos/vendas", headers=hdrs_s,
-                     params={"pagina": pagina, "limite": 100,
-                             "dataInicial": data_corte, "dataFinal": "2099-12-31"},
-                     timeout=30)
+        r = _bling_get(f"{base}/pedidos/vendas", hdrs_s,
+                       params={"pagina": pagina, "limite": 100,
+                               "dataInicial": data_corte, "dataFinal": "2099-12-31"})
         if not r.ok:
             break
         pedidos = r.json().get("data", [])
@@ -324,9 +332,8 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
     sku_to_akg_id: dict[str, int] = {}
     pagina = 1
     while True:
-        r = _req.get(f"{base}/produtos", headers=hdrs_a,
-                     params={"pagina": pagina, "limite": 100, "situacao": "A"},
-                     timeout=30)
+        r = _bling_get(f"{base}/produtos", hdrs_a,
+                       params={"pagina": pagina, "limite": 100, "situacao": "A"})
         if not r.ok:
             break
         prods = r.json().get("data", [])
