@@ -282,8 +282,11 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
     vendas_pos_corte: dict[str, int] = {}   # sku → qtd vendida após corte
 
     # Bling limita período a 366 dias — usar hoje+1 como dataFinal
-    data_final = (datetime.now() + __import__("datetime").timedelta(days=1)).strftime("%Y-%m-%d")
+    # Listing /pedidos/vendas NÃO retorna itens — precisa GET /pedidos/vendas/{id} por pedido
+    import datetime as _dt
+    data_final = (_dt.datetime.now() + _dt.timedelta(days=1)).strftime("%Y-%m-%d")
     pagina = 1
+    ids_confirmados: list[int] = []
     while True:
         r = _bling_get(f"{base}/pedidos/vendas", hdrs_s,
                        params={"pagina": pagina, "limite": 100,
@@ -296,14 +299,22 @@ def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09
         time.sleep(0.35)
         for ped in pedidos:
             sit_id = (ped.get("situacao") or {}).get("id", 0)
-            if int(sit_id or 0) not in SITUACOES_OK:
-                continue
-            for item in (ped.get("itens") or []):
-                sku = item.get("codigo", "")
-                qtd = float(item.get("quantidade", 0))
-                if sku and qtd > 0:
-                    vendas_pos_corte[sku] = vendas_pos_corte.get(sku, 0) + int(qtd)
+            if int(sit_id or 0) in SITUACOES_OK:
+                ids_confirmados.append(ped["id"])
         pagina += 1
+
+    # Buscar detalhe de cada pedido confirmado para extrair itens
+    for ped_id in ids_confirmados:
+        time.sleep(0.4)
+        rd = _bling_get(f"{base}/pedidos/vendas/{ped_id}", hdrs_s)
+        if not rd.ok:
+            continue
+        ped_det = rd.json().get("data", {})
+        for item in (ped_det.get("itens") or []):
+            sku = item.get("codigo", "")
+            qtd = float(item.get("quantidade", 0))
+            if sku and qtd > 0:
+                vendas_pos_corte[sku] = vendas_pos_corte.get(sku, 0) + int(qtd)
 
     # ── 3) Calcular quantidade a transferir por SKU ────────────────────────────
     transferencias: list[dict] = []
