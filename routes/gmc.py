@@ -374,7 +374,12 @@ def _enqueue_reprovado(product: dict):
 
 def _delete_from_gmc(service, product_id: str) -> dict:
     """Exclui permanentemente um produto do GMC via Merchant API v1."""
-    return _merchant_delete(product_id)
+    # Detecta dataSource correto pelo feedLabel no product_id
+    # BRL_93913186609 → Shopify App API (datasource 10623833941)
+    data_source = None
+    if "BRL_93913186609" in product_id:
+        data_source = f"accounts/{MERCHANT_ID}/dataSources/10623833941"
+    return _merchant_delete(product_id, data_source=data_source)
 
 
 def _is_shopping_blocked(product: dict) -> bool:
