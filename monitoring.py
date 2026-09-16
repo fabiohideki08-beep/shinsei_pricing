@@ -23,7 +23,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter
+import requests as _requests
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
@@ -204,3 +205,133 @@ def metrics():
             "log_level": os.getenv("LOG_LEVEL", "INFO"),
         },
     }
+
+
+# ─────────────────────────────────────────────
+# Daily Check — GMC + Bling + WhatsApp Alert
+# ─────────────────────────────────────────────
+
+_ZAPI_URL = (
+    "https://api.z-api.io/instances/3F848712DB88C2FADEE6A6D84865BDBD"
+    "/token/7D0763C39F052F8A110678A9/send-text"
+)
+_ZAPI_CLIENT_TOKEN = "F4bc283e090774be2abceb813e1d5c713S"
+_DONO_PHONE = "5511994697944"
+_SELF_URL = "https://shinsei-pricing.onrender.com"
+
+
+def _whatsapp_alert(message: str) -> dict:
+    try:
+        r = _requests.post(
+            _ZAPI_URL,
+            headers={"Client-Token": _ZAPI_CLIENT_TOKEN, "Content-Type": "application/json"},
+            json={"phone": _DONO_PHONE, "message": message},
+            timeout=15,
+        )
+        return {"ok": r.status_code == 200, "status_code": r.status_code}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@router.post("/daily-check", tags=["Monitoramento"])
+def daily_check():
+    """
+    Check diário do sistema: GMC scan, Bling health, WhatsApp alert se houver problemas.
+    Rota pública — protegida pelo middleware de API key global.
+    """
+    api_key = os.getenv("API_KEY", "")
+    hdrs = {"X-Api-Key": api_key}
+    problemas = []
+    acoes = []
+    resultado: dict = {
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "gmc": {},
+        "bling_shinsei": {},
+        "bling_akg": {},
+        "whatsapp_enviado": False,
+        "problemas": [],
+    }
+
+    # 1. Disparar scan GMC
+    try:
+        _requests.post(f"{_SELF_URL}/gmc/scan", headers=hdrs, timeout=10)
+    except Exception as e:
+        resultado["gmc"]["scan_error"] = str(e)
+
+    # 2. Poll status até concluir (max 5min)
+    scan_status: dict = {}
+    for _ in range(20):
+        time.sleep(15)
+        try:
+            r = _requests.get(f"{_SELF_URL}/gmc/status", headers=hdrs, timeout=10)
+            scan_status = r.json()
+            if not scan_status.get("scan", {}).get("rodando", True):
+                break
+        except Exception:
+            pass
+    resultado["gmc"]["status"] = scan_status
+
+    resumo = scan_status.get("resumo", {})
+    reprovados = resumo.get("total_reprovados", 0)
+    delete_erros = len((scan_status.get("auto_delete") or {}).get("erros", []))
+
+    if reprovados > 0:
+        try:
+            _requests.post(f"{_SELF_URL}/gmc/corrigir", headers=hdrs, timeout=10)
+            time.sleep(30)
+            r = _requests.get(f"{_SELF_URL}/gmc/status", headers=hdrs, timeout=10)
+            scan_status = r.json()
+            resumo = scan_status.get("resumo", {})
+            reprovados = resumo.get("total_reprovados", 0)
+            resultado["gmc"]["status_pos_correcao"] = scan_status
+        except Exception:
+            pass
+        if reprovados > 0:
+            motivos = resumo.get("counts_disapproved", {})
+            problemas.append(f"GMC: {reprovados} produto(s) reprovado(s) — motivos: {motivos}")
+            acoes.append("Verificar: https://merchants.google.com")
+
+    if delete_erros > 0:
+        problemas.append(f"GMC auto-delete: {delete_erros} erro(s)")
+
+    # 3. Bling Shinsei health
+    try:
+        r = _requests.get(f"{_SELF_URL}/bling/token-health", headers=hdrs, timeout=10)
+        health = r.json()
+        resultado["bling_shinsei"] = health
+        min_rest = (health.get("shinsei") or {}).get("expires_in_min", 999)
+        if min_rest < 60:
+            problemas.append(f"Bling Shinsei: token expira em {min_rest:.0f} min")
+            acoes.append(f"Reconectar Shinsei: {_SELF_URL}/bling/callback")
+    except Exception as e:
+        resultado["bling_shinsei"] = {"error": str(e)}
+
+    # 4. Bling AKG status
+    try:
+        r = _requests.get(f"{_SELF_URL}/bling/status2", timeout=10)
+        akg = r.json()
+        resultado["bling_akg"] = akg
+        if akg.get("expirado", False):
+            problemas.append("Bling AKG: token expirado — sincronizacao AKG bloqueada")
+            acoes.append(f"Reconectar AKG: {_SELF_URL}/bling/callback2")
+    except Exception as e:
+        resultado["bling_akg"] = {"error": str(e)}
+
+    resultado["problemas"] = problemas
+
+    # 5. WhatsApp alert se houver problemas
+    if problemas:
+        ts = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
+        linhas = ["*[Shinsei Pricing - Alerta Diario]*", f"Data: {ts}", ""]
+        linhas += [f"- {p}" for p in problemas]
+        if acoes:
+            linhas += ["", "Acoes necessarias:"]
+            linhas += [f"- {a}" for a in acoes]
+        msg = "\n".join(linhas)
+        resultado["whatsapp_enviado"] = True
+        resultado["whatsapp_resultado"] = _whatsapp_alert(msg)
+        resultado["whatsapp_mensagem"] = msg
+    else:
+        resultado["status"] = "OK — sistema saudavel, nenhum alerta enviado"
+
+    return {"ok": True, "resultado": resultado}
