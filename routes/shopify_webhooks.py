@@ -571,13 +571,28 @@ def _extract_gclid(order: dict) -> str:
 
 def _upload_conversion(order: dict):
     """
-    Envia conversão de compra para o Google Ads via Offline Conversion Upload.
+    DESATIVADO em 17/09/2026 — o rastreamento de conversões é feito pelo GA4
+    browser-side (app Google & YouTube, conversion action GA4_PURCHASE primária).
 
-    Estratégia de atribuição (em ordem de prioridade):
-    1. GCLID presente no note_attributes → ClickConversion com gclid (atribuição direta ao clique)
-    2. Sem GCLID → ClickConversion com user identifiers (Enhanced Conversions por email/phone)
-       Requer que Enhanced Conversions esteja ativado na conta Google Ads.
+    Motivos da desativação (ver Albert: feedback_erros_cometidos #53):
+    1. Google bloqueou ConversionUploadService.UploadClickConversions para novas
+       integrações (CUSTOMER_NOT_ALLOWLISTED_FOR_THIS_FEATURE) — exige Data Manager API.
+    2. A CONVERSION_ACTION usada (7250153929) é um evento BEGIN_CHECKOUT custom,
+       primary=False — nunca contaria como conversão de compra.
+
+    Reativar somente após migrar para a Data Manager API
+    (https://developers.google.com/data-manager/api/devguides/events/google-ads/offline)
+    E apontar para uma conversion action de PURCHASE dedicada. O GCLID continua
+    sendo capturado nos note_attributes para essa migração futura.
     """
+    order_id = str(order.get("id", ""))
+    gclid = _extract_gclid(order)
+    print(f"[webhook] conversão delegada ao GA4 browser-side: pedido={order_id} "
+          f"gclid={'SIM' if gclid else 'NÃO'} (upload server-side desativado — ver docstring)")
+    _log_conversion(order_id, float(order.get("total_price") or "0"), "ga4_only")
+    return
+
+    # ── Código original preservado para a futura migração Data Manager API ──
     try:
         client = _gads_client()
         svc = client.get_service("ConversionUploadService")
