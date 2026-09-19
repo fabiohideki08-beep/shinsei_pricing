@@ -163,6 +163,8 @@ PUBLIC_PATHS = {
     "/oee",
     "/sie",
     "/frete/painel",
+    "/frete/shopify-callback",
+    "/frete/calcular",
     # Hub e páginas de sistema
     "/hub",
     "/sistema/bling",
