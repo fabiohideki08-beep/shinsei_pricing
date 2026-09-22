@@ -837,7 +837,17 @@ def normalizar_status():
     import sqlite3 as _sq
     conn = _sq.connect(str(DB_PATH))
     conn.row_factory = _sq.Row
-    r = conn.execute(
+    # 1. Reclassifica ajustes "produto nao encontrado" → sem_estoque_akg
+    r1 = conn.execute(
+        """UPDATE me_ajustes
+           SET status = 'sem_estoque_akg', atualizado_em = datetime('now')
+           WHERE status = 'erro'
+             AND erro_detalhe LIKE '%produto nao encontrado%'"""
+    )
+    ajustes_reclassificados = r1.rowcount
+
+    # 2. Atualiza vendas onde agora todos os ajustes são sem_estoque_akg
+    r2 = conn.execute(
         """UPDATE me_vendas
            SET status = 'sem_ajuste', atualizado_em = datetime('now')
            WHERE status IN ('erro', 'concluido')
@@ -855,9 +865,10 @@ def normalizar_status():
              )"""
     )
     conn.commit()
-    alterados = r.rowcount
+    alterados = r2.rowcount
     conn.close()
-    return {"ok": True, "vendas_normalizadas": alterados}
+    return {"ok": True, "ajustes_reclassificados": ajustes_reclassificados,
+            "vendas_normalizadas": alterados}
 
 
 @router.post("/multiempresa/reprocessar-zerados")
