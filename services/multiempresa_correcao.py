@@ -40,7 +40,7 @@ DEP_SHINSEI_GERAL = 14636070822
 DEP_AKG_GERAL     = 14889056234
 
 # Situações Bling que consideramos "venda confirmada" para disparar ajuste
-SITUACOES_CONFIRMADAS = {9, 12, 15}   # Em andamento, Faturado, etc.
+SITUACOES_CONFIRMADAS = {9, 12, 15}   # Em andamento, Verificado, Faturado
 # Situações que disparam cancelamento/estorno
 SITUACOES_CANCELADAS  = {11, 14, 76}  # Cancelado, Devolvido, etc.
 
@@ -384,6 +384,13 @@ def processar_pedido(empresa_vendedora: str, pedido: dict) -> dict:
     data_venda = (pedido.get("data") or _agora()[:10])[:10]
     hash_it    = _hash_itens(itens)
 
+    # Verificar se há NF emitida — só processar quando estoque foi realmente baixado
+    nota = pedido.get("nota") or pedido.get("notaFiscal") or {}
+    if not nota.get("id") and not nota.get("numero"):
+        conn.close()
+        return {"id_pedido": id_pedido, "status": "aguardando_nf",
+                "motivo": "pedido sem nota fiscal vinculada — aguardar faturamento"}
+
     # ── Registro de controle de venda (idempotência) ──────────────────────────
     ctrl = conn.execute(
         "SELECT * FROM me_vendas WHERE id_pedido_bling=? AND empresa_vendedora=?",
@@ -548,23 +555,23 @@ def processar_pedido(empresa_vendedora: str, pedido: dict) -> dict:
                 continue  # próximo item do pedido
 
         if not id_prod_forn:
-            status_item = "erro"
-            n_erro += 1
-            conn.execute(
-                """INSERT OR REPLACE INTO me_ajustes
-                   (id_venda_ctrl, id_pedido_bling, empresa_vendedora,
-                    canal_venda, deposito_venda, sku, id_item_bling,
-                    quantidade, id_rota, empresa_fornecedora, deposito_fornecedor_id,
-                    status, chave_idempotencia, erro_detalhe, criado_em)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (id_ctrl, id_pedido, empresa_vendedora,
-                 canal, dep_venda, sku, id_item,
-                 qtd, rota["id"], emp_forn, dep_forn,
-                 status_item, chave, f"produto nao encontrado na empresa {emp_forn}", _agora())
-            )
+            # Produto não existe em AKG → estoque próprio da Shinsei, não é da cadeia AKG
+            # Não é erro: apenas não há ajuste a fazer para este SKU
+            status_item = "sem_estoque_akg"
+            n_sem_rota += 1
+            if not ajuste_existente:
+                conn.execute(
+                    """INSERT OR IGNORE INTO me_ajustes
+                       (id_venda_ctrl, id_pedido_bling, empresa_vendedora,
+                        canal_venda, deposito_venda, sku, id_item_bling,
+                        quantidade, status, chave_idempotencia, criado_em)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                    (id_ctrl, id_pedido, empresa_vendedora,
+                     canal, dep_venda, sku, id_item,
+                     qtd, status_item, chave, _agora())
+                )
             conn.commit()
-            resultados.append({"sku": sku, "status": status_item,
-                                "erro": f"SKU não encontrado em {emp_forn}"})
+            resultados.append({"sku": sku, "status": status_item})
             continue
 
         # Passo 3: saída no fornecedor
