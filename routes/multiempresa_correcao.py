@@ -703,7 +703,7 @@ def get_status():
         "vendas_concluidas": count("me_vendas", "WHERE status='concluido'"),
         "vendas_erro": count("me_vendas", "WHERE status='erro'"),
         "ajustes_concluidos": count("me_ajustes", "WHERE status='concluido'"),
-        "ajustes_sem_rota": count("me_ajustes", "WHERE status='pendente_configuracao_de_rota'"),
+        "ajustes_sem_rota": count("me_ajustes", "WHERE status IN ('pendente_configuracao_de_rota','sem_estoque_akg')"),
         "ajustes_erro": count("me_ajustes", "WHERE status='erro'"),
         "estornos_concluidos": count("me_estornos", "WHERE status='concluido'"),
     }

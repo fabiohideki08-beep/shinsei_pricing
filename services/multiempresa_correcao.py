@@ -559,17 +559,16 @@ def processar_pedido(empresa_vendedora: str, pedido: dict) -> dict:
             # Não é erro: apenas não há ajuste a fazer para este SKU
             status_item = "sem_estoque_akg"
             n_sem_rota += 1
-            if not ajuste_existente:
-                conn.execute(
-                    """INSERT OR IGNORE INTO me_ajustes
-                       (id_venda_ctrl, id_pedido_bling, empresa_vendedora,
-                        canal_venda, deposito_venda, sku, id_item_bling,
-                        quantidade, status, chave_idempotencia, criado_em)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-                    (id_ctrl, id_pedido, empresa_vendedora,
-                     canal, dep_venda, sku, id_item,
-                     qtd, status_item, chave, _agora())
-                )
+            conn.execute(
+                """INSERT OR REPLACE INTO me_ajustes
+                   (id_venda_ctrl, id_pedido_bling, empresa_vendedora,
+                    canal_venda, deposito_venda, sku, id_item_bling,
+                    quantidade, status, chave_idempotencia, criado_em)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (id_ctrl, id_pedido, empresa_vendedora,
+                 canal, dep_venda, sku, id_item,
+                 qtd, status_item, chave, _agora())
+            )
             conn.commit()
             resultados.append({"sku": sku, "status": status_item})
             continue
