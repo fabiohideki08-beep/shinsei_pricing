@@ -828,6 +828,38 @@ async def webhook_bling(empresa: str, request: Request,
 # Reprocessar vendas travadas (total_itens=0 / status=concluido sem ajustes)
 # ─────────────────────────────────────────────────────────────────────────────
 
+@router.post("/multiempresa/normalizar-status")
+def normalizar_status():
+    """
+    Atualiza me_vendas para 'sem_ajuste' quando todos os ajustes são 'sem_estoque_akg'
+    (produto de estoque próprio Shinsei — não há ajuste AKG a fazer).
+    """
+    import sqlite3 as _sq
+    conn = _sq.connect(str(DB_PATH))
+    conn.row_factory = _sq.Row
+    r = conn.execute(
+        """UPDATE me_vendas
+           SET status = 'sem_ajuste', atualizado_em = datetime('now')
+           WHERE status IN ('erro', 'concluido')
+             AND id IN (
+               SELECT v.id FROM me_vendas v
+               WHERE NOT EXISTS (
+                 SELECT 1 FROM me_ajustes a
+                 WHERE a.id_venda_ctrl = v.id
+                   AND a.status NOT IN ('sem_estoque_akg')
+               )
+               AND EXISTS (
+                 SELECT 1 FROM me_ajustes a
+                 WHERE a.id_venda_ctrl = v.id
+               )
+             )"""
+    )
+    conn.commit()
+    alterados = r.rowcount
+    conn.close()
+    return {"ok": True, "vendas_normalizadas": alterados}
+
+
 @router.post("/multiempresa/reprocessar-zerados")
 def reprocessar_zerados(background_tasks: BackgroundTasks, empresa: str = EMPRESA_SHINSEI,
                         limite: int = 100):
