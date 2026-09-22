@@ -825,6 +825,60 @@ async def webhook_bling(empresa: str, request: Request,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Reprocessar vendas travadas (total_itens=0 / status=concluido sem ajustes)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/multiempresa/reprocessar-zerados")
+def reprocessar_zerados(background_tasks: BackgroundTasks, empresa: str = EMPRESA_SHINSEI,
+                        limite: int = 100):
+    """
+    Localiza vendas com total_itens=0 e status=concluido (travadas pela idempotência)
+    e força reprocessamento buscando os pedidos novamente no Bling.
+    Útil para desbloquear o estado após o bug do job que passava itens=[].
+    """
+    import sqlite3 as _sq
+    conn = _sq.connect(str(DB_PATH))
+    conn.row_factory = _sq.Row
+    # Vendas bloqueadas: concluído sem itens procesados e sem ajustes concluídos
+    zerados = conn.execute(
+        """SELECT v.id_pedido_bling, v.empresa_vendedora
+           FROM me_vendas v
+           LEFT JOIN me_ajustes a
+             ON a.id_pedido_bling = v.id_pedido_bling
+            AND a.empresa_vendedora = v.empresa_vendedora
+            AND a.status = 'concluido'
+           WHERE v.empresa_vendedora = ?
+             AND v.status IN ('concluido', 'erro')
+             AND a.id IS NULL
+           GROUP BY v.id_pedido_bling
+           LIMIT ?""",
+        (empresa, limite)
+    ).fetchall()
+    conn.close()
+
+    if not zerados:
+        return {"ok": True, "mensagem": "Nenhuma venda zerada encontrada", "total": 0}
+
+    agendados = []
+    for row in zerados:
+        id_pedido = row["id_pedido_bling"]
+        emp = row["empresa_vendedora"]
+        try:
+            pedido_det = _fetch_pedido(emp, id_pedido)
+            background_tasks.add_task(processar_pedido, emp, pedido_det)
+            agendados.append(id_pedido)
+        except Exception as e:
+            logger.error("reprocessar_zerados: pedido %s erro: %s", id_pedido, e)
+
+    return {
+        "ok": True,
+        "total_zerados": len(zerados),
+        "total_agendados": len(agendados),
+        "pedidos": agendados,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Painel HTML
 # ─────────────────────────────────────────────────────────────────────────────
 

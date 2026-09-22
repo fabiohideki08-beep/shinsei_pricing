@@ -273,6 +273,65 @@ def _buscar_id_produto(empresa: str, sku: str) -> int | None:
     return None
 
 
+def _expandir_virtual(empresa_vendedora: str, sku: str, quantidade: float) -> list[dict]:
+    """
+    Se o SKU vendido é um produto virtual (composição/kit) na empresa vendedora,
+    retorna a lista de componentes físicos com quantidades proporcionais.
+    Caso contrário retorna lista com o item original.
+    Usado para encontrar os SKUs reais que existem no fornecedor (AKG).
+    """
+    hdrs = _hdrs(empresa_vendedora)
+    # Busca ID do produto pelo SKU
+    resp = requests.get(f"{BLING_API}/produtos?codigo={sku}&limite=5",
+                        headers=hdrs, timeout=15)
+    if not resp.ok:
+        return [{"codigo": sku, "quantidade": quantidade, "_virtual": False}]
+
+    id_prod = None
+    for item in resp.json().get("data", []):
+        if str(item.get("codigo") or "") == sku:
+            id_prod = item["id"]
+            tipo_estoque = item.get("tipoEstoque") or item.get("tipo_estoque") or ""
+            # Se já na listagem tiver tipoEstoque, verificar antes de buscar detalhe
+            if tipo_estoque != "V":
+                return [{"codigo": sku, "quantidade": quantidade, "_virtual": False}]
+            break
+
+    if not id_prod:
+        return [{"codigo": sku, "quantidade": quantidade, "_virtual": False}]
+
+    # Busca detalhe do produto para verificar estrutura
+    resp2 = requests.get(f"{BLING_API}/produtos/{id_prod}", headers=hdrs, timeout=15)
+    if not resp2.ok:
+        return [{"codigo": sku, "quantidade": quantidade, "_virtual": False}]
+
+    data = resp2.json().get("data") or {}
+    tipo_estoque = data.get("tipoEstoque") or ""
+    estrutura = data.get("estrutura") or {}
+    componentes = estrutura.get("componentes") or []
+
+    if tipo_estoque != "V" or not componentes:
+        return [{"codigo": sku, "quantidade": quantidade, "_virtual": False}]
+
+    # Produto virtual — expandir componentes
+    expandidos = []
+    for comp in componentes:
+        comp_produto = comp.get("produto") or {}
+        comp_sku = str(comp_produto.get("codigo") or comp.get("codigo") or "").strip()
+        comp_qtd = float(comp.get("quantidade") or 1)
+        if comp_sku:
+            expandidos.append({
+                "codigo": comp_sku,
+                "quantidade": comp_qtd * quantidade,
+                "_virtual": True,
+                "_sku_pai": sku,
+            })
+
+    logger.info("expandir_virtual: SKU %s (id=%s) expandido em %d componentes",
+                sku, id_prod, len(expandidos))
+    return expandidos if expandidos else [{"codigo": sku, "quantidade": quantidade, "_virtual": False}]
+
+
 def _movimentar(empresa: str, id_produto: int, deposito_id: int,
                 operacao: str, quantidade: float, obs: str) -> tuple[str | None, str | None]:
     """
@@ -410,8 +469,83 @@ def processar_pedido(empresa_vendedora: str, pedido: dict) -> dict:
         # Buscar IDs dos produtos em cada empresa
         id_prod_forn = _buscar_id_produto(emp_forn, sku)
         time.sleep(0.15)
-        id_prod_vend = _buscar_id_produto(empresa_vendedora, sku) if emp_forn != empresa_vendedora else id_prod_forn
-        time.sleep(0.15)
+
+        # Se não encontrado no fornecedor, verificar se é produto virtual (kit/composição)
+        # e expandir seus componentes físicos — os componentes têm estoque real na AKG
+        if not id_prod_forn:
+            expandidos = _expandir_virtual(empresa_vendedora, sku, qtd)
+            if len(expandidos) > 1 or expandidos[0].get("_virtual"):
+                for comp in expandidos:
+                    comp_sku = comp["codigo"]
+                    comp_qtd = comp["quantidade"]
+                    comp_chave = f"VENDA:{id_pedido}-SKU:{comp_sku}-PAI:{sku}"
+
+                    aj_exist = conn.execute(
+                        "SELECT * FROM me_ajustes "
+                        "WHERE id_pedido_bling=? AND empresa_vendedora=? AND sku=? AND chave_idempotencia=?",
+                        (id_pedido, empresa_vendedora, comp_sku, comp_chave)
+                    ).fetchone()
+                    if aj_exist and aj_exist["status"] == "concluido":
+                        resultados.append({"sku": comp_sku, "status": "duplicata_ignorada", "_pai": sku})
+                        n_ok += 1
+                        continue
+
+                    comp_id_forn = _buscar_id_produto(emp_forn, comp_sku)
+                    time.sleep(0.15)
+                    comp_id_vend = _buscar_id_produto(empresa_vendedora, comp_sku) if emp_forn != empresa_vendedora else comp_id_forn
+                    time.sleep(0.15)
+
+                    if not comp_id_forn:
+                        conn.execute(
+                            """INSERT OR REPLACE INTO me_ajustes
+                               (id_venda_ctrl, id_pedido_bling, empresa_vendedora,
+                                canal_venda, deposito_venda, sku, id_item_bling,
+                                quantidade, id_rota, empresa_fornecedora, deposito_fornecedor_id,
+                                status, chave_idempotencia, erro_detalhe, criado_em)
+                               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            (id_ctrl, id_pedido, empresa_vendedora,
+                             canal, dep_venda, comp_sku, id_item,
+                             comp_qtd, rota["id"], emp_forn, dep_forn,
+                             "erro", comp_chave,
+                             f"componente {comp_sku} nao encontrado em {emp_forn} (pai={sku})", _agora())
+                        )
+                        conn.commit()
+                        resultados.append({"sku": comp_sku, "status": "erro",
+                                           "erro": f"SKU não encontrado em {emp_forn}", "_pai": sku})
+                        n_erro += 1
+                        continue
+
+                    obs_s = f"VENDA:{id_pedido}-SKU:{comp_sku}-PAI:{sku}|etapa=saida|forn={emp_forn}"
+                    id_mov_s, err_s = _movimentar(emp_forn, comp_id_forn, dep_forn, "S", comp_qtd, obs_s)
+                    time.sleep(0.35)
+                    id_mov_e = err_e = None
+                    if emp_forn != empresa_vendedora and comp_id_vend:
+                        obs_e = f"VENDA:{id_pedido}-SKU:{comp_sku}-PAI:{sku}|etapa=entrada|vend={empresa_vendedora}"
+                        id_mov_e, err_e = _movimentar(empresa_vendedora, comp_id_vend, dep_vend_id, "E", comp_qtd, obs_e)
+                        time.sleep(0.35)
+
+                    st_comp = "concluido" if id_mov_s else "erro"
+                    n_ok += 1 if st_comp == "concluido" else 0
+                    n_erro += 0 if st_comp == "concluido" else 1
+                    conn.execute(
+                        """INSERT OR REPLACE INTO me_ajustes
+                           (id_venda_ctrl, id_pedido_bling, empresa_vendedora,
+                            canal_venda, deposito_venda, sku, id_item_bling,
+                            quantidade, id_rota, empresa_fornecedora, deposito_fornecedor_id,
+                            status, id_mov_saida_bling, id_mov_entrada_bling,
+                            chave_idempotencia, erro_detalhe, criado_em, aplicado_em)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        (id_ctrl, id_pedido, empresa_vendedora,
+                         canal, dep_venda, comp_sku, id_item,
+                         comp_qtd, rota["id"], emp_forn, dep_forn,
+                         st_comp, id_mov_s, id_mov_e,
+                         comp_chave, err_s or err_e, _agora(),
+                         _agora() if st_comp == "concluido" else None)
+                    )
+                    conn.commit()
+                    resultados.append({"sku": comp_sku, "qtd": comp_qtd, "status": st_comp,
+                                       "_pai": sku, "mov_saida": id_mov_s})
+                continue  # próximo item do pedido
 
         if not id_prod_forn:
             status_item = "erro"
@@ -623,7 +757,14 @@ def job_multiempresa():
                 id_ped = str(pedido.get("id") or "")
 
                 if sit in SITUACOES_CONFIRMADAS:
-                    processar_pedido(empresa, pedido)
+                    # Listing não retorna itens — buscar detalhe individual
+                    try:
+                        det = requests.get(f"{BLING_API}/pedidos/vendas/{id_ped}",
+                                           headers=hdrs, timeout=20)
+                        pedido_det = det.json().get("data") or pedido if det.ok else pedido
+                    except Exception:
+                        pedido_det = pedido
+                    processar_pedido(empresa, pedido_det)
                 elif sit in SITUACOES_CANCELADAS:
                     estornar_pedido(empresa, id_ped)
 
