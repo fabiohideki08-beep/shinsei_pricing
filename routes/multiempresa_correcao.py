@@ -841,16 +841,16 @@ def reprocessar_zerados(background_tasks: BackgroundTasks, empresa: str = EMPRES
     conn.row_factory = _sq.Row
     # Vendas bloqueadas: concluído sem itens procesados e sem ajustes concluídos
     zerados = conn.execute(
-        """SELECT v.id_pedido_bling, v.empresa_vendedora
+        """SELECT DISTINCT v.id_pedido_bling, v.empresa_vendedora
            FROM me_vendas v
-           LEFT JOIN me_ajustes a
-             ON a.id_pedido_bling = v.id_pedido_bling
-            AND a.empresa_vendedora = v.empresa_vendedora
-            AND a.status = 'concluido'
            WHERE v.empresa_vendedora = ?
-             AND v.status IN ('concluido', 'erro')
-             AND a.id IS NULL
-           GROUP BY v.id_pedido_bling
+             AND v.status IN ('concluido', 'erro', 'sem_ajuste')
+             AND NOT EXISTS (
+               SELECT 1 FROM me_ajustes a
+               WHERE a.id_pedido_bling = v.id_pedido_bling
+                 AND a.empresa_vendedora = v.empresa_vendedora
+                 AND a.status IN ('concluido', 'sem_estoque_akg')
+             )
            LIMIT ?""",
         (empresa, limite)
     ).fetchall()

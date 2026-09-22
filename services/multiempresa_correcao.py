@@ -616,8 +616,9 @@ def processar_pedido(empresa_vendedora: str, pedido: dict) -> dict:
 
     # Atualiza controle
     status_ctrl = (
-        "concluido" if n_erro == 0 and n_sem_rota == 0
-        else "erro"   if n_ok == 0
+        "concluido"      if n_erro == 0 and n_sem_rota == 0
+        else "sem_ajuste" if n_ok == 0 and n_erro == 0   # todos sem_estoque_akg / sem rota
+        else "erro"       if n_ok == 0
         else "concluido_parcial"
     )
     conn.execute(
