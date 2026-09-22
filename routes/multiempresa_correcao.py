@@ -840,7 +840,7 @@ def normalizar_status():
     # 1. Reclassifica ajustes "produto nao encontrado" → sem_estoque_akg
     r1 = conn.execute(
         """UPDATE me_ajustes
-           SET status = 'sem_estoque_akg', atualizado_em = datetime('now')
+           SET status = 'sem_estoque_akg'
            WHERE status = 'erro'
              AND erro_detalhe LIKE '%produto nao encontrado%'"""
     )
