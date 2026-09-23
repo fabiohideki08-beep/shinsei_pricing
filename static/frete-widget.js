@@ -104,7 +104,7 @@
         if (barraFill) barraFill.classList.add('frete-barra-completa');
       } else {
         if (barraFill) barraFill.classList.remove('frete-barra-completa');
-        var faltam = data.items_for_free_shipping || 0;
+        var faltam = data.items_for_free || data.items_for_free_shipping || 0;
         if (mensagem) {
           if (faltam === 1) mensagem.textContent = 'Adicione 1 item para frete gratis!';
           else if (faltam > 1) mensagem.textContent = 'Adicione ' + faltam + ' itens para frete gratis!';
