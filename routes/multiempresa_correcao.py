@@ -44,6 +44,7 @@ from services.multiempresa_correcao import (
     processar_pedido, estornar_pedido, job_multiempresa,
     DB_PATH, EMPRESA_SHINSEI, EMPRESA_AKG, _hdrs,
 )
+_proc = processar_pedido
 
 import requests as _req
 
@@ -937,9 +938,7 @@ def reprocessar_sem_estoque_akg(background_tasks: BackgroundTasks,
     depois dispara reprocessamento para tentar novamente com token AKG válido.
     Útil quando o token AKG estava quebrado durante processamento original.
     """
-    import sqlite3 as _sq
-    conn = _sq.connect(str(DB_PATH))
-    conn.row_factory = _sq.Row
+    conn = _db()
 
     # Busca vendas que têm APENAS ajustes sem_estoque_akg (nenhum concluido)
     vendas = conn.execute(
@@ -983,9 +982,8 @@ def reprocessar_sem_estoque_akg(background_tasks: BackgroundTasks,
     conn.close()
 
     # Dispara reprocessamento em background
-    from services.multiempresa_correcao import processar_pedido as _proc
     for id_pedido, emp in pedidos:
-        background_tasks.add_task(_proc, emp, id_pedido)
+        background_tasks.add_task(processar_pedido, emp, id_pedido)
 
     return {
         "ok": True,
