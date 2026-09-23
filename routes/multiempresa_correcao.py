@@ -927,6 +927,73 @@ def reprocessar_zerados(background_tasks: BackgroundTasks, empresa: str = EMPRES
 
 BLING_API = "https://api.bling.com.br/Api/v3"
 
+
+@router.post("/multiempresa/reprocessar-sem-estoque-akg")
+def reprocessar_sem_estoque_akg(background_tasks: BackgroundTasks,
+                                 empresa: str = EMPRESA_SHINSEI,
+                                 limite: int = 200):
+    """
+    Reseta ajustes 'sem_estoque_akg' para 'pendente' e vendas para 'pendente',
+    depois dispara reprocessamento para tentar novamente com token AKG válido.
+    Útil quando o token AKG estava quebrado durante processamento original.
+    """
+    import sqlite3 as _sq
+    conn = _sq.connect(str(DB_PATH))
+    conn.row_factory = _sq.Row
+
+    # Busca vendas que têm APENAS ajustes sem_estoque_akg (nenhum concluido)
+    vendas = conn.execute(
+        """SELECT DISTINCT v.id, v.id_pedido_bling, v.empresa_vendedora
+           FROM me_vendas v
+           WHERE v.empresa_vendedora = ?
+             AND EXISTS (
+               SELECT 1 FROM me_ajustes a
+               WHERE a.id_venda_ctrl = v.id AND a.status = 'sem_estoque_akg'
+             )
+             AND NOT EXISTS (
+               SELECT 1 FROM me_ajustes a
+               WHERE a.id_venda_ctrl = v.id AND a.status = 'concluido'
+             )
+           LIMIT ?""",
+        (empresa, limite)
+    ).fetchall()
+
+    if not vendas:
+        conn.close()
+        return {"ok": True, "mensagem": "Nenhuma venda elegível", "total": 0}
+
+    ids_venda = [v["id"] for v in vendas]
+    pedidos = [(v["id_pedido_bling"], v["empresa_vendedora"]) for v in vendas]
+
+    placeholders = ",".join("?" * len(ids_venda))
+
+    # Reseta ajustes sem_estoque_akg para pendente
+    conn.execute(
+        f"UPDATE me_ajustes SET status='pendente', atualizado_em=datetime('now') "
+        f"WHERE id_venda_ctrl IN ({placeholders}) AND status='sem_estoque_akg'",
+        ids_venda
+    )
+    # Reseta vendas para pendente
+    conn.execute(
+        f"UPDATE me_vendas SET status='pendente', atualizado_em=datetime('now') "
+        f"WHERE id IN ({placeholders})",
+        ids_venda
+    )
+    conn.commit()
+    conn.close()
+
+    # Dispara reprocessamento em background
+    from services.multiempresa_correcao import processar_pedido as _proc
+    for id_pedido, emp in pedidos:
+        background_tasks.add_task(_proc, emp, id_pedido)
+
+    return {
+        "ok": True,
+        "vendas_resetadas": len(vendas),
+        "pedidos_agendados": [p[0] for p in pedidos],
+    }
+
+
 @router.get("/multiempresa/diagnostico-skus")
 def diagnostico_skus_sem_estoque_akg(limite: int = 200):
     """
