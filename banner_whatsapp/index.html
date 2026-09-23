@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #0f0f0f;
+  }
+
+  .banner {
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(145deg, #111 0%, #1c1c1c 50%, #111 100%);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3.8vh 5vw 3.5vh;
+    overflow: hidden;
+  }
+
+  .glow-top {
+    position: absolute; top: -15vh; right: -10vw;
+    width: 50vw; height: 50vw;
+    background: radial-gradient(circle, rgba(255,85,0,0.20) 0%, transparent 65%);
+    border-radius: 50%; pointer-events: none;
+  }
+  .glow-bot {
+    position: absolute; bottom: -12vh; left: -8vw;
+    width: 38vw; height: 38vw;
+    background: radial-gradient(circle, rgba(255,85,0,0.12) 0%, transparent 65%);
+    border-radius: 50%; pointer-events: none;
+  }
+
+  .header {
+    width: 100%; display: flex; align-items: center; justify-content: space-between;
+    position: relative; z-index: 2;
+  }
+  .logo img { height: 6.5vh; width: auto; object-fit: contain; }
+
+  .tag-oferta {
+    background: #ff5500; color: #fff; font-size: 1.15vw; font-weight: 800;
+    letter-spacing: 0.2vw; text-transform: uppercase; padding: 0.8vh 2vw; border-radius: 5px;
+  }
+
+  .headline { text-align: center; position: relative; z-index: 2; line-height: 1; }
+  .headline-top { font-size: 1.5vw; color: #999; letter-spacing: 0.45vw; text-transform: uppercase; font-weight: 500; margin-bottom: 0.3vh; }
+  .headline-number { font-size: 10vw; font-weight: 900; color: #ff5500; line-height: 0.9; letter-spacing: -0.3vw; text-shadow: 0 0 60px rgba(255,85,0,0.45); display: inline-block; }
+  .headline-pct { font-size: 4.2vw; font-weight: 900; color: #fff; vertical-align: top; margin-top: 1.5vw; display: inline-block; }
+  .headline-sub { font-size: 1.6vw; color: #ccc; font-weight: 600; margin-top: 0.3vh; }
+
+  .products { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5vw; width: 100%; position: relative; z-index: 2; }
+  .prod-card {
+    background: rgba(255,255,255,0.045); border: 1px solid rgba(255,85,0,0.3);
+    border-radius: 1.2vw; padding: 0 0 1.6vh;
+    display: flex; flex-direction: column; gap: 0; position: relative; overflow: hidden;
+  }
+  .prod-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, #ff5500, #ff8800); border-radius: 1.2vw 1.2vw 0 0; z-index: 3;
+  }
+  .prod-img-wrap {
+    width: 100%; height: 30vh; overflow: hidden; border-radius: 1.2vw 1.2vw 0 0; position: relative;
+    background: #fff;
+  }
+  .prod-img-wrap img {
+    width: 100%; height: 100%; object-fit: contain; object-position: center;
+    display: block; padding: 10px;
+  }
+  .prod-img-wrap::after {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 40%;
+    background: linear-gradient(to top, rgba(20,20,20,0.55), transparent);
+    pointer-events: none;
+  }
+  .prod-badge {
+    position: absolute; top: 1.2vh; left: 1vw; z-index: 4;
+    background: linear-gradient(135deg, #ff5500, #ff7700); color: #fff; font-size: 1.35vw; font-weight: 900; padding: 0.35vh 0.9vw; border-radius: 5px;
+  }
+  .prod-info { padding: 1vh 1.4vw 0; display: flex; flex-direction: column; gap: 0.4vh; flex: 1; }
+  .prod-brand { font-size: 0.9vw; color: #ff7733; font-weight: 700; letter-spacing: 0.15vw; text-transform: uppercase; }
+  .prod-name { font-size: 1.35vw; color: #e0e0e0; font-weight: 600; line-height: 1.3; }
+  .prod-prices { margin-top: 0.4vh; }
+  .prod-old { font-size: 1.05vw; color: #555; text-decoration: line-through; }
+  .prod-new { font-size: 3vw; font-weight: 900; color: #16a34a; line-height: 1; margin-top: 0.1vh; }
+  .prod-new small { font-size: 1.35vw; font-weight: 700; }
+
+  .highlights {
+    display: flex; gap: 2.5vw; position: relative; z-index: 2; width: 100%;
+    justify-content: center; padding: 0.9vh 0;
+    border-top: 1px solid rgba(255,255,255,0.07); border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  .hi-item { display: flex; align-items: center; gap: 0.6vw; font-size: 1.15vw; color: #bbb; font-weight: 500; }
+  .hi-icon { font-size: 1.5vw; }
+
+  .footer { width: 100%; display: flex; align-items: center; justify-content: space-between; position: relative; z-index: 2; }
+  .footer-url { font-size: 1.7vw; font-weight: 700; color: #fff; }
+  .footer-url .shin2 { color: #ff5500; }
+  .footer-cta { background: linear-gradient(135deg, #ff5500, #ff7a00); color: #fff; font-size: 1.4vw; font-weight: 800; letter-spacing: 0.1vw; text-transform: uppercase; padding: 1.3vh 2.8vw; border-radius: 0.7vw; box-shadow: 0 0.4vh 2.5vw rgba(255,85,0,0.45); }
+  .footer-info { text-align: right; font-size: 1.05vw; color: #555; line-height: 1.7; }
+</style>
+</head>
+<body>
+<div class="banner">
+  <div class="glow-top"></div>
+  <div class="glow-bot"></div>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">
+      <img src="https://cdn.shopify.com/s/files/1/0942/1386/5777/files/logo_shinsei_brnaco_fundo_transparente.png" alt="Shinsei Market">
+    </div>
+    <div class="tag-oferta">🔥 Oferta Especial</div>
+  </div>
+
+  <!-- Headline -->
+  <div class="headline">
+    <div class="headline-top">descontos de até</div>
+    <div><span class="headline-number">63</span><span class="headline-pct">% OFF</span></div>
+    <div class="headline-sub">em produtos originais com nota fiscal</div>
+  </div>
+
+  <!-- Produtos -->
+  <div class="products">
+    <div class="prod-card">
+      <div class="prod-img-wrap">
+        <img src="https://cdn.shopify.com/s/files/1/0942/1386/5777/files/69a9d95e0d6741846362414a65a1a5cc.jpg?v=1779993750" alt="Coloração Alfaparf Evolution">
+        <div class="prod-badge">63% OFF</div>
+      </div>
+      <div class="prod-info">
+        <div class="prod-brand">Alfaparf Milano</div>
+        <div class="prod-name">Coloração Evolution 60g</div>
+        <div class="prod-prices">
+          <div class="prod-old">De R$ 39,90</div>
+          <div class="prod-new"><small>R$&nbsp;</small>14,90</div>
+        </div>
+      </div>
+    </div>
+    <div class="prod-card">
+      <div class="prod-img-wrap">
+        <img src="https://cdn.shopify.com/s/files/1/0942/1386/5777/files/e4660df9342543b064ea3f4ed45d0e0f.png?v=1778374497" alt="Batom Ruby Rose">
+        <div class="prod-badge">55% OFF</div>
+      </div>
+      <div class="prod-info">
+        <div class="prod-brand">Ruby Rose</div>
+        <div class="prod-name">Batom Velvety Glass</div>
+        <div class="prod-prices">
+          <div class="prod-old">De R$ 32,90</div>
+          <div class="prod-new"><small>R$&nbsp;</small>14,90</div>
+        </div>
+      </div>
+    </div>
+    <div class="prod-card">
+      <div class="prod-img-wrap">
+        <img src="https://cdn.shopify.com/s/files/1/0942/1386/5777/files/9f335a0aa780f25e9fa5d1cd14e3d021.jpg?v=1753588010" alt="Coloração Alfaparf Evolution">
+        <div class="prod-badge">51% OFF</div>
+      </div>
+      <div class="prod-info">
+        <div class="prod-brand">Alfaparf Milano</div>
+        <div class="prod-name">Coloração Evolution 60g</div>
+        <div class="prod-prices">
+          <div class="prod-old">De R$ 38,90</div>
+          <div class="prod-new"><small>R$&nbsp;</small>18,90</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Highlights -->
+  <div class="highlights">
+    <div class="hi-item"><span class="hi-icon">🚚</span> Envio no mesmo dia</div>
+    <div class="hi-item"><span class="hi-icon">✅</span> 100% original</div>
+    <div class="hi-item"><span class="hi-icon">🔄</span> Troca em 7 dias</div>
+    <div class="hi-item"><span class="hi-icon">🧾</span> Com nota fiscal</div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-url"><span class="shin2">shinsei</span>market.com.br</div>
+    <div class="footer-cta">Compre agora →</div>
+    <div class="footer-info">
+      Enquanto durar o estoque<br>
+      Frete grátis acima de R$ 19
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

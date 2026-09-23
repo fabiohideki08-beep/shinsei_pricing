@@ -1,0 +1,37 @@
+{%- comment -%}
+  snippets/frete-widget.liquid
+  Injeta o widget de cálculo e progresso de frete Shinsei Market no carrinho.
+
+  Uso: inclua no template do carrinho (templates/cart.liquid ou sections/cart-items.liquid):
+    {% render 'frete-widget' %}
+
+  Variáveis configuráveis (pode sobrescrever via settings do tema):
+    shinsei_frete_api_base     — URL base da API (ex: https://api.seudominio.com.br)
+    shinsei_frete_subsidio     — R$ de subsídio por item (padrão 8)
+    shinsei_frete_real_default — Frete real padrão sem CEP em R$ (padrão 18)
+{%- endcomment -%}
+
+{%- liquid
+  assign api_base = settings.shinsei_frete_api_base | default: ''
+  assign subsidio_por_item = settings.shinsei_frete_subsidio | default: 8
+  assign frete_real_default = settings.shinsei_frete_real_default | default: 18
+-%}
+
+<link
+  rel="stylesheet"
+  href="{{ 'frete-widget.css' | asset_url }}"
+  media="all"
+>
+
+<script>
+  window.ShinseiFreteConfig = {
+    apiBase: {{ api_base | json }},
+    subsidioPorItem: {{ subsidio_por_item | times: 1.0 }},
+    freteRealDefault: {{ frete_real_default | times: 1.0 }}
+  };
+</script>
+
+<script
+  src="{{ 'frete-widget.js' | asset_url }}"
+  defer
+></script>

@@ -364,3 +364,15 @@ def fila_rejeitar(item_id: str, payload: dict = Body(default={})):
 
 if not FILA_PATH.exists(): _save_json(FILA_PATH, [])
 if not CFG_PATH.exists(): _save_json(CFG_PATH, DEFAULT_CFG)
+
+# ---------------------------------------------------------------------------
+# Registro de routers adicionais
+# ---------------------------------------------------------------------------
+try:
+    from routes.frete import router as frete_router
+    app.include_router(frete_router)
+except Exception as _frete_import_err:
+    import logging as _logging
+    _logging.getLogger("shinsei.app").warning(
+        "routes/frete.py não carregado: %s", _frete_import_err
+    )
