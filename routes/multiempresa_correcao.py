@@ -922,6 +922,129 @@ def reprocessar_zerados(background_tasks: BackgroundTasks, empresa: str = EMPRES
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Diagnóstico: SKUs sem_estoque_akg — verificar se são kits com componentes na AKG
+# ─────────────────────────────────────────────────────────────────────────────
+
+BLING_API = "https://api.bling.com.br/Api/v3"
+
+@router.get("/multiempresa/diagnostico-skus")
+def diagnostico_skus_sem_estoque_akg(limite: int = 200):
+    """
+    Para cada SKU classificado como sem_estoque_akg, busca no Bling Shinsei:
+    - Nome do produto
+    - Se é kit (tipoEstoque=V) → expande componentes
+    - Verifica se componentes existem na AKG
+    Retorna relatório completo para análise.
+    """
+    conn = _db()
+    rows = conn.execute(
+        """SELECT DISTINCT sku FROM me_ajustes
+           WHERE status = 'sem_estoque_akg'
+             AND empresa_vendedora = 'shinsei'
+           LIMIT ?""",
+        (limite,)
+    ).fetchall()
+    conn.close()
+
+    skus = [r["sku"] for r in rows]
+    if not skus:
+        return {"total": 0, "skus": []}
+
+    hdrs_sh = _hdrs("shinsei")
+    hdrs_akg = _hdrs("akg")
+
+    resultado = []
+
+    for sku in skus:
+        entry = {"sku": sku, "nome": None, "tipo_estoque": None,
+                 "componentes": [], "componentes_na_akg": [], "status": None}
+        try:
+            r = _req.get(f"{BLING_API}/produtos",
+                         params={"codigo": sku, "limite": 5},
+                         headers=hdrs_sh, timeout=10)
+            if r.status_code != 200:
+                entry["status"] = f"erro_shinsei_{r.status_code}"
+                resultado.append(entry)
+                continue
+
+            data = r.json().get("data", [])
+            prod = next((p for p in data if p.get("codigo") == sku), None)
+            if not prod:
+                entry["status"] = "nao_encontrado_shinsei"
+                resultado.append(entry)
+                continue
+
+            entry["nome"] = prod.get("nome")
+            entry["tipo_estoque"] = prod.get("estoque", {}).get("tipoEstoque") or prod.get("estrutura", {}).get("tipoEstoque")
+
+            # Verifica se é kit virtual
+            estrutura = prod.get("estrutura", {})
+            tipo = estrutura.get("tipoEstoque") or prod.get("estoque", {}).get("tipoEstoque", "")
+            componentes_raw = estrutura.get("componentes") or prod.get("componentes", [])
+
+            if tipo == "V" and componentes_raw:
+                # Busca detalhes do produto completo para obter componentes
+                prod_id = prod.get("id")
+                r2 = _req.get(f"{BLING_API}/produtos/{prod_id}", headers=hdrs_sh, timeout=10)
+                if r2.status_code == 200:
+                    full = r2.json().get("data", {})
+                    componentes_raw = full.get("estrutura", {}).get("componentes", [])
+
+                for comp in componentes_raw:
+                    comp_sku = comp.get("produto", {}).get("codigo") or comp.get("codigo")
+                    comp_nome = comp.get("produto", {}).get("nome") or comp.get("descricao")
+                    qtd = comp.get("quantidade", 1)
+
+                    comp_entry = {"sku": comp_sku, "nome": comp_nome, "qtd": qtd, "na_akg": False, "id_akg": None}
+
+                    if comp_sku:
+                        ra = _req.get(f"{BLING_API}/produtos",
+                                      params={"codigo": comp_sku, "limite": 5},
+                                      headers=hdrs_akg, timeout=10)
+                        if ra.status_code == 200:
+                            da = ra.json().get("data", [])
+                            match = next((p for p in da if p.get("codigo") == comp_sku), None)
+                            if match:
+                                comp_entry["na_akg"] = True
+                                comp_entry["id_akg"] = match.get("id")
+                                entry["componentes_na_akg"].append(comp_sku)
+
+                    entry["componentes"].append(comp_entry)
+
+                entry["status"] = "kit_componentes_verificados"
+            else:
+                # Produto simples — confirma que não existe na AKG
+                ra = _req.get(f"{BLING_API}/produtos",
+                              params={"codigo": sku, "limite": 5},
+                              headers=hdrs_akg, timeout=10)
+                if ra.status_code == 200:
+                    da = ra.json().get("data", [])
+                    match = next((p for p in da if p.get("codigo") == sku), None)
+                    entry["status"] = "existe_na_akg_agora" if match else "nao_existe_na_akg_confirmado"
+                else:
+                    entry["status"] = f"erro_akg_{ra.status_code}"
+
+        except Exception as e:
+            entry["status"] = f"excecao_{e}"
+
+        resultado.append(entry)
+
+    kits_com_comps_na_akg = [e for e in resultado if e.get("componentes_na_akg")]
+    simples_confirmados = [e for e in resultado if e["status"] == "nao_existe_na_akg_confirmado"]
+    existem_akg_agora = [e for e in resultado if e["status"] == "existe_na_akg_agora"]
+
+    return {
+        "total_skus": len(skus),
+        "kits_com_componentes_na_akg": len(kits_com_comps_na_akg),
+        "simples_confirmados_sem_akg": len(simples_confirmados),
+        "existem_na_akg_agora": len(existem_akg_agora),
+        "kits_com_componentes_na_akg_detalhes": kits_com_comps_na_akg,
+        "existem_na_akg_agora_detalhes": existem_akg_agora,
+        "todos": resultado,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Painel HTML
 # ─────────────────────────────────────────────────────────────────────────────
 
