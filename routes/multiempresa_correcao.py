@@ -965,7 +965,7 @@ def reprocessar_sem_estoque_akg(background_tasks: BackgroundTasks,
         ph = ",".join("?" * len(ids_venda))
 
         conn.execute(
-            f"UPDATE me_ajustes SET status='pendente', atualizado_em=datetime('now') "
+            f"UPDATE me_ajustes SET status='pendente' "
             f"WHERE id_venda_ctrl IN ({ph}) AND status='sem_estoque_akg'",
             ids_venda
         )
