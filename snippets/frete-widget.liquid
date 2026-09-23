@@ -8,6 +8,7 @@
 {%- liquid
   assign api_base = settings.shinsei_frete_api_base | default: 'https://shinsei-pricing.onrender.com'
   assign subsidio_por_item = settings.shinsei_frete_subsidio | default: 8
+  assign subsidio_primeiro_item = settings.shinsei_frete_subsidio_primeiro | default: 4
   assign frete_real_default = settings.shinsei_frete_real_default | default: 18
 -%}
 
@@ -22,6 +23,7 @@
   window.ShinseiFreteConfig = {
     apiBase: {{ api_base | json }},
     subsidioPorItem: {{ subsidio_por_item | times: 1.0 }},
+    subsidioFirstItem: {{ subsidio_primeiro_item | times: 1.0 }},
     freteRealDefault: {{ frete_real_default | times: 1.0 }}
   };
   if (!window.ShinseiFreteInitialized) {

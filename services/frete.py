@@ -514,7 +514,9 @@ async def calculate_freight(
         # Aplica subsídio a cada opção
         final_options: list[FreightOption] = []
         for opt in raw_options:
-            final_price = max(0.0, round(opt.price_real - subsidy_total, 2))
+            _diff = round(opt.price_real - subsidy_total, 2)
+            # Arredonda para zero diferenças menores que R$0,10 (centavos de floating point)
+            final_price = 0.0 if 0.0 < _diff < 0.10 else max(0.0, _diff)
             final_options.append(
                 FreightOption(
                     name=opt.name,

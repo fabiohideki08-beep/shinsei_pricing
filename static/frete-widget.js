@@ -12,9 +12,10 @@
   'use strict';
 
   var CONFIG = window.ShinseiFreteConfig || {};
-  var API_BASE          = (CONFIG.apiBase || '').replace(/\/$/, '');
-  var SUBSIDIO_POR_ITEM = CONFIG.subsidioPorItem  || 8;
-  var FRETE_REAL_DEFAULT = CONFIG.freteRealDefault || 18;
+  var API_BASE            = (CONFIG.apiBase || '').replace(/\/$/, '');
+  var SUBSIDIO_POR_ITEM   = CONFIG.subsidioPorItem  || 8;
+  var SUBSIDIO_FIRST_ITEM = CONFIG.subsidioFirstItem || 4;
+  var FRETE_REAL_DEFAULT  = CONFIG.freteRealDefault || 18;
   var CEP_STORAGE_KEY   = 'shinsei_frete_cep';
 
   var state = {
@@ -180,8 +181,13 @@
   }
 
   // Fallback local — estimativa sem API (backend temporariamente indisponivel)
+  function calcSubsidioLocal(qty) {
+    if (qty <= 0) return 0;
+    return SUBSIDIO_FIRST_ITEM + Math.max(0, qty - 1) * SUBSIDIO_POR_ITEM;
+  }
+
   function showFallbackLocal(qty) {
-    var subsidio = SUBSIDIO_POR_ITEM * (qty || 1);
+    var subsidio = calcSubsidioLocal(qty || 1);
     var frete_real = FRETE_REAL_DEFAULT;
     var frete_final = Math.max(0, frete_real - subsidio);
     var eh_gratis = frete_final === 0;
@@ -206,7 +212,10 @@
       if (eh_gratis) {
         mensagem.innerHTML = '<span class="frete-gratis">Parabens! Voce ganhou frete gratis!</span>';
       } else {
-        var faltam = Math.ceil((frete_real - subsidio) / SUBSIDIO_POR_ITEM);
+        var itensNecessarios = frete_real <= SUBSIDIO_FIRST_ITEM
+          ? 1
+          : 1 + Math.ceil((frete_real - SUBSIDIO_FIRST_ITEM) / SUBSIDIO_POR_ITEM);
+        var faltam = Math.max(0, itensNecessarios - (qty || 1));
         mensagem.textContent = faltam > 0
           ? 'Adicione ' + faltam + ' item' + (faltam > 1 ? 's' : '') + ' para frete gratis!'
           : 'Quase la! Frete com desconto aplicado.';
@@ -288,9 +297,10 @@
     _afterRenderTimer = setTimeout(function () {
       _afterRenderTimer = null;
       var cfg = window.ShinseiFreteConfig || {};
-      if (cfg.apiBase)          API_BASE           = cfg.apiBase.replace(/\/$/, '');
-      if (cfg.subsidioPorItem)  SUBSIDIO_POR_ITEM  = cfg.subsidioPorItem;
-      if (cfg.freteRealDefault) FRETE_REAL_DEFAULT = cfg.freteRealDefault;
+      if (cfg.apiBase)          API_BASE            = cfg.apiBase.replace(/\/$/, '');
+      if (cfg.subsidioPorItem)  SUBSIDIO_POR_ITEM   = cfg.subsidioPorItem;
+      if (cfg.subsidioFirstItem) SUBSIDIO_FIRST_ITEM = cfg.subsidioFirstItem;
+      if (cfg.freteRealDefault) FRETE_REAL_DEFAULT  = cfg.freteRealDefault;
       fillCepInput();
       attachBtnListener();
       if (!state.loading) update();
