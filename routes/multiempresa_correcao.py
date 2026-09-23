@@ -931,65 +931,62 @@ BLING_API = "https://api.bling.com.br/Api/v3"
 
 @router.post("/multiempresa/reprocessar-sem-estoque-akg")
 def reprocessar_sem_estoque_akg(background_tasks: BackgroundTasks,
-                                 empresa: str = EMPRESA_SHINSEI,
-                                 limite: int = 200):
+                                empresa: str = EMPRESA_SHINSEI,
+                                limite: int = 200):
     """
-    Reseta ajustes 'sem_estoque_akg' para 'pendente' e vendas para 'pendente',
-    depois dispara reprocessamento para tentar novamente com token AKG válido.
-    Útil quando o token AKG estava quebrado durante processamento original.
+    Reseta ajustes sem_estoque_akg para pendente e reprocessa vendas.
+    Útil quando o token AKG estava quebrado durante o processamento original.
     """
-    conn = _db()
+    import traceback as _tb
+    try:
+        conn = _db()
+        vendas = conn.execute(
+            """SELECT DISTINCT v.id, v.id_pedido_bling, v.empresa_vendedora
+               FROM me_vendas v
+               WHERE v.empresa_vendedora = ?
+                 AND EXISTS (
+                   SELECT 1 FROM me_ajustes a
+                   WHERE a.id_venda_ctrl = v.id AND a.status = 'sem_estoque_akg'
+                 )
+                 AND NOT EXISTS (
+                   SELECT 1 FROM me_ajustes a
+                   WHERE a.id_venda_ctrl = v.id AND a.status = 'concluido'
+                 )
+               LIMIT ?""",
+            (empresa, limite)
+        ).fetchall()
 
-    # Busca vendas que têm APENAS ajustes sem_estoque_akg (nenhum concluido)
-    vendas = conn.execute(
-        """SELECT DISTINCT v.id, v.id_pedido_bling, v.empresa_vendedora
-           FROM me_vendas v
-           WHERE v.empresa_vendedora = ?
-             AND EXISTS (
-               SELECT 1 FROM me_ajustes a
-               WHERE a.id_venda_ctrl = v.id AND a.status = 'sem_estoque_akg'
-             )
-             AND NOT EXISTS (
-               SELECT 1 FROM me_ajustes a
-               WHERE a.id_venda_ctrl = v.id AND a.status = 'concluido'
-             )
-           LIMIT ?""",
-        (empresa, limite)
-    ).fetchall()
+        if not vendas:
+            conn.close()
+            return {"ok": True, "mensagem": "Nenhuma venda elegível", "total": 0}
 
-    if not vendas:
+        ids_venda = [v["id"] for v in vendas]
+        pedidos = [(v["id_pedido_bling"], v["empresa_vendedora"]) for v in vendas]
+        ph = ",".join("?" * len(ids_venda))
+
+        conn.execute(
+            f"UPDATE me_ajustes SET status='pendente', atualizado_em=datetime('now') "
+            f"WHERE id_venda_ctrl IN ({ph}) AND status='sem_estoque_akg'",
+            ids_venda
+        )
+        conn.execute(
+            f"UPDATE me_vendas SET status='pendente', atualizado_em=datetime('now') "
+            f"WHERE id IN ({ph})",
+            ids_venda
+        )
+        conn.commit()
         conn.close()
-        return {"ok": True, "mensagem": "Nenhuma venda elegível", "total": 0}
 
-    ids_venda = [v["id"] for v in vendas]
-    pedidos = [(v["id_pedido_bling"], v["empresa_vendedora"]) for v in vendas]
+        for id_pedido, emp in pedidos:
+            background_tasks.add_task(processar_pedido, emp, id_pedido)
 
-    placeholders = ",".join("?" * len(ids_venda))
-
-    # Reseta ajustes sem_estoque_akg para pendente
-    conn.execute(
-        f"UPDATE me_ajustes SET status='pendente', atualizado_em=datetime('now') "
-        f"WHERE id_venda_ctrl IN ({placeholders}) AND status='sem_estoque_akg'",
-        ids_venda
-    )
-    # Reseta vendas para pendente
-    conn.execute(
-        f"UPDATE me_vendas SET status='pendente', atualizado_em=datetime('now') "
-        f"WHERE id IN ({placeholders})",
-        ids_venda
-    )
-    conn.commit()
-    conn.close()
-
-    # Dispara reprocessamento em background
-    for id_pedido, emp in pedidos:
-        background_tasks.add_task(processar_pedido, emp, id_pedido)
-
-    return {
-        "ok": True,
-        "vendas_resetadas": len(vendas),
-        "pedidos_agendados": [p[0] for p in pedidos],
-    }
+        return {
+            "ok": True,
+            "vendas_resetadas": len(vendas),
+            "pedidos_agendados": [p[0] for p in pedidos],
+        }
+    except Exception as e:
+        raise HTTPException(500, f"{type(e).__name__}: {e}\n{_tb.format_exc()}")
 
 
 @router.get("/multiempresa/diagnostico-skus")
