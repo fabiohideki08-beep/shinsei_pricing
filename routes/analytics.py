@@ -146,21 +146,25 @@ def _dval(row: dict, idx: int) -> str:
 
 @router.get("/auth")
 def analytics_auth():
-    """Redireciona para autorização OAuth do Google — analytics + search console.
+    """Redireciona para autorização OAuth do Google — analytics.readonly + webmasters.readonly.
 
     Reutiliza /ads/callback (já registrado no GCP) com state=analytics para
     distinguir do fluxo Google Ads. Evita registrar nova redirect_uri no GCP.
+
+    include_granted_scopes=true habilita incremental auth — aprovações anteriores
+    são preservadas e o Google pede só os scopes ainda não aprovados.
     """
     if not _CLIENT_ID:
         raise HTTPException(503, "GOOGLE_ADS_CLIENT_ID não configurado")
     params = {
-        "client_id":     _CLIENT_ID,
-        "redirect_uri":  _REDIRECT_URI,
-        "response_type": "code",
-        "scope":         _SCOPES,
-        "access_type":   "offline",
-        "prompt":        "consent",
-        "state":         "analytics",
+        "client_id":              _CLIENT_ID,
+        "redirect_uri":           _REDIRECT_URI,
+        "response_type":          "code",
+        "scope":                  _SCOPES,
+        "access_type":            "offline",
+        "prompt":                 "consent",
+        "include_granted_scopes": "true",
+        "state":                  "analytics",
     }
     return RedirectResponse(f"https://accounts.google.com/o/oauth2/auth?{urlencode(params)}")
 
