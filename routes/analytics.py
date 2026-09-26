@@ -98,9 +98,11 @@ def _ga4_report(body: dict) -> dict:
     url = f"https://analyticsdata.googleapis.com/v1beta/properties/{GA4_PROPERTY_ID}:runReport"
     r = requests.post(url, json=body, headers={"Authorization": f"Bearer {token}"}, timeout=20)
     if r.status_code == 403:
+        err = r.json() if r.content else {}
+        msg = err.get("error", {}).get("message", r.text[:300])
         raise HTTPException(403,
-            "SA sem acesso ao GA4. Adicione shinsei-indexacao@shinsei-market-seo.iam.gserviceaccount.com "
-            "como Viewer em GA4 → Admin → Property Access Management.")
+            f"GA4 403 — property {GA4_PROPERTY_ID}: {msg}. "
+            "Verifique se a conta Google tem acesso à propriedade GA4 e se a Analytics Data API está habilitada no GCP.")
     if r.status_code != 200:
         raise HTTPException(502, f"GA4 API {r.status_code}: {r.text[:300]}")
     return r.json()
@@ -111,7 +113,9 @@ def _ga4_realtime(body: dict) -> dict:
     url = f"https://analyticsdata.googleapis.com/v1beta/properties/{GA4_PROPERTY_ID}:runRealtimeReport"
     r = requests.post(url, json=body, headers={"Authorization": f"Bearer {token}"}, timeout=15)
     if r.status_code == 403:
-        raise HTTPException(403, "SA sem acesso ao GA4. Veja GET /analytics/setup.")
+        err = r.json() if r.content else {}
+        msg = err.get("error", {}).get("message", r.text[:300])
+        raise HTTPException(403, f"GA4 Realtime 403: {msg}")
     if r.status_code != 200:
         raise HTTPException(502, f"GA4 Realtime {r.status_code}: {r.text[:300]}")
     return r.json()
@@ -123,9 +127,9 @@ def _gsc_query(body: dict) -> dict:
     url = f"https://searchconsole.googleapis.com/webmasters/v3/sites/{prop_enc}/searchAnalytics/query"
     r = requests.post(url, json=body, headers={"Authorization": f"Bearer {token}"}, timeout=20)
     if r.status_code == 403:
-        raise HTTPException(403,
-            "SA sem acesso ao Search Console. Adicione shinsei-indexacao@shinsei-market-seo.iam.gserviceaccount.com "
-            "como proprietário em Search Console → Configurações → Usuários e permissões.")
+        err = r.json() if r.content else {}
+        msg = err.get("error", {}).get("message", r.text[:300])
+        raise HTTPException(403, f"GSC 403 — {GSC_PROPERTY}: {msg}")
     if r.status_code != 200:
         raise HTTPException(502, f"GSC API {r.status_code}: {r.text[:300]}")
     return r.json()
