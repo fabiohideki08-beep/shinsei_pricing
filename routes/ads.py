@@ -51,12 +51,21 @@ def ads_oauth_start():
 
 
 @router.get("/callback")
-def ads_oauth_callback(code: str = "", error: str = ""):
-    """Callback OAuth Google Ads — troca code por refresh_token e salva no Render."""
+def ads_oauth_callback(code: str = "", error: str = "", state: str = ""):
+    """Callback OAuth unificado — Google Ads e Analytics/GA4.
+
+    state=analytics → salva GA4_REFRESH_TOKEN (fluxo de /analytics/auth)
+    state=""        → salva GOOGLE_ADS_REFRESH_TOKEN (fluxo padrão /ads/auth)
+
+    A redirect_uri /ads/callback é a única registrada no GCP OAuth client,
+    por isso o analytics a reutiliza com state=analytics para diferenciar.
+    """
     if error:
-        return HTMLResponse(f"<h2>Erro OAuth Google Ads: {error}</h2>")
+        return HTMLResponse(f"<h2>Erro OAuth: {error}</h2>")
     if not code:
         return HTMLResponse("<h2>Código de autorização não recebido.</h2>")
+
+    is_analytics = (state == "analytics")
 
     client_id     = os.environ.get("GOOGLE_ADS_CLIENT_ID", "")
     client_secret = os.environ.get("GOOGLE_ADS_CLIENT_SECRET", "")
@@ -77,11 +86,37 @@ def ads_oauth_callback(code: str = "", error: str = ""):
     tokens = r.json()
     refresh_token = tokens.get("refresh_token", "")
     if not refresh_token:
-        return HTMLResponse("<h2>refresh_token não retornado. Tente /ads/auth novamente.</h2>")
+        msg = "/analytics/auth" if is_analytics else "/ads/auth"
+        return HTMLResponse(f"<h2>refresh_token não retornado. Tente {msg} novamente.</h2>")
 
-    # Salva GOOGLE_ADS_REFRESH_TOKEN no Render
-    _salvar_refresh_token_render(refresh_token)
+    if is_analytics:
+        # Fluxo Analytics/GA4 — salva GA4_REFRESH_TOKEN
+        os.environ["GA4_REFRESH_TOKEN"] = refresh_token
+        try:
+            from render_persistence import _patch_env_vars
+            render_ok = bool(_patch_env_vars({"GA4_REFRESH_TOKEN": refresh_token}))
+        except Exception as e:
+            logger.warning("Falha ao salvar GA4_REFRESH_TOKEN no Render: %s", e)
+            render_ok = False
+        status_render = "✅ Salvo no Render" if render_ok else "⚠️ Falha ao salvar no Render — copie o token abaixo"
+        return HTMLResponse(f"""
+        <html><head><title>GA4 Conectado ✅</title></head>
+        <body style="font-family:sans-serif;padding:40px;max-width:600px">
+        <h1 style="color:#10b981">✅ GA4 + Search Console Conectados!</h1>
+        <p>Status Render: {status_render}</p>
+        <p>Teste agora:</p>
+        <ul>
+          <li><a href="/analytics/status">GET /analytics/status</a> — métricas GA4</li>
+          <li><a href="/analytics/realtime">GET /analytics/realtime</a> — usuários ativos</li>
+          <li><a href="/analytics/search-console">GET /analytics/search-console</a> — Search Console</li>
+          <li><a href="/analytics/dashboard">GET /analytics/dashboard</a> — tudo junto</li>
+        </ul>
+        <details><summary style="cursor:pointer;color:#6b7280">Mostrar refresh_token</summary>
+        <code style="word-break:break-all;font-size:12px">{refresh_token}</code></details>
+        </body></html>
+        """)
 
+    # Fluxo padrão Google Ads
     render_ok = _salvar_refresh_token_render(refresh_token)
     status_render = "✅ Salvo no Render" if render_ok else "⚠️ Falha ao salvar no Render — copie o token abaixo"
     return HTMLResponse(f"""

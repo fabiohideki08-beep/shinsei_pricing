@@ -28,7 +28,9 @@ GSC_PROPERTY    = os.getenv("GSC_PROPERTY", "sc-domain:shinseimarket.com.br")
 # Reutiliza o client do Google Ads (mesma conta Google)
 _CLIENT_ID     = os.getenv("GOOGLE_ADS_CLIENT_ID", "")
 _CLIENT_SECRET = os.getenv("GOOGLE_ADS_CLIENT_SECRET", "")
-_REDIRECT_URI  = "https://shinsei-pricing.onrender.com/analytics/callback"
+# Reutiliza a redirect_uri do Google Ads (já registrada no GCP)
+# state=analytics diferencia do fluxo Google Ads no callback
+_REDIRECT_URI  = "https://shinsei-pricing.onrender.com/ads/callback"
 _SCOPES = " ".join([
     "https://www.googleapis.com/auth/analytics.readonly",
     "https://www.googleapis.com/auth/webmasters.readonly",
@@ -140,7 +142,11 @@ def _dval(row: dict, idx: int) -> str:
 
 @router.get("/auth")
 def analytics_auth():
-    """Redireciona para autorização OAuth do Google — analytics + search console."""
+    """Redireciona para autorização OAuth do Google — analytics + search console.
+
+    Reutiliza /ads/callback (já registrado no GCP) com state=analytics para
+    distinguir do fluxo Google Ads. Evita registrar nova redirect_uri no GCP.
+    """
     if not _CLIENT_ID:
         raise HTTPException(503, "GOOGLE_ADS_CLIENT_ID não configurado")
     params = {
@@ -150,6 +156,7 @@ def analytics_auth():
         "scope":         _SCOPES,
         "access_type":   "offline",
         "prompt":        "consent",
+        "state":         "analytics",
     }
     return RedirectResponse(f"https://accounts.google.com/o/oauth2/auth?{urlencode(params)}")
 
