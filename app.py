@@ -152,6 +152,13 @@ try:
 except Exception as _tiktok_exc:
     logger.warning("TikTok Shop não carregado: %s", _tiktok_exc)
 
+try:
+    from routes.analytics import router as analytics_router
+    app.include_router(analytics_router)
+    logger.info("GA4 Analytics API registrada em /analytics")
+except Exception as _analytics_exc:
+    logger.warning("Analytics não carregado: %s", _analytics_exc)
+
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     return await verificar_api_key(request, call_next)
