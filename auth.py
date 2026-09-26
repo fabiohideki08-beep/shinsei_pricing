@@ -294,6 +294,8 @@ PUBLIC_PREFIXES = (
     "/frete/",       # Shopify Carrier Service + widget de frete (sem API key)
     "/amazon/auth",   # Amazon SP-API OAuth (sem API key)
     "/amazon/callback",
+    "/analytics/auth",      # GA4 + GSC OAuth (sem API key — browser redirect)
+    "/analytics/callback",  # GA4 + GSC OAuth callback
     "/amazon/exportar-produto",
     "/amazon/listing/",
     "/amazon/listing/",
