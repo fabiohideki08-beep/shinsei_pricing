@@ -1,43 +1,48 @@
 # -*- coding: utf-8 -*-
 """
-GA4 Analytics Data API + Google Search Console — integração completa.
+GA4 Analytics Data API + Google Search Console — integração via OAuth user token.
 
-Usa GOOGLE_SA_JSON (base64) já existente no Render + google-auth (já no requirements.txt).
-SA: shinsei-indexacao@shinsei-market-seo.iam.gserviceaccount.com
+Fluxo:
+  1. GET /analytics/auth  → redireciona para Google OAuth (analytics.readonly + webmasters.readonly)
+  2. Google redireciona para /analytics/callback com ?code=...
+  3. Callback troca code por refresh_token e salva em GA4_REFRESH_TOKEN no Render
+  4. Todos os endpoints usam esse refresh_token para gerar access_tokens
 
-Antes de funcionar: adicionar a SA como Viewer em:
-  - GA4: Admin → Property Access Management
-  - Search Console: Configurações → Usuários e permissões
+Usa as mesmas credenciais do Google Ads (GOOGLE_ADS_CLIENT_ID / SECRET).
 """
 
 from __future__ import annotations
-import base64, json, os, time
+import json, os, time
 from datetime import datetime, date, timedelta, timezone
+from urllib.parse import urlencode
 
 import requests
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 GA4_PROPERTY_ID = os.getenv("GA4_PROPERTY_ID", "497827951")
 GSC_PROPERTY    = os.getenv("GSC_PROPERTY", "sc-domain:shinseimarket.com.br")
-SA_JSON_B64     = os.getenv("GOOGLE_SA_JSON", "")
-_SCOPES = [
+
+# Reutiliza o client do Google Ads (mesma conta Google)
+_CLIENT_ID     = os.getenv("GOOGLE_ADS_CLIENT_ID", "")
+_CLIENT_SECRET = os.getenv("GOOGLE_ADS_CLIENT_SECRET", "")
+_REDIRECT_URI  = "https://shinsei-pricing.onrender.com/analytics/callback"
+_SCOPES = " ".join([
     "https://www.googleapis.com/auth/analytics.readonly",
     "https://www.googleapis.com/auth/webmasters.readonly",
-]
+])
 
 _token_cache: dict = {"token": None, "expires_at": 0}
 
 
-def _get_sa_info() -> dict:
-    if not SA_JSON_B64:
-        raise HTTPException(503, "GOOGLE_SA_JSON não configurado no Render")
-    try:
-        raw = base64.b64decode(SA_JSON_B64 + "==").decode()
-        return json.loads(raw)
-    except Exception as e:
-        raise HTTPException(503, f"GOOGLE_SA_JSON inválido: {e}")
+def _get_refresh_token() -> str:
+    rt = os.getenv("GA4_REFRESH_TOKEN", "")
+    if not rt:
+        raise HTTPException(401,
+            "GA4 não autorizado. Visite /analytics/auth para conectar sua conta Google.")
+    return rt
 
 
 def _get_token() -> str:
@@ -45,18 +50,45 @@ def _get_token() -> str:
     if _token_cache["token"] and now < _token_cache["expires_at"] - 60:
         return _token_cache["token"]
 
-    sa = _get_sa_info()
-    try:
-        from google.oauth2 import service_account
-        import google.auth.transport.requests as ga_req
-    except ImportError:
-        raise HTTPException(503, "Pacote google-auth não instalado")
+    rt = _get_refresh_token()
+    resp = requests.post("https://oauth2.googleapis.com/token", data={
+        "client_id":     _CLIENT_ID,
+        "client_secret": _CLIENT_SECRET,
+        "refresh_token": rt,
+        "grant_type":    "refresh_token",
+    }, timeout=15)
 
-    creds = service_account.Credentials.from_service_account_info(sa, scopes=_SCOPES)
-    creds.refresh(ga_req.Request())
-    _token_cache["token"] = creds.token
-    _token_cache["expires_at"] = creds.expiry.timestamp() if creds.expiry else now + 3600
+    if resp.status_code != 200:
+        raise HTTPException(503, f"Falha ao renovar token GA4: {resp.text[:200]}")
+
+    data = resp.json()
+    _token_cache["token"]      = data["access_token"]
+    _token_cache["expires_at"] = now + data.get("expires_in", 3600)
     return _token_cache["token"]
+
+
+def _save_refresh_token_to_render(token: str):
+    """Persiste GA4_REFRESH_TOKEN no Render via API (GET limit=100 antes do PUT)."""
+    RENDER_KEY = os.getenv("RENDER_API_KEY", "")
+    SVC_ID     = os.getenv("RENDER_SERVICE_ID", "srv-d9jhht58nd3s73beak7g")
+    if not RENDER_KEY:
+        return False
+    H = {"Authorization": f"Bearer {RENDER_KEY}"}
+    # GET antes de PUT (regra obrigatória)
+    existing = requests.get(
+        f"https://api.render.com/v1/services/{SVC_ID}/env-vars?limit=100",
+        headers=H, timeout=15,
+    )
+    if existing.status_code != 200:
+        return False
+    current = {v["envVar"]["key"]: v["envVar"]["value"] for v in existing.json()}
+    current["GA4_REFRESH_TOKEN"] = token
+    r = requests.put(
+        f"https://api.render.com/v1/services/{SVC_ID}/env-vars",
+        json=[{"key": k, "value": v} for k, v in current.items()],
+        headers=H, timeout=20,
+    )
+    return r.status_code == 200
 
 
 def _ga4_report(body: dict) -> dict:
@@ -106,21 +138,76 @@ def _dval(row: dict, idx: int) -> str:
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
+@router.get("/auth")
+def analytics_auth():
+    """Redireciona para autorização OAuth do Google — analytics + search console."""
+    if not _CLIENT_ID:
+        raise HTTPException(503, "GOOGLE_ADS_CLIENT_ID não configurado")
+    params = {
+        "client_id":     _CLIENT_ID,
+        "redirect_uri":  _REDIRECT_URI,
+        "response_type": "code",
+        "scope":         _SCOPES,
+        "access_type":   "offline",
+        "prompt":        "consent",
+    }
+    return RedirectResponse(f"https://accounts.google.com/o/oauth2/auth?{urlencode(params)}")
+
+
+@router.get("/callback")
+def analytics_callback(code: str = "", error: str = ""):
+    """Recebe o code do OAuth, troca por refresh_token e persiste no Render."""
+    if error:
+        return HTMLResponse(f"<h2>Erro OAuth: {error}</h2>", status_code=400)
+    if not code:
+        return HTMLResponse("<h2>Código ausente</h2>", status_code=400)
+
+    resp = requests.post("https://oauth2.googleapis.com/token", data={
+        "code":          code,
+        "client_id":     _CLIENT_ID,
+        "client_secret": _CLIENT_SECRET,
+        "redirect_uri":  _REDIRECT_URI,
+        "grant_type":    "authorization_code",
+    }, timeout=15)
+
+    if resp.status_code != 200:
+        return HTMLResponse(f"<h2>Erro ao trocar código: {resp.text[:300]}</h2>", status_code=502)
+
+    data = resp.json()
+    rt = data.get("refresh_token", "")
+    if not rt:
+        return HTMLResponse("<h2>refresh_token ausente — tente /analytics/auth novamente</h2>", status_code=502)
+
+    # Salva na env var local (válida até restart) e no Render (persistente)
+    os.environ["GA4_REFRESH_TOKEN"] = rt
+    _token_cache.update({"token": None, "expires_at": 0})  # força refresh
+    saved = _save_refresh_token_to_render(rt)
+
+    return HTMLResponse(f"""
+    <html><head><title>GA4 Conectado ✅</title></head><body style="font-family:sans-serif;padding:40px;max-width:600px">
+    <h1 style="color:#10b981">✅ GA4 + Search Console Conectados!</h1>
+    <p>Token salvo {"no Render ✅" if saved else "localmente (Render não atualizado — adicione GA4_REFRESH_TOKEN manualmente)"}</p>
+    <p>Teste agora:</p>
+    <ul>
+      <li><a href="/analytics/status">GET /analytics/status</a> — métricas GA4</li>
+      <li><a href="/analytics/realtime">GET /analytics/realtime</a> — usuários ativos</li>
+      <li><a href="/analytics/search-console">GET /analytics/search-console</a> — Search Console</li>
+      <li><a href="/analytics/dashboard">GET /analytics/dashboard</a> — tudo junto</li>
+    </ul>
+    </body></html>
+    """)
+
+
 @router.get("/setup")
 def analytics_setup():
-    sa = "shinsei-indexacao@shinsei-market-seo.iam.gserviceaccount.com"
+    has_token = bool(os.getenv("GA4_REFRESH_TOKEN"))
     return {
-        "sa_email": sa,
+        "status": "conectado" if has_token else "pendente",
         "property_id": GA4_PROPERTY_ID,
         "gsc_property": GSC_PROPERTY,
-        "passos_ga4": [
-            "1. analytics.google.com → Admin → Property 497827951 → Property Access Management",
-            f"2. + Adicionar usuários → {sa} → papel: Viewer",
-        ],
-        "passos_gsc": [
-            "1. search.google.com/search-console → Configurações → Usuários e permissões",
-            f"2. Adicionar usuário → {sa} → Proprietário restrito ou Proprietário",
-        ],
+        "client_id_configurado": bool(_CLIENT_ID),
+        "instrucao": "Visite GET /analytics/auth para conectar" if not has_token else "Já conectado",
+        "auth_url": "https://shinsei-pricing.onrender.com/analytics/auth",
     }
 
 
