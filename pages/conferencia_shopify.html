@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Bling ↔ Shopify — Shinsei Pricing</title>
+<style>
+:root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--ok:#22c55e;--danger:#ef4444;--warn:#f59e0b;--canal-cor:#22c55e}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text);min-height:100vh}
+.wrap{max-width:1280px;margin:0 auto;padding:22px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:24px;background:rgba(18,26,49,.97);border:1px solid var(--line);border-radius:18px;padding:14px 20px;position:sticky;top:16px;z-index:10;border-left:4px solid var(--canal-cor)}
+.brand h1{margin:0;font-size:19px;font-weight:800;display:flex;align-items:center;gap:10px}
+.brand span{font-size:11px;color:var(--muted)}
+.topbar-right{display:flex;gap:9px;align-items:center}
+.btn{border:none;background:var(--accent);color:#fff;padding:9px 16px;border-radius:11px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:7px;font-size:13px;transition:background .15s}
+.btn:hover{background:#3a78f2}
+.btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+.btn.secondary:hover{background:var(--card2)}
+.btn.sm{padding:6px 12px;font-size:12px;border-radius:8px}
+.btn.ok-btn{background:rgba(34,197,94,.2);color:var(--ok);border:1px solid rgba(34,197,94,.3)}
+.btn.ok-btn:hover{background:rgba(34,197,94,.35)}
+.btn.danger-btn{background:rgba(239,68,68,.2);color:var(--danger);border:1px solid rgba(239,68,68,.3)}
+.btn.danger-btn:hover{background:rgba(239,68,68,.35)}
+.progress-wrap{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 20px;margin-bottom:20px;display:none}
+.progress-wrap.visible{display:block}
+.progress-label{font-size:13px;font-weight:700;margin-bottom:8px;color:var(--muted)}
+.progress-bar-bg{background:var(--card2);border-radius:999px;height:8px;overflow:hidden}
+.progress-bar-fill{height:100%;border-radius:999px;background:var(--accent);transition:width .4s}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.stat-link{cursor:pointer;transition:background .15s,border-color .15s}.stat-link:hover{background:var(--card2);border-color:var(--accent)}
+.stat-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700}
+.stat-val{font-size:26px;font-weight:900;margin-top:4px}
+.tabs{display:flex;gap:6px;margin-bottom:20px;border-bottom:1px solid var(--line);padding-bottom:0}
+.tab{padding:10px 18px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s,border-color .15s;background:none;border-top:none;border-left:none;border-right:none}
+.tab.active{color:var(--text);border-bottom-color:var(--canal-cor)}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+.sub-tabs{display:flex;gap:4px;margin-bottom:20px;padding:4px;background:var(--card2);border-radius:12px;border:1px solid var(--line);flex-wrap:wrap}
+.sub-tab{padding:7px 16px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border-radius:9px;border:none;background:none;transition:all .15s;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.sub-tab.active{background:var(--card);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.sub-tab-panel{display:none}
+.sub-tab-panel.active{display:block}
+.sub-cnt{font-size:11px;padding:1px 7px;border-radius:999px;background:rgba(255,255,255,.08);font-weight:700}
+.table-wrap{overflow-x:auto;border-radius:14px;border:1px solid var(--line)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--card2);padding:10px 12px;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);white-space:nowrap;border-bottom:1px solid var(--line)}
+td{padding:10px 12px;border-bottom:1px solid rgba(38,52,88,.5);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.025)}
+.sku-code{font-family:monospace;font-size:12px;color:var(--accent)}
+.nome-cell{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.margem-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:700}
+.margem-verde{background:rgba(34,197,94,.15);color:var(--ok);border:1px solid rgba(34,197,94,.3)}
+.margem-amarelo{background:rgba(245,158,11,.15);color:var(--warn);border:1px solid rgba(245,158,11,.3)}
+.margem-vermelho{background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3)}
+.status-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid var(--line);background:var(--card2)}
+.status-active{border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.1);color:var(--ok)}
+.status-archived{border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.1);color:var(--warn)}
+.status-draft{border-color:rgba(147,197,253,.3);background:rgba(147,197,253,.1);color:#93c5fd}
+.fila-resumo{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.fila-stat{padding:8px 14px;border-radius:10px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:6px}
+.fila-stat.total{background:var(--card2);border:1px solid var(--line);color:var(--muted)}
+.fila-stat.verde{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.25);color:var(--ok)}
+.fila-stat.amarelo{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);color:var(--warn)}
+.fila-stat.vermelho{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:var(--danger)}
+.filtro-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.filtro-bar label{font-size:12px;color:var(--muted);font-weight:700}
+.fbtn{padding:5px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--line);background:var(--card2);color:var(--muted);transition:all .15s}
+.fbtn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.ausente-section{margin-bottom:28px}
+.ausente-section h3{font-size:14px;font-weight:800;margin:0 0 12px 0;padding-bottom:10px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.count-badge{background:var(--card2);border:1px solid var(--line);color:var(--muted);padding:2px 10px;border-radius:999px;font-size:12px;font-weight:700}
+.empty{padding:32px;text-align:center;color:var(--muted);font-size:14px}
+.skel{display:inline-block;width:60px;height:16px;background:rgba(255,255,255,.08);border-radius:4px;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+.paginacao{display:flex;align-items:center;gap:10px;margin-top:14px;justify-content:flex-end;font-size:13px;color:var(--muted)}
+@media(max-width:900px){.stats-row{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <h1>🟢 Bling ↔ Shopify</h1>
+      <span id="meta-ultima">Carregando...</span>
+    </div>
+    <div class="topbar-right">
+      <a class="btn secondary" href="/dashboard">← Dashboard</a>
+      <button class="btn secondary" id="btn-so-ativos" onclick="toggleSoAtivos()" title="Mostra apenas Bling ativos com listings ativos nos canais">☀️ Só Ativos</button>
+      <button class="btn" id="btn-executar" onclick="executarConferencia()">▶ Executar conferência</button>
+    </div>
+  </div>
+
+  <div class="progress-wrap" id="progress-wrap">
+    <div class="progress-label" id="progress-etapa">Inicializando...</div>
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-bar" style="width:0%"></div></div>
+  </div>
+
+  <div class="stats-row" id="stats-row">
+    <div class="stat"><div class="stat-lbl">Total Bling</div><div class="stat-val"><span class="skel"></span></div></div>
+    <div class="stat stat-link" onclick="irParaAba('estoque')"><div class="stat-lbl">Mapeados Shopify</div><div class="stat-val"><span class="skel"></span></div></div>
+    <div class="stat stat-link" onclick="irParaAba('ausentes','secao-sem-canal')"><div class="stat-lbl">Bling sem Shopify</div><div class="stat-val"><span class="skel"></span></div></div>
+    <div class="stat stat-link" onclick="irParaAba('estoque');setTimeout(()=>setSubTab('sub-sem-integ'),60)"><div class="stat-lbl">Shopify sem Bling</div><div class="stat-val"><span class="skel"></span></div></div>
+    <div class="stat stat-link" style="border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.07)" onclick="trocarTab('sem-vinculo',[...document.querySelectorAll('.tab')].find(t=>(t.getAttribute('onclick')||'').includes(&quot;sem-vinculo&quot;)))"><div class="stat-lbl" style="color:var(--danger)">⚠️ Ativos sem vínculo</div><div class="stat-val" style="color:var(--danger)" id="sv-ativo-sem-vinculo">—</div><div style="font-size:10px;color:var(--muted);margin-top:2px">vendendo sem sync</div></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="trocarTab('fila',this)">💰 Fila de Preços</button>
+    <button class="tab" onclick="trocarTab('estoque',this)">📦 Estoque</button>
+    <button class="tab" onclick="trocarTab('ausentes',this)">⚠️ SKUs Ausentes</button>
+    <button class="tab" id="tab-btn-sem-vinculo" onclick="trocarTab('sem-vinculo',this)" style="border-bottom-color:var(--danger)">🚨 Sem Vínculo <span id="tab-cnt-sem-vinculo" style="font-size:11px;padding:1px 7px;border-radius:999px;background:rgba(239,68,68,.2);color:var(--danger);margin-left:4px"></span></button>
+  </div>
+
+  <div class="tab-panel active" id="tab-fila">
+    <div class="fila-resumo" id="fila-resumo"><span class="fila-stat total">Carregando...</span></div>
+    <div class="filtro-bar">
+      <label>Margem:</label>
+      <button class="fbtn active" id="fm-todos" onclick="setFiltroMargem('todos',this)">Todos</button>
+      <button class="fbtn" id="fm-verde" onclick="setFiltroMargem('verde',this)">🟢 ≥10%</button>
+      <button class="fbtn" id="fm-amarelo" onclick="setFiltroMargem('amarelo',this)">🟡 0–10%</button>
+      <button class="fbtn" id="fm-vermelho" onclick="setFiltroMargem('vermelho',this)">🔴 Prejuízo</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>SKU</th><th>Nome</th><th>Preço Bling</th><th>Preço Shopify</th><th>Margem</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="fila-tbody"><tr><td colspan="7" class="empty">Carregando...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="paginacao" id="fila-pag"></div>
+  </div>
+
+  <div class="tab-panel" id="tab-estoque">
+    <!-- Sub-tabs nav -->
+    <div class="sub-tabs">
+      <button class="sub-tab active" data-target="sub-com-integ" onclick="setSubTab('sub-com-integ',this)">✅ Com integração <span class="sub-cnt" id="scnt-com-integ"></span></button>
+      <button class="sub-tab" data-target="sub-sem-integ" onclick="setSubTab('sub-sem-integ',this)">⚠️ Sem integração <span class="sub-cnt" id="scnt-sem-integ"></span></button>
+    </div>
+
+    <!-- Sub-painel A: COM INTEGRAÇÃO -->
+    <div class="sub-tab-panel active" id="sub-com-integ">
+      <p style="font-size:12px;color:var(--muted);margin:0 0 14px">Estoque controlado pelo Bling · atualização automática</p>
+      <div class="filtro-bar">
+        <label>Status Shopify:</label>
+        <button class="fbtn active" id="fe-todos" onclick="setFiltroEstoque('todos',this)">Todos</button>
+        <button class="fbtn" id="fe-active" onclick="setFiltroEstoque('active',this)">🟢 Ativo</button>
+        <button class="fbtn" id="fe-archived" onclick="setFiltroEstoque('archived',this)">🟡 Arquivado</button>
+        <button class="fbtn" id="fe-draft" onclick="setFiltroEstoque('draft',this)">📝 Rascunho</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>SKU</th><th>Nome</th><th>Estoque Bling</th><th>Estoque Shopify</th><th>Diferença</th><th>Status</th><th>Variant ID</th></tr></thead>
+          <tbody id="estoque-tbody"><tr><td colspan="7" class="empty">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="paginacao" id="estoque-pag"></div>
+    </div>
+
+    <!-- Sub-painel B: SEM INTEGRAÇÃO -->
+    <div class="sub-tab-panel" id="sub-sem-integ">
+      <p style="font-size:12px;color:var(--muted);margin:0 0 14px">SKUs do Shopify que não existem no Bling · estoque não controlado</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>SKU (canal)</th><th>Variant ID</th><th>Estoque Shopify</th><th>Status</th></tr></thead>
+          <tbody id="sem-integ-tbody"><tr><td colspan="4" class="empty">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="paginacao" id="sem-integ-pag"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Sem Vínculo -->
+  <div class="tab-panel" id="tab-sem-vinculo">
+    <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:14px 18px;margin-bottom:20px">
+      <div style="font-size:14px;font-weight:800;color:var(--danger);margin-bottom:4px">⚠️ Anúncios ATIVOS sem vínculo com o Bling</div>
+      <div style="font-size:12px;color:var(--muted)">Estes produtos estão <b style="color:#fff">ativos e vendendo</b> no Shopify, mas o Bling não os reconhece — sem sync de estoque. Risco de sobrevenda.</div>
+    </div>
+    <div id="sem-vinculo-resumo" style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap"></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>SKU Canal</th><th>Variant ID</th><th>Estoque</th><th>Status</th><th>Motivo</th></tr></thead>
+        <tbody id="sem-vinculo-tbody"><tr><td colspan="5" class="empty">Carregando...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="paginacao" id="sem-vinculo-pag"></div>
+  </div>
+
+  <div class="tab-panel" id="tab-ausentes">
+    <div style="padding:10px 0 16px;font-size:12px;color:var(--muted)">
+      💡 Produtos Shopify sem mapeamento Bling estão na aba <b>Estoque</b>.
+    </div>
+    <div class="ausente-section" id="secao-sem-canal">
+      <h3>⚠️ Produtos no Bling sem anúncio no Shopify <span class="count-badge" id="cnt-sem-canal">—</span></h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>SKU</th><th>Nome</th><th>Estoque Bling</th><th>Preço</th><th>Situação</th></tr></thead>
+          <tbody id="sem-canal-tbody"><tr><td colspan="5" class="empty">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="paginacao" id="sem-canal-pag"></div>
+    </div>
+  </div>
+</div>
+<script>
+const CANAL_KEY_FILA = ['shopify'];
+const CANAL_PRESENTE = 'presente_shopify';
+const CANAL_STATUS   = 'status_shopify';
+const CANAL_ID       = 'shopify_variant_id';
+const CANAL_NOME     = 'Shopify';
+const CANAL_STAT_KEY = 'shopify';
+const CANAL_SEM_KEY  = 'bling_sem_shopify';
+const PAGE_SIZE = 100;
+
+let _conf=null, _fila=[], _polling=false;
+let _soAtivos = false;
+let _filtroMargem='todos', _filtroEstoque='todos';
+let _pgFila=1, _pgEstoque=1, _pgSemInteg=1, _pgSem=1, _pgSemVinculo=1;
+
+const fmt   = n=>(n==null)?'—':Number(n).toLocaleString('pt-BR');
+const fmtR$ = n=>(n==null)?'—':'R$ '+Number(n).toFixed(2).replace('.',',');
+
+function margemBadge(m){
+  if(m==null||isNaN(m)) return `<span class="margem-badge" style="color:var(--muted)">—</span>`;
+  const v=parseFloat(m);
+  if(v<0) return `<span class="margem-badge margem-vermelho">🔴 ${v.toFixed(1)}%</span>`;
+  if(v<10) return `<span class="margem-badge margem-amarelo">🟡 ${v.toFixed(1)}%</span>`;
+  return `<span class="margem-badge margem-verde">🟢 ${v.toFixed(1)}%</span>`;
+}
+function margemClasse(m){const v=parseFloat(m);if(isNaN(v))return'neutro';if(v<0)return'vermelho';if(v<10)return'amarelo';return'verde';}
+function statusChip(st){
+  const MAP={active:'🟢 Ativo',archived:'🟡 Arquivado',draft:'📝 Rascunho'};
+  return `<span class="status-chip status-${st||'draft'}">${MAP[st]||st||'—'}</span>`;
+}
+function trocarTab(nome,el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active'); document.getElementById('tab-'+nome).classList.add('active');
+}
+function setSubTab(id,el){
+  document.querySelectorAll('.sub-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.sub-tab-panel').forEach(p=>p.classList.remove('active'));
+  const btn=el||document.querySelector(`.sub-tab[data-target="${id}"]`);
+  if(btn)btn.classList.add('active');
+  const panel=document.getElementById(id);if(panel)panel.classList.add('active');
+}
+function irParaAba(tab, scrollId, subTab){
+  const btn=[...document.querySelectorAll('.tab')].find(t=>(t.getAttribute('onclick')||'').includes("'"+tab+"'"));
+  trocarTab(tab, btn||document.querySelector('.tab'));
+  if(subTab) setTimeout(()=>setSubTab(subTab),30);
+  if(scrollId) setTimeout(()=>{const el=document.getElementById(scrollId);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},80);
+}
+function pagControls(id,total,pag,onNav){
+  const el=document.getElementById(id); if(!el)return;
+  const tp=Math.max(1,Math.ceil(total/PAGE_SIZE));
+  if(tp<=1){el.innerHTML='';return;}
+  el.innerHTML=`<span>${total.toLocaleString('pt-BR')} itens</span>
+    <button class="btn secondary sm" onclick="${onNav}(${pag-1})" ${pag<=1?'disabled':''}>‹</button>
+    <span>${pag}/${tp}</span>
+    <button class="btn secondary sm" onclick="${onNav}(${pag+1})" ${pag>=tp?'disabled':''}>›</button>`;
+}
+function pagSlice(arr,pag){return arr.slice((pag-1)*PAGE_SIZE,pag*PAGE_SIZE);}
+
+function filtrarFila(){
+  return _fila.filter(item=>{
+    if(_filtroMargem==='todos')return true;
+    let m=null;
+    for(const k of CANAL_KEY_FILA){if(item.marketplaces?.[k]){m=item.marketplaces[k].margem;break;}}
+    return margemClasse(m)===_filtroMargem;
+  });
+}
+function renderFila(){
+  const filtrado=filtrarFila(), slice=pagSlice(filtrado,_pgFila);
+  const tbody=document.getElementById('fila-tbody');
+  if(!slice.length){tbody.innerHTML=`<tr><td colspan="7" class="empty">${_fila.length?'Nenhum no filtro.':'Sem itens para Shopify.'}</td></tr>`;document.getElementById('fila-pag').innerHTML='';return;}
+  tbody.innerHTML=slice.map(item=>{
+    let preco_canal=null,margem=null,preco_bling=null;
+    for(const k of CANAL_KEY_FILA){if(item.marketplaces?.[k]){const mp=item.marketplaces[k];preco_canal=mp.preco;margem=mp.margem;break;}}
+    if(item.produto_bling)preco_bling=item.produto_bling.preco||item.produto_bling.preco_venda;
+    const status=item.status||'pendente';
+    const statusCor=status==='pendente'?'var(--warn)':status==='aprovado'?'var(--ok)':'var(--danger)';
+    return `<tr>
+      <td class="sku-code">${item.sku||'—'}</td>
+      <td class="nome-cell" title="${(item.nome||'').replace(/"/g,'&quot;')}">${item.nome||'—'}</td>
+      <td>${fmtR$(preco_bling)}</td><td>${fmtR$(preco_canal)}</td>
+      <td>${margemBadge(margem)}</td>
+      <td><span style="font-size:12px;font-weight:700;color:${statusCor}">${status}</span></td>
+      <td style="white-space:nowrap">${status==='pendente'?`<button class="btn sm ok-btn" onclick="aprovar('${item.id}')">✓</button> <button class="btn sm danger-btn" onclick="rejeitar('${item.id}')">✗</button>`:'—'}</td>
+    </tr>`;
+  }).join('');
+  pagControls('fila-pag',filtrado.length,_pgFila,'navFila');
+}
+function navFila(p){_pgFila=p;renderFila();window.scrollTo(0,0);}
+function setFiltroMargem(f,el){_filtroMargem=f;_pgFila=1;document.querySelectorAll('[id^="fm-"]').forEach(b=>b.classList.remove('active'));el.classList.add('active');renderFila();}
+
+async function aprovar(id){if(!confirm('Aprovar?'))return;try{await fetch(`/fila/aprovar/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});carregarFila();}catch(e){alert('Erro: '+e);}}
+async function rejeitar(id){const motivo=prompt('Motivo (opcional):')||'';try{await fetch(`/fila/rejeitar/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({motivo})});carregarFila();}catch(e){alert('Erro: '+e);}}
+
+async function carregarFila(){
+  try{
+    const r=await fetch('/fila/lista').then(r=>r.json());
+    _fila=(r.itens||[]).filter(item=>CANAL_KEY_FILA.some(k=>k in (item.marketplaces||{})));
+    let verde=0,amarelo=0,vermelho=0;
+    _fila.forEach(item=>{let m=null;for(const k of CANAL_KEY_FILA){if(item.marketplaces?.[k]){m=item.marketplaces[k].margem;break;}}const cl=margemClasse(m);if(cl==='verde')verde++;else if(cl==='amarelo')amarelo++;else if(cl==='vermelho')vermelho++;});
+    document.getElementById('fila-resumo').innerHTML=`<span class="fila-stat total">📋 ${_fila.length} itens</span><span class="fila-stat verde">🟢 ${verde}</span><span class="fila-stat amarelo">🟡 ${amarelo}</span><span class="fila-stat vermelho">🔴 ${vermelho} prejuízo</span>`;
+    _pgFila=1; renderFila();
+  }catch(e){document.getElementById('fila-resumo').innerHTML=`<span class="fila-stat total" style="color:var(--danger)">Erro ao carregar fila</span>`;}
+}
+
+function diffEstoque(blingQty, canalQty){
+  if(canalQty==null) return '<span style="font-size:11px;color:var(--muted)">N/D</span>';
+  const diff=canalQty-blingQty;
+  if(diff===0) return '<span style="color:var(--ok);font-weight:700">✓ Igual</span>';
+  const cor=diff<0?'var(--warn)':'var(--danger)';
+  return `<span style="color:${cor};font-weight:700">${diff>0?'+':''}${diff}</span>`;
+}
+
+function renderEstoque(){
+  if(!_conf)return;
+  // ── Seção A: COM integração ──
+  let mapeados=(_conf.matrix||[]).filter(r=>r[CANAL_PRESENTE]===true && r.presente_bling===true
+    && (!_soAtivos || (r.situacao_bling === 'A' && (r[CANAL_STATUS]||'').toLowerCase() === 'active')));
+  document.getElementById('scnt-com-integ').textContent=mapeados.length.toLocaleString('pt-BR');
+  if(_filtroEstoque!=='todos')mapeados=mapeados.filter(r=>r[CANAL_STATUS]===_filtroEstoque);
+  mapeados.sort((a,b)=>(b.estoque_bling||0)-(a.estoque_bling||0));
+  const slice=pagSlice(mapeados,_pgEstoque);
+  const tbody=document.getElementById('estoque-tbody');
+  if(!slice.length){
+    tbody.innerHTML=`<tr><td colspan="7" class="empty">${mapeados.length?'Nenhum no filtro.':'Nenhum mapeado.'}</td></tr>`;
+    document.getElementById('estoque-pag').innerHTML='';
+  } else {
+    tbody.innerHTML=slice.map(r=>`<tr>
+      <td class="sku-code">${r.sku||'—'}</td>
+      <td class="nome-cell" title="${(r.nome||'').replace(/"/g,'&quot;')}">${r.nome||'—'}</td>
+      <td style="text-align:center;font-weight:700">${fmt(r.estoque_bling)}</td>
+      <td style="text-align:center;font-weight:700">${r.qty_shopify!=null?fmt(r.qty_shopify):'<span style="color:var(--muted)">N/D</span>'}</td>
+      <td style="text-align:center">${diffEstoque(r.estoque_bling||0,r.qty_shopify)}</td>
+      <td>${statusChip(r[CANAL_STATUS])}</td>
+      <td style="font-size:11px;color:var(--muted)">${r[CANAL_ID]||'—'}</td>
+    </tr>`).join('');
+    pagControls('estoque-pag',mapeados.length,_pgEstoque,'navEstoque');
+  }
+  // ── Seção B: SEM integração ──
+  const semInteg=(_conf.shopify_sem_bling||[]).filter(r=>!_soAtivos || r.status === 'active');
+  document.getElementById('scnt-sem-integ').textContent=semInteg.length.toLocaleString('pt-BR');
+  if(document.getElementById('sv-sem-integ')) document.getElementById('sv-sem-integ').textContent=fmt(semInteg.length);
+  const sliceSi=pagSlice(semInteg,_pgSemInteg);
+  document.getElementById('sem-integ-tbody').innerHTML=sliceSi.length
+    ?sliceSi.map(r=>`<tr>
+        <td class="sku-code">${r.sku||'—'}</td>
+        <td style="font-size:11px;color:var(--muted)">${r.variant_id||'—'}</td>
+        <td style="text-align:center;font-weight:700">${r.qty!=null?fmt(r.qty):'<span style="color:var(--muted)">N/D</span>'}</td>
+        <td>${statusChip(r.status)}</td>
+      </tr>`).join('')
+    :`<tr><td colspan="4" class="empty">✅ Todos os produtos Shopify estão mapeados no Bling!</td></tr>`;
+  pagControls('sem-integ-pag',semInteg.length,_pgSemInteg,'navSemInteg');
+}
+function navEstoque(p){_pgEstoque=p;renderEstoque();}
+function navSemInteg(p){_pgSemInteg=p;renderEstoque();}
+function setFiltroEstoque(f,el){_filtroEstoque=f;_pgEstoque=1;document.querySelectorAll('[id^="fe-"]').forEach(b=>b.classList.remove('active'));el.classList.add('active');renderEstoque();}
+
+function renderAusentes(){
+  if(!_conf)return;
+  const matrix=_conf.matrix||[];
+  const semCanal=matrix.filter(r=>r.presente_bling===true && r[CANAL_PRESENTE]===false
+    && (!_soAtivos || r.situacao_bling === 'A'));
+  document.getElementById('cnt-sem-canal').textContent=semCanal.length.toLocaleString('pt-BR');
+  const slice=pagSlice(semCanal,_pgSem);
+  document.getElementById('sem-canal-tbody').innerHTML=slice.length
+    ?slice.map(r=>`<tr>
+        <td class="sku-code">${r.sku||'—'}</td>
+        <td class="nome-cell" title="${(r.nome||'').replace(/"/g,'&quot;')}">${r.nome||'—'}</td>
+        <td style="text-align:center;font-weight:700">${fmt(r.estoque_bling)}</td>
+        <td>${fmtR$(r.preco_bling)}</td>
+        <td><span style="font-size:11px;font-weight:700;color:${r.situacao_bling==='A'?'var(--ok)':'var(--muted)'}">${r.situacao_bling==='A'?'● Ativo':'○ Inativo'}</span></td>
+      </tr>`).join('')
+    :`<tr><td colspan="5" class="empty">✅ Todos os produtos Bling estão no Shopify!</td></tr>`;
+  pagControls('sem-canal-pag',semCanal.length,_pgSem,'navSem');
+}
+function navSem(p){_pgSem=p;renderAusentes();}
+
+// ── Sem Vínculo ──────────────────────────────────────────────────────────────
+function renderSemVinculo(){
+  if(!_conf) return;
+  // Shopify "active" products without Bling mapping
+  const todos = (_conf.shopify_sem_bling || [])
+    .filter(r => r.status === 'active')
+    .map(r => ({
+      sku: r.sku || '—', variant_id: r.variant_id || '—', estoque: r.qty, status: r.status,
+      motivo: '🔍 SKU não encontrado no Bling',
+    }));
+  const totalReal = (_conf.stats || {}).shopify_ativo_sem_vinculo ?? todos.length;
+  const el = document.getElementById('tab-cnt-sem-vinculo');
+  if(el) el.textContent = totalReal || '';
+  const sv = document.getElementById('sv-ativo-sem-vinculo');
+  if(sv) sv.textContent = totalReal;
+  const resumo = document.getElementById('sem-vinculo-resumo');
+  if(resumo) resumo.innerHTML = `
+    <span class="fila-stat vermelho">🚨 ${totalReal} ativos sem vínculo</span>
+    <span class="fila-stat total">🔍 ${todos.length} SKU não encontrado no Bling</span>`;
+  const slice = pagSlice(todos, _pgSemVinculo);
+  const tbody = document.getElementById('sem-vinculo-tbody');
+  tbody.innerHTML = slice.length
+    ? slice.map(r => `<tr>
+        <td class="sku-code" style="color:var(--danger)">${r.sku}</td>
+        <td style="font-size:11px;color:var(--muted)">${r.variant_id}</td>
+        <td style="text-align:center;font-weight:700">${r.estoque!=null?fmt(r.estoque):'<span style="color:var(--muted)">N/D</span>'}</td>
+        <td><span class="status-chip status-active">🟢 Ativo</span></td>
+        <td style="font-size:12px">${r.motivo}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="5" class="empty">✅ Nenhum produto ativo sem vínculo com o Bling!</td></tr>`;
+  pagControls('sem-vinculo-pag', todos.length, _pgSemVinculo, 'navSemVinculo');
+}
+function navSemVinculo(p){_pgSemVinculo=p;renderSemVinculo();}
+
+function toggleSoAtivos(){
+  _soAtivos = !_soAtivos;
+  const btn = document.getElementById('btn-so-ativos');
+  btn.style.background = _soAtivos ? 'rgba(34,197,94,.25)' : '';
+  btn.style.borderColor = _soAtivos ? '#22c55e' : '';
+  btn.style.color = _soAtivos ? '#22c55e' : '';
+  btn.textContent = _soAtivos ? '☀️ Só Ativos ✓' : '☀️ Só Ativos';
+  renderEstoque();
+  renderAusentes();
+  renderSemVinculo();
+}
+
+async function carregarConferencia(){
+  try{
+    const res=await fetch('/conferencia-sku/resultado?canal=shopify&limit=5000').then(r=>r.json());
+    if(!res||!res.stats)return;
+    _conf=res;
+    const s=res.stats, cs=s[CANAL_STAT_KEY]||{};
+    const svShopify = s.shopify_ativo_sem_vinculo ?? cs.sem_bling ?? 0;
+    document.getElementById('stats-row').innerHTML=`
+      <div class="stat"><div class="stat-lbl">Total Bling</div><div class="stat-val">${fmt(s.total_bling)}</div></div>
+      <div class="stat stat-link" onclick="irParaAba('estoque')"><div class="stat-lbl">Mapeados ${CANAL_NOME}</div><div class="stat-val" style="color:var(--ok)">${fmt(cs.presentes_em_bling)}</div></div>
+      <div class="stat stat-link" onclick="irParaAba('ausentes','secao-sem-canal')"><div class="stat-lbl">Bling sem ${CANAL_NOME}</div><div class="stat-val" style="color:var(--warn)">${fmt(s[CANAL_SEM_KEY])}</div></div>
+      <div class="stat stat-link" onclick="irParaAba('estoque');setTimeout(()=>setSubTab('sub-sem-integ'),60)"><div class="stat-lbl">${CANAL_NOME} sem Bling</div><div class="stat-val" style="color:var(--danger)">${fmt(cs.sem_bling)}</div></div>
+      <div class="stat stat-link" style="border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.07)" onclick="trocarTab('sem-vinculo',[...document.querySelectorAll('.tab')].find(t=>(t.getAttribute('onclick')||'').includes(&quot;sem-vinculo&quot;)))"><div class="stat-lbl" style="color:var(--danger)">⚠️ Ativos sem vínculo</div><div class="stat-val" style="color:var(--danger)" id="sv-ativo-sem-vinculo">${fmt(svShopify)}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">vendendo sem sync</div></div>`;
+    if(res.executado_em){const dt=new Date(res.executado_em);document.getElementById('meta-ultima').textContent=`Última: ${dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})} ${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;}
+    renderEstoque(); renderAusentes(); renderSemVinculo();
+  }catch(e){document.getElementById('meta-ultima').textContent='Execute a conferência para ver dados.';}
+}
+
+async function executarConferencia(){
+  const btn=document.getElementById('btn-executar');
+  btn.disabled=true;btn.textContent='⏳ Iniciando...';
+  try{const r=await fetch('/conferencia-sku/executar',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});const d=await r.json();if(d.ok||d.estado?.status==='rodando'){iniciarPolling();}else{alert(d.msg||'Erro');btn.disabled=false;btn.textContent='▶ Executar conferência';}}
+  catch(e){alert('Erro: '+e);btn.disabled=false;btn.textContent='▶ Executar conferência';}
+}
+function iniciarPolling(){
+  if(_polling)return;_polling=true;
+  document.getElementById('progress-wrap').classList.add('visible');
+  document.getElementById('btn-executar').disabled=true;document.getElementById('btn-executar').textContent='⏳ Rodando...';
+  const ETAPAS={bling:'Coletando Bling',ml:'Coletando ML',shopify:'Coletando Shopify',amazon:'Coletando Amazon',shopee:'Coletando Shopee',canais:'Coletando canais (ML + Shopify + Amazon + Shopee)',anuncios_ml:'Mapeando anúncios ML',cruzamento:'Cruzando SKUs',concluido:'Concluído'};
+  const iv=setInterval(async()=>{
+    try{const st=await fetch('/conferencia-sku/status').then(r=>r.json());
+    document.getElementById('progress-etapa').textContent=`${ETAPAS[st.etapa]||st.etapa||''} — ${st.pct||0}%`;
+    document.getElementById('progress-bar').style.width=(st.pct||0)+'%';
+    if(st.status==='concluido'||st.status==='erro'){clearInterval(iv);_polling=false;document.getElementById('progress-wrap').classList.remove('visible');document.getElementById('btn-executar').disabled=false;document.getElementById('btn-executar').textContent='▶ Executar conferência';if(st.status==='concluido'){carregarConferencia();carregarFila();}}}catch(e){clearInterval(iv);_polling=false;}
+  },2500);
+}
+
+carregarConferencia(); carregarFila();
+fetch('/conferencia-sku/status').then(r=>r.json()).then(st=>{if(st.status==='rodando')iniciarPolling();});
+</script>
+
+<!-- Botão Início -->
+<a href="/" id="btn-inicio" title="Voltar para o início" style="position:fixed;bottom:24px;left:24px;z-index:9999;background:#4f8cff;color:#fff;padding:10px 20px;border-radius:14px;font-weight:700;text-decoration:none;font-family:Arial,sans-serif;font-size:14px;box-shadow:0 4px 20px rgba(79,140,255,.45);display:inline-flex;align-items:center;gap:8px;transition:background .2s,transform .15s" onmouseover="this.style.background='#2563eb';this.style.transform='scale(1.05)'" onmouseout="this.style.background='#4f8cff';this.style.transform='scale(1)'">🏠 Início</a>
+</body>
+</html>

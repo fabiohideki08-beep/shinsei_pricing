@@ -1,0 +1,59 @@
+# Arquivos grandes que não precisam ser enviados ao Railway
+# O Railway usa o código do GitHub — estes são dados locais/cache
+
+# Logs e histórico (47MB+)
+data/historico_precificacao.jsonl
+data/pricing_logs.jsonl
+data/webhook_logs.jsonl
+data/run_log.txt
+data/*.log
+*.log
+*.jsonl
+
+# Banco de dados local (Railway tem o próprio)
+*.db
+*.db-shm
+*.db-wal
+shinsei.db
+data/shinsei.db
+
+# Cache grande
+data/gmc_shopify_audit.json
+data/gmc_varredura_completa.json
+data/gmc_diagnostico.json
+data/gmc_recomendacoes.json
+data/gmc_reprovados.json
+data/gmc_issues_live.json
+data/gmc_*.json
+data/all_products_cache.json
+data/bling_order_ids_cache.json
+data/bling_sku_sales_cache.json
+data/ml_price_suggestions.json
+data/shopee_reviews_raw.json
+data/seo_health_cache.json
+data/amazon_marketing_cache.json
+
+# Imagens
+data/*.jpg
+data/*.png
+
+# CSV grandes
+data/avaliacoes_shopify.csv
+data/avaliacoes_com_texto.csv
+
+# Credenciais (não subir ao Railway via CLI)
+data/shopify_config.json
+data/bling_tokens.json
+data/bling_oauth_state.json
+data/ml_tokens.json
+data/ml_oauth_state.json
+data/shopify_state.json
+data/google_service_account.json
+
+# Temporários
+data/temp.xlsx
+data/regras_export.xlsx
+__pycache__/
+.claude/
+.venv/
+venv/

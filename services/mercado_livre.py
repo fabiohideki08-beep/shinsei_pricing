@@ -2,15 +2,105 @@ import os
 import json
 import base64
 import hashlib
+import logging
 import secrets
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 
 import requests
 
+logger = logging.getLogger("shinsei.ml")
+
 ML_API = "https://api.mercadolibre.com"
 ML_AUTH = "https://auth.mercadolivre.com.br/authorization"
+_ML_TOKENS_PATH = Path(__file__).parent.parent / "data" / "ml_tokens.json"
+
+
+# ── Auto-refresh do token ML ──────────────────────────────────────────────────
+
+_SHINSEI_USER_ID = "733168645"
+
+
+def _carregar_tokens_ml() -> dict:
+    # Tenta arquivo local — mas rejeita se user_id for o da AKG (3541432733)
+    try:
+        if _ML_TOKENS_PATH.exists():
+            data = json.loads(_ML_TOKENS_PATH.read_text(encoding="utf-8"))
+            if str(data.get("user_id", "")) == _SHINSEI_USER_ID:
+                return data
+    except Exception:
+        pass
+    # Fallback: env vars (restauradas pelo startup.py após cada deploy)
+    refresh = os.getenv("ML_REFRESH_TOKEN", "")
+    access  = os.getenv("ML_ACCESS_TOKEN", "")
+    if refresh:
+        return {
+            "refresh_token": refresh,
+            "access_token":  access,
+            "client_id":     os.getenv("ML_CLIENT_ID", ""),
+            "user_id":       int(os.getenv("ML_USER_ID", "0") or 0),
+        }
+    return {}
+
+
+def _salvar_tokens_ml(data: dict) -> None:
+    _ML_TOKENS_PATH.parent.mkdir(exist_ok=True)
+    _ML_TOKENS_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    try:
+        from render_persistence import save_ml_tokens_shinsei
+        save_ml_tokens_shinsei(
+            data.get("access_token", ""),
+            data.get("refresh_token", ""),
+            str(data.get("user_id", "")),
+        )
+    except Exception:
+        pass
+
+
+def _renovar_token_ml() -> str:
+    """Renova o access_token ML usando o refresh_token armazenado."""
+    t = _carregar_tokens_ml()
+    refresh_token = t.get("refresh_token")
+    if not refresh_token:
+        raise RuntimeError("ML refresh_token não encontrado — faça login em /ml/login")
+
+    client_id = os.getenv("ML_CLIENT_ID", t.get("client_id", "")).strip()
+    client_secret = os.getenv("ML_CLIENT_SECRET", "").strip()
+    if not client_id or not client_secret:
+        raise RuntimeError("ML_CLIENT_ID / ML_CLIENT_SECRET não configurados")
+
+    resp = requests.post(
+        f"{ML_API}/oauth/token",
+        data={
+            "grant_type": "refresh_token",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": refresh_token,
+        },
+        headers={"accept": "application/json"},
+        timeout=30,
+    )
+    if resp.status_code != 200:
+        raise RuntimeError(f"ML token refresh HTTP {resp.status_code}: {resp.text[:200]}")
+
+    data = resp.json()
+    data["expires_at"] = time.time() + int(data.get("expires_in", 21600))
+    data["renovado_em"] = datetime.now(timezone.utc).isoformat()
+    _salvar_tokens_ml(data)
+    logger.info("ML access_token renovado (expira em %ds)", data.get("expires_in", 21600))
+    return data["access_token"]
+
+
+def obter_token_ml() -> str:
+    """Retorna access_token ML válido, renovando automaticamente se necessário."""
+    t = _carregar_tokens_ml()
+    expires_at = float(t.get("expires_at", 0))
+    # Margem de 5 min para evitar uso na borda de expiração
+    if t.get("access_token") and time.time() < expires_at - 300:
+        return t["access_token"]
+    return _renovar_token_ml()
 
 
 class MercadoLivreService:
@@ -230,7 +320,18 @@ class MercadoLivreOAuthService:
             return {"success": False, "error": response.text}
 
         data = response.json()
+        data["expires_at"] = time.time() + int(data.get("expires_in", 21600))
+        data["renovado_em"] = self._now_iso()
         self._write_json(self.tokens_file, data)
+        # Persiste no Render para sobreviver ao próximo deploy
+        try:
+            is_akg = "akg" in str(self.tokens_file)
+            from render_persistence import save_ml_tokens_akg, save_ml_tokens_shinsei
+            fn = save_ml_tokens_akg if is_akg else save_ml_tokens_shinsei
+            fn(data.get("access_token", ""), data.get("refresh_token", ""),
+               str(data.get("user_id", "")))
+        except Exception:
+            pass
         return {"success": True, "data": data}
 
     def ler_tokens(self):

@@ -1,0 +1,18 @@
+# Garante LF para scripts shell (evita CRLF que quebra o container Linux)
+*.sh text eol=lf
+*.sh linguist-language=Shell
+
+# Python e HTML: LF
+*.py text eol=lf
+*.html text eol=lf
+*.toml text eol=lf
+*.json text eol=lf
+
+# Binários
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary

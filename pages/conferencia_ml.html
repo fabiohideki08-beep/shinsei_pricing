@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Bling ↔ Mercado Livre — Shinsei Pricing</title>
+<style>
+:root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--ok:#22c55e;--danger:#ef4444;--warn:#f59e0b;--canal-cor:#eab308}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text);min-height:100vh}
+.wrap{max-width:1280px;margin:0 auto;padding:22px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:24px;background:rgba(18,26,49,.97);border:1px solid var(--line);border-radius:18px;padding:14px 20px;position:sticky;top:16px;z-index:10;border-left:4px solid var(--canal-cor)}
+.brand h1{margin:0;font-size:19px;font-weight:800;display:flex;align-items:center;gap:10px}
+.brand span{font-size:11px;color:var(--muted)}
+.topbar-right{display:flex;gap:9px;align-items:center}
+.btn{border:none;background:var(--accent);color:#fff;padding:9px 16px;border-radius:11px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:7px;font-size:13px;transition:background .15s}
+.btn:hover{background:#3a78f2}
+.btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
+.btn.secondary:hover{background:var(--card2)}
+.btn.sm{padding:6px 12px;font-size:12px;border-radius:8px}
+.btn.ok-btn{background:rgba(34,197,94,.2);color:var(--ok);border:1px solid rgba(34,197,94,.3)}
+.btn.ok-btn:hover{background:rgba(34,197,94,.35)}
+.btn.danger-btn{background:rgba(239,68,68,.2);color:var(--danger);border:1px solid rgba(239,68,68,.3)}
+.btn.danger-btn:hover{background:rgba(239,68,68,.35)}
+/* progress */
+.progress-wrap{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 20px;margin-bottom:20px;display:none}
+.progress-wrap.visible{display:block}
+.progress-label{font-size:13px;font-weight:700;margin-bottom:8px;color:var(--muted)}
+.progress-bar-bg{background:var(--card2);border-radius:999px;height:8px;overflow:hidden}
+.progress-bar-fill{height:100%;border-radius:999px;background:var(--accent);transition:width .4s}
+/* stats */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.stat-link{cursor:pointer;transition:background .15s,border-color .15s}.stat-link:hover{background:var(--card2);border-color:var(--accent)}
+.stat-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700}
+.stat-val{font-size:26px;font-weight:900;margin-top:4px}
+/* tabs */
+.tabs{display:flex;gap:6px;margin-bottom:20px;border-bottom:1px solid var(--line);padding-bottom:0}
+.tab{padding:10px 18px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s,border-color .15s;background:none;border-top:none;border-left:none;border-right:none}
+.tab.active{color:var(--text);border-bottom-color:var(--canal-cor)}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+/* sub-tabs (dentro da aba Estoque) */
+.sub-tabs{display:flex;gap:4px;margin-bottom:20px;padding:4px;background:var(--card2);border-radius:12px;border:1px solid var(--line);flex-wrap:wrap}
+.sub-tab{padding:7px 16px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border-radius:9px;border:none;background:none;transition:all .15s;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.sub-tab.active{background:var(--card);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.sub-tab-panel{display:none}
+.sub-tab-panel.active{display:block}
+.sub-cnt{font-size:11px;padding:1px 7px;border-radius:999px;background:rgba(255,255,255,.08);font-weight:700}
+/* table */
+.table-wrap{overflow-x:auto;border-radius:14px;border:1px solid var(--line)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--card2);padding:10px 12px;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);white-space:nowrap;border-bottom:1px solid var(--line)}
+td{padding:10px 12px;border-bottom:1px solid rgba(38,52,88,.5);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.025)}
+.sku-code{font-family:monospace;font-size:12px;color:var(--accent)}
+.nome-cell{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* margem badges */
+.margem-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:700}
+.margem-verde{background:rgba(34,197,94,.15);color:var(--ok);border:1px solid rgba(34,197,94,.3)}
+.margem-amarelo{background:rgba(245,158,11,.15);color:var(--warn);border:1px solid rgba(245,158,11,.3)}
+.margem-vermelho{background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3)}
+/* status ml */
+.status-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid var(--line);background:var(--card2)}
+.status-active{border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.1);color:var(--ok)}
+.status-paused{border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.1);color:var(--warn)}
+.status-closed,.status-inactive{border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.1);color:var(--danger)}
+/* fila resumo */
+.fila-resumo{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.fila-stat{padding:8px 14px;border-radius:10px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:6px}
+.fila-stat.total{background:var(--card2);border:1px solid var(--line);color:var(--muted)}
+.fila-stat.verde{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.25);color:var(--ok)}
+.fila-stat.amarelo{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);color:var(--warn)}
+.fila-stat.vermelho{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:var(--danger)}
+/* filtro status */
+.filtro-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.filtro-bar label{font-size:12px;color:var(--muted);font-weight:700}
+.fbtn{padding:5px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--line);background:var(--card2);color:var(--muted);transition:all .15s}
+.fbtn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* ausentes seções */
+.ausente-section{margin-bottom:28px}
+.ausente-section h3{font-size:14px;font-weight:800;margin:0 0 12px 0;padding-bottom:10px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.count-badge{background:var(--card2);border:1px solid var(--line);color:var(--muted);padding:2px 10px;border-radius:999px;font-size:12px;font-weight:700}
+.empty{padding:32px;text-align:center;color:var(--muted);font-size:14px}
+.skel{display:inline-block;width:60px;height:16px;background:rgba(255,255,255,.08);border-radius:4px;animation:pulse 1.4s ease-in-out infinite}
+.skel-row{height:40px;margin:4px 0;border-radius:8px;background:rgba(255,255,255,.05);animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+.paginacao{display:flex;align-items:center;gap:10px;margin-top:14px;justify-content:flex-end;font-size:13px;color:var(--muted)}
+/* Sem Vínculo — sugestões inline */
+.conf-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}
+.conf-alta{background:rgba(34,197,94,.15);color:var(--ok);border:1px solid rgba(34,197,94,.3)}
+.conf-media{background:rgba(245,158,11,.15);color:var(--warn);border:1px solid rgba(245,158,11,.3)}
+.conf-baixa{background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3)}
+.sku-sug-input{background:var(--card2);border:1px solid var(--line);border-radius:6px;color:var(--text);font-family:monospace;font-size:11px;padding:3px 7px;width:140px;outline:none;transition:border-color .15s}
+.sku-sug-input:focus{border-color:var(--accent)}
+.sku-sug-input.editado{border-color:var(--warn);color:var(--warn)}
+.sv-aplicado td{opacity:.45}
+.sv-erro td{background:rgba(239,68,68,.06)}
+@media(max-width:900px){.stats-row{grid-template-columns:repeat(2,1fr)}.topbar{flex-wrap:wrap}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="brand">
+      <h1>🟡 Bling ↔ Mercado Livre</h1>
+      <span id="meta-ultima">Carregando...</span>
+    </div>
+    <div class="topbar-right">
+      <a class="btn secondary" href="/dashboard">← Dashboard</a>
+      <button class="btn secondary" onclick="abrirDebug()" title="Diagnosticar anúncio ML pelo código MLB">🔍 Debug MLB</button>
+      <button class="btn secondary" id="btn-so-ativos" onclick="toggleSoAtivos()" title="Mostra apenas Bling ativos com listings ativos nos canais">☀️ Só Ativos</button>
+      <a class="btn secondary" href="/conferencia/ml/vincular" style="border-color:rgba(234,179,8,.4);color:var(--canal-cor)" title="Gerar sugestões de vínculo em massa por GTIN e título">🔗 Vincular SKUs</a>
+      <button class="btn" id="btn-executar" onclick="executarConferencia()">▶ Executar conferência</button>
+    </div>
+  </div>
+
+  <!-- Progresso -->
+  <div class="progress-wrap" id="progress-wrap">
+    <div class="progress-label" id="progress-etapa">Inicializando...</div>
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-bar" style="width:0%"></div></div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row" id="stats-row">
+    <div class="stat"><div class="stat-lbl">Total Bling</div><div class="stat-val skel"></div></div>
+    <div class="stat stat-link" onclick="irParaAba('estoque')"><div class="stat-lbl">Mapeados ML</div><div class="stat-val skel"></div></div>
+    <div class="stat stat-link" onclick="irParaAba('ausentes','secao-sem-canal')"><div class="stat-lbl">Bling sem ML</div><div class="stat-val" style="color:var(--warn)" id="sv-sem">—</div></div>
+    <div class="stat stat-link" onclick="irParaAba('estoque');setTimeout(()=>setSubTab('sub-sem-sku'),60)"><div class="stat-lbl">ML sem Bling</div><div class="stat-val" style="color:var(--danger)" id="sv-sembling">—</div></div>
+    <div class="stat stat-link" style="border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.07)" onclick="irParaAba('sem-vinculo',this)"><div class="stat-lbl" style="color:var(--danger)">⚠️ Ativos sem vínculo</div><div class="stat-val" style="color:var(--danger)" id="sv-ativo-sem-vinculo">—</div><div style="font-size:10px;color:var(--muted);margin-top:2px">vendendo sem sync</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="trocarTab('fila',this)">💰 Fila de Preços</button>
+    <button class="tab" onclick="trocarTab('estoque',this)">📦 Estoque</button>
+    <button class="tab" onclick="trocarTab('ausentes',this)">⚠️ SKUs Ausentes</button>
+    <button class="tab" id="tab-btn-sem-vinculo" onclick="trocarTab('sem-vinculo',this)" style="border-bottom-color:var(--danger)">🚨 Sem Vínculo <span id="tab-cnt-sem-vinculo" style="font-size:11px;padding:1px 7px;border-radius:999px;background:rgba(239,68,68,.2);color:var(--danger);margin-left:4px"></span></button>
+  </div>
+
+  <!-- Tab: Fila de Preços -->
+  <div class="tab-panel active" id="tab-fila">
+    <div class="fila-resumo" id="fila-resumo">
+      <span class="fila-stat total">Carregando fila...</span>
+    </div>
+    <div class="filtro-bar">
+      <label>Margem:</label>
+      <button class="fbtn active" id="fm-todos" onclick="setFiltroMargem('todos',this)">Todos</button>
+      <button class="fbtn" id="fm-verde" onclick="setFiltroMargem('verde',this)">🟢 ≥10%</button>
+      <button class="fbtn" id="fm-amarelo" onclick="setFiltroMargem('amarelo',this)">🟡 0–10%</button>
+      <button class="fbtn" id="fm-vermelho" onclick="setFiltroMargem('vermelho',this)">🔴 Prejuízo</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>SKU</th><th>Nome</th>
+          <th>Preço Bling</th><th>Preço ML</th><th>Margem</th>
+          <th>Status</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="fila-tbody"><tr><td colspan="7" class="empty">Carregando...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="paginacao" id="fila-pag"></div>
+  </div>
+
+  <!-- Tab: Estoque -->
+  <div class="tab-panel" id="tab-estoque">
+
+    <!-- Sub-tabs nav -->
+    <div class="sub-tabs">
+      <button class="sub-tab active" data-target="sub-com-integ" onclick="setSubTab('sub-com-integ',this)">✅ Com integração <span class="sub-cnt" id="scnt-com-integ"></span></button>
+      <button class="sub-tab" data-target="sub-sem-sku" onclick="setSubTab('sub-sem-sku',this)">⚠️ SKU não encontrado <span class="sub-cnt" id="scnt-sem-sku"></span></button>
+      <button class="sub-tab" data-target="sub-ean-div" onclick="setSubTab('sub-ean-div',this)">🏷️ EAN/GTIN divergente <span class="sub-cnt" id="scnt-ean-div"></span></button>
+      <button class="sub-tab" data-target="sub-sem-nossku" onclick="setSubTab('sub-sem-nossku',this)">❌ Sem SKU/EAN <span class="sub-cnt" id="scnt-sem-nossku"></span></button>
+    </div>
+
+    <!-- Sub-painel A: COM INTEGRAÇÃO -->
+    <div class="sub-tab-panel active" id="sub-com-integ">
+      <p style="font-size:12px;color:var(--muted);margin:0 0 14px">Estoque controlado pelo Bling · atualização automática</p>
+      <div class="filtro-bar">
+        <label>Status ML:</label>
+        <button class="fbtn active" id="fe-todos" onclick="setFiltroEstoque('todos',this)">Todos</button>
+        <button class="fbtn" id="fe-active" onclick="setFiltroEstoque('active',this)">🟢 Ativo</button>
+        <button class="fbtn" id="fe-paused" onclick="setFiltroEstoque('paused',this)">🟡 Pausado</button>
+        <button class="fbtn" id="fe-closed" onclick="setFiltroEstoque('closed',this)">🔴 Fechado</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>SKU</th><th>Nome</th><th>Estoque Bling</th><th>Estoque ML</th><th>Diferença</th><th>Status</th><th>ID ML</th><th>Vínculo</th>
+          </tr></thead>
+          <tbody id="estoque-tbody"><tr><td colspan="8" class="empty">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="paginacao" id="estoque-pag"></div>
+    </div>
+
+    <!-- Sub-painel B: SKU não encontrado no Bling -->
+    <div class="sub-tab-panel" id="sub-sem-sku">
+      <p style="font-size:12px;color:var(--muted);margin:0 0 14px">Anúncios/variações com SKU alfanumérico que <b>não existe no Bling</b> · estoque não controlado</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>SKU (canal)</th><th>ID ML</th><th>Título</th><th>Estoque ML</th><th>Status</th></tr></thead>
+          <tbody id="sem-integ-sku-tbody"><tr><td colspan="5" class="empty">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="paginacao" id="sem-integ-sku-pag"></div>
+    </div>
+
+    <!-- Sub-painel B2: EAN/GTIN divergente -->
+    <div class="sub-tab-panel" id="sub-ean-div">
+      <p style="font-size:12px;color:var(--muted);margin:0 0 14px">Anúncios usando <b>EAN/GTIN como SKU</b> no ML que não batem com nenhum produto no Bling · cadastre o EAN no Bling para resolver</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>EAN/GTIN (canal)</th><th>ID ML</th><th>Título</th><th>Estoque ML</th><th>Status</th></tr></thead>
+          <tbody id="sem-integ-ean-tbody"><tr><td colspan="5" class="empty">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="paginacao" id="sem-integ-ean-pag"></div>
+    </div>
+
+    <!-- Sub-painel C: Sem SKU/EAN -->
+    <div class="sub-tab-panel" id="sub-sem-nossku">
+      <p style="font-size:12px;color:var(--muted);margin:0 0 14px">Anúncios e variações <b>sem nenhum SKU nem EAN</b> · impossível mapear no Bling automaticamente</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ID ML</th><th>Título</th><th>Estoque ML</th></tr></thead>
+          <tbody id="sem-integ-nossku-tbody"><tr><td colspan="3" class="empty">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="paginacao" id="sem-integ-nossku-pag"></div>
+    </div>
+
+  </div>
+
+  <!-- Tab: Sem Vínculo (ativos sem sync de estoque) -->
+  <div class="tab-panel" id="tab-sem-vinculo">
+    <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:14px 18px;margin-bottom:16px">
+      <div style="font-size:14px;font-weight:800;color:var(--danger);margin-bottom:4px">⚠️ Anúncios ATIVOS sem vínculo com o Bling</div>
+      <div style="font-size:12px;color:var(--muted)">Ativos e vendendo, mas o Bling não os reconhece — sem sync de estoque. Risco de sobrevenda.</div>
+    </div>
+    <div id="sem-vinculo-resumo" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap"></div>
+    <!-- Barra de sugestões/vínculo -->
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px">
+      <div style="display:flex;flex-direction:column;gap:3px;flex:1">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">🔗 Sugestões automáticas de vínculo</div>
+        <div id="sv-sug-status" style="font-size:11px;color:var(--muted)">Match por GTIN e similaridade de título — clique para carregar</div>
+      </div>
+      <button class="btn secondary" id="btn-sv-sug" onclick="carregarSugestoesSV()" style="border-color:rgba(234,179,8,.5);color:var(--canal-cor);white-space:nowrap">
+        🔗 Carregar sugestões
+      </button>
+      <div id="sv-vincular-bar" style="display:none;gap:8px;align-items:center">
+        <button class="btn secondary" onclick="selecionarAltaSV()" style="font-size:12px">✓ Alta confiança</button>
+        <button class="btn ok-btn btn" id="btn-sv-vincular" onclick="vincularSelecionadosSV()" disabled>
+          ▶ Vincular (<span id="cnt-sv-sel">0</span>)
+        </button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead id="sem-vinculo-thead">
+          <tr><th>ID Canal</th><th>SKU/Código</th><th>Título</th><th>Estoque</th><th>Motivo</th></tr>
+        </thead>
+        <tbody id="sem-vinculo-tbody"><tr><td colspan="5" class="empty">Carregando...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="paginacao" id="sem-vinculo-pag"></div>
+  </div>
+
+  <!-- Tab: SKUs Ausentes -->
+  <div class="tab-panel" id="tab-ausentes">
+    <div style="padding:10px 0 16px;font-size:12px;color:var(--muted)">
+      💡 Anúncios sem integração (sem SKU / SKU não mapeado) estão na aba <b>Estoque</b>.
+    </div>
+    <div class="ausente-section" id="secao-sem-canal">
+      <h3>⚠️ Produtos no Bling sem anúncio no Mercado Livre <span class="count-badge" id="cnt-sem-ml">—</span></h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>SKU</th><th>Nome</th><th>Estoque Bling</th><th>Preço</th><th>Situação</th></tr></thead>
+          <tbody id="sem-ml-tbody"><tr><td colspan="5" class="empty">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="paginacao" id="sem-ml-pag"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Debug MLB -->
+<div id="debug-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center" onclick="if(event.target===this)fecharDebug()">
+  <div style="background:var(--card);border:1px solid var(--line);border-radius:20px;padding:28px;max-width:700px;width:95%;max-height:85vh;overflow-y:auto;position:relative">
+    <button onclick="fecharDebug()" style="position:absolute;top:14px;right:14px;background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1">✕</button>
+    <h2 style="margin:0 0 6px;font-size:17px;font-weight:800">🔍 Diagnóstico de Anúncio ML</h2>
+    <p style="margin:0 0 18px;font-size:12px;color:var(--muted)">Consulte os dados reais de qualquer anúncio no Mercado Livre pelo código MLB</p>
+    <div style="display:flex;gap:10px;margin-bottom:20px">
+      <input id="debug-mlb-input" type="text" placeholder="Ex: MLB3798077573" style="flex:1;background:var(--card2);border:1px solid var(--line);color:var(--text);padding:10px 14px;border-radius:10px;font-size:14px;outline:none"
+        onkeydown="if(event.key==='Enter')buscarDebug()"/>
+      <button class="btn" onclick="buscarDebug()">Buscar</button>
+    </div>
+    <div id="debug-resultado"></div>
+  </div>
+</div>
+
+<script>
+// ── Constantes do canal ──────────────────────────────────────────────────────
+const CANAL_KEY_FILA = ['mercado_livre_classico','mercado_livre_premium'];
+const CANAL_PRESENTE = 'presente_ml';
+const CANAL_STATUS   = 'status_ml';
+const CANAL_ID       = 'ml_id';
+
+const PAGE_SIZE = 100;
+
+// ── Estado ───────────────────────────────────────────────────────────────────
+let _conf   = null;   // resultado da conferência
+let _fila   = [];     // itens da fila do canal
+let _polling = false;
+let _soAtivos = false;
+
+let _filtroMargem  = 'todos';
+let _filtroEstoque = 'todos';
+let _pgFila   = 1;
+let _pgEstoque = 1, _pgSemIntegSku = 1, _pgSemIntegEan = 1, _pgSemIntegNoSku = 1;
+let _pgSemMl  = 1, _pgMlSemBling = 1, _pgSemVinculo = 1;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const fmt   = n => (n==null)?'—':Number(n).toLocaleString('pt-BR');
+const fmtR$ = n => (n==null)?'—':'R$ '+Number(n).toFixed(2).replace('.',',');
+
+function margemBadge(m){
+  if(m==null||m===''||isNaN(m)) return `<span class="margem-badge" style="color:var(--muted)">—</span>`;
+  const v = parseFloat(m);
+  if(v < 0)  return `<span class="margem-badge margem-vermelho">🔴 ${v.toFixed(1)}%</span>`;
+  if(v < 10) return `<span class="margem-badge margem-amarelo">🟡 ${v.toFixed(1)}%</span>`;
+  return `<span class="margem-badge margem-verde">🟢 ${v.toFixed(1)}%</span>`;
+}
+
+function margemClasse(m){
+  const v = parseFloat(m);
+  if(isNaN(v)) return 'neutro';
+  if(v < 0) return 'vermelho';
+  if(v < 10) return 'amarelo';
+  return 'verde';
+}
+
+function statusChip(st){
+  const MAP = {active:'🟢 Ativo',paused:'🟡 Pausado',closed:'🔴 Fechado',inactive:'🔴 Inativo'};
+  const cls = 'status-'+(st||'inactive');
+  return `<span class="status-chip ${cls}">${MAP[st]||st||'—'}</span>`;
+}
+
+function trocarTab(nome, el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  const panel = document.getElementById('tab-'+nome);
+  if(panel) panel.classList.add('active');
+}
+function setSubTab(id, el){
+  document.querySelectorAll('.sub-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.sub-tab-panel').forEach(p=>p.classList.remove('active'));
+  const btn = el || document.querySelector(`.sub-tab[data-target="${id}"]`);
+  if(btn) btn.classList.add('active');
+  const panel = document.getElementById(id);
+  if(panel) panel.classList.add('active');
+}
+function irParaAba(tab, scrollId, subTab){
+  const btn=[...document.querySelectorAll('.tab')].find(t=>(t.getAttribute('onclick')||'').includes("'"+tab+"'"));
+  trocarTab(tab, btn||document.querySelector('.tab'));
+  if(subTab) setTimeout(()=>setSubTab(subTab),30);
+  if(scrollId) setTimeout(()=>{const el=document.getElementById(scrollId);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},80);
+}
+
+// ── Paginação ────────────────────────────────────────────────────────────────
+function pagControls(containerId, total, pagina, onNav){
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  const totalPags = Math.max(1, Math.ceil(total/PAGE_SIZE));
+  if(totalPags <= 1){ el.innerHTML=''; return; }
+  el.innerHTML = `
+    <span>${total.toLocaleString('pt-BR')} itens</span>
+    <button class="btn secondary sm" onclick="${onNav}(${pagina-1})" ${pagina<=1?'disabled':''}>‹ Anterior</button>
+    <span>${pagina} / ${totalPags}</span>
+    <button class="btn secondary sm" onclick="${onNav}(${pagina+1})" ${pagina>=totalPags?'disabled':''}>Próximo ›</button>`;
+}
+
+// ── Renderiza tabela com paginação ───────────────────────────────────────────
+function pagSlice(arr, pag){ return arr.slice((pag-1)*PAGE_SIZE, pag*PAGE_SIZE); }
+
+// ── Fila ─────────────────────────────────────────────────────────────────────
+function filtrarFila(){
+  return _fila.filter(item => {
+    if(_filtroMargem === 'todos') return true;
+    // Pega margem do marketplace ML
+    let m = null;
+    for(const k of CANAL_KEY_FILA){
+      if(item.marketplaces && item.marketplaces[k]){
+        m = item.marketplaces[k].margem; break;
+      }
+    }
+    return margemClasse(m) === _filtroMargem;
+  });
+}
+
+function renderFila(){
+  const filtrado = filtrarFila();
+  const slice = pagSlice(filtrado, _pgFila);
+  const tbody = document.getElementById('fila-tbody');
+
+  if(!slice.length){
+    tbody.innerHTML = `<tr><td colspan="7" class="empty">${_fila.length?'Nenhum item neste filtro.':'Nenhum item na fila para Mercado Livre.'}</td></tr>`;
+    document.getElementById('fila-pag').innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = slice.map(item => {
+    let preco_ml = null, margem = null, preco_bling = null;
+    for(const k of CANAL_KEY_FILA){
+      if(item.marketplaces && item.marketplaces[k]){
+        const mp = item.marketplaces[k];
+        preco_ml = mp.preco; margem = mp.margem; break;
+      }
+    }
+    if(item.produto_bling) preco_bling = item.produto_bling.preco || item.produto_bling.preco_venda;
+    const status = item.status || 'pendente';
+    const statusCor = status==='pendente'?'var(--warn)':status==='aprovado'?'var(--ok)':'var(--danger)';
+    return `<tr>
+      <td class="sku-code">${item.sku||'—'}</td>
+      <td class="nome-cell" title="${(item.nome||'').replace(/"/g,'&quot;')}">${item.nome||'—'}</td>
+      <td>${fmtR$(preco_bling)}</td>
+      <td>${fmtR$(preco_ml)}</td>
+      <td>${margemBadge(margem)}</td>
+      <td><span style="font-size:12px;font-weight:700;color:${statusCor}">${status}</span></td>
+      <td style="white-space:nowrap">
+        ${status==='pendente'?`<button class="btn sm ok-btn" onclick="aprovar('${item.id}')">✓</button>
+        <button class="btn sm danger-btn" onclick="rejeitar('${item.id}')" style="margin-left:4px">✗</button>`:'—'}
+      </td>
+    </tr>`;
+  }).join('');
+
+  pagControls('fila-pag', filtrado.length, _pgFila, 'navFila');
+}
+
+function navFila(p){ _pgFila = p; renderFila(); window.scrollTo(0,0); }
+
+function setFiltroMargem(f, el){
+  _filtroMargem = f; _pgFila = 1;
+  document.querySelectorAll('[id^="fm-"]').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  renderFila();
+}
+
+async function aprovar(id){
+  if(!confirm('Aprovar este item?')) return;
+  try{
+    await fetch(`/fila/aprovar/${id}`, {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+    carregarFila();
+  } catch(e){ alert('Erro ao aprovar: '+e); }
+}
+
+async function rejeitar(id){
+  const motivo = prompt('Motivo da rejeição (opcional):') ?? '';
+  try{
+    await fetch(`/fila/rejeitar/${id}`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({motivo})});
+    carregarFila();
+  } catch(e){ alert('Erro ao rejeitar: '+e); }
+}
+
+async function carregarFila(){
+  try{
+    const r = await fetch('/fila/lista').then(r=>r.json());
+    const todos = r.itens || [];
+    // Filtra apenas itens que têm dados de ML
+    _fila = todos.filter(item => {
+      const mps = item.marketplaces || {};
+      return CANAL_KEY_FILA.some(k => k in mps);
+    });
+    // Resumo de margem
+    let verde=0,amarelo=0,vermelho=0;
+    _fila.forEach(item=>{
+      let m=null;
+      for(const k of CANAL_KEY_FILA){ if(item.marketplaces?.[k]){ m=item.marketplaces[k].margem; break; }}
+      const cl = margemClasse(m);
+      if(cl==='verde') verde++;
+      else if(cl==='amarelo') amarelo++;
+      else if(cl==='vermelho') vermelho++;
+    });
+    document.getElementById('fila-resumo').innerHTML = `
+      <span class="fila-stat total">📋 ${_fila.length} itens</span>
+      <span class="fila-stat verde">🟢 ${verde} acima da margem</span>
+      <span class="fila-stat amarelo">🟡 ${amarelo} abaixo do alvo</span>
+      <span class="fila-stat vermelho">🔴 ${vermelho} com prejuízo</span>`;
+    _pgFila = 1;
+    renderFila();
+  } catch(e){
+    document.getElementById('fila-resumo').innerHTML = `<span class="fila-stat total" style="color:var(--danger)">Erro ao carregar fila</span>`;
+    document.getElementById('fila-tbody').innerHTML = `<tr><td colspan="7" class="empty">Erro ao carregar dados da fila.</td></tr>`;
+  }
+}
+
+// ── Estoque ──────────────────────────────────────────────────────────────────
+function diffEstoque(blingQty, mlQty){
+  if(mlQty == null) return '<span style="font-size:11px;color:var(--muted)">N/D</span>';
+  const diff = mlQty - blingQty;
+  if(diff === 0) return '<span style="color:var(--ok);font-weight:700">✓ Igual</span>';
+  const cor = diff < 0 ? 'var(--warn)' : 'var(--danger)';
+  const sinal = diff > 0 ? '+' : '';
+  return `<span style="color:${cor};font-weight:700">${sinal}${diff}</span>`;
+}
+
+function renderEstoque(){
+  if(!_conf) return;
+  const matrix = _conf.matrix || [];
+
+  // ── Seção A: COM integração (mapeados em ambos) ──
+  let mapeados = matrix.filter(r => r[CANAL_PRESENTE] === true && r.presente_bling === true
+    && (!_soAtivos || (r.situacao_bling === 'A' && (r[CANAL_STATUS]||'').toLowerCase() === 'active')));
+  document.getElementById('scnt-com-integ').textContent = mapeados.length.toLocaleString('pt-BR');
+  if(_filtroEstoque !== 'todos') mapeados = mapeados.filter(r => r[CANAL_STATUS] === _filtroEstoque);
+  mapeados.sort((a,b)=>(b.estoque_bling||0)-(a.estoque_bling||0));
+
+  const slice = pagSlice(mapeados, _pgEstoque);
+  const tbody = document.getElementById('estoque-tbody');
+  if(!slice.length){
+    tbody.innerHTML = `<tr><td colspan="8" class="empty">${mapeados.length?'Nenhum no filtro.':'Nenhum produto mapeado em ambos.'}</td></tr>`;
+    document.getElementById('estoque-pag').innerHTML='';
+  } else {
+    tbody.innerHTML = slice.map(r => {
+      const matchBy = r.ml_matched_by||'sku';
+      const vincChip = matchBy==='anuncio'
+        ? `<span title="Via Bling /anúncios" style="font-size:10px;padding:2px 7px;border-radius:999px;background:rgba(34,197,94,.12);color:var(--ok);border:1px solid rgba(34,197,94,.3)">📋 Anúncio</span>`
+        : matchBy==='gtin'
+          ? `<span title="Via GTIN ${r.ml_gtin||''}" style="font-size:10px;padding:2px 7px;border-radius:999px;background:rgba(79,140,255,.15);color:var(--accent);border:1px solid rgba(79,140,255,.3)">🔗 GTIN</span>`
+          : `<span style="font-size:10px;color:var(--ok)">✓ SKU</span>`;
+      return `<tr>
+        <td class="sku-code">${r.sku||'—'}</td>
+        <td class="nome-cell" title="${(r.nome||'').replace(/"/g,'&quot;')}">${r.nome||'—'}</td>
+        <td style="text-align:center;font-weight:700">${fmt(r.estoque_bling)}</td>
+        <td style="text-align:center;font-weight:700">${r.qty_ml!=null?fmt(r.qty_ml):'<span style="color:var(--muted)">N/D</span>'}</td>
+        <td style="text-align:center">${diffEstoque(r.estoque_bling||0, r.qty_ml)}</td>
+        <td>${statusChip(r[CANAL_STATUS])}</td>
+        <td style="font-size:11px;color:var(--muted)">${r[CANAL_ID]||'—'}</td>
+        <td>${vincChip}</td>
+      </tr>`;
+    }).join('');
+    pagControls('estoque-pag', mapeados.length, _pgEstoque, 'navEstoque');
+  }
+
+  // ── Seção B: SEM integração — SKU alfanumérico não existe no Bling ──
+  const todosMLSemBling = (_conf.ml_sem_bling || []).filter(r => !_soAtivos || r.status === 'active');
+  const semIntegSku  = todosMLSemBling.filter(r => r.tipo_divergencia !== 'ean_divergente');
+  const semIntegEan  = todosMLSemBling.filter(r => r.tipo_divergencia === 'ean_divergente');
+
+  document.getElementById('scnt-sem-sku').textContent = semIntegSku.length.toLocaleString('pt-BR');
+  const sliceSis = pagSlice(semIntegSku, _pgSemIntegSku);
+  document.getElementById('sem-integ-sku-tbody').innerHTML = sliceSis.length
+    ? sliceSis.map(r=>`<tr>
+        <td class="sku-code">${r.sku||'—'}</td>
+        <td style="font-size:11px;color:var(--muted)">${r.ml_id||'—'}</td>
+        <td class="nome-cell" title="${(r.titulo||'').replace(/"/g,'&quot;')}">${r.titulo||'<span style="color:var(--muted)">—</span>'}</td>
+        <td style="text-align:center;font-weight:700">${r.qty!=null?fmt(r.qty):'<span style="color:var(--muted)">N/D</span>'}</td>
+        <td>${statusChip(r.status)}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="5" class="empty">✅ Nenhum anúncio com SKU fora do Bling.</td></tr>`;
+  pagControls('sem-integ-sku-pag', semIntegSku.length, _pgSemIntegSku, 'navSemIntegSku');
+
+  // ── Seção B2: EAN/GTIN divergente — chave numérica não bate com Bling ──
+  document.getElementById('scnt-ean-div').textContent = semIntegEan.length.toLocaleString('pt-BR');
+  const sliceEan = pagSlice(semIntegEan, _pgSemIntegEan);
+  document.getElementById('sem-integ-ean-tbody').innerHTML = sliceEan.length
+    ? sliceEan.map(r=>`<tr>
+        <td class="sku-code">${r.sku||'—'}</td>
+        <td style="font-size:11px;color:var(--muted)">${r.ml_id||'—'}</td>
+        <td class="nome-cell" title="${(r.titulo||'').replace(/"/g,'&quot;')}">${r.titulo||'<span style="color:var(--muted)">—</span>'}</td>
+        <td style="text-align:center;font-weight:700">${r.qty!=null?fmt(r.qty):'<span style="color:var(--muted)">N/D</span>'}</td>
+        <td>${statusChip(r.status)}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="5" class="empty">✅ Nenhum anúncio com EAN/GTIN divergente do Bling.</td></tr>`;
+  pagControls('sem-integ-ean-pag', semIntegEan.length, _pgSemIntegEan, 'navSemIntegEan');
+
+  // ── Seção C: SEM integração — sem SKU ──
+  const semSkuMl = _conf.sem_sku_ml || [];
+  document.getElementById('scnt-sem-nossku').textContent = semSkuMl.length.toLocaleString('pt-BR');
+  const sliceSins = pagSlice(semSkuMl, _pgSemIntegNoSku);
+  document.getElementById('sem-integ-nossku-tbody').innerHTML = sliceSins.length
+    ? sliceSins.map(r=>`<tr>
+        <td class="sku-code">${r.id||'—'}</td>
+        <td class="nome-cell" title="${(r.titulo||'').replace(/"/g,'&quot;')}">${r.titulo||'—'}</td>
+        <td style="text-align:center;font-weight:700">${fmt(r.estoque)}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="3" class="empty">✅ Nenhum anúncio sem SKU.</td></tr>`;
+  pagControls('sem-integ-nossku-pag', semSkuMl.length, _pgSemIntegNoSku, 'navSemIntegNoSku');
+}
+
+function navEstoque(p)      { _pgEstoque       = p; renderEstoque(); }
+function navSemIntegSku(p)  { _pgSemIntegSku   = p; renderEstoque(); }
+function navSemIntegEan(p)  { _pgSemIntegEan   = p; renderEstoque(); }
+function navSemIntegNoSku(p){ _pgSemIntegNoSku = p; renderEstoque(); }
+
+function setFiltroEstoque(f, el){
+  _filtroEstoque = f; _pgEstoque = 1;
+  document.querySelectorAll('[id^="fe-"]').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  renderEstoque();
+}
+
+// ── SKUs Ausentes ────────────────────────────────────────────────────────────
+function renderAusentes(){
+  if(!_conf) return;
+  const matrix = _conf.matrix || [];
+  // Produtos no Bling mas sem presença no ML (presente_ml === false)
+  const semMl = matrix.filter(r => r.presente_bling === true && r[CANAL_PRESENTE] === false
+    && (!_soAtivos || r.situacao_bling === 'A'));
+  document.getElementById('cnt-sem-ml').textContent = semMl.length.toLocaleString('pt-BR');
+  const sliceSem = pagSlice(semMl, _pgSemMl);
+  document.getElementById('sem-ml-tbody').innerHTML = sliceSem.length
+    ? sliceSem.map(r => `<tr>
+        <td class="sku-code">${r.sku||'—'}</td>
+        <td class="nome-cell" title="${(r.nome||'').replace(/"/g,'&quot;')}">${r.nome||'—'}</td>
+        <td style="text-align:center;font-weight:700">${fmt(r.estoque_bling)}</td>
+        <td>${fmtR$(r.preco_bling)}</td>
+        <td><span style="font-size:11px;font-weight:700;color:${r.situacao_bling==='A'?'var(--ok)':'var(--muted)'}">${r.situacao_bling==='A'?'● Ativo':'○ Inativo'}</span></td>
+      </tr>`).join('')
+    : `<tr><td colspan="5" class="empty">✅ Todos os produtos Bling estão no Mercado Livre!</td></tr>`;
+  pagControls('sem-ml-pag', semMl.length, _pgSemMl, 'navSemMl');
+}
+
+function navSemMl(p){ _pgSemMl = p; renderAusentes(); }
+
+// ── Sem Vínculo ──────────────────────────────────────────────────────────────
+let _svSugestoes = null;   // null = não carregado | {ml_id: sugestão}
+let _svSel       = new Set();
+let _svEditado   = {};     // ml_id → sku editado pelo usuário
+let _svStatus    = {};     // ml_id → {ok, erro} após aplicar
+let _svTodos     = [];     // cache para paginação
+
+function atualizarSvSelUi(){
+  const n = _svSel.size;
+  document.getElementById('cnt-sv-sel').textContent = n;
+  const btn = document.getElementById('btn-sv-vincular');
+  if(btn) btn.disabled = n === 0;
+}
+
+function renderSemVinculo(){
+  if(!_conf) return;
+  const semBlingAtivos = (_conf.ml_sem_bling || [])
+    .filter(r => r.status === 'active')
+    .map(r => ({
+      canal_id: r.ml_id || '—', sku: r.sku || '', titulo: r.titulo || '', estoque: r.qty,
+      motivo: r.tipo_divergencia === 'ean_divergente' ? '🏷️ EAN/GTIN sem match no Bling'
+             : r.tipo_divergencia === 'codigo_numerico' ? '🔢 Código numérico'
+             : '🔍 SKU não encontrado no Bling',
+    }));
+  const semSkuAtivos = (_conf.sem_sku_ml || [])
+    .filter(r => (r.status || '') === 'active')
+    .map(r => ({
+      canal_id: r.id || '—', sku: '', titulo: r.titulo || '', estoque: r.estoque,
+      motivo: '❌ Sem SKU',
+    }));
+  _svTodos = [...semBlingAtivos, ...semSkuAtivos];
+
+  const totalReal = (_conf.stats || {}).ml_ativo_sem_vinculo ?? _svTodos.length;
+  const el = document.getElementById('tab-cnt-sem-vinculo');
+  if(el) el.textContent = totalReal || '';
+  const sv = document.getElementById('sv-ativo-sem-vinculo');
+  if(sv) sv.textContent = totalReal;
+
+  const nEan    = semBlingAtivos.filter(r=>r.motivo.includes('EAN')).length;
+  const nCodNum = semBlingAtivos.filter(r=>r.motivo.includes('numérico')).length;
+  const nSkuAus = semBlingAtivos.filter(r=>r.motivo.includes('encontrado')).length;
+  const truncado = _svTodos.length < totalReal;
+  const resumo = document.getElementById('sem-vinculo-resumo');
+  if(resumo) resumo.innerHTML = `
+    <span class="fila-stat vermelho">🚨 ${totalReal} ativos sem vínculo</span>
+    ${nEan>0?`<span class="fila-stat amarelo">🏷️ ${nEan} EAN divergente</span>`:''}
+    ${nCodNum>0?`<span class="fila-stat total">🔢 ${nCodNum} código numérico</span>`:''}
+    ${nSkuAus>0?`<span class="fila-stat total">🔍 ${nSkuAus} SKU ausente</span>`:''}
+    <span class="fila-stat vermelho">❌ ${semSkuAtivos.length} sem SKU${truncado?' (parcial)':''}</span>`;
+
+  const comSug = _svSugestoes !== null;
+  const COLS   = comSug ? 9 : 5;
+  // Atualiza header quando sugestões carregadas
+  if(comSug){
+    document.getElementById('sem-vinculo-thead').innerHTML = `<tr>
+      <th style="width:34px"><input type="checkbox" id="sv-check-all" onchange="toggleAllSV(this.checked)" title="Selecionar todos"/></th>
+      <th>ID Canal</th><th>Título</th><th>Est.</th>
+      <th>SKU Sugerido <span style="font-weight:400;font-size:10px;color:var(--muted)">(editável)</span></th>
+      <th>Produto Bling</th><th>Conf.</th><th>Motivo</th><th style="width:48px"></th>
+    </tr>`;
+  }
+
+  const slice = pagSlice(_svTodos, _pgSemVinculo);
+  const tbody = document.getElementById('sem-vinculo-tbody');
+  if(!slice.length){
+    tbody.innerHTML = `<tr><td colspan="${COLS}" class="empty">✅ Nenhum anúncio ativo sem vínculo!</td></tr>`;
+    pagControls('sem-vinculo-pag', _svTodos.length, _pgSemVinculo, 'navSemVinculo');
+    return;
+  }
+
+  tbody.innerHTML = slice.map(r => {
+    const st     = _svStatus[r.canal_id];
+    const trCls  = st ? (st.ok ? 'sv-aplicado' : 'sv-erro') : '';
+    const stCell = st ? (st.ok ? '<span style="color:var(--ok)">✓</span>' : `<span style="color:var(--danger);font-size:10px" title="${(st.erro||'').replace(/"/g,'&quot;')}">✗</span>`) : '';
+
+    if(!comSug){
+      return `<tr class="${trCls}">
+        <td class="sku-code" style="color:var(--danger)">${r.canal_id}</td>
+        <td class="sku-code">${r.sku||'<span style="color:var(--muted)">—</span>'}</td>
+        <td class="nome-cell" title="${(r.titulo||'').replace(/"/g,'&quot;')}">${r.titulo||'—'}</td>
+        <td style="text-align:center;font-weight:700">${r.estoque!=null?fmt(r.estoque):'<span style="color:var(--muted)">N/D</span>'}</td>
+        <td style="font-size:11px;color:var(--muted)">${r.motivo}</td>
+      </tr>`;
+    }
+
+    const sug       = _svSugestoes[r.canal_id];
+    const skuVal    = _svEditado[r.canal_id] ?? (sug?.bling_sku || '');
+    const skuCls    = _svEditado[r.canal_id] ? 'sku-sug-input editado' : 'sku-sug-input';
+    const checked   = _svSel.has(r.canal_id) ? 'checked' : '';
+    const confBadge = sug ? (()=>{
+      const cls = sug.nivel==='alta'?'conf-alta':sug.nivel==='media'?'conf-media':'conf-baixa';
+      return `<span class="conf-badge ${cls}">${Math.round(sug.confianca*100)}%</span>`;
+    })() : '<span style="color:var(--muted);font-size:11px">—</span>';
+    const bling_nome = sug?.bling_nome
+      ? `<span class="nome-cell" style="max-width:180px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px" title="${(sug.bling_nome||'').replace(/"/g,'&quot;')}">${sug.bling_nome}</span>` : '—';
+
+    return `<tr class="${trCls}" data-mlid="${r.canal_id}">
+      <td><input type="checkbox" ${checked} ${st?.ok?'disabled':''} onchange="toggleSelSV('${r.canal_id}',this.checked)"/></td>
+      <td><a href="https://produto.mercadolivre.com.br/-${r.canal_id.replace('MLB','MLB-')}" target="_blank" class="sku-code" style="color:var(--danger);text-decoration:none;font-size:11px">${r.canal_id}</a></td>
+      <td class="nome-cell" title="${(r.titulo||'').replace(/"/g,'&quot;')}">${r.titulo||'—'}</td>
+      <td style="text-align:center;font-weight:700;font-size:12px">${r.estoque!=null?fmt(r.estoque):'—'}</td>
+      <td>${sug?`<input class="${skuCls}" type="text" value="${skuVal}" data-original="${sug.bling_sku}"
+           oninput="editarSkuSV('${r.canal_id}',this)" placeholder="—"/>`:'<span style="color:var(--muted);font-size:11px">sem sugestão</span>'}</td>
+      <td>${bling_nome}</td>
+      <td>${confBadge}</td>
+      <td style="font-size:10px;color:var(--muted)">${r.motivo}</td>
+      <td>${stCell}</td>
+    </tr>`;
+  }).join('');
+
+  pagControls('sem-vinculo-pag', _svTodos.length, _pgSemVinculo, 'navSemVinculo');
+}
+function navSemVinculo(p){ _pgSemVinculo = p; renderSemVinculo(); }
+
+function toggleSelSV(ml_id, checked){
+  if(checked) _svSel.add(ml_id); else _svSel.delete(ml_id);
+  atualizarSvSelUi();
+}
+function toggleAllSV(checked){
+  const slice = pagSlice(_svTodos, _pgSemVinculo);
+  slice.forEach(r => { if(!_svStatus[r.canal_id]?.ok){ if(checked) _svSel.add(r.canal_id); else _svSel.delete(r.canal_id); } });
+  atualizarSvSelUi();
+}
+function editarSkuSV(ml_id, input){
+  const val = input.value.trim();
+  if(val === input.dataset.original){ delete _svEditado[ml_id]; input.classList.remove('editado'); }
+  else { _svEditado[ml_id] = val; input.classList.add('editado'); }
+}
+function selecionarAltaSV(){
+  if(!_svSugestoes) return;
+  Object.entries(_svSugestoes).forEach(([ml_id, sug]) => {
+    if((sug.nivel==='alta'||sug.metodo==='gtin_exato') && !_svStatus[ml_id]?.ok)
+      _svSel.add(ml_id);
+  });
+  atualizarSvSelUi();
+  renderSemVinculo();
+}
+
+async function carregarSugestoesSV(){
+  const btn    = document.getElementById('btn-sv-sug');
+  const status = document.getElementById('sv-sug-status');
+  btn.disabled = true;
+  status.textContent = '⏳ Analisando GTINs e títulos...';
+  try {
+    const r = await fetch('/conferencia/ml/sugestoes-vinculo').then(res=>res.json());
+    if(!r.ok){ status.textContent='⚠️ '+(r.erro||'Erro'); btn.disabled=false; return; }
+    _svSugestoes = {};
+    (r.sugestoes||[]).forEach(s => { _svSugestoes[s.ml_id] = s; });
+    const n     = Object.keys(_svSugestoes).length;
+    const nAlta = (r.sugestoes||[]).filter(s=>s.nivel==='alta'||s.metodo==='gtin_exato').length;
+    status.textContent = `✅ ${n} sugestões · ${nAlta} alta confiança (≥68%)`;
+    btn.style.display = 'none';
+    const bar = document.getElementById('sv-vincular-bar');
+    if(bar) bar.style.display = 'flex';
+    renderSemVinculo();
+  } catch(e){ status.textContent='⚠️ Erro: '+e; btn.disabled=false; }
+}
+
+async function vincularSelecionadosSV(){
+  const ids = [..._svSel];
+  if(!ids.length) return;
+  if(!confirm(`Vincular ${ids.length} anúncio${ids.length!==1?'s':''} no Mercado Livre?\n\nIsto atualiza o seller_custom_field via API.`)) return;
+  const vinculos = ids
+    .map(ml_id => ({ ml_id, bling_sku: _svEditado[ml_id] ?? (_svSugestoes?.[ml_id]?.bling_sku||'') }))
+    .filter(v => v.bling_sku);
+
+  const btnVinc = document.getElementById('btn-sv-vincular');
+  const status  = document.getElementById('sv-sug-status');
+  if(btnVinc) btnVinc.disabled = true;
+  status.textContent = `⏳ Aplicando ${vinculos.length} vínculo${vinculos.length!==1?'s':''}...`;
+
+  const LOTE = 30;
+  let okTotal = 0, errTotal = 0;
+  for(let i=0; i<vinculos.length; i+=LOTE){
+    const lote = vinculos.slice(i, i+LOTE);
+    try {
+      const r = await fetch('/conferencia/ml/aplicar-vinculo', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({vinculos: lote}),
+      }).then(res=>res.json());
+      if(r.status === 401){ alert('Token ML expirado — acesse /ml/login para renovar.'); break; }
+      (r.resultados||[]).forEach(res => {
+        _svStatus[res.ml_id] = {ok: res.ok, erro: res.erro||''};
+        if(res.ok){ okTotal++; _svSel.delete(res.ml_id); }
+        else errTotal++;
+      });
+    } catch(e){ errTotal+=lote.length; lote.forEach(v=>{ _svStatus[v.ml_id]={ok:false,erro:String(e)}; }); }
+    renderSemVinculo();
+  }
+  atualizarSvSelUi();
+  const parts = [];
+  if(okTotal>0) parts.push(`✅ ${okTotal} aplicado${okTotal!==1?'s':''}`);
+  if(errTotal>0) parts.push(`⚠️ ${errTotal} erro${errTotal!==1?'s':''}`);
+  status.textContent = parts.join(' · ') + (okTotal>0 ? ' — execute a conferência para atualizar.' : '');
+}
+
+function toggleSoAtivos(){
+  _soAtivos = !_soAtivos;
+  const btn = document.getElementById('btn-so-ativos');
+  btn.style.background = _soAtivos ? 'rgba(34,197,94,.25)' : '';
+  btn.style.borderColor = _soAtivos ? '#22c55e' : '';
+  btn.style.color = _soAtivos ? '#22c55e' : '';
+  btn.textContent = _soAtivos ? '☀️ Só Ativos ✓' : '☀️ Só Ativos';
+  renderEstoque();
+  renderAusentes();
+}
+
+// ── Conferência ──────────────────────────────────────────────────────────────
+async function carregarConferencia(){
+  try{
+    // canal=ml: retorna apenas itens com dados ML (mapeados + sem-bling)
+    // limit=5000: busca toda a matrix do canal de uma vez para filtragem client-side
+    const res = await fetch('/conferencia-sku/resultado?canal=ml&limit=5000').then(r=>r.json());
+    if(!res || !res.stats) return;
+    _conf = res;
+    const s = res.stats;
+    const mlStat = s.ml || {};
+    // Stats
+    const statsRow = document.getElementById('stats-row');
+    const annRemap  = res.ml_anuncios_remapeados || 0;
+    const gtinRemap = res.ml_gtin_remapeados || 0;
+    const remapParts = [];
+    if(annRemap  > 0) remapParts.push(`📋 ${annRemap} via anúncio`);
+    if(gtinRemap > 0) remapParts.push(`🔗 ${gtinRemap} via GTIN`);
+    const remapNote = remapParts.length
+      ? `<div style="font-size:10px;color:var(--muted);margin-top:3px">${remapParts.join(' · ')}</div>` : '';
+    statsRow.innerHTML = `
+      <div class="stat"><div class="stat-lbl">Total Bling</div><div class="stat-val">${fmt(s.total_bling)}</div></div>
+      <div class="stat stat-link" onclick="irParaAba('estoque')"><div class="stat-lbl">Mapeados ML</div><div class="stat-val" style="color:var(--ok)">${fmt(mlStat.presentes_em_bling)}</div>${remapNote}</div>
+      <div class="stat stat-link" onclick="irParaAba('ausentes','secao-sem-canal')"><div class="stat-lbl">Bling sem ML</div><div class="stat-val" style="color:var(--warn)">${fmt(s.bling_sem_ml)}</div></div>
+      <div class="stat stat-link" onclick="irParaAba('estoque');setTimeout(()=>setSubTab('sub-sem-sku'),60)"><div class="stat-lbl">ML sem Bling</div><div class="stat-val" style="color:var(--danger)">${fmt(mlStat.sem_bling)}</div></div>`;
+    // Timestamp
+    if(res.executado_em){
+      const dt = new Date(res.executado_em);
+      const ts = dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) + ' ' +
+                 dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+      document.getElementById('meta-ultima').textContent = `Última conferência: ${ts}`;
+    }
+    renderEstoque();
+    renderAusentes();
+    renderSemVinculo();
+  } catch(e){
+    document.getElementById('meta-ultima').textContent = 'Execute a conferência para ver dados.';
+  }
+}
+
+async function executarConferencia(){
+  const btn = document.getElementById('btn-executar');
+  btn.disabled = true; btn.textContent = '⏳ Iniciando...';
+  try{
+    const r = await fetch('/conferencia-sku/executar',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    const d = await r.json();
+    if(d.ok || d.estado?.status==='rodando'){ iniciarPolling(); }
+    else{ alert(d.msg||'Erro'); btn.disabled=false; btn.textContent='▶ Executar conferência'; }
+  } catch(e){ alert('Erro: '+e); btn.disabled=false; btn.textContent='▶ Executar conferência'; }
+}
+
+function iniciarPolling(){
+  if(_polling) return; _polling=true;
+  document.getElementById('progress-wrap').classList.add('visible');
+  document.getElementById('btn-executar').disabled=true;
+  document.getElementById('btn-executar').textContent='⏳ Rodando...';
+  const ETAPAS={bling:'Coletando Bling',ml:'Coletando ML',shopify:'Coletando Shopify',amazon:'Coletando Amazon',shopee:'Coletando Shopee',canais:'Coletando canais (ML + Shopify + Amazon + Shopee)',anuncios_ml:'Mapeando anúncios ML',cruzamento_gtin:'Cruzando GTINs ML',anuncios_shopee:'Mapeando anúncios Shopee',cruzamento:'Cruzando SKUs',concluido:'Concluído'};
+  const iv = setInterval(async ()=>{
+    try{
+      const st = await fetch('/conferencia-sku/status').then(r=>r.json());
+      document.getElementById('progress-etapa').textContent = `${ETAPAS[st.etapa]||st.etapa||''} — ${st.pct||0}%`;
+      document.getElementById('progress-bar').style.width=(st.pct||0)+'%';
+      if(st.status==='concluido'||st.status==='erro'){
+        clearInterval(iv); _polling=false;
+        document.getElementById('progress-wrap').classList.remove('visible');
+        document.getElementById('btn-executar').disabled=false;
+        document.getElementById('btn-executar').textContent='▶ Executar conferência';
+        if(st.status==='concluido'){ carregarConferencia(); carregarFila(); }
+      }
+    } catch(e){ clearInterval(iv); _polling=false; }
+  },2500);
+}
+
+// ── Debug MLB ────────────────────────────────────────────────────────────────
+function abrirDebug(){
+  const el = document.getElementById('debug-overlay');
+  el.style.display = 'flex';
+  setTimeout(()=>document.getElementById('debug-mlb-input').focus(), 80);
+}
+function fecharDebug(){
+  document.getElementById('debug-overlay').style.display = 'none';
+}
+async function buscarDebug(){
+  const mlb = document.getElementById('debug-mlb-input').value.trim();
+  if(!mlb){ return; }
+  const el = document.getElementById('debug-resultado');
+  el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px 0">⏳ Consultando ML e Bling...</div>';
+  try{
+    const d = await fetch(`/ml/debug/item?mlb=${encodeURIComponent(mlb)}`).then(r=>r.json());
+    if(d.erro){
+      el.innerHTML = `<div style="color:var(--danger);padding:12px;background:rgba(239,68,68,.1);border-radius:10px;border:1px solid rgba(239,68,68,.3)">❌ ${d.erro}</div>`;
+      return;
+    }
+
+    // Busca Bling em paralelo pelo seller_custom_field do item (ou da 1ª variação)
+    let blingData = null;
+    const skuParaBling = d.seller_custom_field ||
+      (d.variacoes && d.variacoes.length ? d.variacoes[0].seller_custom_field : null);
+    if(skuParaBling){
+      try {
+        blingData = await fetch(`/bling/debug/sku-get?sku=${encodeURIComponent(skuParaBling)}`).then(r=>r.json());
+      } catch(e){ blingData = {erro: String(e)}; }
+    }
+
+    const stCor = d.status==='active'?'var(--ok)':d.status==='paused'?'var(--warn)':'var(--danger)';
+    let html = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+        <div style="background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:12px">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:4px">MLB</div>
+          <div style="font-size:14px;font-weight:800;font-family:monospace">${d.mlb||'—'}</div>
+        </div>
+        <div style="background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:12px">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:4px">Status</div>
+          <div style="font-size:14px;font-weight:800;color:${stCor}">${d.status||'—'}</div>
+        </div>
+        <div style="background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:12px">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:4px">seller_custom_field (SKU)</div>
+          <div style="font-size:14px;font-weight:800;font-family:monospace;color:${d.seller_custom_field?'var(--ok)':'var(--danger)'}">${d.seller_custom_field||'❌ Vazio'}</div>
+        </div>
+        <div style="background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:12px">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:4px">Estoque no ML</div>
+          <div style="font-size:14px;font-weight:800">${d.available_quantity!=null?d.available_quantity:'—'}</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:700">TÍTULO</div>
+      <div style="background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:16px">${d.titulo||'—'}</div>`;
+
+    // ── Dados do Bling ──
+    if(blingData){
+      html += `<div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:700;margin-top:16px">📦 BLING — SKU: ${skuParaBling}</div>`;
+      if(blingData.erro){
+        html += `<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--danger);margin-bottom:16px">❌ ${blingData.erro}</div>`;
+      } else if(!blingData.encontrado){
+        html += `<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--danger);margin-bottom:16px">❌ ${blingData.mensagem}</div>`;
+      } else {
+        const sitCor = blingData.situacao==='A'?'var(--ok)':'var(--muted)';
+        const estoqueAtual = blingData.estoque_atual ?? '—';
+        const estoqueFisico = blingData.estoque_fisico ?? '—';
+        const estoqueVirtual = blingData.estoque_virtual ?? '—';
+        const estoqueCor = estoqueAtual > 0 ? 'var(--ok)' : 'var(--danger)';
+        html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+          <div style="background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:10px 12px">
+            <div style="font-size:9px;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:3px">Situação</div>
+            <div style="font-size:13px;font-weight:800;color:${sitCor}">${blingData.situacao==='A'?'● Ativo':'○ Inativo'}</div>
+          </div>
+          <div style="background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:10px 12px">
+            <div style="font-size:9px;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:3px">Estoque Virtual</div>
+            <div style="font-size:13px;font-weight:800;color:${estoqueCor}">${estoqueVirtual}</div>
+          </div>
+          <div style="background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:10px 12px">
+            <div style="font-size:9px;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:3px">Estoque Físico</div>
+            <div style="font-size:13px;font-weight:800">${estoqueFisico}</div>
+          </div>
+          <div style="background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:10px 12px">
+            <div style="font-size:9px;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:3px">Tipo/Estrutura</div>
+            <div style="font-size:11px;font-weight:700;color:var(--muted)">${blingData.tipo||'—'} ${blingData.estrutura?'/ '+JSON.stringify(blingData.estrutura).slice(0,40):''}</div>
+          </div>
+        </div>`;
+        // Alerta de estoque zerado
+        if(estoqueAtual === 0 || estoqueAtual === '0'){
+          html += `<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--danger);margin-bottom:12px">
+            ⚠️ <strong>Estoque ZERO no Bling</strong> — o Bling está enviando qty=0 ao ML, que pausa o anúncio automaticamente. Corrija o estoque no Bling para reativar a sincronização.</div>`;
+        }
+      }
+    }
+
+    // Diagnóstico
+    if(d.diagnostico && d.diagnostico.length){
+      html += `<div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:700">DIAGNÓSTICO</div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+          ${d.diagnostico.map(msg=>`<div style="background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:13px">${msg}</div>`).join('')}
+        </div>`;
+    }
+
+    // Variações
+    if(d.tem_variacoes){
+      html += `<div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:700">VARIAÇÕES (${d.total_variacoes})</div>
+        <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--line)">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr>
+              <th style="background:var(--card2);padding:8px 10px;text-align:left;color:var(--muted);font-size:10px;text-transform:uppercase">ID Variação</th>
+              <th style="background:var(--card2);padding:8px 10px;text-align:left;color:var(--muted);font-size:10px;text-transform:uppercase">SKU (seller_custom_field)</th>
+              <th style="background:var(--card2);padding:8px 10px;text-align:center;color:var(--muted);font-size:10px;text-transform:uppercase">Estoque</th>
+              <th style="background:var(--card2);padding:8px 10px;text-align:left;color:var(--muted);font-size:10px;text-transform:uppercase">Atributos</th>
+            </tr></thead>
+            <tbody>
+              ${d.variacoes.map(v=>{
+                const skuCor = v.seller_custom_field ? 'var(--ok)' : 'var(--danger)';
+                return `<tr>
+                  <td style="padding:8px 10px;border-top:1px solid rgba(38,52,88,.5);font-family:monospace;color:var(--muted)">${v.id||'—'}</td>
+                  <td style="padding:8px 10px;border-top:1px solid rgba(38,52,88,.5);font-family:monospace;font-weight:700;color:${skuCor}">${v.seller_custom_field||'❌ Vazio'}</td>
+                  <td style="padding:8px 10px;border-top:1px solid rgba(38,52,88,.5);text-align:center;font-weight:700">${v.available_quantity!=null?v.available_quantity:'—'}</td>
+                  <td style="padding:8px 10px;border-top:1px solid rgba(38,52,88,.5);color:var(--muted)">${(v.attribute_combinations||[]).join(' · ')||'—'}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    }
+
+    el.innerHTML = html;
+  } catch(e){
+    el.innerHTML = `<div style="color:var(--danger)">Erro: ${e}</div>`;
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+carregarConferencia();
+carregarFila();
+fetch('/conferencia-sku/status').then(r=>r.json()).then(st=>{ if(st.status==='rodando') iniciarPolling(); });
+</script>
+
+<!-- Botão Início -->
+<a href="/" id="btn-inicio" title="Voltar para o início" style="position:fixed;bottom:24px;left:24px;z-index:9999;background:#4f8cff;color:#fff;padding:10px 20px;border-radius:14px;font-weight:700;text-decoration:none;font-family:Arial,sans-serif;font-size:14px;box-shadow:0 4px 20px rgba(79,140,255,.45);display:inline-flex;align-items:center;gap:8px;transition:background .2s,transform .15s" onmouseover="this.style.background='#2563eb';this.style.transform='scale(1.05)'" onmouseout="this.style.background='#4f8cff';this.style.transform='scale(1)'">🏠 Início</a>
+</body>
+</html>

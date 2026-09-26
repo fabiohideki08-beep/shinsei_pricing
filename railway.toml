@@ -1,0 +1,6 @@
+[deploy]
+startCommand = "/usr/local/bin/docker-entrypoint.sh"
+healthcheckPath = "/health"
+healthcheckTimeout = 600
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3

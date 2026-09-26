@@ -73,5 +73,8 @@ async function carregar(){const res=await fetch('/config/automacao'); const d=aw
 async function salvar(){const payload={oee:{}}; ['custo_hora_funcionario','pedidos_por_hora','tempo_medio_tarefa_min','custo_fixo_endereco','custo_logistica_endereco','custo_seguranca_endereco','acessibilidade_cliente','pedidos_mes','reducao_avaria_embalagem_segura'].forEach(k=>payload.oee[k]=Number(document.getElementById(k).value||0)); await fetch('/config/automacao',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); alert('OEE salvo');}
 document.addEventListener('DOMContentLoaded', carregar);
 </script>
+
+<!-- Botão Início -->
+<a href="/" id="btn-inicio" title="Voltar para o início" style="position:fixed;bottom:24px;left:24px;z-index:9999;background:#4f8cff;color:#fff;padding:10px 20px;border-radius:14px;font-weight:700;text-decoration:none;font-family:Arial,sans-serif;font-size:14px;box-shadow:0 4px 20px rgba(79,140,255,.45);display:inline-flex;align-items:center;gap:8px;transition:background .2s,transform .15s" onmouseover="this.style.background='#2563eb';this.style.transform='scale(1.05)'" onmouseout="this.style.background='#4f8cff';this.style.transform='scale(1)'">🏠 Início</a>
 </body>
 </html>

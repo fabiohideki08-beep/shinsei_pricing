@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Shinsei Pricing - Fila de aprovação</title>
+<style>
+:root{--bg:#0b1020;--card:#121a31;--card2:#17213d;--text:#eef2ff;--muted:#9fb0d9;--line:#263458;--accent:#4f8cff;--ok:#16a34a;--danger:#ef4444;--warn:#f59e0b}
+*{box-sizing:border-box} body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#0d1630);color:var(--text)}
+.wrap{max-width:1400px;margin:0 auto;padding:22px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:18px;background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:16px 18px;position:sticky;top:16px;z-index:10}
+.brand h1{margin:0;font-size:24px}.brand p{margin:4px 0 0;color:var(--muted);font-size:14px}.top-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.btn{border:none;background:var(--accent);color:#fff;padding:11px 14px;border-radius:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:8px}.btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text)} .btn.success{background:var(--ok)} .btn.danger{background:var(--danger)}
+.busca-wrap{position:relative;display:flex;align-items:center}.busca-wrap svg{position:absolute;left:12px;color:var(--muted);pointer-events:none}#busca{background:rgba(255,255,255,0.06);border:1px solid var(--line);color:var(--text);padding:10px 14px 10px 38px;border-radius:12px;font-size:14px;width:280px;outline:none;transition:border-color .2s}#busca::placeholder{color:var(--muted)}#busca:focus{border-color:var(--accent)}#busca-count{font-size:12px;color:var(--muted);white-space:nowrap}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid var(--line);background:var(--card2)}
+.grid{display:grid;gap:16px}.item{background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:22px;padding:18px}
+.item-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:14px}.title{font-size:20px;font-weight:700;margin:0 0 6px}.meta{display:flex;gap:10px;flex-wrap:wrap}
+.summary{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px}.metric{background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:14px}.metric .label{color:var(--muted);font-size:12px}.metric .value{font-size:20px;font-weight:700;margin-top:8px}
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:16px} table{width:100%;border-collapse:collapse;min-width:1200px} th,td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;text-align:left;vertical-align:top} th{background:#10182f}
+details{margin-top:14px} details>summary{cursor:pointer;color:#c9d7ff;font-weight:700}.empty{background:rgba(18,26,49,.95);border:1px dashed var(--line);border-radius:22px;padding:40px;text-align:center;color:var(--muted)} .mini{font-size:12px;color:var(--muted)} .neg{color:#fca5a5;font-weight:700}
+@media (max-width:1200px){.summary{grid-template-columns:repeat(2,1fr)}} @media (max-width:700px){.summary{grid-template-columns:1fr}.topbar{flex-direction:column;align-items:flex-start}}
+</style></head><body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand"><h1>Fila de aprovação</h1><p id="fila-subtitulo">Carregando...</p></div>
+    <div class="top-actions">
+      <span class="pill" id="statsPendente" style="cursor:pointer;border-color:var(--warn)" onclick="filtrarStatus('pendente')" title="Clique para filtrar">Pendentes: 0</span>
+      <span class="pill" id="statsAprovado" style="cursor:pointer;border-color:var(--ok)" onclick="filtrarStatus('aprovado')" title="Clique para filtrar">Aprovados: 0</span>
+      <span id="statsIncompleto" style="background:#7c3aed;color:#fff;padding:4px 12px;border-radius:999px;font-size:13px;cursor:pointer" onclick="filtrarStatus('incompleto')" title="Clique para filtrar">Incompletos: 0</span>
+      <span class="pill" id="statsRejeitado" style="cursor:pointer;border-color:var(--danger)" onclick="filtrarStatus('rejeitado')" title="Clique para filtrar">Rejeitados: 0</span>
+      <div class="busca-wrap"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="busca" type="search" placeholder="Buscar por título, SKU ou EAN..." oninput="aplicarFiltro()"></div>
+      <span id="busca-count"></span>
+      <button class="btn secondary" id="btn-planilha" onclick="baixarPlanilha()" title="Exportar produtos sem peso/custo do Bling">⬇ Planilha</button>
+      <label class="btn secondary" style="cursor:pointer" title="Importar planilha corrigida">⬆ Upload <input type="file" accept=".csv" style="display:none" onchange="uploadCorrecoes(this)"></label>
+      <a class="btn secondary" href="/simulador">Simulador</a>
+      <button class="btn secondary" id="btn-atualizar" onclick="atualizarFila()">Atualizar</button>
+    </div>
+  </div>
+
+  <!-- ── Stats analíticos ── -->
+  <div id="stats-cards" style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px;display:none">
+    <div class="summary"><div class="metric"><div class="label">Por canal (top)</div><div id="sc-canais" class="value" style="font-size:12px;line-height:1.5"></div></div></div>
+    <div class="metric"><div class="label">Margem negativa</div><div id="sc-neg" class="value" style="color:#ef4444">–</div></div>
+    <div class="metric"><div class="label">Margem 0–10%</div><div id="sc-baixa" class="value" style="color:#f59e0b">–</div></div>
+    <div class="metric"><div class="label">Margem 10–20%</div><div id="sc-media" class="value" style="color:#60a5fa">–</div></div>
+    <div class="metric"><div class="label">Margem &gt;20%</div><div id="sc-boa" class="value" style="color:#22c55e">–</div></div>
+  </div>
+
+  <!-- ── Barra de ações em lote ── -->
+  <div id="bulk-bar" style="display:none;gap:10px;background:rgba(79,140,255,.1);border:1px solid rgba(79,140,255,.3);border-radius:14px;padding:14px 16px;margin-bottom:14px;flex-wrap:wrap">
+    <!-- Linha 1: contagem + aprovação/rejeição -->
+    <div style="display:flex;align-items:center;gap:10px;width:100%;flex-wrap:wrap">
+      <span id="bulk-count" style="font-weight:700;color:#60a5fa;min-width:140px"></span>
+      <button class="btn success" onclick="aprovarSelecionados()" style="padding:8px 14px;font-size:13px">✅ Aprovar selecionados</button>
+      <button class="btn danger" onclick="rejeitarSelecionados()" style="padding:8px 14px;font-size:13px">❌ Rejeitar selecionados</button>
+      <button class="btn secondary" onclick="limparSelecao()" style="padding:8px 14px;font-size:13px">✕ Cancelar</button>
+    </div>
+    <!-- Linha 2: ações de dados em massa -->
+    <div style="display:flex;align-items:center;gap:10px;width:100%;flex-wrap:wrap;padding-top:10px;border-top:1px solid rgba(79,140,255,.2)">
+      <span style="font-size:12px;color:#9fb0d9;font-weight:600;white-space:nowrap">Atualizar em massa:</span>
+
+      <!-- Peso em massa -->
+      <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.04);border:1px solid rgba(79,140,255,.25);border-radius:10px;padding:6px 10px">
+        <label style="font-size:12px;color:#9fb0d9;white-space:nowrap">⚖ Peso (kg):</label>
+        <input id="bulk-peso" type="number" step="0.001" min="0.001" placeholder="0.300"
+          style="width:90px;background:#0d1630;border:1px solid var(--line);color:#fff;padding:6px 8px;border-radius:8px;font-size:13px;font-weight:700"
+          onkeydown="if(event.key==='Enter')aplicarPesoEmMassa()">
+        <button class="btn" onclick="aplicarPesoEmMassa()" style="padding:6px 12px;font-size:12px;background:#4f8cff">Aplicar</button>
+      </div>
+
+      <!-- Custo em massa -->
+      <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.04);border:1px solid rgba(79,140,255,.25);border-radius:10px;padding:6px 10px">
+        <label style="font-size:12px;color:#9fb0d9;white-space:nowrap">💰 Custo (R$):</label>
+        <input id="bulk-custo" type="number" step="0.01" min="0.01" placeholder="25.90"
+          style="width:90px;background:#0d1630;border:1px solid var(--line);color:#fff;padding:6px 8px;border-radius:8px;font-size:13px;font-weight:700"
+          onkeydown="if(event.key==='Enter')aplicarCustoEmMassa()">
+        <button class="btn" onclick="aplicarCustoEmMassa()" style="padding:6px 12px;font-size:12px;background:#4f8cff">Aplicar</button>
+      </div>
+
+      <div id="bulk-progress" style="font-size:12px;color:#9fb0d9"></div>
+    </div>
+  </div>
+
+  <!-- ── Filtros avançados ── -->
+  <div id="filtros-wrap" style="background:rgba(18,26,49,.95);border:1px solid var(--line);border-radius:18px;padding:14px 18px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <span style="font-size:13px;font-weight:700;color:#c9d7ff">Filtros avançados</span>
+      <button class="btn secondary" style="padding:5px 10px;font-size:11px;border-radius:8px" onclick="limparFiltros()">Limpar filtros</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
+      <!-- Status -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;color:var(--muted)">Status</label>
+        <select id="f-status" onchange="aplicarFiltro()" style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px">
+          <option value="">Todos</option>
+          <option value="pendente">Pendentes</option>
+          <option value="incompleto">Incompletos</option>
+          <option value="aprovado">Aprovados</option>
+          <option value="rejeitado">Rejeitados</option>
+        </select>
+      </div>
+      <!-- Canal -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;color:var(--muted)">Canal (melhor)</label>
+        <select id="f-canal" onchange="aplicarFiltro()" style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px">
+          <option value="">Todos os canais</option>
+          <option value="mercado_livre">Mercado Livre</option>
+          <option value="shopify">Shopify</option>
+          <option value="shopee">Shopee</option>
+          <option value="amazon">Amazon</option>
+        </select>
+      </div>
+      <!-- Tipo de custo -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;color:var(--muted)">Tipo de custo</label>
+        <select id="f-custo" onchange="aplicarFiltro()" style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px">
+          <option value="">Todos</option>
+          <option value="simples">Simples (Bling)</option>
+          <option value="composicao">Composição / Kit</option>
+          <option value="override">Override manual</option>
+        </select>
+      </div>
+      <!-- Margem mínima -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;color:var(--muted)">Margem mín. (%)</label>
+        <input id="f-margem-min" type="number" step="1" placeholder="Ex: 10" oninput="aplicarFiltro()" style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px">
+      </div>
+      <!-- Margem máxima -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;color:var(--muted)">Margem máx. (%)</label>
+        <input id="f-margem-max" type="number" step="1" placeholder="Ex: 40" oninput="aplicarFiltro()" style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px">
+      </div>
+      <!-- Custo mínimo -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;color:var(--muted)">Custo mín. (R$)</label>
+        <input id="f-custo-min" type="number" step="0.01" placeholder="Ex: 10" oninput="aplicarFiltro()" style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px">
+      </div>
+      <!-- Custo máximo -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;color:var(--muted)">Custo máx. (R$)</label>
+        <input id="f-custo-max" type="number" step="0.01" placeholder="Ex: 100" oninput="aplicarFiltro()" style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px">
+      </div>
+      <!-- Peso -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;color:var(--muted)">Peso</label>
+        <select id="f-peso" onchange="aplicarFiltro()" style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px">
+          <option value="">Todos</option>
+          <option value="com_peso">Com peso preenchido</option>
+          <option value="sem_peso">Sem peso (=0)</option>
+        </select>
+      </div>
+      <!-- Origem -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;color:var(--muted)">Origem</label>
+        <select id="f-origem" onchange="aplicarFiltro()" style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px">
+          <option value="">Qualquer origem</option>
+          <option value="ajuste_margem">Ajuste universal de margem</option>
+          <option value="simulador">Simulador manual</option>
+        </select>
+      </div>
+      <!-- Ordenação -->
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:11px;color:var(--muted)">Ordenar por</label>
+        <select id="f-ordem" onchange="aplicarFiltro()" style="background:#0d1630;border:1px solid var(--line);color:#fff;padding:8px 10px;border-radius:10px;font-size:12px">
+          <option value="recente">Mais recente</option>
+          <option value="nome">Nome A→Z</option>
+          <option value="custo_desc">Maior custo</option>
+          <option value="custo_asc">Menor custo</option>
+          <option value="margem_desc">Maior margem</option>
+          <option value="margem_asc">Menor margem</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:10px;font-size:12px;color:var(--muted)">
+      Exibindo <b id="filtro-count" style="color:#4f8cff">0</b> de <b id="filtro-total">0</b> itens
+    </div>
+  </div>
+
+  <!-- ── Checkbox de seleção global ── -->
+  <div id="sel-bar" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:13px;color:#9fb0d9">
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+      <input type="checkbox" id="sel-todos" onchange="toggleSelecionarTodos(this.checked)" style="width:16px;height:16px;accent-color:#4f8cff"> Selecionar todos visíveis
+    </label>
+    <span id="sel-info"></span>
+  </div>
+
+  <div id="lista" class="grid"></div>
+</div>
+<script>
+let _todosItens = [];
+function moeda(v){return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
+function formatDate(v){if(!v)return '-'; const d=new Date(v); return isNaN(d)?v:d.toLocaleString('pt-BR')}
+function cardStatus(status){const map={pendente:'#f59e0b',aprovado:'#16a34a',rejeitado:'#ef4444'}; return `<span class="pill" style="border-color:${map[status]||'#263458'}">${(status||'pendente').toUpperCase()}</span>`}
+function renderMarketplaces(marketplaces){const items=Object.values(marketplaces||{});if(!items.length)return '<div class="mini" style="padding:12px">Sem canais para exibir.</div>';return `<div class="table-wrap"><table><thead><tr><th>Canal</th><th>Preço promocional</th><th>Preço virtual</th><th>Dif. nominal</th><th>Dif. %</th><th>Receita líquida</th><th>Lucro</th><th>Lucro líquido</th><th>Margem</th><th>Frete</th><th>Comissão</th><th>Taxa fixa</th><th>Imposto</th><th>Custo total</th><th>Faixa aplicada</th><th>Índice final</th></tr></thead><tbody>${items.map(item=>{const raw=item.raw||{}; const promo=Number(item.preco_promocional||raw.preco_promocional||raw.preco_final||0); const virt=Number(item.preco||raw.preco_virtual||0); const difNom=Number(raw.diferenca_nominal ?? (virt-promo)); const difPct=Number(raw.diferenca_percentual ?? (promo?((virt-promo)/promo)*100:0)); const margem=Number(item.margem||raw.margem||0); return `<tr><td>${item.label||'-'}</td><td>${moeda(promo)}</td><td>${moeda(virt)}</td><td>${moeda(difNom)}</td><td>${difPct.toFixed(2)}%</td><td>${moeda(raw.receita_liquida||0)}</td><td>${moeda(item.lucro||raw.lucro||0)}</td><td>${moeda(raw.lucro_liquido||0)}</td><td class="${margem<0?'neg':''}">${margem.toFixed(2)}%</td><td>${moeda(item.frete||raw.frete||0)}</td><td>${Number(item.comissao||raw.comissao||0).toFixed(2)}</td><td>${moeda(item.taxa_fixa||raw.taxa_fixa||0)}</td><td>${moeda(item.imposto||raw.imposto||0)}</td><td>${moeda(item.custo_total||raw.custo_total||0)}</td><td>${item.faixa_aplicada||raw.faixa_aplicada||'-'}</td><td>${Number(item.indice_final||raw.indice_final||0).toFixed(2)}</td></tr>`}).join('')}</tbody></table></div>`}
+function renderComponentes(aud){const comps=aud.componentes_custo||[];if(!comps.length)return '<div class="mini" style="padding:10px 0">Sem componentes detalhados.</div>';return `<div class="table-wrap"><table style="min-width:820px"><thead><tr><th>SKU componente</th><th>ID</th><th>Qtd.</th><th>Custo unitário</th><th>Subtotal</th><th>Origem busca</th><th>Origem custo</th><th>Warning</th></tr></thead><tbody>${comps.map(c=>`<tr><td>${c.sku||'-'}</td><td>${c.id||'-'}</td><td>${Number(c.quantidade||0).toFixed(2)}</td><td>${moeda(c.custo_unitario||0)}</td><td>${moeda(c.subtotal||0)}</td><td>${c.origem_busca||'-'}</td><td>${c.origem_custo||'-'}</td><td>${c.warning||'-'}</td></tr>`).join('')}</tbody></table></div>`}
+async function aprovar(id){const res=await fetch(`/fila/aprovar/${id}`,{method:'POST'}); const data=await res.json(); if(data.ok){alert('Item aprovado e aplicado.'); carregarFila()} else {alert(data.detail||'Erro ao aprovar.')}}
+async function rejeitar(id){const motivo=prompt('Motivo da rejeição:','Rejeitado manualmente.')||'Rejeitado manualmente.'; const res=await fetch(`/fila/rejeitar/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({motivo})}); const data=await res.json(); if(data.ok){alert('Item marcado como rejeitado.'); carregarFila()} else {alert(data.detail||'Erro ao rejeitar.')}}
+function renderHistorico(item){const hist=item.historico_decisao||[]; if(!hist.length)return '<div class="mini">Sem decisões registradas.</div>'; return `<div class="table-wrap"><table style="min-width:640px"><thead><tr><th>Ação</th><th>Quando</th><th>Motivo / resumo</th></tr></thead><tbody>${hist.map(h=>`<tr><td>${h.acao||'-'}</td><td>${formatDate(h.quando)}</td><td>${h.motivo || JSON.stringify(h.resultado_resumido || {})}</td></tr>`).join('')}</tbody></table></div>`}
+// ── Seleção múltipla ──────────────────────────────────────────────────────────
+let _selecionados = new Set();
+
+function atualizarBulkBar(){
+  const bar = document.getElementById('bulk-bar');
+  const cnt = document.getElementById('bulk-count');
+  const info = document.getElementById('sel-info');
+  bar.style.display = _selecionados.size > 0 ? 'flex' : 'none';
+  if(cnt) cnt.textContent = `${_selecionados.size} item(s) selecionado(s)`;
+  if(info) info.textContent = _selecionados.size > 0 ? `${_selecionados.size} selecionado(s)` : '';
+}
+
+function toggleSelecao(id, checked){
+  if(checked) _selecionados.add(id); else _selecionados.delete(id);
+  atualizarBulkBar();
+}
+
+function toggleSelecionarTodos(checked){
+  _selecionados.clear();
+  if(checked){
+    document.querySelectorAll('.item-checkbox').forEach(cb => {
+      _selecionados.add(cb.dataset.id);
+      cb.checked = true;
+    });
+  } else {
+    document.querySelectorAll('.item-checkbox').forEach(cb => cb.checked = false);
+  }
+  atualizarBulkBar();
+}
+
+function limparSelecao(){
+  _selecionados.clear();
+  document.querySelectorAll('.item-checkbox').forEach(cb => cb.checked = false);
+  document.getElementById('sel-todos').checked = false;
+  atualizarBulkBar();
+}
+
+async function aprovarSelecionados(){
+  const ids = [..._selecionados];
+  if(!ids.length) return;
+  if(!confirm(`Aprovar ${ids.length} item(s)? Os preços serão aplicados no Bling.`)) return;
+  const prog = document.getElementById('bulk-progress');
+
+  // Processa em batches de 20
+  let aprovados = 0, erros = 0;
+  for(let i = 0; i < ids.length; i += 20){
+    const batch = ids.slice(i, i+20);
+    prog.textContent = `Aprovando... ${Math.min(i+20, ids.length)}/${ids.length}`;
+    const res = await fetch('/fila/aprovar-lote', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ids: batch})});
+    const d = await res.json();
+    aprovados += d.aprovados || 0;
+    erros += d.erros || 0;
+  }
+  prog.textContent = `✅ ${aprovados} aprovados${erros ? `, ❌ ${erros} erros` : ''}`;
+  limparSelecao();
+  setTimeout(() => { carregarFila(); prog.textContent=''; }, 2000);
+}
+
+async function rejeitarSelecionados(){
+  const ids = [..._selecionados];
+  if(!ids.length) return;
+  const motivo = prompt(`Motivo para rejeitar ${ids.length} item(s):`, 'Rejeitado em lote.') || 'Rejeitado em lote.';
+  const res = await fetch('/fila/rejeitar-lote', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ids, motivo})});
+  const d = await res.json();
+  alert(`${d.rejeitados} item(s) rejeitado(s).`);
+  limparSelecao();
+  carregarFila();
+}
+
+async function aplicarPesoEmMassa(){
+  const ids = [..._selecionados];
+  if(!ids.length){ alert('Selecione pelo menos um item.'); return; }
+  const pesoVal = parseFloat(document.getElementById('bulk-peso').value);
+  if(!pesoVal || pesoVal <= 0){ alert('Informe um peso válido em kg.'); return; }
+  const prog = document.getElementById('bulk-progress');
+  prog.textContent = `Aplicando peso ${pesoVal}kg em 0/${ids.length}...`;
+  let ok=0, erros=0;
+  for(let i=0; i<ids.length; i++){
+    try{
+      const r = await fetch(`/fila/completar/${ids[i]}`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({tipo:'peso', valor:pesoVal})});
+      if(r.ok) ok++; else erros++;
+    }catch(e){ erros++; }
+    prog.textContent = `Peso ${pesoVal}kg: ${ok+erros}/${ids.length} (${ok} ok${erros?', '+erros+' erros':''})`;
+    if(i < ids.length-1) await new Promise(r=>setTimeout(r,80));
+  }
+  prog.textContent = `✅ Peso aplicado: ${ok}/${ids.length}${erros?' | ⚠ '+erros+' erros':''}`;
+  document.getElementById('bulk-peso').value = '';
+  carregarFila();
+}
+
+async function aplicarCustoEmMassa(){
+  const ids = [..._selecionados];
+  if(!ids.length){ alert('Selecione pelo menos um item.'); return; }
+  const custoVal = parseFloat(document.getElementById('bulk-custo').value);
+  if(!custoVal || custoVal <= 0){ alert('Informe um custo válido em R$.'); return; }
+  const prog = document.getElementById('bulk-progress');
+  prog.textContent = `Aplicando custo R$${custoVal.toFixed(2)} em 0/${ids.length}...`;
+  let ok=0, erros=0;
+  for(let i=0; i<ids.length; i++){
+    try{
+      const r = await fetch(`/fila/completar/${ids[i]}`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({tipo:'custo', valor:custoVal})});
+      if(r.ok) ok++; else erros++;
+    }catch(e){ erros++; }
+    prog.textContent = `Custo R$${custoVal.toFixed(2)}: ${ok+erros}/${ids.length} (${ok} ok${erros?', '+erros+' erros':''})`;
+    if(i < ids.length-1) await new Promise(r=>setTimeout(r,80));
+  }
+  prog.textContent = `✅ Custo aplicado: ${ok}/${ids.length}${erros?' | ⚠ '+erros+' erros':''}`;
+  document.getElementById('bulk-custo').value = '';
+  carregarFila();
+}
+
+// ── Stats analíticos ──────────────────────────────────────────────────────────
+async function carregarStatsDetalhados(){
+  try{
+    const res = await fetch('/fila/stats-detalhados');
+    const d = await res.json();
+    const cards = document.getElementById('stats-cards');
+    if(cards) cards.style.display = 'grid';
+    const canaisEl = document.getElementById('sc-canais');
+    if(canaisEl) canaisEl.innerHTML = Object.entries(d.canais||{}).slice(0,4).map(([k,v])=>`<b>${k}</b>: ${v}`).join('<br>');
+    const dm = d.dist_margem || {};
+    if(document.getElementById('sc-neg')) document.getElementById('sc-neg').textContent = dm.negativa ?? '–';
+    if(document.getElementById('sc-baixa')) document.getElementById('sc-baixa').textContent = dm['0_a_10'] ?? '–';
+    if(document.getElementById('sc-media')) document.getElementById('sc-media').textContent = dm['10_a_20'] ?? '–';
+    if(document.getElementById('sc-boa')) document.getElementById('sc-boa').textContent = dm.acima_20 ?? '–';
+    const sub = document.getElementById('fila-subtitulo');
+    if(sub && d.total_pendentes) sub.textContent = `${d.total_pendentes} pendentes · margem média ${d.avg_margem?.toFixed(1)}%`;
+  }catch(e){}
+}
+
+function renderItem(item){
+  if(item.status === 'incompleto') return renderItemIncompleto(item);
+  const produto=item.produto_bling||{}; const aud=item.auditoria||{};
+  const isPendente = item.status === 'pendente';
+  return `<div class="item" id="item-${item.id}">
+    <div class="item-head">
+      <div style="display:flex;align-items:flex-start;gap:10px">
+        ${isPendente ? `<input type="checkbox" class="item-checkbox" data-id="${item.id}" style="margin-top:6px;width:16px;height:16px;accent-color:#4f8cff;flex-shrink:0" onchange="toggleSelecao('${item.id}',this.checked)">` : ''}
+        <div>
+          <div class="title">${item.nome || produto.nome || '[ERRO: PREVIEW INVÁLIDO]'}</div>
+          <div class="meta">${cardStatus(item.status || 'pendente')}<span class="pill">SKU ${item.sku || aud.sku || produto.codigo || '-'}</span><span class="pill">Bling ID ${produto.id || '-'}</span><span class="pill">Criado ${formatDate(item.criado_em)}</span><span class="pill">Atualizado ${formatDate(item.atualizado_em)}</span></div>
+        </div>
+      </div>
+      <div class="meta">
+        ${isPendente ? `<button class="btn success" onclick="aprovar('${item.id}')">Aprovar</button><button class="btn danger" onclick="rejeitar('${item.id}')">Rejeitar</button>` : ''}
+      </div>
+    </div>
+    <div class="summary">
+      <div class="metric"><div class="label">Tipo de custo</div><div class="value">${aud.tipo_custo || '-'}</div></div>
+      <div class="metric"><div class="label">Custo usado</div><div class="value">${moeda(aud.custo_usado || 0)}</div></div>
+      <div class="metric"><div class="label">Peso usado</div><div class="value">${Number(aud.peso_usado || 0).toFixed(3)}</div></div>
+      <div class="metric"><div class="label">Origem custo</div><div class="value" style="font-size:16px">${aud.origem_custo || '-'}</div></div>
+      <div class="metric"><div class="label">Melhor canal</div><div class="value" style="font-size:16px">${(item.payload_original && item.payload_original.melhor_canal) || '-'}</div></div>
+      <div class="metric"><div class="label">Fórmula</div><div class="value" style="font-size:16px">${aud.formula_version || '-'}</div></div>
+    </div>
+    <h3 style="margin:0 0 10px">Retrato multicanal</h3>${renderMarketplaces(item.marketplaces || {})}
+    <details open><summary>Auditoria do custo e da composição</summary><div class="mini" style="margin:10px 0 12px">${aud.warning_custo || 'Sem alertas de custo.'}</div>${renderComponentes(aud)}</details>
+    <details><summary>Histórico de decisão</summary>${renderHistorico(item)}</details>
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid #263458">
+      <span style="font-size:11px;color:#9fb0d9;margin-right:8px">Abrir no marketplace:</span>
+      <span id="links-pend-${item.id}" style="font-size:12px;color:#64748b">Carregando...</span>
+    </div>
+  </div>`;
+}
+function _getMelhorMargem(item){
+  // Retorna a melhor margem entre os canais do item
+  const mps = Object.values(item.marketplaces||{});
+  if(!mps.length) return null;
+  const margens = mps.map(mp=>{
+    const raw = mp.raw||{};
+    return Number(mp.margem||raw.margem||raw.margem_liquida_percentual||0);
+  });
+  return Math.max(...margens);
+}
+
+function limparFiltros(){
+  ['f-status','f-canal','f-custo','f-peso','f-origem','f-ordem'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  ['f-margem-min','f-margem-max','f-custo-min','f-custo-max'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('f-ordem').value='recente';
+  document.getElementById('busca').value='';
+  aplicarFiltro();
+}
+
+function aplicarFiltro(){
+  const termo=(document.getElementById('busca')?.value||'').toLowerCase().trim();
+  const fStatus=(document.getElementById('f-status')?.value||'').toLowerCase();
+  const fCanal=(document.getElementById('f-canal')?.value||'').toLowerCase();
+  const fCusto=(document.getElementById('f-custo')?.value||'');
+  const fMargemMin=parseFloat(document.getElementById('f-margem-min')?.value||'');
+  const fMargemMax=parseFloat(document.getElementById('f-margem-max')?.value||'');
+  const fCustoMin=parseFloat(document.getElementById('f-custo-min')?.value||'');
+  const fCustoMax=parseFloat(document.getElementById('f-custo-max')?.value||'');
+  const fPeso=(document.getElementById('f-peso')?.value||'');
+  const fOrigem=(document.getElementById('f-origem')?.value||'');
+  const fOrdem=(document.getElementById('f-ordem')?.value||'recente');
+
+  const el=document.getElementById('lista');
+  if(!el) return;
+
+  let filtrados = _todosItens.filter(i=>{
+    const aud = i.auditoria||{};
+    const prod = i.produto_bling||{};
+    const nome = (i.nome||'').toLowerCase();
+    const sku = (i.sku||aud.sku||prod.codigo||'').toLowerCase();
+    const ean = (prod.gtin||'').toLowerCase();
+    const origem = (i.origem||'').toLowerCase();
+    const canal = (i.payload_original?.melhor_canal||i.melhor_canal||'').toLowerCase();
+    const tipoCusto = (aud.tipo_custo||'').toLowerCase();
+    const custo = Number(aud.custo_usado||0);
+    const peso = Number(aud.peso_usado||0);
+    const melhorMargem = _getMelhorMargem(i);
+
+    if(termo && !nome.includes(termo) && !sku.includes(termo) && !ean.includes(termo)) return false;
+    if(fStatus && (i.status||'pendente')!==fStatus) return false;
+    if(fCanal && !canal.includes(fCanal)) return false;
+    if(fCusto){
+      if(fCusto==='simples' && !tipoCusto.includes('simples') && !tipoCusto.includes('bling')) return false;
+      if(fCusto==='composicao' && !tipoCusto.includes('composicao') && !tipoCusto.includes('kit') && !tipoCusto.includes('comp')) return false;
+      if(fCusto==='override' && !tipoCusto.includes('override') && !tipoCusto.includes('manual')) return false;
+    }
+    if(!isNaN(fMargemMin) && melhorMargem!==null && melhorMargem<fMargemMin) return false;
+    if(!isNaN(fMargemMax) && melhorMargem!==null && melhorMargem>fMargemMax) return false;
+    if(!isNaN(fCustoMin) && custo<fCustoMin) return false;
+    if(!isNaN(fCustoMax) && custo>fCustoMax) return false;
+    if(fPeso==='com_peso' && peso<=0) return false;
+    if(fPeso==='sem_peso' && peso>0) return false;
+    if(fOrigem==='ajuste_margem' && !origem.includes('ajuste_margem')) return false;
+    if(fOrigem==='simulador' && origem.includes('ajuste_margem')) return false;
+    return true;
+  });
+
+  // Ordenação
+  filtrados.sort((a,b)=>{
+    const audA=a.auditoria||{}, audB=b.auditoria||{};
+    if(fOrdem==='nome') return (a.nome||'').localeCompare(b.nome||'');
+    if(fOrdem==='custo_desc') return Number(audB.custo_usado||0)-Number(audA.custo_usado||0);
+    if(fOrdem==='custo_asc') return Number(audA.custo_usado||0)-Number(audB.custo_usado||0);
+    if(fOrdem==='margem_desc') return (_getMelhorMargem(b)||0)-(_getMelhorMargem(a)||0);
+    if(fOrdem==='margem_asc') return (_getMelhorMargem(a)||0)-(_getMelhorMargem(b)||0);
+    // recente (default)
+    return new Date(b.criado_em||0)-new Date(a.criado_em||0);
+  });
+
+  // Atualizar contadores
+  const countEl=document.getElementById('busca-count');
+  if(countEl) countEl.textContent=termo?`${filtrados.length} de ${_todosItens.length}`:'';
+  const fcEl=document.getElementById('filtro-count');
+  const ftEl=document.getElementById('filtro-total');
+  if(fcEl) fcEl.textContent=filtrados.length;
+  if(ftEl) ftEl.textContent=_todosItens.length;
+
+  if(!filtrados.length){
+    el.innerHTML=_todosItens.length
+      ?'<div class="empty">Nenhum item encontrado com esses filtros.</div>'
+      :'<div class="empty">Nenhum item na fila.</div>';
+    return;
+  }
+  el.innerHTML=filtrados.map(renderItem).join('');
+}
+async function carregarFila(){
+  try{
+    const res=await fetch('/fila/lista');
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    const lista=data.itens||[];
+    const stats=data.stats||{pendente:0,aprovado:0,rejeitado:0,incompleto:0};
+    document.getElementById('statsPendente').textContent=`Pendentes: ${stats.pendente||0}`;
+    document.getElementById('statsAprovado').textContent=`Aprovados: ${stats.aprovado||0}`;
+    document.getElementById('statsRejeitado').textContent=`Rejeitados: ${stats.rejeitado||0}`;
+    const incEl=document.getElementById('statsIncompleto');
+    if(incEl) incEl.textContent=`Incompletos: ${stats.incompleto||0}`;
+    _todosItens = lista;
+    _selecionados.clear();
+    atualizarBulkBar();
+    aplicarFiltro();
+    carregarStatsDetalhados();
+    lista.filter(i=>i.status==='incompleto').forEach((i,idx)=>{setTimeout(()=>carregarLinksCard(i.sku,i.id),100);setTimeout(()=>carregarNomeProduto(i.sku,i.id),idx*50);});
+    lista.filter(i=>i.status==='pendente').forEach((i,idx)=>setTimeout(()=>carregarLinksPendente(i.sku,i.id),idx*200));
+  }catch(e){
+    console.error('Erro ao carregar fila:',e);
+    const el=document.getElementById('lista');
+    if(el) el.innerHTML='<div class="empty" style="color:#fca5a5">Erro ao carregar fila: '+e.message+'</div>';
+  }
+}
+
+async function atualizarFila(){
+  const btn=document.getElementById('btn-atualizar');
+  if(btn){btn.disabled=true; btn.textContent='Atualizando...';}
+  await carregarFila();
+  if(btn){
+    btn.textContent='✓ Atualizado';
+    setTimeout(()=>{btn.textContent='Atualizar';btn.disabled=false;},1500);
+  }
+}
+
+async function carregarLinksPendente(sku, id){
+  try{
+    const r=await fetch('/fila/links/'+sku);
+    if(!r.ok) return;
+    const d=await r.json();
+    const el=document.getElementById('links-pend-'+id);
+    if(!el) return;
+    const ls=d.links||{};
+    const nomes={bling:'Bling',ml:'Mercado Livre',shopify:'Shopify',amazon:'Amazon',shopee:'Shopee'};
+    const icons={bling:'🔵',ml:'🟡',shopify:'🟢',amazon:'🟠',shopee:'🟠'};
+    el.innerHTML=Object.entries(ls).map(([k,v])=>
+      `<a href="${v}" target="_blank" style="color:#4f8cff;font-size:12px;text-decoration:none">${icons[k]||'🔗'} ${nomes[k]||k}</a>`
+    ).join(' ');
+    if(!Object.keys(ls).length) el.textContent='';
+  }catch(e){}
+}
+
+async function baixarPlanilha(){
+  const btn = document.getElementById('btn-planilha');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Gerando...'; }
+  try{
+    const res = await fetch('/fila/exportar-sem-dados');
+    if(!res.ok){ alert('Erro ao gerar planilha: HTTP '+res.status); return; }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'produtos_sem_dados_'+new Date().toISOString().slice(0,10)+'.csv';
+    a.click();
+    return;
+  } catch(e){
+    alert('Erro: '+e.message);
+    return;
+  } finally {
+    if(btn){ btn.disabled=false; btn.textContent='⬇ Planilha'; }
+  }
+}
+
+let _importPoll = null;
+
+async function uploadCorrecoes(input){
+  const file = input.files[0];
+  if(!file) return;
+  const label = input.parentElement;
+  label.childNodes[0].textContent = ' Enviando...';
+  try{
+    const text = await file.text();
+    const res = await fetch('/fila/importar-correcoes', {
+      method:'POST', headers:{'Content-Type':'text/csv'}, body: text
+    });
+    const d = await res.json();
+    if(d.ok && d.iniciado){
+      mostrarProgressoImport(d.total);
+    } else {
+      alert('Erro: '+(d.detail||JSON.stringify(d)));
+    }
+  } catch(e){
+    alert('Erro: '+e.message);
+  } finally {
+    label.childNodes[0].textContent = '⬆ Upload';
+    input.value = '';
+  }
+}
+
+function mostrarProgressoImport(total){
+  let bar = document.getElementById('import-progress-bar');
+  if(!bar){
+    bar = document.createElement('div');
+    bar.id = 'import-progress-bar';
+    bar.style = 'position:fixed;bottom:20px;right:20px;background:#1e2a47;border:1px solid #3b5bdb;border-radius:14px;padding:16px 20px;min-width:280px;z-index:9999;color:#fff;font-size:13px;box-shadow:0 8px 32px rgba(0,0,0,.4)';
+    document.body.appendChild(bar);
+  }
+  bar.innerHTML = `<div style="font-weight:700;margin-bottom:8px">Atualizando Bling...</div>
+    <div id="ip-prog" style="color:#60a5fa">Iniciando... (${total} produtos)</div>
+    <div id="ip-bar-wrap" style="background:#0d1730;border-radius:8px;height:8px;margin-top:8px;overflow:hidden"><div id="ip-bar" style="background:#3b5bdb;height:8px;width:0%;transition:width .4s"></div></div>`;
+  if(_importPoll) clearInterval(_importPoll);
+  _importPoll = setInterval(async ()=>{
+    try{
+      const s = await fetch('/fila/importar-correcoes/status').then(r=>r.json());
+      const pct = s.total > 0 ? Math.round((s.ok+s.erros+s.ignorados)/s.total*100) : 0;
+      document.getElementById('ip-prog').textContent = `OK: ${s.ok} | Erros: ${s.erros} | Ignorados: ${s.ignorados} de ${s.total}`;
+      document.getElementById('ip-bar').style.width = pct+'%';
+      if(s.status === 'done'){
+        clearInterval(_importPoll); _importPoll = null;
+        document.getElementById('ip-prog').textContent = `Concluído! ${s.ok} atualizados no Bling.`;
+        document.getElementById('ip-bar').style.background = '#22c55e';
+        setTimeout(()=>{ bar.remove(); carregarFila(); }, 4000);
+      }
+    }catch(_){}
+  }, 2000);
+}
+
+carregarFila();
+
+function renderItemIncompleto(item){
+  const campos = item.campos_faltando || [];
+  const sku = item.sku || '';
+  const id = item.id || '';
+  const comps = (item.dados_incompletos || {}).componentes_sem_custo || [];
+  const comp_nome = comps.length > 0 ? comps[0].nome || comps[0].sku || '' : '';
+  const titulo = campos.includes('peso')
+    ? 'Preencha o peso do produto no Bling.'
+    : campos.includes('composicao') && comp_nome
+    ? `Componente sem custo: ${comp_nome}`
+    : campos.includes('custo') || campos.includes('composicao')
+    ? 'Preencha o preço de compra no estoque ou revise a composição do anúncio.'
+    : 'Dados incompletos para precificação.';
+  const tipo_campo = campos.includes('peso') ? 'peso' : 'custo';
+  const label_campo = campos.includes('peso') ? 'Peso do produto (kg)' : 'Custo de compra (R$)';
+  const placeholder = campos.includes('peso') ? 'ex: 0.300' : 'ex: 15.90';
+  const erro_msg = item.erro_msg || '';
+
+  const _nomeErro = ['Preencha','preencha','Dados incompletos','Componente sem custo'];
+  const nome_produto_raw = item.nome || '';
+  const nomeEhMensagem = _nomeErro.some(p => nome_produto_raw.includes(p));
+  const nome_produto = nomeEhMensagem ? '' : nome_produto_raw;
+  return `<div class="item" style="border-left:4px solid #7c3aed" id="card-${id}">
+    <div class="item-head">
+      <div>
+        <div class="title" id="nome-${id}">${nome_produto || '<span style="color:#64748b;font-size:13px">Carregando nome...</span>'}</div>
+        <div style="font-size:13px;color:#f59e0b;margin-bottom:6px">${titulo}</div>
+        <div class="meta">
+          <span class="pill" style="background:#7c3aed;color:#fff">INCOMPLETO</span>
+          <span class="pill">SKU ${sku}</span>
+          <span class="pill">Criado ${formatDate(item.criado_em)}</span>
+        </div>
+      </div>
+      <div class="meta">
+        <button class="btn danger" onclick="ignorarIncompleto('${id}')">Ignorar</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;margin-top:12px">
+      <div style="flex:1;min-width:260px">
+        <div style="color:#f59e0b;font-weight:600;margin-bottom:8px">⚠️ Corrigir no Bling</div>
+        <label style="font-size:12px;color:#9fb0d9">${label_campo}</label>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <input type="number" id="val-${id}" step="0.001" min="0" placeholder="${placeholder}"
+            style="background:#1e293b;border:1px solid #334155;color:#eef2ff;padding:8px 12px;border-radius:6px;width:160px">
+          <button class="btn success" onclick="salvarIncompleto('${id}','${sku}','${tipo_campo}')">Salvar no Bling</button>
+        </div>
+        ${erro_msg ? `<div style="font-size:11px;color:#64748b;margin-top:6px">Erro: ${erro_msg}</div>` : ''}
+      </div>
+      <div style="min-width:180px">
+        <div style="font-size:12px;color:#9fb0d9;margin-bottom:6px">Consultar no marketplace:</div>
+        <div id="links-${id}" style="display:flex;flex-direction:column;gap:5px">
+          <span style="font-size:11px;color:#64748b">Carregando...</span>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function salvarIncompleto(id, sku, tipo){
+  const valEl = document.getElementById('val-'+id);
+  const val = parseFloat(valEl?.value);
+  if(!val || val <= 0){ 
+    mostrarFeedbackCard(id, 'Informe um valor válido.', false);
+    return; 
+  }
+  const btnEl = valEl?.parentElement?.querySelector('button');
+  if(btnEl){ btnEl.disabled=true; btnEl.textContent='Salvando...'; }
+  const r = await fetch('/fila/completar/'+id, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({tipo, valor:val})
+  });
+  const d = await r.json();
+  if(d.ok){ 
+    mostrarFeedbackCard(id, '✅ ' + (d.mensagem || 'Salvo! Será recalculado no próximo ciclo.'), true);
+    setTimeout(()=>carregarFila(), 2000);
+  } else {
+    mostrarFeedbackCard(id, '❌ ' + (d.detail || 'Erro ao salvar.'), false);
+    if(btnEl){ btnEl.disabled=false; btnEl.textContent='Salvar no Bling'; }
+  }
+}
+
+function mostrarFeedbackCard(id, msg, sucesso){
+  const card = document.getElementById('card-'+id);
+  if(!card) return;
+  // Remove feedback anterior
+  const antigo = card.querySelector('.feedback-msg');
+  if(antigo) antigo.remove();
+  // Cria novo feedback
+  const div = document.createElement('div');
+  div.className = 'feedback-msg';
+  div.style.cssText = `margin-top:10px;padding:10px 14px;border-radius:6px;font-size:13px;font-weight:600;background:${sucesso?'rgba(34,197,94,.15)':'rgba(239,68,68,.15)'};color:${sucesso?'#22c55e':'#ef4444'};border:1px solid ${sucesso?'rgba(34,197,94,.3)':'rgba(239,68,68,.3)'}`;
+  div.textContent = msg;
+  // Insere após o botão salvar
+  const form = card.querySelector('div[style*="display:flex"]');
+  if(form) form.parentElement.appendChild(div);
+  else card.appendChild(div);
+}
+
+async function ignorarIncompleto(id){
+  if(!confirm('Ignorar este item? Ele voltará na próxima vez que o scheduler rodar.')) return;
+  await fetch('/fila/rejeitar/'+id, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({motivo:'Ignorado manualmente.'})
+  });
+  carregarFila();
+}
+
+async function carregarNomeProduto(sku, id){
+  const el = document.getElementById('nome-'+id);
+  if(!el || (el.textContent && !el.querySelector('span'))) return;
+  try{
+    const r = await fetch('/bling/produto/buscar-por-sku', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sku})});
+    if(!r.ok) return;
+    const d = await r.json();
+    const nome = ((d.produtos||[])[0]||{}).nome || '';
+    if(el) el.textContent = nome || sku;
+  }catch(e){ if(el) el.textContent = sku; }
+}
+
+async function carregarLinksCard(sku, id){
+  try{
+    const r = await fetch('/fila/links/'+sku);
+    if(!r.ok) return;
+    const d = await r.json();
+    const el = document.getElementById('links-'+id);
+    if(!el) return;
+    const ls = d.links || {};
+    const nomes = {bling:'Bling',ml:'Mercado Livre',shopify:'Shopify',amazon:'Amazon'};
+    const icons = {bling:'🔵',ml:'🟡',shopify:'🟢',amazon:'🟠'};
+    el.innerHTML = Object.entries(ls).map(([k,v])=>
+      `<a href="${v}" target="_blank" style="color:#4f8cff;font-size:12px;text-decoration:none">${icons[k]||'🔗'} ${nomes[k]||k}</a>`
+    ).join('');
+  }catch(e){}
+}
+
+function filtrarStatus(status){
+  const sel = document.getElementById('f-status');
+  if(sel){
+    sel.value = (sel.value === status) ? '' : status; // toggle
+  }
+  aplicarFiltro();
+  // Scroll até os filtros
+  document.getElementById('filtros-wrap')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+</script>
+<!-- Botão Início -->
+<a href="/" id="btn-inicio" title="Voltar para o início" style="position:fixed;bottom:24px;left:24px;z-index:9999;background:#4f8cff;color:#fff;padding:10px 20px;border-radius:14px;font-weight:700;text-decoration:none;font-family:Arial,sans-serif;font-size:14px;box-shadow:0 4px 20px rgba(79,140,255,.45);display:inline-flex;align-items:center;gap:8px;transition:background .2s,transform .15s" onmouseover="this.style.background='#2563eb';this.style.transform='scale(1.05)'" onmouseout="this.style.background='#4f8cff';this.style.transform='scale(1)'">🏠 Início</a>
+</body></html>

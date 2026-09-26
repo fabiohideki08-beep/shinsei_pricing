@@ -1,0 +1,115 @@
+# ─── Python ───────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ─── Ambiente virtual ─────────────────────────────────────────
+venv/
+env/
+.venv/
+
+# ─── Variáveis de ambiente (NUNCA versionar com valores reais) ─
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+
+# ─── Credenciais e tokens (CRÍTICO — NUNCA versionar) ─────────
+data/shopify_config.json
+data/bling_tokens.json
+data/bling_oauth_state.json
+data/ml_tokens.json
+data/ml_oauth_state.json
+data/shopify_state.json
+data/google_service_account.json
+bling_token.json
+google-ads.yaml
+shinsei-market-seo-*.json
+data/shopee_cookies.txt
+data/melhorenvio_token.json
+
+# ─── Banco de dados local ─────────────────────────────────────
+*.db
+*.db-shm
+*.db-wal
+shinsei.db
+
+# ─── Dados gerados em runtime (grandes / sensíveis) ───────────
+data/all_products_cache.json
+data/amazon_marketing_cache.json
+data/auditoria_completa.json
+data/avaliacoes_com_texto.csv
+data/avaliacoes_shopify.csv
+data/bling_order_ids_cache.json
+data/bling_sku_sales_cache.json
+data/colecoes_ordenadas.json
+data/descricoes_rascunho.json
+data/fila_*.json
+data/fix_palavras_restritas_log.json
+data/gmc_*.json
+data/ml_price_suggestions.json
+data/produto*.json
+data/scbot_log.json
+data/seo_health_cache.json
+data/shopee_*.json
+
+# ─── Logs e histórico ─────────────────────────────────────────
+data/historico_precificacao.jsonl
+data/pricing_logs.jsonl
+data/webhook_logs.jsonl
+data/run_log.txt
+data/ordenar_log.txt
+data/merchant_custom_labels_log.txt
+data/merchant_gtin_err.txt
+data/merchant_gtin_log.txt
+data/identifier_err.txt
+data/identifier_log.txt
+logs/
+*.log
+*.jsonl
+
+# ─── Imagens geradas / assets de dados ────────────────────────
+data/*.jpg
+data/*.png
+data/*.html
+
+# ─── Arquivos temporários e backups ───────────────────────────
+*_backup.*
+*_old.*
+*- Copia*
+~$*
+*.tmp
+app_old.py
+app_mock_backup.py
+app_v4_backup.py
+index_backup.html
+index_final_backup.html
+modulo_regras_precificacao.py.py
+
+# ─── IDEs ─────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ─── OS ───────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Excel temporário ─────────────────────────────────────────
+~$*.xlsx
+*.xlsb
+data/temp.xlsx
+
+# ─── Claude worktrees (internos) ──────────────────────────────
+.claude/
+railway_vars.env

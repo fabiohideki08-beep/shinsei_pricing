@@ -47,6 +47,31 @@
       <div id="status" class="status">Carregando status...</div>
     </div>
 
+    <!-- ── Conta AKG ────────────────────────────────────────────────────── -->
+    <div class="card">
+      <h2>Conta AKG — Mercado Livre</h2>
+      <div class="sub" style="margin-bottom:16px">Conexão OAuth e publicação dos anúncios da Shinsei na conta AKG.</div>
+
+      <div class="actions">
+        <a class="btn" href="/ml/login2">Conectar ML AKG</a>
+        <button class="secondary" onclick="renovarTokenAkg()">Renovar token AKG</button>
+        <button class="secondary" onclick="statusAkg()">Atualizar status AKG</button>
+      </div>
+      <div id="status-akg" class="status" style="margin-top:12px">—</div>
+
+      <hr style="margin:20px 0;border:none;border-top:1px solid #e5e7eb">
+
+      <h3 style="margin:0 0 12px">Publicar anúncios Shinsei → AKG (Grátis)</h3>
+      <div class="actions">
+        <button onclick="dryRun()" style="background:#f59e0b;color:#fff">🔍 Testar (dry-run 10)</button>
+        <button onclick="testeReal()" style="background:#7c3aed;color:#fff">🧪 Publicar 1 real</button>
+        <button onclick="iniciarCopia()" style="background:#16a34a;color:#fff">🚀 Iniciar publicação</button>
+        <button onclick="statusCopia()" class="secondary">📊 Ver progresso</button>
+        <button onclick="resetarCopia()" style="background:#dc2626;color:#fff">🗑 Resetar progresso</button>
+      </div>
+      <div id="log-copia" style="margin-top:12px;padding:14px;border-radius:12px;background:#f3f4f6;font-family:monospace;font-size:13px;min-height:60px;white-space:pre-wrap">—</div>
+    </div>
+
     <div class="card">
       <h2>Como usar</h2>
       <p>1. Preencha o Client ID, Client Secret e o Callback.</p>
@@ -110,8 +135,103 @@
     async function carregarTudo(){
       await carregarConfig();
       await carregarStatus();
+      await statusAkg();
     }
     carregarTudo();
+
+    async function statusAkg(){
+      const box = document.getElementById('status-akg');
+      try {
+        const r = await fetch('/ml/status2');
+        const d = await r.json();
+        box.className = 'status ' + (d.conectado ? 'ok' : 'bad');
+        box.innerHTML = `<strong>AKG ML:</strong> ${d.conectado ? '✅ Conectado' : '❌ Não conectado'} ${d.seller_id ? '| seller_id: ' + d.seller_id : ''}`;
+      } catch(e) { box.textContent = 'Falha ao carregar status AKG.'; }
+    }
+
+    async function renovarTokenAkg(){
+      const r = await fetch('/ml/refresh2', {method:'POST'});
+      const d = await r.json();
+      alert(d.success ? 'Token AKG renovado.' : (d.detail || 'Falha.'));
+      statusAkg();
+    }
+
+    async function _post(url) {
+      const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}});
+      if (!r.ok) { const t = await r.text(); throw new Error(`HTTP ${r.status}: ${t.slice(0,200)}`); }
+      return r.json();
+    }
+    async function _get(url) {
+      const r = await fetch(url);
+      if (!r.ok) { const t = await r.text(); throw new Error(`HTTP ${r.status}: ${t.slice(0,200)}`); }
+      return r.json();
+    }
+
+    async function testeReal(){
+      const box = document.getElementById('log-copia');
+      if (!confirm('Publicar 1 item REAL no ML AKG? Será criado um anúncio de verdade.')) return;
+      box.textContent = '⏳ Publicando 1 item real...';
+      try {
+        const d = await _post('/ml/akg/copiar-shinsei/teste-real');
+        const criado = d.criados_detalhe?.[0];
+        let txt = `✅ Criados: ${d.criados} | ❌ Falhas: ${d.falhas}\n\n`;
+        if (criado) {
+          txt += `SKU: ${criado.sku}\nShinsei ID: ${criado.shinsei_id}\nAKG ID: ${criado.akg_id}\nTítulo: ${criado.title || '-'}\n`;
+          if (criado.akg_id && criado.akg_id !== 'DRY_RUN') {
+            txt += `\n🔗 Verificando no ML...`;
+            box.textContent = txt;
+            try {
+              const v = await _get(`/ml/akg/verificar-item/${criado.akg_id}`);
+              txt += `\n✅ Item confirmado no ML!\nStatus: ${v.status}\nTipo: ${v.listing_type_id}\nPreço: R$ ${v.price}\nLink: ${v.permalink}`;
+            } catch(e2) { txt += `\n⚠️ Verificação falhou: ${e2.message}`; }
+          }
+        }
+        if (d.falhas_detalhe?.length) txt += `\nFalhas:\n` + d.falhas_detalhe.map(f=>`${f.sku}: ${f.erro}`).join('\n');
+        if (d.log?.length) txt += `\n\nLog:\n` + d.log.join('\n');
+        box.textContent = txt;
+      } catch(e) { box.textContent = '❌ Erro: ' + e.message; }
+    }
+
+    async function dryRun(){
+      const box = document.getElementById('log-copia');
+      box.textContent = '⏳ Testando 10 itens...';
+      try {
+        const d = await _post('/ml/akg/copiar-shinsei/dry-run?limit=10');
+        box.textContent = JSON.stringify(d, null, 2);
+      } catch(e) { box.textContent = '❌ Erro: ' + e.message; }
+    }
+
+    async function iniciarCopia(){
+      if (!confirm('Iniciar a publicação de todos os anúncios da Shinsei na conta AKG como Grátis?')) return;
+      const box = document.getElementById('log-copia');
+      box.textContent = '🚀 Iniciando job em background...';
+      try {
+        const d = await _post('/ml/akg/copiar-shinsei/iniciar');
+        box.textContent = d.message || JSON.stringify(d);
+        setTimeout(statusCopia, 4000);
+      } catch(e) { box.textContent = '❌ Erro: ' + e.message; }
+    }
+
+    async function statusCopia(){
+      const box = document.getElementById('log-copia');
+      try {
+        const d = await _get('/ml/akg/copiar-shinsei/status');
+        box.textContent = `✅ Criados: ${d.criados}\n❌ Falhas: ${d.falhas}\n⏭ Skipped: ${d.skipped}` +
+          (d.falhas_detalhe?.length ? '\n\nÚltimas falhas:\n' + d.falhas_detalhe.slice(0,5).map(f=>f.sku+': '+f.erro).join('\n') : '');
+      } catch(e) { box.textContent = '❌ Erro: ' + e.message; }
+    }
+
+    async function resetarCopia(){
+      if (!confirm('Resetar o progresso salvo? Isso não desfaz publicações já feitas.')) return;
+      const box = document.getElementById('log-copia');
+      try {
+        const d = await _post('/ml/akg/copiar-shinsei/resetar');
+        box.textContent = d.message || 'Resetado.';
+      } catch(e) { box.textContent = '❌ Erro: ' + e.message; }
+    }
   </script>
+
+<!-- Botão Início -->
+<a href="/" id="btn-inicio" title="Voltar para o início" style="position:fixed;bottom:24px;left:24px;z-index:9999;background:#4f8cff;color:#fff;padding:10px 20px;border-radius:14px;font-weight:700;text-decoration:none;font-family:Arial,sans-serif;font-size:14px;box-shadow:0 4px 20px rgba(79,140,255,.45);display:inline-flex;align-items:center;gap:8px;transition:background .2s,transform .15s" onmouseover="this.style.background='#2563eb';this.style.transform='scale(1.05)'" onmouseout="this.style.background='#4f8cff';this.style.transform='scale(1)'">🏠 Início</a>
 </body>
 </html>

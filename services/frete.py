@@ -10,11 +10,15 @@ Regras:
 """
 from __future__ import annotations
 
+import json
 import logging
 import math
 import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
+
+_FRETE_CONFIG_PATH = Path(__file__).parent.parent / "data" / "frete_config.json"
 
 import httpx
 from pydantic import BaseModel
@@ -25,18 +29,56 @@ logger = logging.getLogger("shinsei.frete")
 # Constantes
 # ---------------------------------------------------------------------------
 
-SUBSIDY_PER_ITEM: float = float(os.getenv("FRETE_SUBSIDIO_POR_ITEM", "8.0"))
-ORIGIN_CEP: str = os.getenv("FRETE_CEP_ORIGEM", "06036003")
+# Defaults de env (fallback se frete_config.json não existir)
+_SUBSIDY_PER_ITEM_DEFAULT: float = float(os.getenv("FRETE_SUBSIDIO_POR_ITEM", "8.0"))
+_SUBSIDY_FIRST_ITEM_DEFAULT: float = float(os.getenv("FRETE_SUBSIDIO_PRIMEIRO_ITEM", "4.0"))
+_ORIGIN_CEP_DEFAULT: str = os.getenv("FRETE_CEP_ORIGEM", "06036003")
+_FRETE_REAL_DEFAULT_DEFAULT: float = float(os.getenv("FRETE_REAL_DEFAULT", "18.0"))
+
+# Para compatibilidade com imports existentes (routes/frete.py importa estes nomes)
+SUBSIDY_PER_ITEM: float = _SUBSIDY_PER_ITEM_DEFAULT
+SUBSIDY_FIRST_ITEM: float = _SUBSIDY_FIRST_ITEM_DEFAULT
+ORIGIN_CEP: str = _ORIGIN_CEP_DEFAULT
+
+
+def carregar_config_frete() -> dict:
+    """Lê configuração de frete do JSON (com fallback para defaults de env)."""
+    cfg = {
+        "subsidio_primeiro_item": _SUBSIDY_FIRST_ITEM_DEFAULT,
+        "subsidio_por_item": _SUBSIDY_PER_ITEM_DEFAULT,
+        "frete_real_default": _FRETE_REAL_DEFAULT_DEFAULT,
+        "cep_origem": _ORIGIN_CEP_DEFAULT,
+        "frete_gratis_minimo": FRETE_GRATIS_MINIMO,
+    }
+    try:
+        if _FRETE_CONFIG_PATH.exists():
+            saved = json.loads(_FRETE_CONFIG_PATH.read_text(encoding="utf-8"))
+            cfg.update({k: v for k, v in saved.items() if v is not None})
+    except Exception:
+        pass
+    return cfg
+
+
+def salvar_config_frete(cfg: dict) -> None:
+    """Salva configuração de frete no JSON."""
+    _FRETE_CONFIG_PATH.parent.mkdir(exist_ok=True)
+    _FRETE_CONFIG_PATH.write_text(
+        json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+# Valor mínimo do pedido para qualificar frete grátis
+# (mesma regra do widget JS — aplicada aqui para cobrir o shopify-callback)
+FRETE_GRATIS_MINIMO: float = float(os.getenv("FRETE_GRATIS_MINIMO", "29.0"))
 
 MELHOR_ENVIO_TOKEN: str = os.getenv("MELHOR_ENVIO_TOKEN", "")
-MELHOR_ENVIO_SANDBOX: bool = os.getenv("MELHOR_ENVIO_SANDBOX", "true").lower() in ("1", "true", "yes")
+MELHOR_ENVIO_SANDBOX: bool = os.getenv("MELHOR_ENVIO_SANDBOX", "false").lower() in ("1", "true", "yes")
 
 _ME_BASE_PROD = "https://www.melhorenvio.com.br/api/v2"
 _ME_BASE_SANDBOX = "https://sandbox.melhorenvio.com.br/api/v2"
 MELHOR_ENVIO_BASE_URL = _ME_BASE_SANDBOX if MELHOR_ENVIO_SANDBOX else _ME_BASE_PROD
 
 # Serviços que queremos da API do Melhor Envio
-MELHOR_ENVIO_SERVICE_IDS = [1, 2, 3, 4]  # SEDEX, PAC, Jadlog Package, Jadlog .com
+MELHOR_ENVIO_SERVICE_IDS = [1, 2, 3, 4, 31, 34]  # PAC, SEDEX, Jadlog .Package, Jadlog .Com, Loggi Express, Loggi Ponto
 
 # Tabela fallback (frete_real em R$) por estado/região quando sem token
 _FALLBACK_STATES: dict[str, float] = {
@@ -66,6 +108,70 @@ RMSP_MUNICIPALITIES: set[str] = {
 }
 
 RMSP_FREIGHT_VALUE: float = 8.0  # valor simbólico usado para RMSP (sempre grátis após subsídio)
+
+# Micro-região do depósito (Osasco e adjacente) — frete grátis sem mínimo de compra.
+# Bairros: Vila Yara, Vila Campesina, Adalgisa, Umuarama, Jardim D'Abril,
+#           Jaguaribe, Novo Osasco, Cipava e arredores.
+_MICROREGIAO_DEPOSITO: list[tuple[int, int]] = [
+    (6020000, 6029999),  # Vila Yara / Vila Campesina
+    (6030000, 6036999),  # Adalgisa / Umuarama (inclui 06036-003 do depósito)
+    (6040000, 6045999),  # Jardim D'Abril
+    (6050000, 6069999),  # Jaguaribe / Novo Osasco / Cipava
+]
+
+
+def is_microregiao_deposito(cep: str) -> bool:
+    """Retorna True se o CEP está na micro-região do depósito (frete grátis sem mínimo)."""
+    digits = normalize_cep(cep)
+    if len(digits) < 8:
+        return False
+    n = int(digits)
+    return any(lo <= n <= hi for lo, hi in _MICROREGIAO_DEPOSITO)
+
+_FRETE_HISTORICO_PATH = Path(__file__).parent.parent / "data" / "frete_historico.json"
+_HISTORICO_MAX = 300  # máximo de registros mantidos
+
+
+def registrar_historico_frete(entry: dict) -> None:
+    """Salva uma entrada no histórico de fretes (últimos _HISTORICO_MAX registros)."""
+    try:
+        historico: list = []
+        if _FRETE_HISTORICO_PATH.exists():
+            historico = json.loads(_FRETE_HISTORICO_PATH.read_text(encoding="utf-8"))
+        historico.insert(0, entry)
+        historico = historico[:_HISTORICO_MAX]
+        _FRETE_HISTORICO_PATH.parent.mkdir(exist_ok=True)
+        _FRETE_HISTORICO_PATH.write_text(
+            json.dumps(historico, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except Exception as exc:
+        logger.warning("Falha ao gravar histórico de frete: %s", exc)
+
+
+def ler_historico_frete(limit: int = 100) -> list:
+    """Retorna os últimos N registros do histórico."""
+    try:
+        if _FRETE_HISTORICO_PATH.exists():
+            return json.loads(_FRETE_HISTORICO_PATH.read_text(encoding="utf-8"))[:limit]
+    except Exception:
+        pass
+    return []
+
+
+def calcular_subsidio_total(qty_items: int, cfg: dict | None = None) -> float:
+    """
+    Calcula o subsídio total para N itens.
+    Regra: 1º item = subsidio_primeiro_item, 2º em diante = subsidio_por_item.
+    Lê configuração do JSON (dinâmico, sem reiniciar).
+    """
+    if cfg is None:
+        cfg = carregar_config_frete()
+    first = float(cfg.get("subsidio_primeiro_item", _SUBSIDY_FIRST_ITEM_DEFAULT))
+    per   = float(cfg.get("subsidio_por_item",      _SUBSIDY_PER_ITEM_DEFAULT))
+    if qty_items <= 0:
+        return 0.0
+    return round(first + max(0, qty_items - 1) * per, 2)
+
 
 # ---------------------------------------------------------------------------
 # Modelos Pydantic
@@ -107,25 +213,45 @@ def normalize_cep(cep: str) -> str:
 
 
 async def get_city_from_cep(cep: str) -> dict[str, Any]:
-    """Consulta ViaCEP e retorna dict com city/state (e demais campos)."""
+    """
+    Consulta CEP e retorna dict com city/state.
+    Tenta ViaCEP primeiro; se falhar, usa BrasilAPI como fallback.
+    """
     cep = normalize_cep(cep)
-    url = f"https://viacep.com.br/ws/{cep}/json/"
+
+    # ── Tentativa 1: ViaCEP ───────────────────────────────────────────────────
     try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
-            resp = await client.get(url)
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            resp = await client.get(f"https://viacep.com.br/ws/{cep}/json/")
             resp.raise_for_status()
             data = resp.json()
-            if data.get("erro"):
-                logger.warning("ViaCEP: CEP %s não encontrado", cep)
-                return {"city": "", "state": "", "raw": data}
+            if not data.get("erro"):
+                return {
+                    "city": data.get("localidade", ""),
+                    "state": data.get("uf", ""),
+                    "raw": data,
+                }
+    except Exception as exc:
+        logger.debug("ViaCEP indisponível para CEP %s (%s) — tentando BrasilAPI", cep, exc)
+
+    # ── Tentativa 2: BrasilAPI ────────────────────────────────────────────────
+    try:
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            resp = await client.get(
+                f"https://brasilapi.com.br/api/cep/v2/{cep}",
+                headers={"User-Agent": "ShinseMarket/1.0"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
             return {
-                "city": data.get("localidade", ""),
-                "state": data.get("uf", ""),
+                "city": data.get("city", ""),
+                "state": data.get("state", ""),
                 "raw": data,
             }
     except Exception as exc:
-        logger.error("ViaCEP error for CEP %s: %s", cep, exc)
-        return {"city": "", "state": "", "raw": {}}
+        logger.warning("BrasilAPI também falhou para CEP %s: %s", cep, exc)
+
+    return {"city": "", "state": "", "raw": {}}
 
 
 def is_rmsp(city: str, state: str) -> bool:
@@ -152,6 +278,7 @@ async def get_real_freight(
     destination_cep: str,
     weight_kg: float,
     declared_value: float,
+    dims: dict | None = None,
 ) -> list[FreightOption]:
     """
     Calcula frete real via Melhor Envio API.
@@ -173,15 +300,16 @@ async def get_real_freight(
     weight_g = max(weight_kg * 1000, 100)  # mínimo 100g
     weight_real_kg = weight_g / 1000
 
+    _d = dims or {}
     body = {
         "from": {"postal_code": normalize_cep(origin_cep)},
         "to": {"postal_code": normalize_cep(destination_cep)},
         "products": [
             {
                 "weight": weight_real_kg,
-                "width": 12,
-                "height": 10,
-                "length": 15,
+                "width":  float(_d.get("largura")      or 12),
+                "height": float(_d.get("altura")        or 10),
+                "length": float(_d.get("profundidade")  or 15),
                 "quantity": 1,
                 "insurance_value": max(declared_value, 1.0),
             }
@@ -233,7 +361,7 @@ async def get_real_freight(
         logger.warning("Melhor Envio retornou zero opções válidas — usando fallback.")
         return await _fallback_freight(destination_cep, weight_kg)
 
-    return options
+    return sorted(options, key=lambda o: o.price_real)
 
 
 async def _fallback_freight(destination_cep: str, weight_kg: float) -> list[FreightOption]:
@@ -301,6 +429,7 @@ async def calculate_freight(
     qty_items: int,
     total_weight_kg: float,
     order_value: float,
+    product_id: str | None = None,
 ) -> FreightResult:
     """
     Calcula o frete final aplicando a regra de subsídio cumulativo.
@@ -311,12 +440,25 @@ async def calculate_freight(
     """
     dest_cep = normalize_cep(destination_cep)
     qty_items = max(1, int(qty_items))
+    cfg_frete = carregar_config_frete()
+    origin_cep_cfg = cfg_frete.get("cep_origem", ORIGIN_CEP)
     total_weight_kg = max(0.1, float(total_weight_kg))
     order_value = max(0.0, float(order_value))
 
+    # Carrega dimensões do cache Shopify quando product_id fornecido
+    dims: dict | None = None
+    if product_id:
+        try:
+            from services.bling_dimensions import get_dims_for_product
+            dims = get_dims_for_product(product_id)
+            if dims and dims.get("peso_kg"):
+                total_weight_kg = dims["peso_kg"]
+        except Exception as exc:
+            logger.debug("Falha ao carregar dims para product_id=%s: %s", product_id, exc)
+
     logger.info(
-        "calculate_freight: cep=%s qty=%d peso=%.3fkg valor=R$%.2f",
-        dest_cep, qty_items, total_weight_kg, order_value,
+        "calculate_freight: cep=%s qty=%d peso=%.3fkg valor=R$%.2f product_id=%s",
+        dest_cep, qty_items, total_weight_kg, order_value, product_id or "-",
     )
 
     # Dados do CEP de destino
@@ -325,27 +467,41 @@ async def calculate_freight(
     state = (cep_info.get("state") or "").upper()
     rmsp = is_rmsp(city, state)
 
-    subsidy_total = round(SUBSIDY_PER_ITEM * qty_items, 2)
+    subsidy_total = calcular_subsidio_total(qty_items, cfg_frete)
 
     if rmsp:
-        # RMSP: frete_real simbólico = R$8, sempre grátis
+        # RMSP: entrega própria Shinsei — mesmo dia (pedidos até 12h, seg-sáb) ou dia seguinte
+        _now_sp = datetime.now(timezone(timedelta(hours=-3)))  # horário de Brasília
+        _weekday = _now_sp.weekday()   # 0=seg … 5=sáb, 6=dom
+        _hour    = _now_sp.hour
+
+        # Regras de entrega RMSP (entrega própria Shinsei):
+        #   Seg–Sex antes das 12h  → Entrega Hoje       (0 dias)
+        #   Seg–Sex após as 12h    → Receba Amanha       (1 dia)
+        #   Sáb antes das 12h     → Entrega Hoje       (0 dias)
+        #   Sáb após as 12h       → Receba Segunda-Feira (2 dias)
+        #   Dom (qualquer horário) → Receba Segunda-Feira (1 dia)
+        if _weekday <= 5 and _hour < 12:          # seg-sáb até 12h
+            _delivery_days = 0
+            _delivery_name = "Entrega Hoje"
+        elif _weekday == 6:                        # domingo
+            _delivery_days = 1
+            _delivery_name = "Receba Segunda-Feira"
+        elif _weekday == 5:                        # sábado após 12h
+            _delivery_days = 2
+            _delivery_name = "Entrega Segunda-Feira"
+        else:                                      # seg-sex após 12h
+            _delivery_days = 1
+            _delivery_name = "Receba Amanha"
+
         raw_options = [
             FreightOption(
-                name="PAC",
-                carrier="Correios",
+                name=_delivery_name,
+                carrier="Shinsei Market",
                 price_real=RMSP_FREIGHT_VALUE,
                 price_final=0.0,
                 subsidy=subsidy_total,
-                delivery_days=3,
-                is_free=True,
-            ),
-            FreightOption(
-                name="SEDEX",
-                carrier="Correios",
-                price_real=RMSP_FREIGHT_VALUE,
-                price_final=0.0,
-                subsidy=subsidy_total,
-                delivery_days=1,
+                delivery_days=_delivery_days,
                 is_free=True,
             ),
         ]
@@ -353,12 +509,14 @@ async def calculate_freight(
         cheapest_final = 0.0
         is_free_cart = True
     else:
-        raw_options = await get_real_freight(ORIGIN_CEP, dest_cep, total_weight_kg, order_value)
+        raw_options = await get_real_freight(origin_cep_cfg, dest_cep, total_weight_kg, order_value, dims=dims)
 
         # Aplica subsídio a cada opção
         final_options: list[FreightOption] = []
         for opt in raw_options:
-            final_price = max(0.0, round(opt.price_real - subsidy_total, 2))
+            _diff = round(opt.price_real - subsidy_total, 2)
+            # Arredonda para zero diferenças menores que R$0,10 (centavos de floating point)
+            final_price = 0.0 if 0.0 < _diff < 0.10 else max(0.0, _diff)
             final_options.append(
                 FreightOption(
                     name=opt.name,
@@ -379,8 +537,12 @@ async def calculate_freight(
         if is_free_cart:
             items_for_free = 0
         else:
-            # Quantos itens precisam para zerare o frete mais barato
-            items_needed = math.ceil(cheapest_real / SUBSIDY_PER_ITEM)
+            _first = float(cfg_frete.get("subsidio_primeiro_item", _SUBSIDY_FIRST_ITEM_DEFAULT))
+            _per   = float(cfg_frete.get("subsidio_por_item",      _SUBSIDY_PER_ITEM_DEFAULT))
+            if cheapest_real <= _first:
+                items_needed = 1
+            else:
+                items_needed = 1 + math.ceil((cheapest_real - _first) / _per)
             items_for_free = max(0, items_needed - qty_items)
 
     result = FreightResult(
@@ -395,6 +557,46 @@ async def calculate_freight(
         cheapest_final=cheapest_final if not rmsp else 0.0,
         is_free=is_free_cart,
     )
+
+    # ── Regra de mínimo: pedidos abaixo de frete_gratis_minimo não têm frete grátis ──
+    # Aplica-se quando order_value é conhecido (> 0), ou seja, vem do shopify-callback.
+    # Para chamadas do widget sem valor (order_value=0) a regra é aplicada client-side.
+    # RMSP abaixo do mínimo: cobra R$8,00 fixo (custo da entrega própria Shinsei).
+    minimo_gratis = float(cfg_frete.get("frete_gratis_minimo", FRETE_GRATIS_MINIMO))
+    _microregiao = is_microregiao_deposito(dest_cep)
+    if not _microregiao and order_value > 0.0 and order_value < minimo_gratis and result.is_free:
+        logger.info(
+            "calculate_freight: valor=R$%.2f < mínimo=R$%.2f — removendo frete grátis.",
+            order_value, minimo_gratis,
+        )
+        _rmsp_frete_fixo = 12.90  # valor cobrado na RMSP para pedidos abaixo do mínimo
+        opts_corrigidas = []
+        for opt in result.options:
+            if opt.is_free and opt.price_real > 0:
+                preco_cobrado = _rmsp_frete_fixo if rmsp else opt.price_real
+                opts_corrigidas.append(FreightOption(
+                    name=opt.name,
+                    carrier=opt.carrier,
+                    price_real=opt.price_real,
+                    price_final=preco_cobrado,
+                    subsidy=0.0,
+                    delivery_days=opt.delivery_days,
+                    is_free=False,
+                ))
+            else:
+                opts_corrigidas.append(opt)
+        result = FreightResult(
+            destination_cep=result.destination_cep,
+            city=result.city,
+            state=result.state,
+            is_rmsp=result.is_rmsp,
+            qty_items=result.qty_items,
+            subsidy_total=result.subsidy_total,
+            options=opts_corrigidas,
+            items_for_free_shipping=result.items_for_free_shipping,
+            cheapest_final=min((o.price_final for o in opts_corrigidas), default=0.0),
+            is_free=False,
+        )
 
     logger.info(
         "calculate_freight result: city=%s state=%s rmsp=%s subsidy=R$%.2f cheapest_final=R$%.2f free=%s",
