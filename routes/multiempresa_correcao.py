@@ -42,7 +42,7 @@ from fastapi import Request, BackgroundTasks
 from services.multiempresa_correcao import (
     init_db, listar_rotas, criar_rota, atualizar_rota, desativar_rota,
     processar_pedido, estornar_pedido, job_multiempresa,
-    reprocessar_processando,
+    resetar_processando,
     DB_PATH, EMPRESA_SHINSEI, EMPRESA_AKG, _hdrs,
 )
 _proc = processar_pedido
@@ -1004,8 +1004,21 @@ def endpoint_reprocessar_processando(empresa: str = EMPRESA_SHINSEI, limite: int
     """
     import traceback as _tb
     try:
-        resultado = reprocessar_processando(empresa, limite)
-        return resultado
+        pedidos, total = resetar_processando(empresa, limite)
+        if not pedidos:
+            return {"ok": True, "mensagem": "Nenhuma venda presa em processando", "total": 0}
+
+        processados = 0
+        for id_pedido, emp in pedidos:
+            try:
+                pedido_det = _fetch_pedido(emp, id_pedido)
+                processar_pedido(emp, pedido_det)
+                processados += 1
+                import time; time.sleep(0.3)
+            except Exception as e:
+                logger.error("reprocessar_processando: pedido %s erro: %s", id_pedido, e)
+
+        return {"ok": True, "vendas_resetadas": total, "processadas": processados}
     except Exception as e:
         raise HTTPException(500, f"{type(e).__name__}: {e}\n{_tb.format_exc()}")
 

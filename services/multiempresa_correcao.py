@@ -806,10 +806,11 @@ def _reprocessar_sem_rota(empresa_vendedora: str):
             logger.warning("reprocessar [%s/%s]: %s", empresa_vendedora, id_ped, e)
 
 
-def reprocessar_processando(empresa: str, limite: int = 200) -> dict:
+def resetar_processando(empresa: str, limite: int = 200) -> tuple[list, int]:
     """
-    Reseta vendas presas em status='processando' para 'pendente' e reprocessa.
-    Vendas ficam presas quando o processo Render reinicia durante um background task.
+    Reseta me_vendas com status='processando' → 'pendente'.
+    Retorna (lista de (id_pedido, empresa), total_resetados).
+    Não processa — deixa o caller buscar o pedido e chamar processar_pedido.
     """
     conn = _db()
     vendas = conn.execute(
@@ -827,7 +828,7 @@ def reprocessar_processando(empresa: str, limite: int = 200) -> dict:
 
     if not vendas:
         conn.close()
-        return {"ok": True, "mensagem": "Nenhuma venda presa em processando", "total": 0}
+        return [], 0
 
     ids = [v["id"] for v in vendas]
     ph = ",".join("?" * len(ids))
@@ -844,18 +845,8 @@ def reprocessar_processando(empresa: str, limite: int = 200) -> dict:
     conn.close()
 
     pedidos = [(v["id_pedido_bling"], v["empresa_vendedora"]) for v in vendas]
-    processados = 0
-    for id_pedido, emp in pedidos:
-        try:
-            pedido_det = _fetch_pedido(emp, id_pedido)
-            processar_pedido(emp, pedido_det)
-            processados += 1
-            time.sleep(0.3)
-        except Exception as e:
-            logger.error("reprocessar_processando: pedido %s erro: %s", id_pedido, e)
-
-    logger.info("reprocessar_processando [%s]: %d vendas resetadas, %d processadas", empresa, len(vendas), processados)
-    return {"ok": True, "vendas_resetadas": len(vendas), "processadas": processados}
+    logger.info("resetar_processando [%s]: %d vendas resetadas", empresa, len(vendas))
+    return pedidos, len(vendas)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
