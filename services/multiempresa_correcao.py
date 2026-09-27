@@ -291,26 +291,22 @@ def _expandir_virtual(empresa_vendedora: str, sku: str, quantidade: float) -> li
     for item in resp.json().get("data", []):
         if str(item.get("codigo") or "") == sku:
             id_prod = item["id"]
-            tipo_estoque = item.get("tipoEstoque") or item.get("tipo_estoque") or ""
-            # Se já na listagem tiver tipoEstoque, verificar antes de buscar detalhe
-            if tipo_estoque != "V":
-                return [{"codigo": sku, "quantidade": quantidade, "_virtual": False}]
             break
 
     if not id_prod:
         return [{"codigo": sku, "quantidade": quantidade, "_virtual": False}]
 
-    # Busca detalhe do produto para verificar estrutura
+    # Busca detalhe do produto para verificar estrutura.componentes
     resp2 = requests.get(f"{BLING_API}/produtos/{id_prod}", headers=hdrs, timeout=15)
     if not resp2.ok:
         return [{"codigo": sku, "quantidade": quantidade, "_virtual": False}]
 
     data = resp2.json().get("data") or {}
-    tipo_estoque = data.get("tipoEstoque") or ""
     estrutura = data.get("estrutura") or {}
     componentes = estrutura.get("componentes") or []
 
-    if tipo_estoque != "V" or not componentes:
+    # Expandir qualquer produto que tenha componentes — kits (tipoEstoque=V) E composições
+    if not componentes:
         return [{"codigo": sku, "quantidade": quantidade, "_virtual": False}]
 
     # Produto virtual — expandir componentes
@@ -473,15 +469,12 @@ def processar_pedido(empresa_vendedora: str, pedido: dict) -> dict:
         dep_forn  = rota["deposito_fornecedor_id"]
         dep_vend_id = DEP_SHINSEI_GERAL if empresa_vendedora == EMPRESA_SHINSEI else DEP_AKG_GERAL
 
-        # Buscar IDs dos produtos em cada empresa
-        id_prod_forn = _buscar_id_produto(emp_forn, sku)
+        # Verificar PRIMEIRO se o produto tem composição (kit/composição com componentes)
+        # Isso cobre tanto tipoEstoque=V (kit virtual) quanto composições com 1+ componentes
+        expandidos = _expandir_virtual(empresa_vendedora, sku, qtd)
         time.sleep(0.15)
 
-        # Se não encontrado no fornecedor, verificar se é produto virtual (kit/composição)
-        # e expandir seus componentes físicos — os componentes têm estoque real na AKG
-        if not id_prod_forn:
-            expandidos = _expandir_virtual(empresa_vendedora, sku, qtd)
-            if len(expandidos) > 1 or expandidos[0].get("_virtual"):
+        if expandidos and expandidos[0].get("_virtual"):
                 for comp in expandidos:
                     comp_sku = comp["codigo"]
                     comp_qtd = comp["quantidade"]
@@ -502,24 +495,21 @@ def processar_pedido(empresa_vendedora: str, pedido: dict) -> dict:
                     comp_id_vend = _buscar_id_produto(empresa_vendedora, comp_sku) if emp_forn != empresa_vendedora else comp_id_forn
                     time.sleep(0.15)
 
-                    if not comp_id_forn:
+                    if not comp_id_forn or not comp_id_vend:
+                        # SKU do componente não existe em uma das empresas — ignorar (sem erro)
                         conn.execute(
                             """INSERT OR REPLACE INTO me_ajustes
                                (id_venda_ctrl, id_pedido_bling, empresa_vendedora,
                                 canal_venda, deposito_venda, sku, id_item_bling,
-                                quantidade, id_rota, empresa_fornecedora, deposito_fornecedor_id,
-                                status, chave_idempotencia, erro_detalhe, criado_em)
-                               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                                quantidade, status, chave_idempotencia, criado_em)
+                               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
                             (id_ctrl, id_pedido, empresa_vendedora,
                              canal, dep_venda, comp_sku, id_item,
-                             comp_qtd, rota["id"], emp_forn, dep_forn,
-                             "erro", comp_chave,
-                             f"componente {comp_sku} nao encontrado em {emp_forn} (pai={sku})", _agora())
+                             comp_qtd, "sem_estoque_akg", comp_chave, _agora())
                         )
                         conn.commit()
-                        resultados.append({"sku": comp_sku, "status": "erro",
-                                           "erro": f"SKU não encontrado em {emp_forn}", "_pai": sku})
-                        n_erro += 1
+                        resultados.append({"sku": comp_sku, "status": "sem_estoque_akg", "_pai": sku})
+                        n_sem_rota += 1
                         continue
 
                     obs_s = f"VENDA:{id_pedido}-SKU:{comp_sku}-PAI:{sku}|etapa=saida|forn={emp_forn}"
@@ -553,6 +543,15 @@ def processar_pedido(empresa_vendedora: str, pedido: dict) -> dict:
                     resultados.append({"sku": comp_sku, "qtd": comp_qtd, "status": st_comp,
                                        "_pai": sku, "mov_saida": id_mov_s})
                 continue  # próximo item do pedido
+
+        # Produto sem composição — buscar diretamente na AKG
+        id_prod_forn = _buscar_id_produto(emp_forn, sku)
+        time.sleep(0.15)
+        id_prod_vend = (
+            _buscar_id_produto(empresa_vendedora, sku)
+            if emp_forn != empresa_vendedora else id_prod_forn
+        )
+        time.sleep(0.15)
 
         if not id_prod_forn:
             # Produto não existe em AKG → estoque próprio da Shinsei, não é da cadeia AKG
