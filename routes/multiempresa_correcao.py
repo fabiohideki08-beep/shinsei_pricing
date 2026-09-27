@@ -946,7 +946,9 @@ def reprocessar_sem_estoque_akg(background_tasks: BackgroundTasks,
                WHERE v.empresa_vendedora = ?
                  AND EXISTS (
                    SELECT 1 FROM me_ajustes a
-                   WHERE a.id_venda_ctrl = v.id AND a.status = 'sem_estoque_akg'
+                   WHERE a.id_venda_ctrl = v.id
+                     AND (a.status = 'sem_estoque_akg'
+                          OR (a.status = 'pendente' AND a.empresa_fornecedora IS NULL))
                  )
                  AND NOT EXISTS (
                    SELECT 1 FROM me_ajustes a
@@ -978,7 +980,11 @@ def reprocessar_sem_estoque_akg(background_tasks: BackgroundTasks,
         conn.close()
 
         for id_pedido, emp in pedidos:
-            background_tasks.add_task(processar_pedido, emp, id_pedido)
+            try:
+                pedido_det = _fetch_pedido(emp, id_pedido)
+                background_tasks.add_task(processar_pedido, emp, pedido_det)
+            except Exception as e:
+                logger.error("reprocessar_sem_estoque_akg: pedido %s erro: %s", id_pedido, e)
 
         return {
             "ok": True,
