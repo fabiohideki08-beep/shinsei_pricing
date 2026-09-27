@@ -39,10 +39,11 @@ EMPRESA_AKG     = "akg"
 DEP_SHINSEI_GERAL = 14636070822
 DEP_AKG_GERAL     = 14889056234
 
-# Situação Bling que indica venda faturada (NF emitida) — único trigger válido
-# 15 = Faturado: pedido com NF emitida, estoque já baixado no Bling
-# Situações 9 (Em andamento) e 12 (Verificado) ainda não têm NF → não processar
-SITUACOES_CONFIRMADAS = {15}   # Apenas Faturado (NF emitida)
+# Situações Bling que indicam NF emitida — único trigger válido
+# Situação 24 = NF emitida na Shinsei (verificado ao vivo: todos os pedidos sit=24 têm nota.id)
+# Situação 15 = "Faturado" genérico do Bling (mantido como fallback)
+# Situações 9 (Em andamento), 12 (Verificado), 6 (Em aberto) ainda não têm NF → não processar
+SITUACOES_CONFIRMADAS = {24, 15}   # NF emitida (24=Shinsei real, 15=fallback Bling padrão)
 # Situações que disparam cancelamento/estorno
 SITUACOES_CANCELADAS  = {11, 14, 76}  # Cancelado, Devolvido, etc.
 
