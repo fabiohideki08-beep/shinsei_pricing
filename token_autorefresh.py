@@ -84,6 +84,7 @@ def _renovar_bling() -> bool:
             headers={
                 "Authorization":  f"Basic {basic}",
                 "Content-Type":   "application/x-www-form-urlencoded",
+                "enable-jwt":     "1",
             },
         )
         with urllib.request.urlopen(req, timeout=20) as resp:
@@ -175,6 +176,7 @@ def _renovar_bling_akg() -> bool:
             headers={
                 "Authorization":  f"Basic {basic}",
                 "Content-Type":   "application/x-www-form-urlencoded",
+                "enable-jwt":     "1",
             },
         )
         with urllib.request.urlopen(req, timeout=20) as resp:

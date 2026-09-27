@@ -1293,13 +1293,14 @@ def _bling_akg_headers() -> dict:
             data={"grant_type": "refresh_token",
                   "refresh_token": tokens.get("refresh_token", "")},
             auth=(_cid, _csec),
+            headers={"enable-jwt": "1"},
             timeout=20)
         if r.status_code == 200:
             new = r.json()
             new["expires_at"] = _time.time() + new.get("expires_in", 3600) - 60
             _bling_akg_save(new)
             access = new["access_token"]
-    return {"Authorization": f"Bearer {access}", "Content-Type": "application/json"}
+    return {"Authorization": f"Bearer {access}", "Content-Type": "application/json", "enable-jwt": "1"}
 
 @app.get("/bling/auth2")
 def bling_auth2():

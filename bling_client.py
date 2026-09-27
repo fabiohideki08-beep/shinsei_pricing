@@ -175,6 +175,7 @@ class BlingClient:
             url,
             data={"grant_type": "authorization_code", "code": code, "redirect_uri": self.redirect_uri},
             auth=(self.client_id, self.client_secret),
+            headers={"enable-jwt": "1"},
             timeout=30,
         )
         if response.status_code != 200:
@@ -194,6 +195,7 @@ class BlingClient:
             url,
             data={"grant_type": "refresh_token", "refresh_token": refresh_token},
             auth=(self.client_id, self.client_secret),
+            headers={"enable-jwt": "1"},
             timeout=30,
         )
         if response.status_code != 200:
@@ -224,6 +226,7 @@ class BlingClient:
         return {
             "Authorization": f"Bearer {self.tokens['access_token']}",
             "Content-Type": "application/json",
+            "enable-jwt": "1",
         }
 
     # ── Rate limit ────────────────────────────
