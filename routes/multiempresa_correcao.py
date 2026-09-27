@@ -42,6 +42,7 @@ from fastapi import Request, BackgroundTasks
 from services.multiempresa_correcao import (
     init_db, listar_rotas, criar_rota, atualizar_rota, desativar_rota,
     processar_pedido, estornar_pedido, job_multiempresa,
+    reprocessar_processando,
     DB_PATH, EMPRESA_SHINSEI, EMPRESA_AKG, _hdrs,
 )
 _proc = processar_pedido
@@ -991,6 +992,20 @@ def reprocessar_sem_estoque_akg(background_tasks: BackgroundTasks,
             "vendas_resetadas": len(vendas),
             "pedidos_agendados": [p[0] for p in pedidos],
         }
+    except Exception as e:
+        raise HTTPException(500, f"{type(e).__name__}: {e}\n{_tb.format_exc()}")
+
+
+@router.post("/multiempresa/reprocessar-processando")
+def endpoint_reprocessar_processando(empresa: str = EMPRESA_SHINSEI, limite: int = 200):
+    """
+    Reseta vendas presas em status='processando' para 'pendente' e reprocessa.
+    Necessário quando o processo Render reinicia durante um background task.
+    """
+    import traceback as _tb
+    try:
+        resultado = reprocessar_processando(empresa, limite)
+        return resultado
     except Exception as e:
         raise HTTPException(500, f"{type(e).__name__}: {e}\n{_tb.format_exc()}")
 

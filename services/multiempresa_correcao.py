@@ -19,7 +19,7 @@ import json
 import logging
 import sqlite3
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -39,8 +39,10 @@ EMPRESA_AKG     = "akg"
 DEP_SHINSEI_GERAL = 14636070822
 DEP_AKG_GERAL     = 14889056234
 
-# Situações Bling que consideramos "venda confirmada" para disparar ajuste
-SITUACOES_CONFIRMADAS = {9, 12, 15}   # Em andamento, Verificado, Faturado
+# Situação Bling que indica venda faturada (NF emitida) — único trigger válido
+# 15 = Faturado: pedido com NF emitida, estoque já baixado no Bling
+# Situações 9 (Em andamento) e 12 (Verificado) ainda não têm NF → não processar
+SITUACOES_CONFIRMADAS = {15}   # Apenas Faturado (NF emitida)
 # Situações que disparam cancelamento/estorno
 SITUACOES_CANCELADAS  = {11, 14, 76}  # Cancelado, Devolvido, etc.
 
@@ -728,27 +730,23 @@ def estornar_pedido(empresa_vendedora: str, id_pedido: str) -> dict:
 # Job periódico
 # ─────────────────────────────────────────────────────────────────────────────
 
-_ultima_verificacao: dict[str, str] = {}
-
-
 def job_multiempresa():
     """
-    Verifica pedidos recentes de Shinsei e AKG:
-    - Novos confirmados → processar_pedido
-    - Cancelados com ajuste → estornar_pedido
-    - Pendentes de rota → tentar reprocessar
+    Verifica pedidos faturados (situacao=15 = NF emitida) dos últimos 30 dias.
+    Trigger: emissão de NF — só processar quando estoque já foi baixado no Bling.
     Chamado pelo scheduler a cada ~10 min.
     """
     init_db()
-    hoje = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # Sempre varrer os últimos 30 dias — captura pedidos que foram faturados
+    # após já terem sido vistos pelo job (situação mudou de 9/12 para 15)
+    data_desde = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
 
     for empresa in [EMPRESA_SHINSEI, EMPRESA_AKG]:
-        data_desde = _ultima_verificacao.get(empresa, hoje)
         hdrs = _hdrs(empresa)
 
         try:
-            # Vendas confirmadas
-            params = f"pagina=1&limite=100&dataInicial={data_desde}"
+            # Busca apenas pedidos faturados (situacao=15 → NF emitida)
+            params = f"pagina=1&limite=100&dataInicial={data_desde}&situacao=15"
             resp = requests.get(f"{BLING_API}/pedidos/vendas?{params}",
                                 headers=hdrs, timeout=20)
             if not resp.ok:
@@ -756,7 +754,7 @@ def job_multiempresa():
                 continue
 
             pedidos = resp.json().get("data", [])
-            logger.info("job_multiempresa [%s]: %d pedidos desde %s", empresa, len(pedidos), data_desde)
+            logger.info("job_multiempresa [%s]: %d pedidos faturados desde %s", empresa, len(pedidos), data_desde)
 
             for pedido in pedidos:
                 sit = int((pedido.get("situacao") or {}).get("id") or 0)
@@ -778,7 +776,6 @@ def job_multiempresa():
 
             # Reprocessar itens sem rota (alguém pode ter cadastrado rota nova)
             _reprocessar_sem_rota(empresa)
-            _ultima_verificacao[empresa] = hoje
 
         except Exception as e:
             logger.error("job_multiempresa [%s]: %s", empresa, e)
@@ -807,6 +804,58 @@ def _reprocessar_sem_rota(empresa_vendedora: str):
             time.sleep(0.5)
         except Exception as e:
             logger.warning("reprocessar [%s/%s]: %s", empresa_vendedora, id_ped, e)
+
+
+def reprocessar_processando(empresa: str, limite: int = 200) -> dict:
+    """
+    Reseta vendas presas em status='processando' para 'pendente' e reprocessa.
+    Vendas ficam presas quando o processo Render reinicia durante um background task.
+    """
+    conn = _db()
+    vendas = conn.execute(
+        """SELECT DISTINCT v.id, v.id_pedido_bling, v.empresa_vendedora
+           FROM me_vendas v
+           WHERE v.empresa_vendedora = ?
+             AND v.status = 'processando'
+             AND NOT EXISTS (
+               SELECT 1 FROM me_ajustes a
+               WHERE a.id_venda_ctrl = v.id AND a.status = 'concluido'
+             )
+           LIMIT ?""",
+        (empresa, limite)
+    ).fetchall()
+
+    if not vendas:
+        conn.close()
+        return {"ok": True, "mensagem": "Nenhuma venda presa em processando", "total": 0}
+
+    ids = [v["id"] for v in vendas]
+    ph = ",".join("?" * len(ids))
+
+    conn.execute(
+        f"UPDATE me_vendas SET status='pendente', atualizado_em=datetime('now') WHERE id IN ({ph})",
+        ids
+    )
+    conn.execute(
+        f"UPDATE me_ajustes SET status='pendente' WHERE id_venda_ctrl IN ({ph}) AND status='processando'",
+        ids
+    )
+    conn.commit()
+    conn.close()
+
+    pedidos = [(v["id_pedido_bling"], v["empresa_vendedora"]) for v in vendas]
+    processados = 0
+    for id_pedido, emp in pedidos:
+        try:
+            pedido_det = _fetch_pedido(emp, id_pedido)
+            processar_pedido(emp, pedido_det)
+            processados += 1
+            time.sleep(0.3)
+        except Exception as e:
+            logger.error("reprocessar_processando: pedido %s erro: %s", id_pedido, e)
+
+    logger.info("reprocessar_processando [%s]: %d vendas resetadas, %d processadas", empresa, len(vendas), processados)
+    return {"ok": True, "vendas_resetadas": len(vendas), "processadas": processados}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
