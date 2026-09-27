@@ -1023,6 +1023,57 @@ def endpoint_reprocessar_processando(empresa: str = EMPRESA_SHINSEI, limite: int
         raise HTTPException(500, f"{type(e).__name__}: {e}\n{_tb.format_exc()}")
 
 
+@router.post("/multiempresa/reprocessar-pendentes")
+def endpoint_reprocessar_pendentes(empresa: str = EMPRESA_SHINSEI, limite: int = 100):
+    """
+    Para cada me_venda em status=pendente: busca o pedido no Bling e processa
+    se tiver nota fiscal (nota.id ou nota.numero). Vendas sem NF continuam pendentes.
+    """
+    import traceback as _tb, time as _time
+    try:
+        conn = _db()
+        vendas = conn.execute(
+            """SELECT DISTINCT v.id, v.id_pedido_bling, v.empresa_vendedora
+               FROM me_vendas v
+               WHERE v.empresa_vendedora = ?
+                 AND v.status = 'pendente'
+               ORDER BY v.criado_em ASC
+               LIMIT ?""",
+            (empresa, limite)
+        ).fetchall()
+        conn.close()
+
+        if not vendas:
+            return {"ok": True, "mensagem": "Nenhuma venda pendente", "total": 0}
+
+        processados = 0
+        sem_nf = 0
+        erros = 0
+        for v in vendas:
+            try:
+                pedido_det = _fetch_pedido(v["empresa_vendedora"], v["id_pedido_bling"])
+                nota = pedido_det.get("nota") or pedido_det.get("notaFiscal") or {}
+                if nota.get("id") or nota.get("numero"):
+                    processar_pedido(v["empresa_vendedora"], pedido_det)
+                    processados += 1
+                else:
+                    sem_nf += 1
+                _time.sleep(0.3)
+            except Exception as e:
+                logger.error("reprocessar_pendentes: pedido %s erro: %s", v["id_pedido_bling"], e)
+                erros += 1
+
+        return {
+            "ok": True,
+            "total_pendentes": len(vendas),
+            "processados": processados,
+            "sem_nf": sem_nf,
+            "erros": erros,
+        }
+    except Exception as e:
+        raise HTTPException(500, f"{type(e).__name__}: {e}\n{_tb.format_exc()}")
+
+
 @router.get("/multiempresa/diagnostico-skus")
 def diagnostico_skus_sem_estoque_akg(limite: int = 200):
     """
