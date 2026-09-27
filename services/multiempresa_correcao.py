@@ -745,8 +745,9 @@ def job_multiempresa():
         hdrs = _hdrs(empresa)
 
         try:
-            # Busca apenas pedidos faturados (situacao=15 → NF emitida)
-            params = f"pagina=1&limite=100&dataInicial={data_desde}&situacao=15"
+            # Busca pedidos faturados (situacoes[]=15 → NF emitida)
+            # Nota: parâmetro é "situacoes[]" (plural), não "situacao"
+            params = f"pagina=1&limite=100&dataInicial={data_desde}&situacoes[]=15"
             resp = requests.get(f"{BLING_API}/pedidos/vendas?{params}",
                                 headers=hdrs, timeout=20)
             if not resp.ok:
@@ -754,9 +755,11 @@ def job_multiempresa():
                 continue
 
             pedidos = resp.json().get("data", [])
-            logger.info("job_multiempresa [%s]: %d pedidos faturados desde %s", empresa, len(pedidos), data_desde)
+            # Filtrar apenas situação 15 no código (parâmetro pode ser ignorado pelo Bling)
+            pedidos_faturados = [p for p in pedidos if int((p.get("situacao") or {}).get("id") or 0) in SITUACOES_CONFIRMADAS]
+            logger.info("job_multiempresa [%s]: %d/%d pedidos faturados desde %s", empresa, len(pedidos_faturados), len(pedidos), data_desde)
 
-            for pedido in pedidos:
+            for pedido in pedidos_faturados:
                 sit = int((pedido.get("situacao") or {}).get("id") or 0)
                 id_ped = str(pedido.get("id") or "")
 
