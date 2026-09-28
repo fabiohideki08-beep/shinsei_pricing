@@ -379,7 +379,18 @@ def _delete_from_gmc(service, product_id: str) -> dict:
     data_source = None
     if "BRL_93913186609" in product_id:
         data_source = f"accounts/{MERCHANT_ID}/dataSources/10623833941"
-    return _merchant_delete(product_id, data_source=data_source)
+
+    result = _merchant_delete(product_id, data_source=data_source)
+
+    # Se falhou com 400 (datasource errado), tentar cada Content API datasource
+    if not result.get("ok") and result.get("status") == 400 and data_source is None:
+        for ds_id in ("10641509804", "10664918142", "10720111632", "10547809423"):
+            ds = f"accounts/{MERCHANT_ID}/dataSources/{ds_id}"
+            result = _merchant_delete(product_id, data_source=ds)
+            if result.get("ok"):
+                break
+
+    return result
 
 
 def _is_shopping_blocked(product: dict) -> bool:
