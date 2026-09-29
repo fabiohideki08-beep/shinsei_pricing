@@ -1107,21 +1107,10 @@ def endpoint_reprocessar_pendentes(empresa: str = EMPRESA_SHINSEI, limite: int =
         raise HTTPException(500, f"{type(e).__name__}: {e}\n{_tb.format_exc()}")
 
 
-@router.post("/multiempresa/reprocessar-erros")
-def endpoint_reprocessar_erros(empresa: str = "todas", limite: int = 100):
-    """
-    Reprocessa ajustes com status=erro de forma inteligente:
-    - id_mov_entrada preenchido + id_mov_saida null → tenta APENAS a saída (não duplica entrada)
-    - Ambos null → reprocessa pedido completo via processar_pedido
-    - Ambos preenchidos → corrige inconsistência: marca concluido
-    empresa: 'shinsei' | 'akg' | 'todas' (padrão)
-    """
-    import traceback as _tb, time as _time
-
+def _run_reprocessar_erros(empresa: str, limite: int):
+    """Lógica de reprocessamento executada em background."""
+    import time as _time
     try:
-        if empresa != "todas" and empresa not in (EMPRESA_SHINSEI, EMPRESA_AKG):
-            raise HTTPException(400, "empresa deve ser 'shinsei', 'akg' ou 'todas'")
-
         conn = _db()
         query = "SELECT * FROM me_ajustes WHERE status='erro'"
         params: list = []
@@ -1134,16 +1123,17 @@ def endpoint_reprocessar_erros(empresa: str = "todas", limite: int = 100):
         conn.close()
 
         if not ajustes:
-            return {"ok": True, "mensagem": "Nenhum ajuste com erro", "total": 0}
+            logger.info("reprocessar_erros: nenhum ajuste com erro")
+            return
 
         so_saida = [a for a in ajustes if a["id_mov_entrada_bling"] and not a["id_mov_saida_bling"]]
         ambos_null = [a for a in ajustes if not a["id_mov_entrada_bling"] and not a["id_mov_saida_bling"]]
         ambos_ok = [a for a in ajustes if a["id_mov_entrada_bling"] and a["id_mov_saida_bling"]]
+        logger.info("reprocessar_erros: total=%d so_saida=%d completo=%d inconsistente=%d",
+                    len(ajustes), len(so_saida), len(ambos_null), len(ambos_ok))
 
         n_saida_ok = n_saida_err = n_completo = n_fetch_err = n_inconsistente = 0
-        detalhes: list[dict] = []
 
-        # Caso 1: entrada já feita, só falta saída
         for aj in so_saida:
             emp_forn = aj["empresa_fornecedora"]
             sku = aj["sku"]
@@ -1159,7 +1149,7 @@ def endpoint_reprocessar_erros(empresa: str = "todas", limite: int = 100):
                     conn2.execute("UPDATE me_ajustes SET erro_detalhe=? WHERE id=?", (detalhe, aj["id"]))
                     conn2.commit(); conn2.close()
                     n_saida_err += 1
-                    detalhes.append({"ajuste_id": aj["id"], "sku": sku, "caso": "so_saida", "resultado": "erro", "detalhe": detalhe})
+                    logger.warning("reprocessar_erros so_saida: SKU %s not found in %s", sku, emp_forn)
                     continue
 
                 obs_saida = f"{chave}|etapa=saida|forn={emp_forn}|retry=1"
@@ -1178,19 +1168,17 @@ def endpoint_reprocessar_erros(empresa: str = "todas", limite: int = 100):
                     _recalcular_venda_ctrl(conn2, aj["id_venda_ctrl"])
                     conn2.commit(); conn2.close()
                     n_saida_ok += 1
-                    detalhes.append({"ajuste_id": aj["id"], "sku": sku, "caso": "so_saida", "resultado": "concluido", "mov_saida": id_mov_s})
+                    logger.info("reprocessar_erros so_saida OK: ajuste %d SKU %s mov_saida=%s", aj["id"], sku, id_mov_s)
                 else:
                     conn2.execute("UPDATE me_ajustes SET erro_detalhe=? WHERE id=?", (erro_s, aj["id"]))
                     conn2.commit(); conn2.close()
                     n_saida_err += 1
-                    detalhes.append({"ajuste_id": aj["id"], "sku": sku, "caso": "so_saida", "resultado": "erro", "detalhe": erro_s})
+                    logger.error("reprocessar_erros so_saida FAIL: ajuste %d SKU %s: %s", aj["id"], sku, erro_s)
             except Exception as exc:
-                logger.error("reprocessar_erros so_saida [%s/%s]: %s", aj.get("empresa_fornecedora"), sku, exc)
+                logger.error("reprocessar_erros so_saida exc [%s/%s]: %s", emp_forn, sku, exc)
                 n_saida_err += 1
-                detalhes.append({"ajuste_id": aj["id"], "sku": sku, "caso": "so_saida", "resultado": "erro", "detalhe": str(exc)})
             _time.sleep(0.1)
 
-        # Caso 2: nenhuma movimentação feita → retry completo do pedido
         pedidos_feitos: set[tuple] = set()
         for aj in ambos_null:
             emp_vend = aj["empresa_vendedora"]
@@ -1203,14 +1191,11 @@ def endpoint_reprocessar_erros(empresa: str = "todas", limite: int = 100):
                 pedido_det = _fetch_pedido(emp_vend, id_ped)
                 processar_pedido(emp_vend, pedido_det)
                 n_completo += 1
-                detalhes.append({"pedido": id_ped, "empresa": emp_vend, "caso": "completo", "resultado": "reprocessado"})
                 _time.sleep(0.3)
             except Exception as exc:
                 logger.error("reprocessar_erros completo [%s/%s]: %s", emp_vend, id_ped, exc)
                 n_fetch_err += 1
-                detalhes.append({"pedido": id_ped, "empresa": emp_vend, "caso": "completo", "resultado": "erro", "detalhe": str(exc)})
 
-        # Caso 3: ambos preenchidos mas status=erro (inconsistência)
         for aj in ambos_ok:
             conn3 = _db()
             conn3.execute(
@@ -1220,15 +1205,43 @@ def endpoint_reprocessar_erros(empresa: str = "todas", limite: int = 100):
             _recalcular_venda_ctrl(conn3, aj["id_venda_ctrl"])
             conn3.commit(); conn3.close()
             n_inconsistente += 1
-            detalhes.append({"ajuste_id": aj["id"], "sku": aj["sku"], "caso": "inconsistente", "resultado": "concluido"})
 
+        logger.info("reprocessar_erros fim: saida_ok=%d saida_err=%d completo=%d fetch_err=%d inconsistente=%d",
+                    n_saida_ok, n_saida_err, n_completo, n_fetch_err, n_inconsistente)
+    except Exception as e:
+        logger.error("reprocessar_erros: erro inesperado: %s", e)
+
+
+@router.post("/multiempresa/reprocessar-erros")
+def endpoint_reprocessar_erros(background_tasks: BackgroundTasks,
+                                empresa: str = "todas", limite: int = 100):
+    """
+    Reprocessa ajustes com status=erro de forma inteligente (roda em background):
+    - id_mov_entrada preenchido + id_mov_saida null → tenta APENAS a saída (não duplica entrada)
+    - Ambos null → reprocessa pedido completo via processar_pedido
+    - Ambos preenchidos → corrige inconsistência: marca concluido
+    empresa: 'shinsei' | 'akg' | 'todas' (padrão)
+    """
+    import traceback as _tb
+
+    try:
+        if empresa != "todas" and empresa not in (EMPRESA_SHINSEI, EMPRESA_AKG):
+            raise HTTPException(400, "empresa deve ser 'shinsei', 'akg' ou 'todas'")
+
+        conn = _db()
+        query = "SELECT COUNT(*) AS total FROM me_ajustes WHERE status='erro'"
+        params: list = []
+        if empresa != "todas":
+            query += " AND empresa_vendedora=?"
+            params.append(empresa)
+        total_pendente = conn.execute(query, params).fetchone()["total"]
+        conn.close()
+
+        background_tasks.add_task(_run_reprocessar_erros, empresa, limite)
         return {
             "ok": True,
-            "total_erros": len(ajustes),
-            "so_saida": {"total": len(so_saida), "ok": n_saida_ok, "falhas": n_saida_err},
-            "completo": {"total": len(pedidos_feitos), "ok": n_completo, "falhas": n_fetch_err},
-            "inconsistente_corrigido": n_inconsistente,
-            "detalhes": detalhes,
+            "mensagem": f"Reprocessamento iniciado em background ({total_pendente} ajustes com erro)",
+            "total_erros": total_pendente,
         }
 
     except HTTPException:
