@@ -44,6 +44,7 @@ from services.multiempresa_correcao import (
     processar_pedido, estornar_pedido, job_multiempresa,
     resetar_processando,
     DB_PATH, EMPRESA_SHINSEI, EMPRESA_AKG, _hdrs,
+    _buscar_id_produto, _movimentar, _agora,
 )
 _proc = processar_pedido
 
@@ -112,6 +113,38 @@ def _fetch_pedido(empresa: str, id_pedido: str) -> dict:
     if not data:
         raise HTTPException(404, "Pedido não encontrado no Bling")
     return data
+
+
+def _recalcular_venda_ctrl(conn: sqlite3.Connection, id_ctrl: int):
+    """Recalcula e grava status de me_vendas baseado nos ajustes atuais."""
+    row = conn.execute(
+        """SELECT
+             COUNT(*) AS total,
+             SUM(CASE WHEN status='concluido' THEN 1 ELSE 0 END) AS ok,
+             SUM(CASE WHEN status='erro' THEN 1 ELSE 0 END) AS erro,
+             SUM(CASE WHEN status IN ('pendente_configuracao_de_rota','sem_estoque_akg') THEN 1 ELSE 0 END) AS sem_rota
+           FROM me_ajustes WHERE id_venda_ctrl=?""",
+        (id_ctrl,)
+    ).fetchone()
+    if not row or not row["total"]:
+        return
+    n_ok     = row["ok"] or 0
+    n_erro   = row["erro"] or 0
+    n_semr   = row["sem_rota"] or 0
+    total    = row["total"]
+    if n_erro == 0 and n_ok > 0:
+        status = "concluido"
+    elif n_ok > 0:
+        status = "concluido_parcial"
+    elif n_semr == total:
+        status = "sem_ajuste"
+    else:
+        status = "erro"
+    conn.execute(
+        """UPDATE me_vendas SET status=?, itens_ok=?, itens_erro=?,
+           itens_sem_rota=?, atualizado_em=? WHERE id=?""",
+        (status, n_ok, n_erro, n_semr, _agora(), id_ctrl)
+    )
 
 
 @router.post("/multiempresa/processar/{empresa}/{id_pedido}")
@@ -1070,6 +1103,136 @@ def endpoint_reprocessar_pendentes(empresa: str = EMPRESA_SHINSEI, limite: int =
             "sem_nf": sem_nf,
             "erros": erros,
         }
+    except Exception as e:
+        raise HTTPException(500, f"{type(e).__name__}: {e}\n{_tb.format_exc()}")
+
+
+@router.post("/multiempresa/reprocessar-erros")
+def endpoint_reprocessar_erros(empresa: str = "todas", limite: int = 100):
+    """
+    Reprocessa ajustes com status=erro de forma inteligente:
+    - id_mov_entrada preenchido + id_mov_saida null → tenta APENAS a saída (não duplica entrada)
+    - Ambos null → reprocessa pedido completo via processar_pedido
+    - Ambos preenchidos → corrige inconsistência: marca concluido
+    empresa: 'shinsei' | 'akg' | 'todas' (padrão)
+    """
+    import traceback as _tb, time as _time
+
+    try:
+        if empresa != "todas" and empresa not in (EMPRESA_SHINSEI, EMPRESA_AKG):
+            raise HTTPException(400, "empresa deve ser 'shinsei', 'akg' ou 'todas'")
+
+        conn = _db()
+        query = "SELECT * FROM me_ajustes WHERE status='erro'"
+        params: list = []
+        if empresa != "todas":
+            query += " AND empresa_vendedora=?"
+            params.append(empresa)
+        query += " ORDER BY criado_em ASC LIMIT ?"
+        params.append(limite)
+        ajustes = conn.execute(query, params).fetchall()
+        conn.close()
+
+        if not ajustes:
+            return {"ok": True, "mensagem": "Nenhum ajuste com erro", "total": 0}
+
+        so_saida = [a for a in ajustes if a["id_mov_entrada_bling"] and not a["id_mov_saida_bling"]]
+        ambos_null = [a for a in ajustes if not a["id_mov_entrada_bling"] and not a["id_mov_saida_bling"]]
+        ambos_ok = [a for a in ajustes if a["id_mov_entrada_bling"] and a["id_mov_saida_bling"]]
+
+        n_saida_ok = n_saida_err = n_completo = n_fetch_err = n_inconsistente = 0
+        detalhes: list[dict] = []
+
+        # Caso 1: entrada já feita, só falta saída
+        for aj in so_saida:
+            emp_forn = aj["empresa_fornecedora"]
+            sku = aj["sku"]
+            dep_forn = aj["deposito_fornecedor_id"]
+            qtd = aj["quantidade"]
+            chave = aj["chave_idempotencia"] or f"VENDA:{aj['id_pedido_bling']}-SKU:{sku}"
+            try:
+                id_prod_forn = _buscar_id_produto(emp_forn, sku)
+                _time.sleep(0.2)
+                if not id_prod_forn:
+                    detalhe = f"produto nao encontrado na empresa {emp_forn}"
+                    conn2 = _db()
+                    conn2.execute("UPDATE me_ajustes SET erro_detalhe=? WHERE id=?", (detalhe, aj["id"]))
+                    conn2.commit(); conn2.close()
+                    n_saida_err += 1
+                    detalhes.append({"ajuste_id": aj["id"], "sku": sku, "caso": "so_saida", "resultado": "erro", "detalhe": detalhe})
+                    continue
+
+                obs_saida = f"{chave}|etapa=saida|forn={emp_forn}|retry=1"
+                id_mov_s, erro_s = _movimentar(emp_forn, id_prod_forn, dep_forn, "S", qtd, obs_saida)
+                _time.sleep(0.35)
+
+                conn2 = _db()
+                agora = _agora()
+                if id_mov_s:
+                    conn2.execute(
+                        """UPDATE me_ajustes
+                           SET status='concluido', id_mov_saida_bling=?, erro_detalhe=null, aplicado_em=?
+                           WHERE id=?""",
+                        (id_mov_s, agora, aj["id"])
+                    )
+                    _recalcular_venda_ctrl(conn2, aj["id_venda_ctrl"])
+                    conn2.commit(); conn2.close()
+                    n_saida_ok += 1
+                    detalhes.append({"ajuste_id": aj["id"], "sku": sku, "caso": "so_saida", "resultado": "concluido", "mov_saida": id_mov_s})
+                else:
+                    conn2.execute("UPDATE me_ajustes SET erro_detalhe=? WHERE id=?", (erro_s, aj["id"]))
+                    conn2.commit(); conn2.close()
+                    n_saida_err += 1
+                    detalhes.append({"ajuste_id": aj["id"], "sku": sku, "caso": "so_saida", "resultado": "erro", "detalhe": erro_s})
+            except Exception as exc:
+                logger.error("reprocessar_erros so_saida [%s/%s]: %s", aj.get("empresa_fornecedora"), sku, exc)
+                n_saida_err += 1
+                detalhes.append({"ajuste_id": aj["id"], "sku": sku, "caso": "so_saida", "resultado": "erro", "detalhe": str(exc)})
+            _time.sleep(0.1)
+
+        # Caso 2: nenhuma movimentação feita → retry completo do pedido
+        pedidos_feitos: set[tuple] = set()
+        for aj in ambos_null:
+            emp_vend = aj["empresa_vendedora"]
+            id_ped = aj["id_pedido_bling"]
+            chave_ped = (emp_vend, id_ped)
+            if chave_ped in pedidos_feitos:
+                continue
+            pedidos_feitos.add(chave_ped)
+            try:
+                pedido_det = _fetch_pedido(emp_vend, id_ped)
+                processar_pedido(emp_vend, pedido_det)
+                n_completo += 1
+                detalhes.append({"pedido": id_ped, "empresa": emp_vend, "caso": "completo", "resultado": "reprocessado"})
+                _time.sleep(0.3)
+            except Exception as exc:
+                logger.error("reprocessar_erros completo [%s/%s]: %s", emp_vend, id_ped, exc)
+                n_fetch_err += 1
+                detalhes.append({"pedido": id_ped, "empresa": emp_vend, "caso": "completo", "resultado": "erro", "detalhe": str(exc)})
+
+        # Caso 3: ambos preenchidos mas status=erro (inconsistência)
+        for aj in ambos_ok:
+            conn3 = _db()
+            conn3.execute(
+                "UPDATE me_ajustes SET status='concluido', aplicado_em=? WHERE id=?",
+                (_agora(), aj["id"])
+            )
+            _recalcular_venda_ctrl(conn3, aj["id_venda_ctrl"])
+            conn3.commit(); conn3.close()
+            n_inconsistente += 1
+            detalhes.append({"ajuste_id": aj["id"], "sku": aj["sku"], "caso": "inconsistente", "resultado": "concluido"})
+
+        return {
+            "ok": True,
+            "total_erros": len(ajustes),
+            "so_saida": {"total": len(so_saida), "ok": n_saida_ok, "falhas": n_saida_err},
+            "completo": {"total": len(pedidos_feitos), "ok": n_completo, "falhas": n_fetch_err},
+            "inconsistente_corrigido": n_inconsistente,
+            "detalhes": detalhes,
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(500, f"{type(e).__name__}: {e}\n{_tb.format_exc()}")
 
