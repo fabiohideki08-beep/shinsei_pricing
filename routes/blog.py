@@ -5,11 +5,15 @@ Blog publishing endpoint — intermediary between the daily blog cron
 
 The cron calls POST /blog/publicar with article content.
 This service calls OpenAI for image generation and Shopify for publishing.
+
+Image generation strategy:
+- TIPO A (product): fetch real product image from Shopify, use /v1/images/edits
+  so GPT sees the actual packaging and generates a faithful cover.
+- TIPO B (technique): use /v1/images/generations with editorial prompt.
 """
 from __future__ import annotations
 
-import base64
-import json
+import io
 import logging
 import os
 from datetime import datetime
@@ -24,11 +28,24 @@ from auth import verificar_api_key
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/blog", tags=["blog"])
 
-SHOPIFY_STORE   = os.getenv("SHOPIFY_STORE", "pknw4n-eg.myshopify.com")
+SHOPIFY_SHOP    = os.getenv("SHOPIFY_SHOP", "pknw4n-eg")
 SHOPIFY_TOKEN   = os.getenv("SHOPIFY_ACCESS_TOKEN", "")
 SHOPIFY_BLOG_ID = 117021376817
-SHOPIFY_BASE    = f"https://{SHOPIFY_STORE}/admin/api/2024-01"
+SHOPIFY_BASE    = f"https://{SHOPIFY_SHOP}.myshopify.com/admin/api/2024-01"
 OPENAI_API_KEY  = os.getenv("OPENAI_API_KEY", "")
+
+# Prompt prefix injected for TIPO A when a reference image is provided.
+# Explicitly instructs GPT-image-1 to stay faithful to the real packaging.
+_FIDELITY_PREFIX = (
+    "Blog cover image for a Brazilian professional hair cosmetics store. "
+    "IMPORTANT: the reference image shows the EXACT product — preserve its "
+    "packaging colors, branding, logo and design with full fidelity. "
+    "Do NOT change colors or invent a different product. "
+    "Place the product on a clean white marble surface with soft professional "
+    "studio lighting, elegant bokeh background. Product occupies the left half "
+    "of the frame. No text overlay. Photorealistic, premium beauty advertising, "
+    "widescreen 3:2 format. "
+)
 
 
 class BlogPublicarRequest(BaseModel):
@@ -39,6 +56,7 @@ class BlogPublicarRequest(BaseModel):
     tags: str
     image_prompt: Optional[str] = None
     article_type: Optional[str] = "A"  # "A" = produto, "B" = técnica
+    product_search: Optional[str] = None  # TIPO A: search term to find real product image in Shopify
 
 
 def _shopify_headers() -> dict:
@@ -59,8 +77,71 @@ def _handle_exists(handle: str) -> bool:
     return any(a.get("handle") == handle for a in articles)
 
 
+def _fetch_product_image_bytes(search_query: str) -> Optional[bytes]:
+    """
+    Searches Shopify for a product matching search_query and returns
+    the raw bytes of its first image. Returns None if not found or error.
+    """
+    try:
+        url = f"{SHOPIFY_BASE}/products.json"
+        params = {"title": search_query, "limit": 3, "fields": "id,title,images", "status": "active"}
+        r = requests.get(url, headers=_shopify_headers(), params=params, timeout=15)
+        if r.status_code != 200:
+            logger.warning(f"Shopify product search failed ({r.status_code}) for: {search_query}")
+            return None
+        products = r.json().get("products", [])
+        if not products:
+            logger.warning(f"No Shopify product found for search: {search_query}")
+            return None
+        images = products[0].get("images", [])
+        if not images:
+            logger.warning(f"Product found but has no images: {products[0].get('title')}")
+            return None
+        img_url = images[0]["src"]
+        logger.info(f"Using reference image from product '{products[0].get('title')}': {img_url}")
+        img_r = requests.get(img_url, timeout=30)
+        if img_r.status_code == 200:
+            return img_r.content
+    except Exception as e:
+        logger.error(f"_fetch_product_image_bytes error: {e}")
+    return None
+
+
+def _generate_image_with_reference(prompt: str, image_bytes: bytes) -> Optional[str]:
+    """
+    Calls gpt-image-1 /edits with a real product image as reference.
+    Returns base64 string or None on failure.
+    """
+    if not OPENAI_API_KEY:
+        return None
+    try:
+        full_prompt = _FIDELITY_PREFIX + prompt
+        files = {
+            "image[]": ("product_ref.jpg", io.BytesIO(image_bytes), "image/jpeg"),
+        }
+        data = {
+            "model": "gpt-image-1",
+            "prompt": full_prompt,
+            "size": "1536x1024",
+            "quality": "medium",
+            "n": "1",
+        }
+        r = requests.post(
+            "https://api.openai.com/v1/images/edits",
+            headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+            files=files,
+            data=data,
+            timeout=180,
+        )
+        r.raise_for_status()
+        return r.json()["data"][0]["b64_json"]
+    except Exception as e:
+        logger.error(f"Image edit with reference failed: {e}")
+        return None
+
+
 def _generate_image_b64(prompt: str) -> Optional[str]:
-    """Calls gpt-image-1 and returns base64 string, or None on failure."""
+    """Calls gpt-image-1 /generations (TIPO B — no reference image). Returns base64 or None."""
     if not OPENAI_API_KEY:
         logger.warning("OPENAI_API_KEY not set — skipping image generation")
         return None
@@ -119,9 +200,25 @@ def publicar_blog(req: BlogPublicarRequest, _=Depends(verificar_api_key)):
         }
 
     # 2. Generate image
+    # TIPO A (product): fetch real Shopify product image → use /edits for faithful cover
+    # TIPO B (technique): use /generations with editorial prompt
     image_b64 = None
     if req.image_prompt:
-        image_b64 = _generate_image_b64(req.image_prompt)
+        article_type = (req.article_type or "B").upper()
+        if article_type == "A" and req.product_search:
+            ref_bytes = _fetch_product_image_bytes(req.product_search)
+            if ref_bytes:
+                logger.info(f"TIPO A: generating image with real product reference for {req.handle}")
+                image_b64 = _generate_image_with_reference(req.image_prompt, ref_bytes)
+                if not image_b64:
+                    logger.warning(f"Reference edit failed for {req.handle}, falling back to /generations")
+                    image_b64 = _generate_image_b64(req.image_prompt)
+            else:
+                logger.warning(f"Could not find reference image for '{req.product_search}', using /generations")
+                image_b64 = _generate_image_b64(req.image_prompt)
+        else:
+            image_b64 = _generate_image_b64(req.image_prompt)
+
         if image_b64:
             logger.info(f"Image generated for {req.handle} ({len(image_b64)} chars b64)")
         else:
@@ -132,6 +229,13 @@ def publicar_blog(req: BlogPublicarRequest, _=Depends(verificar_api_key)):
     url = f"https://www.shinseimarket.com.br/blogs/novidades/{req.handle}"
     logger.info(f"Published: {url}")
 
+    image_method = "none"
+    if image_b64:
+        if (req.article_type or "B").upper() == "A" and req.product_search:
+            image_method = "edits_with_reference"
+        else:
+            image_method = "generations"
+
     return {
         "status": "published",
         "handle": req.handle,
@@ -139,6 +243,7 @@ def publicar_blog(req: BlogPublicarRequest, _=Depends(verificar_api_key)):
         "url": url,
         "article_id": article.get("id"),
         "image_generated": image_b64 is not None,
+        "image_method": image_method,
         "published_at": datetime.utcnow().isoformat(),
     }
 
