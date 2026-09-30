@@ -356,13 +356,20 @@ def _expandir_componentes_fornecedor(empresa: str, id_produto: int, quantidade: 
         return []
     result = []
     for comp in componentes:
-        comp_id = (comp.get("produto") or {}).get("id")
-        if comp_id:
-            result.append({
-                "id_produto": int(comp_id),
-                "quantidade": float(comp.get("quantidade") or 1) * quantidade,
-            })
-    logger.info("expandir_comp_forn: produto %s expandido em %d componentes", id_produto, len(result))
+        comp_produto = comp.get("produto") or {}
+        comp_sku = str(comp_produto.get("codigo") or comp.get("codigo") or "").strip()
+        comp_qtd = float(comp.get("quantidade") or 1) * quantidade
+        if not comp_sku:
+            logger.warning("expandir_comp_forn: componente sem SKU em produto %s — pulando", id_produto)
+            continue
+        # Match obrigatório por SKU (Código) conforme regra do sistema
+        id_comp = _buscar_id_produto(empresa, comp_sku)
+        if not id_comp:
+            logger.warning("expandir_comp_forn: SKU %s não encontrado em %s — retornando None",
+                           comp_sku, empresa)
+            return None
+        result.append({"id_produto": id_comp, "quantidade": comp_qtd})
+    logger.info("expandir_comp_forn: produto %s expandido em %d componentes via SKU", id_produto, len(result))
     return result if result else []
 
 
@@ -387,6 +394,11 @@ def _movimentar(empresa: str, id_produto: int, deposito_id: int,
         headers={**hdrs, "Content-Type": "application/json"},
         json=payload, timeout=30
     )
+    if resp.status_code == 504:
+        # Bling aplica a movimentação mesmo com timeout — documentado no Albert (bling_endpoints_mapeamento)
+        logger.warning("movimentar [%s/%s op=%s] HTTP 504 — operação aplicada no Bling (timeout não é falha)",
+                       empresa, id_produto, operacao)
+        return f"ok-504-{id_produto}", None
     if not resp.ok:
         detalhe = resp.text[:500]
         logger.error("movimentar [%s/%s op=%s] HTTP %s: %s",
