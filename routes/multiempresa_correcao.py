@@ -1199,7 +1199,7 @@ def _run_reprocessar_erros(empresa: str, limite: int):
             except Exception as exc:
                 logger.error("reprocessar_erros so_saida exc [%s/%s]: %s", emp_forn, sku, exc)
                 n_saida_err += 1
-            _time.sleep(0.1)
+            _time.sleep(0.5)
 
         pedidos_feitos: set[tuple] = set()
         for aj in ambos_null:
