@@ -159,6 +159,13 @@ try:
 except Exception as _analytics_exc:
     logger.warning("Analytics não carregado: %s", _analytics_exc)
 
+try:
+    from routes.blog import router as blog_router
+    app.include_router(blog_router)
+    logger.info("Blog publishing API registrada em /blog")
+except Exception as _blog_exc:
+    logger.warning("Blog router não carregado: %s", _blog_exc)
+
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     return await verificar_api_key(request, call_next)
