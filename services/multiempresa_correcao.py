@@ -333,19 +333,27 @@ def _expandir_virtual(empresa_vendedora: str, sku: str, quantidade: float) -> li
 
 def _expandir_componentes_fornecedor(empresa: str, id_produto: int, quantidade: float) -> list[dict] | None:
     """
-    Se o produto (por ID) for um kit virtual no fornecedor (tipoEstoque=V com componentes),
-    retorna lista [{"id_produto": int, "quantidade": float}] para cada componente.
-    Retorna None se for produto simples ou em caso de erro.
+    Verifica se o produto é um kit virtual e retorna seus componentes.
+
+    Retorno:
+      list não-vazia  → produto virtual; mover cada componente individualmente
+      list vazia []   → produto simples; usar movimentação direta
+      None            → ERRO de API (429/4xx/5xx); não fazer fallback, reprocessar depois
+
     Usado para evitar POST /estoques em produto virtual (Bling retorna 504).
     """
     hdrs = _hdrs(empresa)
     resp = requests.get(f"{BLING_API}/produtos/{id_produto}", headers=hdrs, timeout=15)
     if not resp.ok:
+        logger.warning("expandir_comp_forn: GET /produtos/%s retornou HTTP %s — retornando None (não fazer fallback)",
+                       id_produto, resp.status_code)
         return None
     data = resp.json().get("data") or {}
     componentes = (data.get("estrutura") or {}).get("componentes") or []
     if not componentes:
-        return None
+        logger.debug("expandir_comp_forn: produto %s sem estrutura.componentes — produto simples",
+                     id_produto)
+        return []
     result = []
     for comp in componentes:
         comp_id = (comp.get("produto") or {}).get("id")
@@ -354,7 +362,8 @@ def _expandir_componentes_fornecedor(empresa: str, id_produto: int, quantidade: 
                 "id_produto": int(comp_id),
                 "quantidade": float(comp.get("quantidade") or 1) * quantidade,
             })
-    return result if result else None
+    logger.info("expandir_comp_forn: produto %s expandido em %d componentes", id_produto, len(result))
+    return result if result else []
 
 
 def _movimentar(empresa: str, id_produto: int, deposito_id: int,
@@ -605,7 +614,12 @@ def processar_pedido(empresa_vendedora: str, pedido: dict) -> dict:
         obs_saida = f"{chave}|etapa=saida|forn={emp_forn}"
         comps_forn = _expandir_componentes_fornecedor(emp_forn, id_prod_forn, qtd)
         time.sleep(0.15)
-        if comps_forn:
+        if comps_forn is None:
+            # Erro de API ao consultar produto — não fazer fallback (evita 504 em kit virtual)
+            id_mov_saida = None
+            erro_saida = f"expandir_componentes: GET /produtos/{id_prod_forn} falhou — reprocessar depois"
+        elif comps_forn:
+            # Produto virtual — mover componentes individualmente
             ids_movs_s: list[str] = []
             erro_saida = None
             for comp in comps_forn:
@@ -618,6 +632,7 @@ def processar_pedido(empresa_vendedora: str, pedido: dict) -> dict:
                     break
             id_mov_saida = ",".join(ids_movs_s) if (not erro_saida and ids_movs_s) else None
         else:
+            # Produto simples — movimentação direta
             id_mov_saida, erro_saida = _movimentar(emp_forn, id_prod_forn, dep_forn, "S", qtd, obs_saida)
         time.sleep(0.35)
 

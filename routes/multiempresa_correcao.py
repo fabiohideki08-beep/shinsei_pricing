@@ -1156,7 +1156,12 @@ def _run_reprocessar_erros(empresa: str, limite: int):
                 # Se produto virtual no fornecedor, mover componentes individualmente
                 comps_forn = _expandir_componentes_fornecedor(emp_forn, id_prod_forn, qtd)
                 _time.sleep(0.15)
-                if comps_forn:
+                if comps_forn is None:
+                    # Erro de API ao consultar produto — não fazer fallback (evita 504 em kit virtual)
+                    id_mov_s = None
+                    erro_s = f"expandir_componentes: GET /produtos/{id_prod_forn} falhou — reprocessar depois"
+                elif comps_forn:
+                    # Produto virtual — mover componentes individualmente
                     ids_movs_s: list[str] = []
                     erro_s = None
                     for comp in comps_forn:
@@ -1169,6 +1174,7 @@ def _run_reprocessar_erros(empresa: str, limite: int):
                             break
                     id_mov_s = ",".join(ids_movs_s) if (not erro_s and ids_movs_s) else None
                 else:
+                    # Produto simples — movimentação direta
                     id_mov_s, erro_s = _movimentar(emp_forn, id_prod_forn, dep_forn, "S", qtd, obs_saida)
                 _time.sleep(0.35)
 
