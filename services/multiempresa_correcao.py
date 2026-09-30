@@ -354,22 +354,18 @@ def _expandir_componentes_fornecedor(empresa: str, id_produto: int, quantidade: 
         logger.debug("expandir_comp_forn: produto %s sem estrutura.componentes — produto simples",
                      id_produto)
         return []
+    # GET /produtos/{id} retorna componentes apenas com produto.id (sem codigo)
+    # o match por SKU deve ser usado em _buscar_id_produto (entre empresas),
+    # mas aqui os IDs já são do próprio contexto da empresa — usar produto.id diretamente
     result = []
     for comp in componentes:
-        comp_produto = comp.get("produto") or {}
-        comp_sku = str(comp_produto.get("codigo") or comp.get("codigo") or "").strip()
-        comp_qtd = float(comp.get("quantidade") or 1) * quantidade
-        if not comp_sku:
-            logger.warning("expandir_comp_forn: componente sem SKU em produto %s — pulando", id_produto)
-            continue
-        # Match obrigatório por SKU (Código) conforme regra do sistema
-        id_comp = _buscar_id_produto(empresa, comp_sku)
-        if not id_comp:
-            logger.warning("expandir_comp_forn: SKU %s não encontrado em %s — retornando None",
-                           comp_sku, empresa)
-            return None
-        result.append({"id_produto": id_comp, "quantidade": comp_qtd})
-    logger.info("expandir_comp_forn: produto %s expandido em %d componentes via SKU", id_produto, len(result))
+        comp_id = (comp.get("produto") or {}).get("id")
+        if comp_id:
+            result.append({
+                "id_produto": int(comp_id),
+                "quantidade": float(comp.get("quantidade") or 1) * quantidade,
+            })
+    logger.info("expandir_comp_forn: produto %s expandido em %d componentes", id_produto, len(result))
     return result if result else []
 
 
