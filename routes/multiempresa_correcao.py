@@ -44,7 +44,7 @@ from services.multiempresa_correcao import (
     processar_pedido, estornar_pedido, job_multiempresa,
     resetar_processando,
     DB_PATH, EMPRESA_SHINSEI, EMPRESA_AKG, _hdrs,
-    _buscar_id_produto, _movimentar, _agora,
+    _buscar_id_produto, _movimentar, _agora, _expandir_componentes_fornecedor,
 )
 _proc = processar_pedido
 
@@ -1153,7 +1153,23 @@ def _run_reprocessar_erros(empresa: str, limite: int):
                     continue
 
                 obs_saida = f"{chave}|etapa=saida|forn={emp_forn}|retry=1"
-                id_mov_s, erro_s = _movimentar(emp_forn, id_prod_forn, dep_forn, "S", qtd, obs_saida)
+                # Se produto virtual no fornecedor, mover componentes individualmente
+                comps_forn = _expandir_componentes_fornecedor(emp_forn, id_prod_forn, qtd)
+                _time.sleep(0.15)
+                if comps_forn:
+                    ids_movs_s: list[str] = []
+                    erro_s = None
+                    for comp in comps_forn:
+                        id_c, err_c = _movimentar(emp_forn, comp["id_produto"], dep_forn, "S", comp["quantidade"], obs_saida)
+                        _time.sleep(0.35)
+                        if id_c:
+                            ids_movs_s.append(id_c)
+                        else:
+                            erro_s = err_c
+                            break
+                    id_mov_s = ",".join(ids_movs_s) if (not erro_s and ids_movs_s) else None
+                else:
+                    id_mov_s, erro_s = _movimentar(emp_forn, id_prod_forn, dep_forn, "S", qtd, obs_saida)
                 _time.sleep(0.35)
 
                 conn2 = _db()

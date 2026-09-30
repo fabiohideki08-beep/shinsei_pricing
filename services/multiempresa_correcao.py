@@ -331,6 +331,32 @@ def _expandir_virtual(empresa_vendedora: str, sku: str, quantidade: float) -> li
     return expandidos if expandidos else [{"codigo": sku, "quantidade": quantidade, "_virtual": False}]
 
 
+def _expandir_componentes_fornecedor(empresa: str, id_produto: int, quantidade: float) -> list[dict] | None:
+    """
+    Se o produto (por ID) for um kit virtual no fornecedor (tipoEstoque=V com componentes),
+    retorna lista [{"id_produto": int, "quantidade": float}] para cada componente.
+    Retorna None se for produto simples ou em caso de erro.
+    Usado para evitar POST /estoques em produto virtual (Bling retorna 504).
+    """
+    hdrs = _hdrs(empresa)
+    resp = requests.get(f"{BLING_API}/produtos/{id_produto}", headers=hdrs, timeout=15)
+    if not resp.ok:
+        return None
+    data = resp.json().get("data") or {}
+    componentes = (data.get("estrutura") or {}).get("componentes") or []
+    if not componentes:
+        return None
+    result = []
+    for comp in componentes:
+        comp_id = (comp.get("produto") or {}).get("id")
+        if comp_id:
+            result.append({
+                "id_produto": int(comp_id),
+                "quantidade": float(comp.get("quantidade") or 1) * quantidade,
+            })
+    return result if result else None
+
+
 def _movimentar(empresa: str, id_produto: int, deposito_id: int,
                 operacao: str, quantidade: float, obs: str) -> tuple[str | None, str | None]:
     """
@@ -575,9 +601,24 @@ def processar_pedido(empresa_vendedora: str, pedido: dict) -> dict:
             resultados.append({"sku": sku, "status": status_item})
             continue
 
-        # Passo 3: saída no fornecedor
+        # Passo 3: saída no fornecedor — se produto virtual, mover componentes individualmente
         obs_saida = f"{chave}|etapa=saida|forn={emp_forn}"
-        id_mov_saida, erro_saida = _movimentar(emp_forn, id_prod_forn, dep_forn, "S", qtd, obs_saida)
+        comps_forn = _expandir_componentes_fornecedor(emp_forn, id_prod_forn, qtd)
+        time.sleep(0.15)
+        if comps_forn:
+            ids_movs_s: list[str] = []
+            erro_saida = None
+            for comp in comps_forn:
+                id_c, err_c = _movimentar(emp_forn, comp["id_produto"], dep_forn, "S", comp["quantidade"], obs_saida)
+                time.sleep(0.35)
+                if id_c:
+                    ids_movs_s.append(id_c)
+                else:
+                    erro_saida = err_c
+                    break
+            id_mov_saida = ",".join(ids_movs_s) if (not erro_saida and ids_movs_s) else None
+        else:
+            id_mov_saida, erro_saida = _movimentar(emp_forn, id_prod_forn, dep_forn, "S", qtd, obs_saida)
         time.sleep(0.35)
 
         # Passo 4: entrada/ajuste no vendedor (se empresa diferente)
