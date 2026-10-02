@@ -692,6 +692,83 @@ def _set_bling_transporte_or_fallback(order: dict):
         _generate_me_label(order)
 
 
+def _send_tiktok_conversion(order: dict):
+    """Envia evento Purchase para a TikTok Events API (server-side)."""
+    import time as _time
+
+    pixel_code   = os.getenv("TIKTOK_PIXEL_ID", "DA8HBRJC77UF8GCE5I10")
+    access_token = os.getenv("TIKTOK_EVENTS_API_TOKEN", "")
+    if not access_token:
+        print("[tiktok] TIKTOK_EVENTS_API_TOKEN não configurado — pulando")
+        return
+
+    order_id   = str(order.get("id", ""))
+    order_name = order.get("name", f"#{order_id}")
+    email      = (order.get("email") or "").strip().lower()
+    phone      = (order.get("phone") or "").strip()
+    total      = float(order.get("total_price") or "0")
+
+    def _sha256(s):
+        return hashlib.sha256(s.encode()).hexdigest() if s else None
+
+    phone_digits = "".join(c for c in phone if c.isdigit())
+    if phone_digits and not phone_digits.startswith("55"):
+        phone_digits = "55" + phone_digits
+
+    user = {}
+    if email:
+        user["email"] = _sha256(email)
+    if phone_digits:
+        user["phone_number"] = _sha256(phone_digits)
+
+    contents = []
+    for item in order.get("line_items", []):
+        contents.append({
+            "content_id":   str(item.get("variant_id") or item.get("product_id") or ""),
+            "content_type": "product",
+            "content_name": (item.get("title") or item.get("name") or "Produto")[:100],
+            "quantity":     int(item.get("quantity") or 1),
+            "price":        float(item.get("price") or "0"),
+        })
+
+    try:
+        event_time = int(datetime.fromisoformat(
+            (order.get("created_at") or "").replace("Z", "+00:00")
+        ).timestamp())
+    except Exception:
+        event_time = int(_time.time())
+
+    payload = {
+        "pixel_code": pixel_code,
+        "event":      "Purchase",
+        "event_time": event_time,
+        "event_id":   f"purchase_{order_id}",
+        "user":       user,
+        "properties": {
+            "value":        total,
+            "currency":     "BRL",
+            "contents":     contents,
+            "content_type": "product",
+            "order_id":     order_id,
+        },
+    }
+
+    try:
+        r = requests.post(
+            "https://business-api.tiktok.com/open_api/v1.3/event/track/",
+            json=payload,
+            headers={"Access-Token": access_token, "Content-Type": "application/json"},
+            timeout=15,
+        )
+        data = r.json() if r.text else {}
+        if r.status_code == 200 and data.get("code") == 0:
+            print(f"[tiktok] ✅ Purchase: pedido={order_name} valor=R${total:.2f}")
+        else:
+            print(f"[tiktok] ⚠️ HTTP {r.status_code} code={data.get('code')} msg={data.get('message','')}")
+    except Exception as e:
+        print(f"[tiktok] ERRO: {e}")
+
+
 def _verify_hmac(body: bytes, hmac_header: str) -> bool:
     secret = os.getenv("SHOPIFY_WEBHOOK_SECRET", "")
     if not secret:
@@ -725,6 +802,7 @@ async def order_paid(
         background_tasks.add_task(_set_bling_transporte_or_fallback, order)
 
     background_tasks.add_task(_upload_conversion, order)
+    background_tasks.add_task(_send_tiktok_conversion, order)
 
     return {"ok": True, "order_id": order.get("id")}
 
