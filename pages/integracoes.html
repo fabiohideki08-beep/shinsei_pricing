@@ -527,22 +527,33 @@
       <div class="card-header">
         <div class="card-icon">🎵</div>
         <div>
-          <div class="card-title">TikTok Pixel + Events API</div>
-          <div class="card-sub">Rastreamento de conversões server-side</div>
+          <div class="card-title">TikTok — Rastreamento + Shop</div>
+          <div class="card-sub">Events API (server-side) + TikTok Shop via Bling</div>
         </div>
         <div style="margin-left:auto" id="status-tiktok">
           <span class="status-badge unknown"><span class="dot gray"></span>Verificando...</span>
         </div>
       </div>
 
+      <div class="section-title" style="margin-top:8px">🎯 Events API — Conversões Shinsei</div>
       <div id="info-tiktok">
         <div class="info-row"><span class="info-label">Pixel (Shopify App)</span><span class="info-value" style="font-family:monospace;font-size:11px" id="tiktok-pixel-shopify">DA8HBRJC77UF8GCE5I10</span></div>
         <div class="info-row"><span class="info-label">Pixel (theme.liquid)</span><span class="info-value" style="font-family:monospace;font-size:11px">D2B58OBC77U0DDF6QFG0</span></div>
         <div class="info-row"><span class="info-label">Events API Token</span><span class="info-value" id="tiktok-token-status">—</span></div>
-        <div class="info-row"><span class="info-label">Endpoint server-side</span><span class="info-value" style="font-size:11px;color:var(--muted)">business-api.tiktok.com</span></div>
         <div class="info-row"><span class="info-label">Webhook disparo</span><span class="info-value" style="font-size:11px;color:var(--muted)">orders/paid → /shopify/webhook/order-paid</span></div>
         <div class="info-row"><span class="info-label">Último Purchase</span><span class="info-value" id="tiktok-ultimo-purchase">—</span></div>
       </div>
+
+      <hr class="divider"/>
+      <div class="section-title">🛍️ TikTok Shop — Shinsei (Bling)</div>
+      <div class="info-row"><span class="info-label">idLoja Bling</span><span class="info-value" style="font-family:monospace;font-size:11px">206293681</span></div>
+      <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="tiktok-shinsei-shop-status">—</span></div>
+
+      <hr class="divider"/>
+      <div class="section-title">🛍️ TikTok Shop — AKG (Bling)</div>
+      <div class="info-row"><span class="info-label">idLoja Bling</span><span class="info-value" style="font-family:monospace;font-size:11px">206316394</span></div>
+      <div class="info-row"><span class="info-label">Shop ID TikTok</span><span class="info-value" style="font-family:monospace;font-size:11px">7494859114033349978</span></div>
+      <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="tiktok-akg-shop-status">—</span></div>
 
       <hr class="divider"/>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -944,6 +955,23 @@ async function verificarTiktok(){
   }catch(e){
     setStatus('status-tiktok', false, 'Erro');
     document.getElementById('tiktok-token-status').textContent = 'Erro ao verificar';
+  }
+  // Status dos TikTok Shops (Shinsei + AKG)
+  try{
+    const rs = await fetch('/tiktok/status');
+    const ds = await rs.json();
+    document.getElementById('tiktok-shinsei-shop-status').textContent =
+      ds.ok ? '✅ OK — idLoja ' + ds.loja_id : '❌ ' + (ds.erro||'erro');
+  }catch(e){
+    document.getElementById('tiktok-shinsei-shop-status').textContent = 'Erro ao verificar';
+  }
+  try{
+    const ra = await fetch('/tiktok/akg/status');
+    const da = await ra.json();
+    document.getElementById('tiktok-akg-shop-status').textContent =
+      da.ok ? '✅ OK — idLoja ' + da.loja_id : '❌ ' + (da.erro||'erro');
+  }catch(e){
+    document.getElementById('tiktok-akg-shop-status').textContent = 'Erro ao verificar';
   }
 }
 

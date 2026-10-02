@@ -1,9 +1,9 @@
 """
 TikTok Shop — integração via Bling API v3
-idLoja TikTok Shop Shinsei: 206293681
-tipoIntegracao: "TikTok Shop"
 
-Todos os produtos, anúncios e pedidos TikTok são gerenciados pelo Bling Shinsei.
+Shinsei: idLoja=206293681 (TIKTOK_BLING_LOJA_ID)
+AKG:     idLoja=206316394 (TIKTOK_AKG_BLING_LOJA_ID), Shop ID=7494859114033349978
+tipoIntegracao: "TikTok Shop"
 """
 import logging
 import os
@@ -14,49 +14,60 @@ import requests
 logger = logging.getLogger(__name__)
 
 BLING_BASE = "https://api.bling.com.br/Api/v3"
-TIKTOK_LOJA_ID   = int(os.environ.get("TIKTOK_BLING_LOJA_ID", "206293681"))
-TIKTOK_TIPO      = os.environ.get("TIKTOK_BLING_TIPO", "TikTok Shop")
+TIKTOK_LOJA_ID     = int(os.environ.get("TIKTOK_BLING_LOJA_ID", "206293681"))
+TIKTOK_AKG_LOJA_ID = int(os.environ.get("TIKTOK_AKG_BLING_LOJA_ID", "206316394"))
+TIKTOK_TIPO        = os.environ.get("TIKTOK_BLING_TIPO", "TikTok Shop")
 
 
-def _bling_headers() -> dict:
-    """Busca token Bling Shinsei via BlingClient com auto-refresh."""
+def _bling_headers(empresa: str = "shinsei") -> dict:
+    """Busca token Bling via BlingClient com auto-refresh."""
     try:
-        from bling_client import BlingClient
-        client = BlingClient()
-        hdrs = client._get_headers()  # auto-refresh se expirado
+        if empresa == "akg":
+            from bling_client import BlingClientAKG
+            client = BlingClientAKG()
+        else:
+            from bling_client import BlingClient
+            client = BlingClient()
+        hdrs = client._get_headers()
         hdrs["Accept"] = "application/json"
         return hdrs
     except Exception:
-        token = os.environ.get("BLING_ACCESS_TOKEN", "")
+        if empresa == "akg":
+            token = os.environ.get("BLING_AKG_ACCESS_TOKEN", "")
+        else:
+            token = os.environ.get("BLING_ACCESS_TOKEN", "")
         return {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+
+
+def _loja_id(empresa: str) -> int:
+    return TIKTOK_AKG_LOJA_ID if empresa == "akg" else TIKTOK_LOJA_ID
 
 
 # ── Anúncios (produtos TikTok no Bling) ──────────────────────────────────
 
-def listar_anuncios(pagina: int = 1, limite: int = 100) -> dict:
-    """Lista anúncios TikTok Shop cadastrados no Bling Shinsei."""
-    hdrs = _bling_headers()
+def listar_anuncios(pagina: int = 1, limite: int = 100, empresa: str = "shinsei") -> dict:
+    """Lista anúncios TikTok Shop cadastrados no Bling."""
     r = requests.get(
         f"{BLING_BASE}/anuncios",
         params={
             "tipoIntegracao": TIKTOK_TIPO,
-            "idLoja": TIKTOK_LOJA_ID,
+            "idLoja": _loja_id(empresa),
             "pagina": pagina,
             "limite": limite,
         },
-        headers=hdrs,
+        headers=_bling_headers(empresa),
         timeout=30,
     )
     r.raise_for_status()
     return r.json()
 
 
-def listar_todos_anuncios() -> list:
+def listar_todos_anuncios(empresa: str = "shinsei") -> list:
     """Coleta todos os anúncios TikTok paginando automaticamente."""
     todos = []
     pagina = 1
     while True:
-        resp = listar_anuncios(pagina=pagina, limite=100)
+        resp = listar_anuncios(pagina=pagina, limite=100, empresa=empresa)
         data = resp.get("data", [])
         todos.extend(data)
         if len(data) < 100:
@@ -66,59 +77,58 @@ def listar_todos_anuncios() -> list:
     return todos
 
 
-def buscar_anuncio(anuncio_id: int) -> dict:
+def buscar_anuncio(anuncio_id: int, empresa: str = "shinsei") -> dict:
     r = requests.get(
         f"{BLING_BASE}/anuncios/{anuncio_id}",
-        headers=_bling_headers(),
+        headers=_bling_headers(empresa),
         timeout=30,
     )
     r.raise_for_status()
     return r.json()
 
 
-def criar_anuncio(produto_id: int, preco: float, titulo: Optional[str] = None) -> dict:
+def criar_anuncio(produto_id: int, preco: float, titulo: Optional[str] = None, empresa: str = "shinsei") -> dict:
     """Publica produto do Bling no TikTok Shop."""
-    hdrs = _bling_headers()
     body = {
         "integracao": {"tipo": TIKTOK_TIPO},
-        "loja": {"id": TIKTOK_LOJA_ID},
+        "loja": {"id": _loja_id(empresa)},
         "produto": {"id": produto_id},
         "preco": preco,
     }
     if titulo:
         body["titulo"] = titulo
-    r = requests.post(f"{BLING_BASE}/anuncios", json=body, headers=hdrs, timeout=30)
+    r = requests.post(f"{BLING_BASE}/anuncios", json=body, headers=_bling_headers(empresa), timeout=30)
     if not r.ok:
         raise Exception(f"{r.status_code} {r.reason} — {r.text[:300]}")
     return r.json()
 
 
-def atualizar_anuncio(anuncio_id: int, payload: dict) -> dict:
+def atualizar_anuncio(anuncio_id: int, payload: dict, empresa: str = "shinsei") -> dict:
     r = requests.put(
         f"{BLING_BASE}/anuncios/{anuncio_id}",
         json=payload,
-        headers=_bling_headers(),
+        headers=_bling_headers(empresa),
         timeout=30,
     )
     r.raise_for_status()
     return r.json()
 
 
-def atualizar_preco_anuncio(anuncio_id: int, preco: float) -> dict:
-    return atualizar_anuncio(anuncio_id, {"preco": preco})
+def atualizar_preco_anuncio(anuncio_id: int, preco: float, empresa: str = "shinsei") -> dict:
+    return atualizar_anuncio(anuncio_id, {"preco": preco}, empresa=empresa)
 
 
 # ── Pedidos TikTok ────────────────────────────────────────────────────────
 
-def listar_pedidos_tiktok(pagina: int = 1, limite: int = 100, situacao: Optional[int] = None) -> dict:
+def listar_pedidos_tiktok(pagina: int = 1, limite: int = 100, situacao: Optional[int] = None, empresa: str = "shinsei") -> dict:
     """Lista pedidos de venda originados do TikTok Shop."""
-    params = {"pagina": pagina, "limite": limite, "idLoja": TIKTOK_LOJA_ID}
+    params = {"pagina": pagina, "limite": limite, "idLoja": _loja_id(empresa)}
     if situacao:
         params["situacao"] = situacao
     r = requests.get(
         f"{BLING_BASE}/pedidos/vendas",
         params=params,
-        headers=_bling_headers(),
+        headers=_bling_headers(empresa),
         timeout=30,
     )
     r.raise_for_status()
@@ -127,11 +137,11 @@ def listar_pedidos_tiktok(pagina: int = 1, limite: int = 100, situacao: Optional
 
 # ── Produtos Bling para vincular ao TikTok ────────────────────────────────
 
-def buscar_produto_bling(sku: str) -> Optional[dict]:
+def buscar_produto_bling(sku: str, empresa: str = "shinsei") -> Optional[dict]:
     r = requests.get(
         f"{BLING_BASE}/produtos",
         params={"codigo": sku, "limite": 1},
-        headers=_bling_headers(),
+        headers=_bling_headers(empresa),
         timeout=30,
     )
     r.raise_for_status()
@@ -141,15 +151,17 @@ def buscar_produto_bling(sku: str) -> Optional[dict]:
 
 # ── Status ────────────────────────────────────────────────────────────────
 
-def status() -> dict:
+def status(empresa: str = "shinsei") -> dict:
+    loja_id = _loja_id(empresa)
     try:
-        resp = listar_anuncios(pagina=1, limite=1)
+        resp = listar_anuncios(pagina=1, limite=1, empresa=empresa)
         return {
             "ok": True,
-            "loja_id": TIKTOK_LOJA_ID,
+            "empresa": empresa,
+            "loja_id": loja_id,
             "tipo_integracao": TIKTOK_TIPO,
             "total_anuncios_sample": len(resp.get("data", [])),
-            "canal": "Bling Shinsei → TikTok Shop",
+            "canal": f"Bling {empresa.upper()} -> TikTok Shop",
         }
     except Exception as e:
-        return {"ok": False, "erro": str(e), "loja_id": TIKTOK_LOJA_ID}
+        return {"ok": False, "empresa": empresa, "erro": str(e), "loja_id": loja_id}

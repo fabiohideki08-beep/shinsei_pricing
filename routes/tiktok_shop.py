@@ -684,3 +684,55 @@ def listar_pedidos(
         return tiktok.listar_pedidos_tiktok(pagina=pagina, limite=limite, situacao=situacao)
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
+# ── Endpoints AKG ─────────────────────────────────────────────────────────
+
+@router.get("/akg/status")
+def tiktok_akg_status():
+    return tiktok.status(empresa="akg")
+
+
+@router.get("/akg/anuncios")
+def listar_anuncios_akg(
+    pagina: int = 1,
+    limite: int = 100,
+    todos: bool = False,
+    _=Depends(verificar_api_key),
+):
+    try:
+        if todos:
+            data = tiktok.listar_todos_anuncios(empresa="akg")
+            return {"total": len(data), "data": data}
+        return tiktok.listar_anuncios(pagina=pagina, limite=limite, empresa="akg")
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.post("/akg/anuncios")
+def publicar_anuncio_akg(body: PublicarRequest, _=Depends(verificar_api_key)):
+    try:
+        return tiktok.criar_anuncio(body.produto_id, body.preco, body.titulo, empresa="akg")
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.put("/akg/anuncios/{anuncio_id}/preco")
+def atualizar_preco_akg(anuncio_id: int, body: AtualizarPrecoRequest, _=Depends(verificar_api_key)):
+    try:
+        return tiktok.atualizar_preco_anuncio(anuncio_id, body.preco, empresa="akg")
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.get("/akg/pedidos")
+def listar_pedidos_akg(
+    pagina: int = 1,
+    limite: int = 100,
+    situacao: Optional[int] = None,
+    _=Depends(verificar_api_key),
+):
+    try:
+        return tiktok.listar_pedidos_tiktok(pagina=pagina, limite=limite, situacao=situacao, empresa="akg")
+    except Exception as e:
+        raise HTTPException(500, str(e))
