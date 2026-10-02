@@ -512,6 +512,50 @@
   </div>
 
   <!-- ══════════════════════════════════════════════════ -->
+  <!-- SEÇÃO: SOCIAL MEDIA                               -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div style="margin:28px 0 14px;display:flex;align-items:center;gap:12px">
+    <div style="flex:1;height:1px;background:var(--line)"></div>
+    <span style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap">🎵 Social Media — Rastreamento</span>
+    <div style="flex:1;height:1px;background:var(--line)"></div>
+  </div>
+
+  <div class="grid">
+
+    <!-- TIKTOK -->
+    <div class="card" id="card-tiktok">
+      <div class="card-header">
+        <div class="card-icon">🎵</div>
+        <div>
+          <div class="card-title">TikTok Pixel + Events API</div>
+          <div class="card-sub">Rastreamento de conversões server-side</div>
+        </div>
+        <div style="margin-left:auto" id="status-tiktok">
+          <span class="status-badge unknown"><span class="dot gray"></span>Verificando...</span>
+        </div>
+      </div>
+
+      <div id="info-tiktok">
+        <div class="info-row"><span class="info-label">Pixel (Shopify App)</span><span class="info-value" style="font-family:monospace;font-size:11px" id="tiktok-pixel-shopify">DA8HBRJC77UF8GCE5I10</span></div>
+        <div class="info-row"><span class="info-label">Pixel (theme.liquid)</span><span class="info-value" style="font-family:monospace;font-size:11px">D2B58OBC77U0DDF6QFG0</span></div>
+        <div class="info-row"><span class="info-label">Events API Token</span><span class="info-value" id="tiktok-token-status">—</span></div>
+        <div class="info-row"><span class="info-label">Endpoint server-side</span><span class="info-value" style="font-size:11px;color:var(--muted)">business-api.tiktok.com</span></div>
+        <div class="info-row"><span class="info-label">Webhook disparo</span><span class="info-value" style="font-size:11px;color:var(--muted)">orders/paid → /shopify/webhook/order-paid</span></div>
+        <div class="info-row"><span class="info-label">Último Purchase</span><span class="info-value" id="tiktok-ultimo-purchase">—</span></div>
+      </div>
+
+      <hr class="divider"/>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn secondary sm" onclick="verificarTiktok()">🔄 Verificar</button>
+        <a class="btn secondary sm" href="/shopify/webhook/tiktok-logs" target="_blank">📋 Ver logs</a>
+        <a class="btn secondary sm" href="https://ads.tiktok.com" target="_blank">🔗 Ads Manager ↗</a>
+      </div>
+      <div id="notice-tiktok" class="notice" style="margin-top:8px"></div>
+    </div>
+
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
   <!-- SEÇÃO: INFRAESTRUTURA                             -->
   <!-- ══════════════════════════════════════════════════ -->
   <div style="display:flex;align-items:center;gap:12px;margin:32px 0 16px">
@@ -882,6 +926,27 @@ async function verificarAmazon(){
   }
 }
 
+// ── TIKTOK ──────────────────────────────────────────────
+async function verificarTiktok(){
+  try{
+    const res = await fetch('/shopify/webhook/tiktok-status');
+    const d = await res.json();
+    setStatus('status-tiktok', d.ok, d.ok ? 'Configurado' : 'Não configurado');
+    document.getElementById('tiktok-token-status').textContent = d.token_configurado ? '✅ Ativo' : '❌ Não configurado';
+    if(d.pixel_id) document.getElementById('tiktok-pixel-shopify').textContent = d.pixel_id;
+    const ulEl = document.getElementById('tiktok-ultimo-purchase');
+    if(d.ultimo_purchase){
+      const ts = new Date(d.ultimo_purchase.ts);
+      ulEl.textContent = ts.toLocaleString('pt-BR') + ' — ' + (d.ultimo_purchase.order_name || '') + ' R$' + (d.ultimo_purchase.valor||'').toString();
+    } else {
+      ulEl.textContent = 'Aguardando primeiro pedido';
+    }
+  }catch(e){
+    setStatus('status-tiktok', false, 'Erro');
+    document.getElementById('tiktok-token-status').textContent = 'Erro ao verificar';
+  }
+}
+
 function verificarTodas(){
   verificarBling();
   verificarML();
@@ -890,6 +955,7 @@ function verificarTodas(){
   verificarShopee();
   verificarRender();
   verificarME();
+  verificarTiktok();
   verificarSMTP();
   verificarZAPI();
   carregarCredenciais();

@@ -761,12 +761,28 @@ def _send_tiktok_conversion(order: dict):
             timeout=15,
         )
         data = r.json() if r.text else {}
-        if r.status_code == 200 and data.get("code") == 0:
+        ok = r.status_code == 200 and data.get("code") == 0
+        status = "ok" if ok else f"erro:{r.status_code}:{data.get('code','')}"
+        if ok:
             print(f"[tiktok] ✅ Purchase: pedido={order_name} valor=R${total:.2f}")
         else:
             print(f"[tiktok] ⚠️ HTTP {r.status_code} code={data.get('code')} msg={data.get('message','')}")
+        _log_tiktok(order_id, order_name, total, status)
     except Exception as e:
         print(f"[tiktok] ERRO: {e}")
+        _log_tiktok(order_id, order_name, total, f"erro:{e}")
+
+
+def _log_tiktok(order_id: str, order_name: str, valor: float, status: str):
+    log_file = DATA_DIR / "conversoes_tiktok.json"
+    try:
+        log = json.loads(log_file.read_text(encoding="utf-8")) if log_file.exists() else []
+    except Exception:
+        log = []
+    log.append({"order_id": order_id, "order_name": order_name,
+                 "valor": valor, "status": status,
+                 "ts": datetime.now(timezone.utc).isoformat()})
+    log_file.write_text(json.dumps(log[-200:], ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _verify_hmac(body: bytes, hmac_header: str) -> bool:
@@ -805,6 +821,40 @@ async def order_paid(
     background_tasks.add_task(_send_tiktok_conversion, order)
 
     return {"ok": True, "order_id": order.get("id")}
+
+
+@router.get("/tiktok-status")
+def tiktok_status():
+    """Status rápido do TikTok Events API — sem chamada externa."""
+    pixel_id = os.getenv("TIKTOK_PIXEL_ID", "")
+    token    = os.getenv("TIKTOK_EVENTS_API_TOKEN", "")
+    log_file = DATA_DIR / "conversoes_tiktok.json"
+    ultimo = None
+    if log_file.exists():
+        try:
+            entries = json.loads(log_file.read_text(encoding="utf-8"))
+            if entries:
+                ultimo = entries[-1]
+        except Exception:
+            pass
+    return {
+        "ok": bool(token and pixel_id),
+        "pixel_id": pixel_id or "DA8HBRJC77UF8GCE5I10",
+        "token_configurado": bool(token),
+        "endpoint": "business-api.tiktok.com/open_api/v1.3/event/track/",
+        "webhook": "/shopify/webhook/order-paid",
+        "ultimo_purchase": ultimo,
+    }
+
+
+@router.get("/tiktok-logs")
+def tiktok_logs():
+    """Lista os últimos eventos Purchase enviados ao TikTok Events API."""
+    log_file = DATA_DIR / "conversoes_tiktok.json"
+    if not log_file.exists():
+        return {"eventos": [], "total": 0}
+    entries = json.loads(log_file.read_text(encoding="utf-8"))
+    return {"eventos": list(reversed(entries[-50:])), "total": len(entries)}
 
 
 @router.get("/conversoes")
