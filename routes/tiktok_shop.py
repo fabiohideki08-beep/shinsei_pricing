@@ -686,6 +686,28 @@ def listar_pedidos(
         raise HTTPException(500, str(e))
 
 
+# ── Diagnóstico Bling lojas ───────────────────────────────────────────────
+
+@router.get("/debug/bling-lojas")
+def debug_bling_lojas(empresa: str = "akg", _=Depends(verificar_api_key)):
+    """Lista todas as lojas virtuais configuradas no Bling para descobrir idLoja correto."""
+    import requests as _req
+    hdrs = tiktok._bling_headers(empresa)
+    r = _req.get("https://api.bling.com.br/Api/v3/lojas/virtual", headers=hdrs, timeout=15)
+    return {"status": r.status_code, "body": r.json() if r.ok else r.text}
+
+@router.get("/debug/bling-anuncios-raw")
+def debug_bling_anuncios_raw(empresa: str = "akg", id_loja: int = 0, tipo: str = "TikTok Shop", _=Depends(verificar_api_key)):
+    """Chama Bling /anuncios com parâmetros customizáveis para diagnóstico."""
+    import requests as _req
+    hdrs = tiktok._bling_headers(empresa)
+    params = {"tipoIntegracao": tipo, "pagina": 1, "limite": 100}
+    if id_loja:
+        params["idLoja"] = id_loja
+    r = _req.get("https://api.bling.com.br/Api/v3/anuncios", headers=hdrs, params=params, timeout=15)
+    return {"status": r.status_code, "params": params, "body": r.json() if r.ok else r.text}
+
+
 # ── Endpoints AKG ─────────────────────────────────────────────────────────
 
 @router.get("/akg/status")
