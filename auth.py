@@ -317,6 +317,7 @@ PUBLIC_PREFIXES = (
     "/gmc/",          # GMC scan, status, blacklist
     "/seo-health/",   # SEO Health análise e pagespeed
     "/marketing/",    # Marketing endpoints
+    "/temp-img/",     # Cache temporário de imagens (upload Python → fetch browser)
 )
 
 
