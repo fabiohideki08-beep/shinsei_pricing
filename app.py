@@ -50,6 +50,27 @@ PAGES_DIR.mkdir(exist_ok=True)
 app = FastAPI(title="Shinsei Pricing")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
+# ── Cache temporário de imagens (upload via Python, fetch via browser) ──
+_tmp_img_cache: dict = {}
+
+@app.post("/temp-img/{code}")
+async def store_temp_img(code: str, request: Request):
+    data = await request.body()
+    _tmp_img_cache[code] = data
+    return {"ok": True, "code": code, "size": len(data)}
+
+@app.get("/temp-img/{code}")
+async def get_temp_img(code: str):
+    from fastapi.responses import Response
+    if code not in _tmp_img_cache:
+        raise HTTPException(404, f"Image {code} not in cache")
+    return Response(content=_tmp_img_cache[code], media_type="image/jpeg")
+
+@app.delete("/temp-img")
+async def clear_temp_img():
+    _tmp_img_cache.clear()
+    return {"ok": True}
+
 # ── Flags de controle de background ──────────────────────────────────
 _scheduler_pausado: bool = False
 
