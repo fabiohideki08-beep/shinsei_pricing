@@ -758,3 +758,134 @@ def listar_pedidos_akg(
         return tiktok.listar_pedidos_tiktok(pagina=pagina, limite=limite, situacao=situacao, empresa="akg")
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
+# ── Shopify → TikTok Publications ─────────────────────────────────────────
+
+import os
+import requests as _req
+
+def _shopify_headers():
+    token = os.getenv("SHOPIFY_ACCESS_TOKEN", "")
+    return {"X-Shopify-Access-Token": token, "Content-Type": "application/json"}
+
+def _shopify_base():
+    shop = os.getenv("SHOPIFY_SHOP", "pknw4n-eg")
+    domain = shop if "." in shop else f"{shop}.myshopify.com"
+    return f"https://{domain}/admin/api/2024-01"
+
+def _shopify_graphql(query: str, variables: dict = None):
+    r = _req.post(
+        f"{_shopify_base()}/graphql.json",
+        headers=_shopify_headers(),
+        json={"query": query, "variables": variables or {}},
+        timeout=30,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+@router.get("/shopify/publications")
+def listar_publications(_=Depends(verificar_api_key)):
+    """Lista todas as publicações (canais de venda) do Shopify."""
+    try:
+        r = _req.get(f"{_shopify_base()}/publications.json", headers=_shopify_headers(), timeout=30)
+        r.raise_for_status()
+        pubs = r.json().get("publications", [])
+        return {"total": len(pubs), "publications": [{"id": p["id"], "name": p["name"]} for p in pubs]}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.post("/shopify/publicar-tiktok")
+def publicar_todos_no_tiktok(
+    publication_id: int = Body(..., description="ID da publication TikTok (de /shopify/publications)"),
+    dry_run: bool = Body(False, description="Se True, só conta sem publicar"),
+    _=Depends(verificar_api_key),
+):
+    """
+    Publica todos os produtos ativos do Shopify no canal TikTok Shopping.
+    Use GET /tiktok/shopify/publications para achar o publication_id correto.
+    """
+    try:
+        base = _shopify_base()
+        hdrs = _shopify_headers()
+
+        # 1. Buscar produtos já no TikTok
+        tiktok_ids = set()
+        url = f"{base}/publications/{publication_id}/products.json?limit=250&fields=id"
+        while url:
+            r = _req.get(url, headers=hdrs, timeout=30)
+            r.raise_for_status()
+            for p in r.json().get("products", []):
+                tiktok_ids.add(p["id"])
+            link = r.headers.get("Link", "")
+            url = None
+            if 'rel="next"' in link:
+                for part in link.split(","):
+                    if 'rel="next"' in part:
+                        url = part.split(";")[0].strip().strip("<>")
+                        break
+
+        # 2. Buscar todos os produtos ativos
+        all_ids = []
+        url = f"{base}/products.json?limit=250&status=active&fields=id,title"
+        params = {}
+        while url:
+            r = _req.get(url, headers=hdrs, params=params, timeout=30)
+            r.raise_for_status()
+            for p in r.json().get("products", []):
+                all_ids.append({"id": p["id"], "title": p["title"]})
+            params = {}
+            link = r.headers.get("Link", "")
+            url = None
+            if 'rel="next"' in link:
+                for part in link.split(","):
+                    if 'rel="next"' in part:
+                        url = part.split(";")[0].strip().strip("<>")
+                        break
+
+        # 3. Identificar os que faltam
+        faltando = [p for p in all_ids if p["id"] not in tiktok_ids]
+
+        if dry_run:
+            return {
+                "dry_run": True,
+                "ja_no_tiktok": len(tiktok_ids),
+                "total_ativos": len(all_ids),
+                "faltando": len(faltando),
+                "amostra_faltando": faltando[:10],
+            }
+
+        # 4. Publicar via GraphQL (publishablePublish)
+        MUTATION = """
+mutation publishablePublish($id: ID!, $input: [PublicationInput!]!) {
+  publishablePublish(id: $id, input: $input) {
+    publishable { ... on Product { id title } }
+    userErrors { field message }
+  }
+}
+"""
+        pub_gid = f"gid://shopify/Publication/{publication_id}"
+        ok = 0
+        erros = []
+        for p in faltando:
+            prod_gid = f"gid://shopify/Product/{p['id']}"
+            result = _shopify_graphql(MUTATION, {"id": prod_gid, "input": [{"publicationId": pub_gid}]})
+            ue = result.get("data", {}).get("publishablePublish", {}).get("userErrors", [])
+            if ue:
+                erros.append({"id": p["id"], "titulo": p["title"], "erro": ue})
+            else:
+                ok += 1
+            import time as _time
+            _time.sleep(0.2)  # rate limit
+
+        return {
+            "ja_no_tiktok": len(tiktok_ids),
+            "total_ativos": len(all_ids),
+            "publicados_agora": ok,
+            "erros": len(erros),
+            "detalhes_erros": erros[:20],
+        }
+    except Exception as e:
+        raise HTTPException(500, str(e))
