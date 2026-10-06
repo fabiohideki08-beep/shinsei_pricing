@@ -26,6 +26,9 @@ except ImportError:
     _SHOPEE_API_DISPONIVEL = False
     _get_shopee_taxa_real = None
 
+# TikTok Shop — tabela oficial BR (comissão + taxa fixa por faixa de preço)
+from tiktok_pricing_engine import TIKTOK_CANAIS, resolver_preco_tiktok
+
 # ── Flags globais de API real-time ────────────────────────────────────────────
 _ML_API_REAL = False
 _ML_PESO_G = 0
@@ -38,6 +41,9 @@ _AMAZON_CATEGORY = ""
 
 _SHOPEE_API_REAL = False
 _SHOPEE_CATEGORY = ""
+
+_TIKTOK_ATIVO = True
+_TIKTOK_ISENTO = None  # None = segue env TIKTOK_ISENCAO_ATIVA
 
 
 def configurar_ml_api(usar_api: bool, peso_g: int = 0, category_id: str = ""):
@@ -61,7 +67,13 @@ def configurar_shopee_api(usar_api: bool, category: str = ""):
     _SHOPEE_CATEGORY = category
 
 
-FORMULA_VERSION = "v3.4.0-composicao"
+def configurar_tiktok(ativo: bool = True, isento=None):
+    global _TIKTOK_ATIVO, _TIKTOK_ISENTO
+    _TIKTOK_ATIVO = bool(ativo)
+    _TIKTOK_ISENTO = isento
+
+
+FORMULA_VERSION = "v3.5.0-tiktok"
 
 def _safe_float(v, default=0.0):
     try:
@@ -155,7 +167,57 @@ def _resolver_preco_por_objetivo(custo_base, frete, taxa_fixa, comissao, imposto
         return (custo_base + frete + taxa_fixa + lucro_alvo) / max(1 - comissao - imposto, 0.0001)
     raise ValueError("Objetivo inválido.")
 
+def _calcular_canal_tiktok(regras: List[Dict], canal: str, custo_base: float, peso: float, imposto: float, objetivo: str, tipo_alvo: str, valor_alvo: float):
+    # Frete vem de regra cadastrada para o canal (se houver); comissão e taxa fixa da tabela TikTok
+    try:
+        regra = _achar_regra(regras, canal, peso, max(custo_base * 1.5, 1.0))
+        frete = _round2(regra["taxa_frete"])
+    except ValueError:
+        regra, frete = None, 0.0
+    preco, faixa = resolver_preco_tiktok(
+        lambda comissao, taxa_fixa: _resolver_preco_por_objetivo(custo_base, frete, taxa_fixa, comissao, imposto, objetivo, tipo_alvo, valor_alvo),
+        isento=_TIKTOK_ISENTO,
+    )
+    preco_final = _round2(preco)
+    comissao_pct = faixa["comissao_pct"]
+    taxa_fixa = _round2(faixa["taxa_fixa"])
+    comissao_valor = _round2(preco_final * comissao_pct)
+    imposto_valor = _round2(preco_final * imposto)
+    receita_liquida = _round2(preco_final - frete - taxa_fixa - comissao_valor)
+    lucro_bruto = _round2(receita_liquida - custo_base)
+    lucro_liquido = _round2(lucro_bruto - imposto_valor)
+    margem = _round2((lucro_liquido / preco_final) * 100 if preco_final else 0)
+    limite = f"< R${faixa['preco_max'] + 0.01:g}" if faixa["preco_min"] == 0 else f">= R${faixa['preco_min']:g}"
+    if "sfp_pct" in faixa:
+        isencao = " (isenção)" if faixa.get("source") == "tiktok_isencao" else ""
+        faixa_txt = (f"TikTok {limite}: comissão {faixa['comissao_plataforma_pct'] * 100:g}%{isencao} + SFP {faixa['sfp_pct'] * 100:g}%"
+                     f" + transação {faixa['transacao_pct'] * 100:g}% + R${taxa_fixa:.2f}/item")
+    else:
+        faixa_txt = f"TikTok {limite}: {comissao_pct * 100:g}% + R${taxa_fixa:.2f} (extratos API)"
+    return {
+        "canal": canal,
+        "preco_final": preco_final,
+        "receita_liquida": receita_liquida,
+        "lucro_bruto": lucro_bruto,
+        "lucro": lucro_bruto,
+        "lucro_liquido": lucro_liquido,
+        "margem": margem,
+        "margem_liquida_percentual": margem,
+        "frete": frete,
+        "taxa_fixa": taxa_fixa,
+        "comissao": _round2(comissao_pct * 100),
+        "comissao_valor": comissao_valor,
+        "imposto": imposto_valor,
+        "custo_total": _round2(custo_base),
+        "faixa_aplicada": faixa_txt,
+        "indice_final": round(lucro_liquido, 4),
+        "taxa_source": faixa.get("source", "tabela_tiktok_br"),
+    }
+
+
 def _calcular_um_canal(regras: List[Dict], canal: str, custo_base: float, peso: float, imposto: float, objetivo: str, tipo_alvo: str, valor_alvo: float, embalagem: float = 0):
+    if canal in TIKTOK_CANAIS:
+        return _calcular_canal_tiktok(regras, canal, custo_base, peso, imposto, objetivo, tipo_alvo, valor_alvo)
     # Para canais Full, embalagem é por conta do ML
     if 'Full' in canal:
         custo_base = custo_base - _safe_float(embalagem, 0)
@@ -305,6 +367,11 @@ def calcular_canais(regras, preco_compra, embalagem, peso, imposto, quantidade, 
         if canal and canal not in nomes and bool(r.get("ativo", True)):
             nomes.append(canal)
             canais.append(canal)
+    # TikTok Shop não depende de regras cadastradas: taxas vêm da tabela oficial
+    if _TIKTOK_ATIVO:
+        for canal in TIKTOK_CANAIS:
+            if canal.lower() not in {n.lower() for n in nomes}:
+                canais.append(canal)
     resultados = []
     for canal in canais:
         try:
@@ -816,6 +883,8 @@ def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto,
     configurar_ml_api(_usar_ml_api, _peso_g)
     configurar_amazon_api(_usar_amazon_api, sku=sku)
     configurar_shopee_api(_usar_shopee_api)
+    _cfg_intel = intelligence_config if isinstance(intelligence_config, dict) else {}
+    configurar_tiktok(_cfg_intel.get("tiktok_ativo", True), _cfg_intel.get("tiktok_isencao"))
 
     calculo = calcular_canais(regras, preco_custo, embalagem, peso_usado, imposto, quantidade, objetivo, tipo_alvo, valor_alvo, intelligence_config=intelligence_config, historical_data=historical_data, sku=sku, score_config=_score_cfg if _score_cfg.get("ajuste_ativo") else None)
     integracao = gerar_integracao(calculo["canais"], modo_preco_virtual, acrescimo_percentual, acrescimo_nominal, preco_manual, arredondamento, modo_aprovacao=modo_aprovacao, preco_custo_bling=preco_custo, preco_compra_anterior_bling=preco_compra_anterior_bling, estoque=estoque, regra_estoque=regra_estoque)

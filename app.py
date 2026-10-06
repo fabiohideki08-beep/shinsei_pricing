@@ -282,7 +282,7 @@ bling_update_module = _optional_import("bling_update_engine")
 aplicar_precos_multicanal = getattr(bling_update_module, "aplicar_precos_multicanal", None) if bling_update_module else None
 
 DEFAULT_CFG = {"modo_aprovacao":"manual","fila_auto_ao_calcular":True,"peso_forca":0.4,"peso_equilibrio":0.4,"peso_lucro":0.2,"forcas_canais":{"Mercado Livre Classico":0.8,"Mercado Livre Premium":0.75,"Shopee":0.6,"Amazon":0.7,"Shein":0.55,"Shopify":0.65},"regra_estoque":{"ativo":False,"limite":2,"tipo":"percentual","valor":0}}
-CANAL_ALIAS = {"Mercado Livre Classico":"mercado_livre_classico","Mercado Livre Premium":"mercado_livre_premium","Shopee":"shopee","Amazon":"amazon","Shein":"shein","Shopify":"shopify","Shopfy":"shopify"}
+CANAL_ALIAS = {"Mercado Livre Classico":"mercado_livre_classico","Mercado Livre Premium":"mercado_livre_premium","Shopee":"shopee","Amazon":"amazon","Shein":"shein","Shopify":"shopify","Shopfy":"shopify","TikTok Shop":"tiktok_shop","TikTok Shop AKG":"tiktok_shop_akg"}
 
 def _load_json(path: Path, default: Any):
     if not path.exists(): return default
@@ -576,6 +576,12 @@ def taxas_status():
         status["shopee"] = {"disponivel": ok, "fonte": "pedidos_reais" if ok else "tabela_br"}
     except Exception:
         status["shopee"] = {"disponivel": False, "fonte": "tabela_br"}
+    # TikTok Shop
+    try:
+        from tiktok_pricing_engine import status_fonte as _tt_status
+        status["tiktok"] = _tt_status()
+    except Exception:
+        status["tiktok"] = {"disponivel": False, "fonte": "tabela_br"}
     return status
 
 @app.get("/fila", response_class=HTMLResponse)

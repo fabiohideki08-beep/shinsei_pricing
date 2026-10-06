@@ -244,7 +244,7 @@ async function atualizarContadorFila(){
 async function carregarStatusTaxas(){
   const el=document.getElementById('taxasStatus');
   if(!el)return;
-  const LABELS={ml:'ML',amazon:'Amazon',shopee:'Shopee'};
+  const LABELS={ml:'ML',amazon:'Amazon',shopee:'Shopee',tiktok:'TikTok'};
   const FONTES={'api':'API real','sp_api':'SP-API','pedidos_reais':'Pedidos reais','tabela_br':'Tabela BR','fallback':'Fallback','regras':'Regras'};
   try{
     const d=await fetch('/taxas/status').then(r=>r.json());
