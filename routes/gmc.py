@@ -140,25 +140,28 @@ _fix: dict = {
 
 # ── GMC helpers ───────────────────────────────────────────────────────────────
 
-def _build_service():
-    import httplib2
-    import google_auth_httplib2
+def _sa_credentials():
+    """Service account do GMC: env var (JSON ou base64) ou arquivo local."""
     from google.oauth2 import service_account
-    from googleapiclient.discovery import build
 
-    # Aceita credenciais via env var (JSON ou base64) ou arquivo local
-    sa_json_env = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+    sa_json_env = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "") or os.environ.get("GOOGLE_SA_JSON", "")
     if sa_json_env:
         import base64
         try:
             sa_info = json.loads(sa_json_env)
         except Exception:
             sa_info = json.loads(base64.b64decode(sa_json_env).decode())
-        creds = service_account.Credentials.from_service_account_info(sa_info, scopes=SCOPES)
-    else:
-        creds = service_account.Credentials.from_service_account_file(
-            str(SA_FILE), scopes=SCOPES
-        )
+        return service_account.Credentials.from_service_account_info(sa_info, scopes=SCOPES)
+    return service_account.Credentials.from_service_account_file(str(SA_FILE), scopes=SCOPES)
+
+
+def _build_service():
+    import httplib2
+    import google_auth_httplib2
+    from google.oauth2 import service_account
+    from googleapiclient.discovery import build
+
+    creds = _sa_credentials()
     http = httplib2.Http(timeout=60)
     authed_http = google_auth_httplib2.AuthorizedHttp(creds, http=http)
     return build("content", "v2.1", http=authed_http)
@@ -173,28 +176,23 @@ def _clean(product: dict) -> dict:
 def _get_merchant_token() -> str:
     """Retorna access token OAuth para uso direto na Merchant API v1."""
     import google.auth.transport.requests
-    from google.oauth2 import service_account
 
-    sa_json_env = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")
-    if sa_json_env:
-        import base64
-        try:
-            sa_info = json.loads(sa_json_env)
-        except Exception:
-            sa_info = json.loads(base64.b64decode(sa_json_env).decode())
-        creds = service_account.Credentials.from_service_account_info(sa_info, scopes=SCOPES)
-    else:
-        creds = service_account.Credentials.from_service_account_file(str(SA_FILE), scopes=SCOPES)
+    creds = _sa_credentials()
     creds.refresh(google.auth.transport.requests.Request())
     return creds.token
 
 
 def _content_id_to_merchant_name(product_id: str) -> str:
-    """Converte product_id Content API → nome recurso Merchant API.
+    """Converte product_id Content API → nome recurso Merchant API v1 ({idioma}~{feedLabel}~{offerId}).
 
-    'online:pt:BR:12345' → 'online~pt~BR~12345'
+    'online:pt:BR:12345' → 'pt~BR~12345'   (v1 não tem mais o canal)
+    'pt~BR~12345'        → inalterado      (já vem assim do scan v1)
     """
-    return product_id.replace(":", "~")
+    if "~" in product_id:
+        return product_id
+    if product_id.startswith(("online:", "local:")):
+        product_id = product_id.split(":", 1)[1]
+    return product_id.replace(":", "~", 2)
 
 
 def _get_primary_datasource() -> str:
@@ -372,12 +370,13 @@ def _enqueue_reprovado(product: dict):
 
 # ── GMC helpers ───────────────────────────────────────────────────────────────
 
-def _delete_from_gmc(service, product_id: str) -> dict:
+def _delete_from_gmc(service, product_id: str, data_source: str | None = None) -> dict:
     """Exclui permanentemente um produto do GMC via Merchant API v1."""
     # Detecta dataSource correto pelo feedLabel no product_id
     # BRL_93913186609 → Shopify App API (datasource 10623833941)
-    data_source = None
-    if "BRL_93913186609" in product_id:
+    if data_source:
+        pass
+    elif "BRL_93913186609" in product_id:
         data_source = f"accounts/{MERCHANT_ID}/dataSources/10623833941"
 
     result = _merchant_delete(product_id, data_source=data_source)
@@ -397,35 +396,24 @@ def _is_shopping_blocked(product: dict) -> bool:
     """
     Retorna True se o produto está bloqueado de aparecer no Google Shopping.
 
-    Critérios:
-    1. Qualquer destination Shopping/Shopping ads/SurfacesAcrossGoogle/DisplayAds
-       com status 'disapproved' ou 'excluded' no destinationStatuses.
-    2. Se não houver destinationStatuses, verifica se o país BR está na lista
-       de países reprovados de algum destino Shopping.
+    Critério: BR em `disapprovedCountries` de um destino Shopping (Shopping ads ou
+    listagens gratuitas). O campo `status` global é obsoleto — o Google passou a
+    devolver 'disapproved' mesmo com BR em `approvedCountries` — e só é considerado
+    quando o destino não traz nenhuma lista de países. Display/Demand Gen não contam:
+    reprovação só neles não tira o produto do Shopping.
     """
     SHOPPING_DESTS = {
-        "Shopping", "Shopping ads",
+        "Shopping", "Shopping ads", "SHOPPING_ADS",
         "SurfacesAcrossGoogle", "Surfaces across Google",
-        "DisplayAds", "Display ads",
-        "Free listings", "Free local listings",
+        "Free listings", "FREE_LISTINGS",
     }
-    destinations = product.get("destinations", [])
-    if not destinations:
-        return False
-
-    for d in destinations:
-        dest_name = d.get("destination", "")
-        # Verifica pelo nome exato ou por substring (Google muda nomes ocasionalmente)
-        is_shopping = dest_name in SHOPPING_DESTS or any(
-            kw in dest_name for kw in ("Shopping", "Surfaces", "Display")
-        )
-        if not is_shopping:
+    for d in product.get("destinations", []):
+        if d.get("destination", "") not in SHOPPING_DESTS:
             continue
-        status = d.get("status", "")
-        if status in ("disapproved", "excluded"):
+        if "BR" in d.get("disapprovedCountries", []):
             return True
-        # Alguns responses usam disapprovedCountries em vez de status global
-        if d.get("disapprovedCountries"):
+        tem_paises = any(d.get(k) for k in ("approvedCountries", "pendingCountries", "disapprovedCountries"))
+        if not tem_paises and d.get("status", "") in ("disapproved", "excluded"):
             return True
     return False
 
@@ -449,10 +437,15 @@ def _auto_delete_after_scan(resultado: dict) -> list[dict]:
     seen: set[str] = set()
     to_delete: list[tuple[str, str]] = []
 
+    # Google ainda revisando (imagem, verificação da loja): não é reprovação definitiva
+    def _so_pendente(p: dict) -> bool:
+        iss = p.get("issues", [])
+        return bool(iss) and all(i.get("resolution") == "pending_processing" for i in iss)
+
     # Regra 1: todos os reprovados
     for p in disapproved:
         pid = p["product_id"]
-        if pid in seen:
+        if pid in seen or _so_pendente(p):
             continue
         seen.add(pid)
         cat = p.get("category", "other")
@@ -461,7 +454,7 @@ def _auto_delete_after_scan(resultado: dict) -> list[dict]:
     # Regra 2: limitados que estão efetivamente bloqueados no Shopping
     for p in limited:
         pid = p["product_id"]
-        if pid in seen:
+        if pid in seen or _so_pendente(p):
             continue
         if _is_shopping_blocked(p):
             seen.add(pid)
@@ -493,7 +486,7 @@ def _auto_delete_after_scan(resultado: dict) -> list[dict]:
             p["motivo_remocao"] = motivo
             _enqueue_reprovado(p)
 
-        res = _delete_from_gmc(service, pid)
+        res = _delete_from_gmc(service, pid, (product_index.get(pid) or {}).get("data_source"))
         log.append({"product_id": pid, "motivo": motivo, **res})
         time.sleep(0.3)
 
@@ -502,81 +495,96 @@ def _auto_delete_after_scan(resultado: dict) -> list[dict]:
 
 # ── Scan ──────────────────────────────────────────────────────────────────────
 
-def _scan_gmc() -> dict:
-    service = _build_service()
-    disapproved: list = []
-    limited: list = []
+_SERVABILITY_V1 = {"DISAPPROVED": "disapproved", "DEMOTED": "demoted", "NOT_IMPACTED": "unaffected"}
+_SHOPPING_CONTEXTS_V1 = {"SHOPPING_ADS", "FREE_LISTINGS"}
+
+
+def _merchant_products_pages(page_size: int = 1000):
+    """Itera páginas de produtos da Merchant API v1 (com productStatus), com retry."""
     page_token = None
-    total = 0
-
     while True:
-        kwargs: dict = {"merchantId": MERCHANT_ID, "maxResults": 250}
+        params: dict = {"pageSize": page_size}
         if page_token:
-            kwargs["pageToken"] = page_token
-
+            params["pageToken"] = page_token
         for _attempt in range(3):
             try:
-                response = service.productstatuses().list(**kwargs).execute()
+                r = requests.get(f"{MERCHANT_API_BASE}/products", params=params, timeout=120,
+                                 headers={"Authorization": f"Bearer {_get_merchant_token()}"})
+                r.raise_for_status()
                 break
-            except Exception as _e:
+            except Exception:
                 if _attempt == 2:
                     raise
                 time.sleep(2 ** _attempt)
-        resources = response.get("resources", [])
-        total    += len(resources)
+        data = r.json()
+        yield data.get("products", [])
+        page_token = data.get("nextPageToken")
+        if not page_token:
+            break
+
+
+def _scan_gmc() -> dict:
+    """Scan via Merchant API v1 (a Content API productstatuses devolve 410 desde o sunset).
+
+    Reprovado = BR em disapprovedCountries de SHOPPING_ADS ou FREE_LISTINGS (bloqueado no
+    Shopping). Issues que não bloqueiam o Shopping (Demand Gen, imagem em revisão,
+    NOT_IMPACTED) entram em `limited` apenas para acompanhamento.
+    """
+    disapproved: list = []
+    limited: list = []
+    total = 0
+
+    for products in _merchant_products_pages():
+        total += len(products)
         _scan["total"]  = total
         _scan["pagina"] = _scan.get("pagina", 0) + 1
 
-        for status in resources:
-            offer_id = status.get("productId", "")
-            title    = status.get("title", "(sem título)")
-            link     = status.get("link", "")
-            issues   = status.get("itemLevelIssues", [])
-            dest_st  = status.get("destinationStatuses", [])
-
-            disapproved_issues = [i for i in issues if i.get("servability") == "disapproved"]
-            # Captura: unaffected (limited) + demoted + vazio — qualquer issue não-disapproved
-            # que ainda possa bloquear o Shopping via destinationStatuses
-            nondisapproved_issues = [i for i in issues if i.get("servability") != "disapproved"]
+        for prod in products:
+            attrs  = prod.get("productAttributes") or {}
+            status = prod.get("productStatus") or {}
+            issues = status.get("itemLevelIssues", [])
+            # Formato compatível com o restante do módulo (_is_shopping_blocked, fila, painel)
+            dest_st = [
+                {"destination": d.get("reportingContext", ""),
+                 **{k: d[k] for k in ("approvedCountries", "pendingCountries", "disapprovedCountries") if d.get(k)}}
+                for d in status.get("destinationStatuses", [])
+            ]
 
             def _fmt(issue_list: list) -> list:
                 return [
                     {
                         "description": i.get("description", ""),
                         "detail":      i.get("detail", ""),
-                        "servability": i.get("servability", ""),
+                        "servability": _SERVABILITY_V1.get(i.get("severity", ""), i.get("severity", "").lower()),
                         "resolution":  i.get("resolution", ""),
-                        "attribute":   i.get("attributeName", ""),
+                        "attribute":   i.get("attribute", ""),
+                        "context":     i.get("reportingContext", ""),
                     }
                     for i in issue_list
                 ]
 
             entry = {
-                "product_id":   offer_id,
-                "offer_id":     offer_id.split(":")[-1] if offer_id else "",
-                "title":        title,
-                "link":         link,
+                "product_id":   prod.get("name", "").rsplit("/", 1)[-1],
+                "offer_id":     prod.get("offerId", ""),
+                "data_source":  prod.get("dataSource", ""),
+                "title":        attrs.get("title", "(sem título)"),
+                "link":         attrs.get("link", ""),
                 "destinations": dest_st,
             }
 
-            if disapproved_issues:
-                entry["issues"]   = _fmt(disapproved_issues)
+            if _is_shopping_blocked(entry):
+                bloqueantes = [i for i in issues if i.get("severity") == "DISAPPROVED"
+                               and i.get("reportingContext", "SHOPPING_ADS") in _SHOPPING_CONTEXTS_V1]
+                entry["issues"]   = _fmt(bloqueantes or issues)
                 entry["category"] = _classify_product(entry)
                 entry["severity"] = "disapproved"
                 disapproved.append(entry)
-
-            # Inclui neste grupo: unaffected + demoted + sem servability
-            # O critério real de remoção é o destinationStatuses (via _is_shopping_blocked)
-            if nondisapproved_issues:
+            elif issues:
                 e2 = dict(entry)
-                e2["issues"]   = _fmt(nondisapproved_issues)
+                e2["issues"]   = _fmt(issues)
                 e2["category"] = _classify_product(e2)
                 e2["severity"] = "limited"
                 limited.append(e2)
-
-        page_token = response.get("nextPageToken")
-        if not page_token:
-            break
 
     return {
         "total_scanned": total,
@@ -912,7 +920,15 @@ def diagnostico_gmc():
             # Contagem por destino (para tabela)
             for d in dest_statuses:
                 dest_name = d.get("destination", "Outro")
-                s = d.get("status", "unknown")
+                # `status` global é obsoleto (vem 'disapproved' mesmo aprovado) — usar países
+                if "BR" in d.get("approvedCountries", []):
+                    s = "approved"
+                elif "BR" in d.get("disapprovedCountries", []):
+                    s = "disapproved"
+                elif "BR" in d.get("pendingCountries", []):
+                    s = "pending"
+                else:
+                    s = d.get("status", "unknown")
                 if dest_name not in dest_stats:
                     dest_stats[dest_name] = {"approved": 0, "disapproved": 0, "pending": 0, "excluded": 0, "unknown": 0}
                 dest_stats[dest_name][s if s in dest_stats[dest_name] else "unknown"] += 1
