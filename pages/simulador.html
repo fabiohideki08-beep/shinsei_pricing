@@ -54,6 +54,13 @@
     .fix-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     .fix-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 
+    /* Extras por canal */
+    .extras-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+    .canal-extras{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:14px}
+    .canal-extras .ce-title{font-size:13px;font-weight:700;margin-bottom:10px;color:#dbe4ff}
+    .canal-extras .ce-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .ce-badge{display:inline-block;padding:2px 7px;border-radius:6px;background:rgba(79,140,255,.15);color:var(--accent);font-size:10px;font-weight:700;margin-left:6px;vertical-align:middle}
+
     /* Export dropdown */
     .export-wrap{position:relative;display:inline-block}
     .export-menu{display:none;position:absolute;top:calc(100% + 6px);right:0;background:var(--card2);border:1px solid var(--line);border-radius:12px;min-width:160px;z-index:20;padding:6px}
@@ -153,6 +160,18 @@
           <button class="btn sm" onclick="recalcularAposFixar()">🔄 Recalcular após corrigir</button>
         </div>
       </div>
+    </section>
+
+    <!-- BLOCO 1.5: DESCONTOS E AFILIADOS POR CANAL -->
+    <section class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:12px;flex-wrap:wrap">
+        <div>
+          <h2 style="margin:0">Descontos e afiliados por canal</h2>
+          <p style="margin:4px 0 0;font-size:12px;color:var(--muted)">Configure desconto ao cliente (%) e comissão de afiliados (%) por canal — deduzidos automaticamente do lucro no resultado.</p>
+        </div>
+        <button class="btn secondary sm" onclick="limparExtrasCanal()">🔄 Limpar</button>
+      </div>
+      <div class="extras-grid" id="custosAdicionaisGrid"></div>
     </section>
 
     <!-- BLOCO 2: DETALHES DO PRODUTO -->
@@ -260,6 +279,7 @@ async function carregarStatusTaxas(){
 
 atualizarContadorFila();
 carregarStatusTaxas();
+renderCustosAdicionais();
 
 function obterPayload(){
   return {
@@ -323,6 +343,53 @@ function renderProductDetails(data){
     </div>`
 }
 
+// ─── EXTRAS POR CANAL (Descontos + Afiliados) ────────────
+const CANAIS_EXTRAS_CONFIG = [
+  {key:'ml',       label:'Mercado Livre'},
+  {key:'shopee',   label:'Shopee'},
+  {key:'tiktok',   label:'TikTok Shop'},
+  {key:'amazon',   label:'Amazon'},
+  {key:'shopify',  label:'Shopify / Site'},
+  {key:'b2w',      label:'B2W / Americanas'},
+];
+const EXTRAS_KEY = 'shinsei_extras_canal_v1';
+
+function getExtraCanal(key){
+  try{const s=JSON.parse(localStorage.getItem(EXTRAS_KEY)||'{}');return{desconto:Number(s[key]?.desconto||0),afiliados:Number(s[key]?.afiliados||0)};}
+  catch(e){return{desconto:0,afiliados:0}}
+}
+
+function saveExtraCanal(key,field,val){
+  try{const s=JSON.parse(localStorage.getItem(EXTRAS_KEY)||'{}');if(!s[key])s[key]={desconto:0,afiliados:0};s[key][field]=parseFloat(val)||0;localStorage.setItem(EXTRAS_KEY,JSON.stringify(s));}
+  catch(e){}
+}
+
+function renderCustosAdicionais(){
+  const grid=document.getElementById('custosAdicionaisGrid');
+  if(!grid)return;
+  grid.innerHTML=CANAIS_EXTRAS_CONFIG.map(c=>{
+    const d=getExtraCanal(c.key);
+    const temValor=d.desconto>0||d.afiliados>0;
+    return `<div class="canal-extras">
+      <div class="ce-title">${c.label}${temValor?`<span class="ce-badge">${(d.desconto+d.afiliados).toFixed(1)}% extra</span>`:''}  </div>
+      <div class="ce-fields">
+        <div class="field"><label>Desconto ao cliente (%)</label>
+          <input type="number" step="0.1" min="0" max="100" value="${d.desconto||''}" placeholder="0"
+                 oninput="saveExtraCanal('${c.key}','desconto',this.value);renderCustosAdicionais();if(ultimoPreview)renderPreview(ultimoPreview)"></div>
+        <div class="field"><label>Afiliados (%)</label>
+          <input type="number" step="0.1" min="0" max="100" value="${d.afiliados||''}" placeholder="0"
+                 oninput="saveExtraCanal('${c.key}','afiliados',this.value);renderCustosAdicionais();if(ultimoPreview)renderPreview(ultimoPreview)"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function limparExtrasCanal(){
+  localStorage.removeItem(EXTRAS_KEY);
+  renderCustosAdicionais();
+  if(ultimoPreview)renderPreview(ultimoPreview);
+}
+
 // ─── RENDER CANAIS COM EXPANSÃO ──────────────────────────
 function renderCheckout(data){
   const items=Object.entries(data.marketplaces||{});
@@ -341,8 +408,8 @@ function renderCheckout(data){
     const raw=item.raw||{};
     const promo=Number(item.preco_promocional||raw.preco_promocional||raw.preco_final||0);
     const virt=Number(item.preco||raw.preco_virtual||item.preco_virtual||0);
-    const lucro=Number(item.lucro||raw.lucro_liquido||raw.lucro||0);
-    const margem=Number(item.margem||raw.margem_liquida_percentual||raw.margem||0);
+    const lucroBase=Number(item.lucro||raw.lucro_liquido||raw.lucro||0);
+    const margemBase=Number(item.margem||raw.margem_liquida_percentual||raw.margem||0);
     const frete=Number(item.frete||raw.frete||0);
     const comissaoPct=Number(item.comissao||raw.comissao||0);
     const comissao=Number(raw.comissao_valor||item.comissao_valor||(promo*comissaoPct/100));
@@ -353,6 +420,12 @@ function renderCheckout(data){
     const faixa=item.faixa_aplicada||raw.faixa_aplicada||'-';
     const taxaSource=raw.taxa_source||'regras';
     const taxaLabel={'api':'🟢 API ML','sp_api':'🟢 SP-API','tabela_br':'🟡 Tabela BR','pedidos_reais':'🟢 Pedidos reais','fallback':'🟡 Fallback','regras':'📋 Regras'}[taxaSource]||(taxaSource);
+    // Extras por canal (desconto + afiliados)
+    const extras=getExtraCanal(key);
+    const descontoExtVal=promo*(extras.desconto/100);
+    const afiliadosExtVal=promo*(extras.afiliados/100);
+    const lucro=lucroBase-descontoExtVal-afiliadosExtVal;
+    const margem=promo>0?(lucro/promo*100):margemBase;
     const isMelhor=idx===0&&lucro>0;
     const isPrejuizo=lucro<0;
     const ajuste=virt-promo;
@@ -389,6 +462,11 @@ function renderCheckout(data){
               <div class="detail-item"><div class="di-label">Faixa aplicada</div><div class="di-val" style="font-size:11px">${faixa}</div></div>
               <div class="detail-item"><div class="di-label">Preço virtual (âncora)</div><div class="di-val" style="color:#f5b301">${moeda(virt)}</div></div>
               <div class="detail-item"><div class="di-label">Fonte da taxa</div><div class="di-val" style="font-size:11px">${taxaLabel}</div></div>
+              ${extras.desconto>0||extras.afiliados>0?`
+              <div class="detail-item" style="border-top:1px solid var(--line);padding-top:8px;margin-top:4px;grid-column:1/-1"><div class="di-label" style="color:var(--warn)">Extras configurados</div></div>
+              ${extras.desconto>0?`<div class="detail-item"><div class="di-label">Desconto ao cliente</div><div class="di-val" style="color:var(--warn)">-${moeda(descontoExtVal)} (${n(extras.desconto)}%)</div></div>`:''}
+              ${extras.afiliados>0?`<div class="detail-item"><div class="di-label">Comissão afiliados</div><div class="di-val" style="color:var(--warn)">-${moeda(afiliadosExtVal)} (${n(extras.afiliados)}%)</div></div>`:''}
+              <div class="detail-item"><div class="di-label">Lucro sem extras</div><div class="di-val" style="color:var(--muted)">${moeda(lucroBase)}</div></div>`:''}
             </div>
           </td>
         </tr>
