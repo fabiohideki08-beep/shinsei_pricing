@@ -725,18 +725,16 @@ def transferir_shinsei_para_akg(dry_run: bool = True, data_corte: str = "2026-09
     }
 
 
-@router.get("/multiempresa/negativos-akg")
-def listar_negativos_akg():
+def _varrer_negativos_akg() -> list[dict]:
     """
-    Lista todos os produtos físicos com estoque negativo no Bling AKG Geral.
-    Para cada um, consulta o saldo disponível no Shinsei Geral.
-    Retorno rápido (não cruza histórico de vendas).
+    Varre todos os produtos físicos AKG com saldoVirtualTotal < 0.
+    Usa saldoVirtualTotal do listing (sem confirmação por depósito) para ser rápido.
+    Para cada negativo, busca o produto e saldo no Shinsei Geral.
     """
     import time as _t
     import requests as _req
 
     BLING_API = "https://api.bling.com.br/Api/v3"
-    DEP_AKG     = 14889056234
     DEP_SHINSEI = 14636070822
 
     hdrs_a = _hdrs(EMPRESA_AKG)
@@ -757,42 +755,31 @@ def listar_negativos_akg():
         r = _get(f"{BLING_API}/produtos", hdrs_a,
                  params={"pagina": pagina, "limite": 100, "situacao": "A", "tipo": "P"})
         if not r.ok:
-            return {"ok": False, "erro": f"AKG produtos HTTP {r.status_code}"}
+            break
         prods = r.json().get("data", [])
         if not prods:
             break
-        _t.sleep(0.35)
+        _t.sleep(0.25)
         for p in prods:
             est = p.get("estoque") or {}
-            saldo_total = float(est.get("saldoVirtualTotal", 0) or 0)
-            if saldo_total >= 0:
-                continue
-            # Confirmar saldo no depósito AKG Geral
-            _t.sleep(0.3)
-            rs = _get(f"{BLING_API}/estoques/saldos", hdrs_a,
-                      params={"produto": p["id"], "deposito": DEP_AKG})
-            saldo_dep = saldo_total
-            if rs.ok:
-                saldos = rs.json().get("data", [])
-                if saldos:
-                    saldo_dep = float(saldos[0].get("saldoVirtualTotal", saldo_total) or saldo_total)
-            if saldo_dep >= 0:
+            saldo = float(est.get("saldoVirtualTotal", 0) or 0)
+            if saldo >= 0:
                 continue
             negativos.append({
                 "sku": p.get("codigo", ""),
                 "nome": str(p.get("nome", ""))[:80],
                 "id_akg": p["id"],
-                "saldo_akg": saldo_dep,
+                "saldo_akg": saldo,
                 "saldo_shinsei": None,
                 "id_shinsei": None,
             })
         pagina += 1
 
-    # Buscar saldo Shinsei para cada negativo
+    # Enriquecer com dados Shinsei
     for n in negativos:
         if not n["sku"]:
             continue
-        _t.sleep(0.3)
+        _t.sleep(0.25)
         r = _get(f"{BLING_API}/produtos", hdrs_s,
                  params={"codigo": n["sku"], "situacao": "A"})
         if not r.ok:
@@ -800,16 +787,26 @@ def listar_negativos_akg():
         prods_s = r.json().get("data", [])
         if not prods_s:
             continue
-        prod_s = prods_s[0]
+        prod_s = next((p for p in prods_s if str(p.get("codigo","")) == n["sku"]), prods_s[0])
         n["id_shinsei"] = prod_s["id"]
-        _t.sleep(0.3)
-        rs2 = _get(f"{BLING_API}/estoques/saldos", hdrs_s,
-                   params={"produto": prod_s["id"], "deposito": DEP_SHINSEI})
-        if rs2.ok:
-            saldos2 = rs2.json().get("data", [])
-            n["saldo_shinsei"] = float(saldos2[0].get("saldoVirtualTotal", 0) or 0) if saldos2 else 0
+        _t.sleep(0.25)
+        rs = _get(f"{BLING_API}/estoques/saldos", hdrs_s,
+                  params={"produto": prod_s["id"], "deposito": DEP_SHINSEI})
+        if rs.ok:
+            saldos = rs.json().get("data", [])
+            n["saldo_shinsei"] = float(saldos[0].get("saldoVirtualTotal", 0) or 0) if saldos else 0
 
     negativos.sort(key=lambda x: x["saldo_akg"])
+    return negativos
+
+
+@router.get("/multiempresa/negativos-akg")
+def listar_negativos_akg():
+    """
+    Lista todos os produtos físicos com estoque negativo no Bling AKG.
+    Para cada um, consulta o saldo disponível no Shinsei Geral.
+    """
+    negativos = _varrer_negativos_akg()
     return {
         "ok": True,
         "total_negativos": len(negativos),
@@ -846,9 +843,7 @@ def corrigir_negativos_akg(dry_run: bool = True):
         return r
 
     # Reutilizar lógica de varredura
-    from fastapi.testclient import TestClient
-    negativos = listar_negativos_akg()
-    itens = negativos.get("itens", [])
+    itens = _varrer_negativos_akg()
 
     if dry_run:
         return {
