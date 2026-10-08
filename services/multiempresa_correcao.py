@@ -317,7 +317,21 @@ def _expandir_virtual(empresa_vendedora: str, sku: str, quantidade: float) -> li
     for comp in componentes:
         comp_produto = comp.get("produto") or {}
         comp_sku = str(comp_produto.get("codigo") or comp.get("codigo") or "").strip()
+        comp_id = comp_produto.get("id")
         comp_qtd = float(comp.get("quantidade") or 1)
+
+        # Bling API retorna componentes sem campo 'codigo' em estrutura.componentes
+        # (apenas produto.id). Buscar o codigo via GET /produtos/{id} quando necessario.
+        if not comp_sku and comp_id:
+            try:
+                resp_comp = requests.get(f"{BLING_API}/produtos/{comp_id}",
+                                         headers=hdrs, timeout=15)
+                time.sleep(0.15)
+                if resp_comp.ok:
+                    comp_sku = str((resp_comp.json().get("data") or {}).get("codigo") or "").strip()
+            except Exception:
+                pass
+
         if comp_sku:
             expandidos.append({
                 "codigo": comp_sku,
