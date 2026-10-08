@@ -730,15 +730,13 @@ def _varrer_negativos_akg() -> list[dict]:
     Varre todos os produtos físicos AKG com saldoVirtualTotal < 0.
     Usa saldoVirtualTotal do listing (sem confirmação por depósito) para ser rápido.
     Para cada negativo, busca o produto e saldo no Shinsei Geral.
+    Headers renovados a cada 50 itens para não expirar em varreduras longas.
     """
     import time as _t
     import requests as _req
 
     BLING_API = "https://api.bling.com.br/Api/v3"
     DEP_SHINSEI = 14636070822
-
-    hdrs_a = _hdrs(EMPRESA_AKG)
-    hdrs_s = _hdrs(EMPRESA_SHINSEI)
 
     def _get(url, hdrs, params=None):
         for _ in range(4):
@@ -752,6 +750,7 @@ def _varrer_negativos_akg() -> list[dict]:
     negativos = []
     pagina = 1
     while True:
+        hdrs_a = _hdrs(EMPRESA_AKG)  # renovar a cada página
         r = _get(f"{BLING_API}/produtos", hdrs_a,
                  params={"pagina": pagina, "limite": 100, "situacao": "A", "tipo": "P"})
         if not r.ok:
@@ -775,8 +774,10 @@ def _varrer_negativos_akg() -> list[dict]:
             })
         pagina += 1
 
-    # Enriquecer com dados Shinsei
-    for n in negativos:
+    # Enriquecer com dados Shinsei — renovar headers a cada 50 itens
+    for i, n in enumerate(negativos):
+        if i % 50 == 0:
+            hdrs_s = _hdrs(EMPRESA_SHINSEI)
         if not n["sku"]:
             continue
         _t.sleep(0.25)
@@ -795,12 +796,161 @@ def _varrer_negativos_akg() -> list[dict]:
         if rs.ok:
             saldos = rs.json().get("data", [])
             n["saldo_shinsei"] = float(saldos[0].get("saldoVirtualTotal", 0) or 0) if saldos else 0
+        else:
+            # Fallback: usar estoque total do produto (sem filtrar por depósito)
+            n["saldo_shinsei"] = float((prod_s.get("estoque") or {}).get("saldoVirtualTotal", 0) or 0)
 
     negativos.sort(key=lambda x: x["saldo_akg"])
     return negativos
 
 
-_negativos_akg_cache: dict = {}   # armazena resultado da última varredura
+def _varrer_negativos_shinsei() -> list[dict]:
+    """
+    Varre todos os produtos físicos Shinsei com saldoVirtualTotal < 0.
+    Para cada negativo, busca o produto e saldo na AKG Geral.
+    Headers renovados a cada 50 itens para não expirar.
+    """
+    import time as _t
+    import requests as _req
+
+    BLING_API = "https://api.bling.com.br/Api/v3"
+    DEP_AKG = 14889056234
+
+    def _get(url, hdrs, params=None):
+        for _ in range(4):
+            r = _req.get(url, headers=hdrs, params=params, timeout=25)
+            if r.status_code == 429:
+                _t.sleep(3)
+                continue
+            return r
+        return r
+
+    negativos = []
+    pagina = 1
+    while True:
+        hdrs_s = _hdrs(EMPRESA_SHINSEI)
+        r = _get(f"{BLING_API}/produtos", hdrs_s,
+                 params={"pagina": pagina, "limite": 100, "situacao": "A", "tipo": "P"})
+        if not r.ok:
+            break
+        prods = r.json().get("data", [])
+        if not prods:
+            break
+        _t.sleep(0.25)
+        for p in prods:
+            est = p.get("estoque") or {}
+            saldo = float(est.get("saldoVirtualTotal", 0) or 0)
+            if saldo >= 0:
+                continue
+            negativos.append({
+                "sku": p.get("codigo", ""),
+                "nome": str(p.get("nome", ""))[:80],
+                "id_shinsei": p["id"],
+                "saldo_shinsei": saldo,
+                "saldo_akg": None,
+                "id_akg": None,
+            })
+        pagina += 1
+
+    # Enriquecer com dados AKG — renovar headers a cada 50 itens
+    for i, n in enumerate(negativos):
+        if i % 50 == 0:
+            hdrs_a = _hdrs(EMPRESA_AKG)
+        if not n["sku"]:
+            continue
+        _t.sleep(0.25)
+        r = _get(f"{BLING_API}/produtos", hdrs_a,
+                 params={"codigo": n["sku"], "situacao": "A"})
+        if not r.ok:
+            continue
+        prods_a = r.json().get("data", [])
+        if not prods_a:
+            continue
+        prod_a = next((p for p in prods_a if str(p.get("codigo","")) == n["sku"]), prods_a[0])
+        n["id_akg"] = prod_a["id"]
+        _t.sleep(0.25)
+        rs = _get(f"{BLING_API}/estoques/saldos", hdrs_a,
+                  params={"produto": prod_a["id"], "deposito": DEP_AKG})
+        if rs.ok:
+            saldos = rs.json().get("data", [])
+            n["saldo_akg"] = float(saldos[0].get("saldoVirtualTotal", 0) or 0) if saldos else 0
+        else:
+            n["saldo_akg"] = float((prod_a.get("estoque") or {}).get("saldoVirtualTotal", 0) or 0)
+
+    negativos.sort(key=lambda x: x["saldo_shinsei"])
+    return negativos
+
+
+_negativos_akg_cache: dict = {}      # armazena resultado da última varredura AKG
+_negativos_shinsei_cache: dict = {}  # armazena resultado da última varredura Shinsei
+
+
+def _job_negativos_shinsei(aplicar: bool, obs_extra: str = "") -> None:
+    """Executa varredura de negativos Shinsei + correção em background."""
+    import time as _t
+    import requests as _req
+
+    BLING_API = "https://api.bling.com.br/Api/v3"
+    DEP_SHINSEI = 14636070822
+    DEP_AKG     = 14889056234
+    OBS = f"Correcao bug multiempresa — componentes Shinsei nao transferidos da AKG{' ' + obs_extra if obs_extra else ''}"
+
+    _negativos_shinsei_cache["status"] = "em_andamento"
+    _negativos_shinsei_cache["iniciado_em"] = _agora()
+    _negativos_shinsei_cache["aplicar"] = aplicar
+
+    try:
+        itens = _varrer_negativos_shinsei()
+        _negativos_shinsei_cache["itens"] = itens
+        _negativos_shinsei_cache["total_negativos"] = len(itens)
+
+        if not aplicar:
+            _negativos_shinsei_cache["status"] = "concluido_dry_run"
+            _negativos_shinsei_cache["concluido_em"] = _agora()
+            return
+
+        corrigidos, erros = [], []
+        for n in itens:
+            if not n.get("id_shinsei") or not n.get("id_akg"):
+                erros.append({"sku": n["sku"], "erro": "sem id em uma das empresas"})
+                continue
+            qtd = min(abs(n["saldo_shinsei"]), max(0, n.get("saldo_akg") or 0))
+            if qtd == 0:
+                erros.append({"sku": n["sku"], "nome": n["nome"],
+                               "saldo_shinsei": n["saldo_shinsei"],
+                               "erro": f"AKG insuficiente (saldo={n.get('saldo_akg')})"})
+                continue
+            hdrs_s = _hdrs(EMPRESA_SHINSEI)
+            hdrs_a = _hdrs(EMPRESA_AKG)
+            _t.sleep(0.35)
+            re = _req.post(f"{BLING_API}/estoques", headers=hdrs_s, json={
+                "produto": {"id": n["id_shinsei"]}, "deposito": {"id": DEP_SHINSEI},
+                "tipoOperacao": "E", "quantidade": int(qtd), "observacoes": OBS,
+            }, timeout=30)
+            entrada_ok = re.ok or re.status_code == 504
+            _t.sleep(0.35)
+            rs = _req.post(f"{BLING_API}/estoques", headers=hdrs_a, json={
+                "produto": {"id": n["id_akg"]}, "deposito": {"id": DEP_AKG},
+                "tipoOperacao": "S", "quantidade": int(qtd), "observacoes": OBS,
+            }, timeout=30)
+            saida_ok = rs.ok or rs.status_code == 504
+            entry = {"sku": n["sku"], "nome": n["nome"], "qtd": qtd,
+                     "saldo_shinsei_antes": n["saldo_shinsei"],
+                     "entrada_shinsei": entrada_ok, "saida_akg": saida_ok}
+            (corrigidos if entrada_ok else erros).append(entry)
+
+        _negativos_shinsei_cache.update({
+            "status": "concluido",
+            "concluido_em": _agora(),
+            "corrigidos": len(corrigidos),
+            "erros_count": len(erros),
+            "detalhes_corrigidos": corrigidos,
+            "detalhes_erros": erros,
+        })
+    except Exception as exc:
+        _negativos_shinsei_cache["status"] = "erro"
+        _negativos_shinsei_cache["erro"] = str(exc)[:300]
+        _negativos_shinsei_cache["concluido_em"] = _agora()
 
 
 def _job_negativos_akg(aplicar: bool, obs_extra: str = "") -> None:
@@ -904,6 +1054,38 @@ def resultado_negativos_akg():
     if not _negativos_akg_cache:
         return {"ok": False, "msg": "Nenhuma varredura iniciada. Use POST /multiempresa/negativos-akg/iniciar"}
     return {"ok": True, **_negativos_akg_cache}
+
+
+@router.post("/multiempresa/negativos-shinsei/iniciar")
+def iniciar_negativos_shinsei(aplicar: bool = False):
+    """
+    Dispara varredura de negativos Shinsei em background.
+    Detecta produtos físicos Shinsei com saldo negativo — causados por
+    vendas na Shinsei cujos componentes estavam na AKG e nunca foram transferidos.
+    aplicar=false (padrão): só lista (dry_run).
+    aplicar=true: aplica ENTRADA Shinsei + SAÍDA AKG para cada negativo.
+    Verificar resultado: GET /multiempresa/negativos-shinsei/resultado
+    """
+    if _negativos_shinsei_cache.get("status") == "em_andamento":
+        return {"ok": False, "msg": "Varredura já em andamento", "cache": _negativos_shinsei_cache}
+
+    _negativos_shinsei_cache.clear()
+    _negativos_shinsei_cache["status"] = "iniciando"
+
+    import threading
+    t = threading.Thread(target=_job_negativos_shinsei, args=(aplicar,), daemon=True)
+    t.start()
+
+    return {"ok": True, "msg": "Varredura Shinsei iniciada em background", "aplicar": aplicar,
+            "resultado_em": "/multiempresa/negativos-shinsei/resultado"}
+
+
+@router.get("/multiempresa/negativos-shinsei/resultado")
+def resultado_negativos_shinsei():
+    """Retorna o resultado da última varredura de negativos Shinsei."""
+    if not _negativos_shinsei_cache:
+        return {"ok": False, "msg": "Nenhuma varredura iniciada. Use POST /multiempresa/negativos-shinsei/iniciar"}
+    return {"ok": True, **_negativos_shinsei_cache}
 
 
 @router.get("/multiempresa/status")
