@@ -800,98 +800,110 @@ def _varrer_negativos_akg() -> list[dict]:
     return negativos
 
 
-@router.get("/multiempresa/negativos-akg")
-def listar_negativos_akg():
-    """
-    Lista todos os produtos físicos com estoque negativo no Bling AKG.
-    Para cada um, consulta o saldo disponível no Shinsei Geral.
-    """
-    negativos = _varrer_negativos_akg()
-    return {
-        "ok": True,
-        "total_negativos": len(negativos),
-        "itens": negativos,
-    }
+_negativos_akg_cache: dict = {}   # armazena resultado da última varredura
 
 
-@router.post("/multiempresa/corrigir-negativos-akg")
-def corrigir_negativos_akg(dry_run: bool = True):
-    """
-    Corrige todos os físicos com saldo negativo no AKG Geral:
-      ENTRADA AKG Geral + SAÍDA Shinsei Geral para abs(saldo_negativo) unidades.
-    Quantidade limitada ao saldo disponível no Shinsei.
-    dry_run=true (padrão): apenas lista o que seria feito.
-    """
+def _job_negativos_akg(aplicar: bool, obs_extra: str = "") -> None:
+    """Executa varredura + correção em background; salva resultado no cache global."""
     import time as _t
     import requests as _req
+    import json as _json
 
     BLING_API = "https://api.bling.com.br/Api/v3"
     DEP_AKG     = 14889056234
-    DEP_SHINSEI = 14636070822
-    OBS = "Correcao bug multiempresa — componentes de kits AKG nao transferidos"
+    OBS = f"Correcao bug multiempresa — componentes de kits AKG nao transferidos{' ' + obs_extra if obs_extra else ''}"
 
     hdrs_a = _hdrs(EMPRESA_AKG)
     hdrs_s = _hdrs(EMPRESA_SHINSEI)
 
-    def _get(url, hdrs, params=None):
-        for _ in range(4):
-            r = _req.get(url, headers=hdrs, params=params, timeout=25)
-            if r.status_code == 429:
-                _t.sleep(3)
+    _negativos_akg_cache["status"] = "em_andamento"
+    _negativos_akg_cache["iniciado_em"] = _agora()
+    _negativos_akg_cache["aplicar"] = aplicar
+
+    try:
+        itens = _varrer_negativos_akg()
+        _negativos_akg_cache["itens"] = itens
+        _negativos_akg_cache["total_negativos"] = len(itens)
+
+        if not aplicar:
+            _negativos_akg_cache["status"] = "concluido_dry_run"
+            _negativos_akg_cache["concluido_em"] = _agora()
+            return
+
+        corrigidos, erros = [], []
+        for n in itens:
+            if not n.get("id_akg") or not n.get("id_shinsei"):
+                erros.append({"sku": n["sku"], "erro": "sem id em uma das empresas"})
                 continue
-            return r
-        return r
+            qtd = min(abs(n["saldo_akg"]), max(0, n.get("saldo_shinsei") or 0))
+            if qtd == 0:
+                erros.append({"sku": n["sku"], "nome": n["nome"],
+                               "saldo_akg": n["saldo_akg"],
+                               "erro": f"Shinsei insuficiente (saldo={n.get('saldo_shinsei')})"})
+                continue
+            _t.sleep(0.35)
+            re = _req.post(f"{BLING_API}/estoques", headers=hdrs_a, json={
+                "produto": {"id": n["id_akg"]}, "deposito": {"id": DEP_AKG},
+                "tipoOperacao": "E", "quantidade": int(qtd), "observacoes": OBS,
+            }, timeout=30)
+            entrada_ok = re.ok or re.status_code == 504
+            _t.sleep(0.35)
+            rs = _req.post(f"{BLING_API}/estoques", headers=hdrs_s, json={
+                "produto": {"id": n["id_shinsei"]}, "deposito": {"id": 14636070822},
+                "tipoOperacao": "S", "quantidade": int(qtd), "observacoes": OBS,
+            }, timeout=30)
+            saida_ok = rs.ok or rs.status_code == 504
+            entry = {"sku": n["sku"], "nome": n["nome"], "qtd": qtd,
+                     "saldo_akg_antes": n["saldo_akg"],
+                     "entrada_akg": entrada_ok, "saida_shinsei": saida_ok}
+            (corrigidos if entrada_ok else erros).append(entry)
 
-    # Reutilizar lógica de varredura
-    itens = _varrer_negativos_akg()
+        _negativos_akg_cache.update({
+            "status": "concluido",
+            "concluido_em": _agora(),
+            "corrigidos": len(corrigidos),
+            "erros_count": len(erros),
+            "detalhes_corrigidos": corrigidos,
+            "detalhes_erros": erros,
+        })
+    except Exception as exc:
+        _negativos_akg_cache["status"] = "erro"
+        _negativos_akg_cache["erro"] = str(exc)[:300]
+        _negativos_akg_cache["concluido_em"] = _agora()
 
-    if dry_run:
-        return {
-            "ok": True, "dry_run": True,
-            "total_negativos": len(itens),
-            "itens": [{
-                "sku": n["sku"], "nome": n["nome"],
-                "saldo_akg": n["saldo_akg"],
-                "saldo_shinsei": n["saldo_shinsei"],
-                "qtd_a_corrigir": min(abs(n["saldo_akg"]),
-                                      max(0, n["saldo_shinsei"] or 0)),
-                "possivel": (n["saldo_shinsei"] or 0) >= abs(n["saldo_akg"]),
-            } for n in itens],
-        }
 
-    corrigidos, erros = [], []
-    for n in itens:
-        if not n["id_akg"] or not n["id_shinsei"]:
-            erros.append({"sku": n["sku"], "erro": "sem id em uma das empresas"})
-            continue
-        qtd = min(abs(n["saldo_akg"]), max(0, n["saldo_shinsei"] or 0))
-        if qtd == 0:
-            erros.append({"sku": n["sku"], "erro": "saldo Shinsei insuficiente"})
-            continue
-        _t.sleep(0.4)
-        re = _req.post(f"{BLING_API}/estoques", headers=hdrs_a, json={
-            "produto": {"id": n["id_akg"]}, "deposito": {"id": DEP_AKG},
-            "tipoOperacao": "E", "quantidade": int(qtd), "observacoes": OBS,
-        }, timeout=30)
-        entrada_ok = re.ok or re.status_code == 504
-        _t.sleep(0.4)
-        rs = _req.post(f"{BLING_API}/estoques", headers=hdrs_s, json={
-            "produto": {"id": n["id_shinsei"]}, "deposito": {"id": DEP_SHINSEI},
-            "tipoOperacao": "S", "quantidade": int(qtd), "observacoes": OBS,
-        }, timeout=30)
-        saida_ok = rs.ok or rs.status_code == 504
-        entry = {"sku": n["sku"], "nome": n["nome"], "qtd": qtd,
-                 "entrada_akg": entrada_ok, "saida_shinsei": saida_ok}
-        if entrada_ok:
-            corrigidos.append(entry)
-        else:
-            erros.append({**entry, "erro": f"entrada AKG HTTP {re.status_code}"})
+@router.post("/multiempresa/negativos-akg/iniciar")
+def iniciar_negativos_akg(aplicar: bool = False, background_tasks=None):
+    """
+    Dispara varredura de negativos AKG em background.
+    aplicar=false (padrão): só lista (dry_run).
+    aplicar=true: aplica ENTRADA AKG + SAÍDA Shinsei para cada negativo.
+    Verificar resultado: GET /multiempresa/negativos-akg/resultado
+    """
+    from fastapi import BackgroundTasks
+    if background_tasks is None:
+        background_tasks = BackgroundTasks()
 
-    return {
-        "ok": True, "dry_run": False,
-        "corrigidos": len(corrigidos), "erros": len(erros),
-        "detalhes": corrigidos, "detalhes_erro": erros,
-    }
+    if _negativos_akg_cache.get("status") == "em_andamento":
+        return {"ok": False, "msg": "Varredura já em andamento", "cache": _negativos_akg_cache}
+
+    _negativos_akg_cache.clear()
+    _negativos_akg_cache["status"] = "iniciando"
+
+    import threading
+    t = threading.Thread(target=_job_negativos_akg, args=(aplicar,), daemon=True)
+    t.start()
+
+    return {"ok": True, "msg": "Varredura iniciada em background", "aplicar": aplicar,
+            "resultado_em": "/multiempresa/negativos-akg/resultado"}
+
+
+@router.get("/multiempresa/negativos-akg/resultado")
+def resultado_negativos_akg():
+    """Retorna o resultado da última varredura de negativos AKG."""
+    if not _negativos_akg_cache:
+        return {"ok": False, "msg": "Nenhuma varredura iniciada. Use POST /multiempresa/negativos-akg/iniciar"}
+    return {"ok": True, **_negativos_akg_cache}
 
 
 @router.get("/multiempresa/status")
