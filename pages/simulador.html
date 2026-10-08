@@ -279,7 +279,6 @@ async function carregarStatusTaxas(){
 
 atualizarContadorFila();
 carregarStatusTaxas();
-renderCustosAdicionais();
 
 function obterPayload(){
   return {
@@ -930,6 +929,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   restaurarSimulacao();
   auVerificarStatus();
   auCarregarCacheInfo();
+  renderCustosAdicionais();
 });
 </script>
 
