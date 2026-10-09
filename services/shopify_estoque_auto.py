@@ -13,6 +13,13 @@ Regras adicionais:
   - Só atua em produtos com inventory_management = "shopify" (rastreamento ativo)
   - Produtos com track desabilitado são ignorados
   - Produz relatório completo a cada ciclo
+
+Reconciliação Bling → Shopify (08/10/2026):
+  O sync de estoque é por webhook (routes/estoque_sync.py); se um evento se perde,
+  a Shopify fica com 0 e o produto some para sempre. Antes de ocultar/restaurar,
+  o ciclo consulta o saldo do Bling Shinsei: se a Shopify tem ≤0 mas o Bling tem
+  saldo > 0, o inventário Shopify é corrigido para o saldo do Bling (só para cima,
+  nunca zera nada) e o produto permanece/volta ativo.
 """
 from __future__ import annotations
 
@@ -99,6 +106,82 @@ def _set_status(base: str, hdrs: dict, product_id: int, new_status: str,
     return False
 
 
+def _bling_saldos() -> Optional[dict[str, int]]:
+    """
+    Mapa SKU → saldoVirtualTotal de todos os produtos ATIVOS do Bling Shinsei.
+    Retorna None se o Bling estiver indisponível (ciclo segue sem reconciliar).
+    """
+    try:
+        from bling_client import BlingClient
+        bc = BlingClient()
+        saldos: dict[str, int] = {}
+        pagina = 1
+        while True:
+            r = requests.get(f"{bc.base_url}/produtos", headers=bc._get_headers(),
+                             params={"pagina": pagina, "limite": 100, "criterio": 2}, timeout=60)
+            if r.status_code == 429:
+                time.sleep(2)
+                continue
+            r.raise_for_status()
+            dados = r.json().get("data", [])
+            if not dados:
+                break
+            for p in dados:
+                sku = (p.get("codigo") or "").strip()
+                if sku and p.get("situacao") == "A":
+                    saldo = (p.get("estoque") or {}).get("saldoVirtualTotal") or 0
+                    saldos[sku] = max(saldos.get(sku, 0), int(float(saldo)))
+            pagina += 1
+            time.sleep(0.4)  # rate limit Bling (3 req/s)
+        logger.info("[ESTOQUE-AUTO] Saldos Bling carregados: %d SKUs", len(saldos))
+        return saldos
+    except Exception as e:
+        logger.warning("[ESTOQUE-AUTO] Bling indisponível, ciclo sem reconciliação: %s", e)
+        return None
+
+
+def _location_id(base: str, hdrs: dict) -> Optional[int]:
+    r = requests.get(f"{base}/locations.json", headers=hdrs, timeout=30)
+    if r.status_code != 200:
+        return None
+    locs = [l for l in r.json().get("locations", []) if l.get("active")]
+    return locs[0]["id"] if locs else None
+
+
+def _reconciliar_com_bling(base: str, hdrs: dict, prod: dict, saldos: Optional[dict],
+                           location_id: Optional[int], dry_run: bool) -> list[dict]:
+    """
+    Para variantes rastreadas com estoque Shopify ≤ 0 e saldo Bling > 0,
+    seta o inventário Shopify = saldo Bling. Retorna as variantes corrigidas
+    e atualiza inventory_quantity em `prod` para o restante do ciclo.
+    """
+    if not saldos or not location_id:
+        return []
+    corrigidas = []
+    for v in prod.get("variants", []):
+        if v.get("inventory_management") != "shopify":
+            continue
+        atual = int(v.get("inventory_quantity") or 0)
+        bling = saldos.get((v.get("sku") or "").strip(), 0)
+        if atual > 0 or bling <= 0:
+            continue
+        ok = True
+        if not dry_run:
+            r = requests.post(f"{base}/inventory_levels/set.json", headers=hdrs, timeout=30,
+                              json={"location_id": location_id,
+                                    "inventory_item_id": v["inventory_item_id"],
+                                    "available": bling})
+            ok = r.status_code == 200
+            if not ok:
+                logger.error("[ESTOQUE-AUTO] Falha ao setar estoque SKU=%s: %d %s",
+                             v.get("sku"), r.status_code, r.text[:200])
+            time.sleep(0.5)
+        if ok:
+            v["inventory_quantity"] = bling
+        corrigidas.append({"sku": v.get("sku"), "shopify": atual, "bling": bling, "ok": ok})
+    return corrigidas
+
+
 def executar(dry_run: bool = False) -> dict:
     """
     Executa um ciclo completo de auto-ocultação por estoque.
@@ -121,10 +204,25 @@ def executar(dry_run: bool = False) -> dict:
         "ocultados": [],      # ativos → draft (0 estoque)
         "restaurados": [],    # draft → active (estoque voltou)
         "ignorados_skip": [], # tinham tag mostrar-sem-estoque
+        "reconciliados": [],  # Shopify ≤0 corrigido para saldo do Bling
         "erros": [],
         "total_ativos_verificados": 0,
         "total_drafts_verificados": 0,
     }
+
+    saldos = _bling_saldos()
+    location_id = _location_id(base, hdrs) if saldos else None
+    resultado["bling_reconciliacao_ativa"] = bool(saldos and location_id)
+
+    def _reconciliar(prod: dict) -> None:
+        corr = _reconciliar_com_bling(base, hdrs, prod, saldos, location_id, dry_run)
+        if corr:
+            logger.info("[ESTOQUE-AUTO] %s %d '%s' estoque Bling → Shopify: %s",
+                        "SIMULADO" if dry_run else "RECONCILIANDO", prod["id"],
+                        prod.get("title", "")[:60], corr)
+            resultado["reconciliados"].append({"id": prod["id"], "title": prod.get("title", "")[:60],
+                                               "variantes": corr})
+            resultado["erros"].extend({"id": prod["id"], **c} for c in corr if not c["ok"])
 
     # ── PASSO 1: Produtos ativos com estoque ≤ 0 → ocultar ──────────────────
     logger.info("[ESTOQUE-AUTO] Buscando produtos ativos...")
@@ -144,6 +242,10 @@ def executar(dry_run: bool = False) -> dict:
         if SKIP_TAG in tags:
             resultado["ignorados_skip"].append({"id": pid, "title": title, "inv": inv})
             continue
+
+        if inv <= 0:
+            _reconciliar(prod)
+            inv = _total_inventory(prod.get("variants", []))
 
         if inv <= 0:
             new_tags = [t for t in tags if t != HIDDEN_TAG] + [HIDDEN_TAG]
@@ -171,6 +273,9 @@ def executar(dry_run: bool = False) -> dict:
             continue  # draft manual — não tocar
 
         inv = _total_inventory(prod.get("variants", []))
+        if inv is not None and inv <= 0:
+            _reconciliar(prod)
+            inv = _total_inventory(prod.get("variants", []))
         if inv is None or inv <= 0:
             continue  # ainda sem estoque
 
@@ -188,9 +293,10 @@ def executar(dry_run: bool = False) -> dict:
 
     # ── Resumo ───────────────────────────────────────────────────────────────
     logger.info(
-        "[ESTOQUE-AUTO] Ciclo concluído — ocultados: %d | restaurados: %d | skip: %d | erros: %d",
+        "[ESTOQUE-AUTO] Ciclo concluído — ocultados: %d | restaurados: %d | reconciliados: %d | skip: %d | erros: %d",
         len(resultado["ocultados"]),
         len(resultado["restaurados"]),
+        len(resultado["reconciliados"]),
         len(resultado["ignorados_skip"]),
         len(resultado["erros"]),
     )
