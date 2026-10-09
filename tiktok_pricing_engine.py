@@ -10,6 +10,9 @@ Taxas TikTok Shop Brasil (vigentes desde 15/07/2026).
 - Isenção para novos vendedores: 0% de comissão da plataforma por 60 dias (limite R$17.000 GMV).
 - Sempre cobrados, inclusive na isenção (confirmado no extrato AKG de 05/10/2026, 41 linhas):
   taxa fixa R$4/item, SFP 6% e ~3% de taxa de transação sobre as vendas líquidas.
+- Gordura de campanha (TIKTOK_CAMPANHA_PCT, padrão 0): reserva para o desconto bancado pelo
+  vendedor em Cofinanciamento / Voucher Xtra / LIVE Specials. O TikTok não publica esse %;
+  ele é definido por evento no Seller Center. Somado ao percentual de todas as faixas.
 
 Fonte das taxas, em ordem:
 1. API TikTok Shop (Partner API / Finance): extratos reais de pedidos liquidados → regressão
@@ -190,22 +193,25 @@ def tabela_tiktok() -> dict:
         # Cobranças sobre vendas líquidas que valem mesmo na isenção (extrato AKG 05/10/2026):
         "sfp_pct": _env_float("TIKTOK_SFP_PCT", 0.06),               # Programa de frete (SFP)
         "transacao_pct": _env_float("TIKTOK_TRANSACAO_PCT", 0.03),   # taxa de transação (não detalhada no extrato)
+        "campanha_pct": _env_float("TIKTOK_CAMPANHA_PCT", 0.0),      # gordura p/ desconto de campanha do vendedor
     }
 
 
 def faixas_tiktok(isento: bool | None = None) -> list[dict]:
     """
     Faixas de taxa em ordem crescente de preço: [{preco_min, preco_max, comissao_pct, taxa_fixa}].
-    `comissao_pct` é o percentual total (comissão + SFP + transação). A isenção de novo
-    vendedor zera só a comissão da plataforma — taxa fixa, SFP e transação continuam.
+    `comissao_pct` é o percentual total (comissão + SFP + transação + gordura de campanha).
+    A isenção de novo vendedor zera só a comissão da plataforma — taxa fixa, SFP e transação continuam.
     """
     t = tabela_tiktok()
     if isento is None:
         isento = t["isencao_ativa"]
     api = _faixas_api()
     if api and not isento:
-        return [{**f, "source": "api_tiktok"} for f in api]
-    extras = t["sfp_pct"] + t["transacao_pct"]
+        # Extratos não trazem campanhas futuras → a gordura entra por cima da regressão
+        return [{**f, "comissao_pct": f["comissao_pct"] + t["campanha_pct"],
+                 "campanha_pct": t["campanha_pct"], "source": "api_tiktok"} for f in api]
+    extras = t["sfp_pct"] + t["transacao_pct"] + t["campanha_pct"]
     source = "tiktok_isencao" if isento else "tabela_tiktok_br"
     faixas = [
         (0.0, t["limiar"] - 0.01, t["comissao_baixa"], t["taxa_fixa_baixa"]),
@@ -214,7 +220,8 @@ def faixas_tiktok(isento: bool | None = None) -> list[dict]:
     return [
         {"preco_min": lo, "preco_max": hi, "comissao_pct": (0.0 if isento else com) + extras,
          "comissao_plataforma_pct": 0.0 if isento else com, "sfp_pct": t["sfp_pct"],
-         "transacao_pct": t["transacao_pct"], "taxa_fixa": fixa, "source": source}
+         "transacao_pct": t["transacao_pct"], "campanha_pct": t["campanha_pct"],
+         "taxa_fixa": fixa, "source": source}
         for lo, hi, com, fixa in faixas
     ]
 

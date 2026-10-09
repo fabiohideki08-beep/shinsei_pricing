@@ -194,6 +194,8 @@ def _calcular_canal_tiktok(regras: List[Dict], canal: str, custo_base: float, pe
                      f" + transação {faixa['transacao_pct'] * 100:g}% + R${taxa_fixa:.2f}/item")
     else:
         faixa_txt = f"TikTok {limite}: {comissao_pct * 100:g}% + R${taxa_fixa:.2f} (extratos API)"
+    if faixa.get("campanha_pct"):
+        faixa_txt += f" + gordura campanha {faixa['campanha_pct'] * 100:g}%"
     return {
         "canal": canal,
         "preco_final": preco_final,
