@@ -350,6 +350,32 @@ def reset_fila() -> int:
         return cur.rowcount
 
 
+def ja_existe_incompleto(sku: str) -> bool:
+    """Verifica se já existe um item incompleto para o SKU (SQL direto, sem limit)."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT id FROM fila_aprovacao WHERE sku=? AND status='incompleto' LIMIT 1",
+        (sku,)
+    ).fetchone()
+    return row is not None
+
+
+def dedup_incompletos_fila() -> int:
+    """Remove entradas duplicadas de incompleto, mantendo apenas a mais recente por SKU.
+    Retorna o número de linhas removidas."""
+    with db_transaction() as conn:
+        cur = conn.execute("""
+            DELETE FROM fila_aprovacao
+            WHERE status='incompleto'
+            AND rowid NOT IN (
+                SELECT MAX(rowid) FROM fila_aprovacao
+                WHERE status='incompleto'
+                GROUP BY sku
+            )
+        """)
+        return cur.rowcount
+
+
 def ja_existe_pendente(sku: str, canal: str | None = None) -> bool:
     """Verifica se jÃ¡ existe um item pendente para o mesmo SKU (e canal, se informado)."""
     conn = get_db()

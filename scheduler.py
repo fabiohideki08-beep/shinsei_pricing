@@ -519,10 +519,9 @@ def _ciclo_atualizacao() -> dict:
 
 
 def _ja_existe_incompleto(db_mod, sku: str) -> bool:
-    """Verifica se já existe um item incompleto pendente para o SKU."""
+    """Verifica se já existe um item incompleto para o SKU (usa SQL direto)."""
     try:
-        itens = db_mod.listar_fila(status="incompleto")
-        return any(i.get("sku") == sku for i in itens)
+        return db_mod.ja_existe_incompleto(sku)
     except Exception:
         return False
 
