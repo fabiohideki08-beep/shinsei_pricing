@@ -19,8 +19,8 @@ from database import (
     substituir_todas_regras,
     listar_fila as db_listar_fila,
     buscar_item_fila, inserir_item_fila, atualizar_status_fila,
-    stats_fila, limpar_invalidos_fila, reset_fila,
-    ja_existe_pendente, get_config as db_get_config,
+    stats_fila, limpar_invalidos_fila, reset_fila, dedup_incompletos_fila,
+    ja_existe_pendente, ja_existe_incompleto, get_config as db_get_config,
     migrar_json_legado,
 )
 from scheduler import iniciar_scheduler_background, parar_scheduler
@@ -2371,6 +2371,12 @@ def fila_adicionar(payload: dict = Body(...)):
 def fila_limpar_invalidos():
     removidos_n = limpar_invalidos_fila()
     return {"ok":True,"removidos":removidos_n,"stats":stats_fila()}
+
+@app.post("/fila/dedup-incompletos")
+def fila_dedup_incompletos():
+    """Remove entradas incompleto duplicadas — mantém 1 por SKU (a mais recente)."""
+    removidos = dedup_incompletos_fila()
+    return {"ok": True, "removidos": removidos, "stats": stats_fila()}
 
 @app.post("/fila/reset-total")
 def fila_reset_total():
