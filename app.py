@@ -139,6 +139,9 @@ app.include_router(multiempresas_router)
 from routes.multiempresa_correcao import router as me_correcao_router
 app.include_router(me_correcao_router)
 
+from routes.multiempresa_analitico import router as me_analitico_router
+app.include_router(me_analitico_router)
+
 from routes.copiar_ml import router as copiar_ml_router
 app.include_router(copiar_ml_router)
 from routes.controle_anuncios import router as controle_anuncios_router

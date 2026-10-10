@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analítico Multiempresa — Distribuição de Estoque</title>
+<style>
+  :root {
+    --bg:       #0f1117;
+    --surface:  #1a1d27;
+    --border:   #2a2d3a;
+    --text:     #e4e6f0;
+    --muted:    #8b8fa8;
+    --accent:   #6c63ff;
+    --green:    #22c55e;
+    --yellow:   #f59e0b;
+    --red:      #ef4444;
+    --orange:   #f97316;
+    --blue:     #3b82f6;
+    --radius:   8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; font-size: 14px; }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  header h1 { font-size: 17px; font-weight: 600; }
+  header p  { font-size: 12px; color: var(--muted); }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+  /* Resumo cards */
+  .resumo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .card .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+  .card .value { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .card.transfere .value { color: var(--red); }
+  .card.redistribui .value { color: var(--yellow); }
+  .card.ok .value { color: var(--green); }
+  .card.total .value { color: var(--blue); }
+
+  /* Filtros */
+  .filtros {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex; flex-wrap: wrap; gap: 12px;
+    margin-bottom: 20px;
+    align-items: flex-end;
+  }
+  .filtros label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  .filtros select, .filtros input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 6px 10px;
+    font-size: 13px;
+    min-width: 140px;
+  }
+  .btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 18px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .btn:hover { filter: brightness(1.1); }
+  .btn.secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+  .btn.danger { background: var(--red); }
+
+  /* Tabela */
+  .tabela-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    background: var(--surface);
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  th:hover { color: var(--text); }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge.transfere-sh { background: rgba(239,68,68,.15); color: var(--red); }
+  .badge.transfere-ak { background: rgba(249,115,22,.15); color: var(--orange); }
+  .badge.redistribui-sh { background: rgba(245,158,11,.15); color: var(--yellow); }
+  .badge.redistribui-ak { background: rgba(245,158,11,.15); color: var(--yellow); }
+  .badge.proporcional { background: rgba(34,197,94,.15); color: var(--green); }
+  .badge.sem-historico { background: rgba(139,143,168,.15); color: var(--muted); }
+
+  /* Barra proporcional */
+  .barra-wrap { display: flex; align-items: center; gap: 6px; min-width: 160px; }
+  .barra { height: 8px; border-radius: 4px; overflow: hidden; background: var(--border); flex: 1; }
+  .barra-sh { height: 100%; background: var(--blue); }
+  .barra-pcts { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+  /* Estoque pill */
+  .stock-pill { font-size: 11px; }
+  .stock-ok  { color: var(--green); }
+  .stock-bad { color: var(--red); }
+
+  /* Paginação */
+  .paginacao { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; align-items: center; }
+  .paginacao span { color: var(--muted); font-size: 12px; }
+
+  /* Loading */
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty { text-align: center; padding: 48px 24px; color: var(--muted); }
+
+  /* Modal de detalhe */
+  .modal-backdrop {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.6); z-index: 100;
+    align-items: center; justify-content: center;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; width: min(700px, 95vw);
+    max-height: 90vh; overflow-y: auto; padding: 24px;
+  }
+  .modal h2 { font-size: 16px; margin-bottom: 16px; }
+  .modal-close { float: right; cursor: pointer; color: var(--muted); font-size: 20px; line-height: 1; }
+  .detalhe-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .detalhe-row:last-child { border: none; }
+  .detalhe-label { color: var(--muted); font-size: 12px; }
+  .detalhe-value { font-weight: 500; }
+  .serie-chart { margin-top: 16px; }
+  .serie-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 12px; }
+  .serie-bar-row .mes { width: 54px; color: var(--muted); }
+  .serie-bar-sh { height: 14px; background: var(--blue); border-radius: 2px; }
+  .serie-bar-ak { height: 14px; background: var(--orange); border-radius: 2px; margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>📊 Analítico Multiempresa — Distribuição de Estoque</h1>
+    <p>Compara vendas Shinsei × AKG por SKU e recomenda redistribuição de estoque</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Resumo -->
+  <div class="resumo-grid" id="resumo-grid">
+    <div class="card total"><div class="label">SKUs analisados</div><div class="value" id="r-total">—</div></div>
+    <div class="card transfere"><div class="label">Transferir para Shinsei</div><div class="value" id="r-ts">—</div></div>
+    <div class="card transfere"><div class="label">Transferir para AKG</div><div class="value" id="r-ta">—</div></div>
+    <div class="card redistribui"><div class="label">Redistribuir Shinsei</div><div class="value" id="r-rs">—</div></div>
+    <div class="card redistribui"><div class="label">Redistribuir AKG</div><div class="value" id="r-ra">—</div></div>
+    <div class="card ok"><div class="label">Proporcional (OK)</div><div class="value" id="r-ok">—</div></div>
+  </div>
+
+  <!-- Filtros -->
+  <div class="filtros">
+    <label>Período (dias)
+      <input type="number" id="f-dias" value="90" min="7" max="365" style="width:80px">
+    </label>
+    <label>Mínimo de vendas
+      <input type="number" id="f-min" value="3" min="1" max="100" style="width:80px">
+    </label>
+    <label>Recomendação
+      <select id="f-rec">
+        <option value="">Todas</option>
+        <option value="TRANSFERIR_PARA_SHINSEI">Transferir → Shinsei</option>
+        <option value="TRANSFERIR_PARA_AKG">Transferir → AKG</option>
+        <option value="REDISTRIBUIR_PARA_SHINSEI">Redistribuir → Shinsei</option>
+        <option value="REDISTRIBUIR_PARA_AKG">Redistribuir → AKG</option>
+        <option value="PROPORCIONAL">Proporcional (OK)</option>
+      </select>
+    </label>
+    <label>SKU
+      <input type="text" id="f-sku" placeholder="Ex: ALF-001" style="width:140px">
+    </label>
+    <label style="flex-direction:row;align-items:center;gap:6px;padding-bottom:2px">
+      <input type="checkbox" id="f-estoque"> Buscar estoque Bling
+      <span style="color:var(--muted);font-size:11px">(lento)</span>
+    </label>
+    <button class="btn" onclick="buscar(1)">Buscar</button>
+    <button class="btn secondary" onclick="carregarTopDesalinhados()">⚡ Top Críticos</button>
+    <span id="spinner" style="display:none"><span class="spinner"></span></span>
+  </div>
+
+  <!-- Tabela -->
+  <div class="tabela-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>SKU</th>
+          <th>Total vendido</th>
+          <th title="Shinsei (azul) / AKG (laranja)">Distribuição vendas</th>
+          <th>Shinsei</th>
+          <th>AKG</th>
+          <th>Estoque Shinsei</th>
+          <th>Estoque AKG</th>
+          <th>Recomendação</th>
+          <th>Ação sugerida</th>
+        </tr>
+      </thead>
+      <tbody id="tabela-body">
+        <tr><td colspan="9" class="empty">Use os filtros acima para buscar</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="paginacao" id="paginacao"></div>
+</div>
+
+<!-- Modal de detalhe SKU -->
+<div class="modal-backdrop" id="modal-backdrop" onclick="fecharModal(event)">
+  <div class="modal" id="modal">
+    <span class="modal-close" onclick="document.getElementById('modal-backdrop').classList.remove('open')">×</span>
+    <h2 id="modal-titulo">SKU</h2>
+    <div id="modal-conteudo"></div>
+  </div>
+</div>
+
+<script>
+let _pagina = 1;
+const _limite = 50;
+let _total = 0;
+
+const BADGE = {
+  TRANSFERIR_PARA_SHINSEI:    ['transfere-sh',   'Transferir → Shinsei'],
+  TRANSFERIR_PARA_AKG:        ['transfere-ak',   'Transferir → AKG'],
+  REDISTRIBUIR_PARA_SHINSEI:  ['redistribui-sh', 'Redistribuir → Shinsei'],
+  REDISTRIBUIR_PARA_AKG:      ['redistribui-ak', 'Redistribuir → AKG'],
+  PROPORCIONAL:               ['proporcional',   'Proporcional OK'],
+  SEM_HISTORICO:              ['sem-historico',  'Sem histórico'],
+};
+
+function showSpinner(v) {
+  document.getElementById('spinner').style.display = v ? '' : 'none';
+}
+
+async function carregarResumo() {
+  const dias = document.getElementById('f-dias').value;
+  const min  = document.getElementById('f-min').value;
+  try {
+    const r = await fetch(`/multiempresa/analitico/resumo?dias=${dias}&min_vendas=${min}`);
+    const d = await r.json();
+    document.getElementById('r-total').textContent = d.total_skus_analisados;
+    document.getElementById('r-ts').textContent = d.recomendacoes.TRANSFERIR_PARA_SHINSEI;
+    document.getElementById('r-ta').textContent = d.recomendacoes.TRANSFERIR_PARA_AKG;
+    document.getElementById('r-rs').textContent = d.recomendacoes.REDISTRIBUIR_PARA_SHINSEI;
+    document.getElementById('r-ra').textContent = d.recomendacoes.REDISTRIBUIR_PARA_AKG;
+    document.getElementById('r-ok').textContent = d.recomendacoes.PROPORCIONAL;
+  } catch(e) { console.error(e); }
+}
+
+async function buscar(pagina) {
+  _pagina = pagina;
+  showSpinner(true);
+  const dias    = document.getElementById('f-dias').value;
+  const min     = document.getElementById('f-min').value;
+  const rec     = document.getElementById('f-rec').value;
+  const sku     = document.getElementById('f-sku').value.trim();
+  const estoque = document.getElementById('f-estoque').checked;
+
+  let url = `/multiempresa/analitico/vendas-cruzadas?dias=${dias}&min_vendas=${min}&pagina=${pagina}&limite=${_limite}&include_estoque=${estoque}`;
+  if (rec) url += `&recomendacao=${encodeURIComponent(rec)}`;
+  if (sku) url += `&sku=${encodeURIComponent(sku)}`;
+
+  try {
+    const r = await fetch(url);
+    const d = await r.json();
+    _total = d.total;
+    renderTabela(d.itens);
+    renderPaginacao();
+    await carregarResumo();
+  } catch(e) {
+    document.getElementById('tabela-body').innerHTML = `<tr><td colspan="9" class="empty">Erro: ${e.message}</td></tr>`;
+  } finally {
+    showSpinner(false);
+  }
+}
+
+async function carregarTopDesalinhados() {
+  showSpinner(true);
+  const dias = document.getElementById('f-dias').value;
+  const min  = document.getElementById('f-min').value;
+  try {
+    const r = await fetch(`/multiempresa/analitico/top-desalinhados?dias=${dias}&min_vendas=${min}&top=20`);
+    const d = await r.json();
+    _total = d.itens.length;
+    renderTabela(d.itens);
+    renderPaginacao();
+  } catch(e) {
+    document.getElementById('tabela-body').innerHTML = `<tr><td colspan="9" class="empty">Erro: ${e.message}</td></tr>`;
+  } finally {
+    showSpinner(false);
+  }
+}
+
+function fmt(n) {
+  if (n == null) return '—';
+  return new Intl.NumberFormat('pt-BR').format(n);
+}
+
+function renderTabela(itens) {
+  const tbody = document.getElementById('tabela-body');
+  if (!itens.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty">Nenhum SKU encontrado</td></tr>';
+    return;
+  }
+  tbody.innerHTML = itens.map(v => {
+    const [cls, label] = BADGE[v.recomendacao] || ['sem-historico', v.recomendacao];
+    const barW = `${v.pct_shinsei}%`;
+    const estOk = v.estoque_total != null;
+
+    let acaoHtml = '';
+    if (v.qtd_a_transferir > 0) {
+      const dir = v.direcao_transferencia === 'akg→shinsei'
+        ? '🔵 AKG → Shinsei'
+        : '🟠 Shinsei → AKG';
+      acaoHtml = `<span style="font-size:12px">${dir}: <strong>${fmt(v.qtd_a_transferir)}</strong> un.</span>`;
+    } else if (v.recomendacao === 'PROPORCIONAL') {
+      acaoHtml = `<span style="color:var(--green);font-size:12px">✓ Balanceado</span>`;
+    } else {
+      acaoHtml = `<span style="color:var(--muted);font-size:12px">—</span>`;
+    }
+
+    return `
+      <tr onclick="abrirDetalhe('${v.sku}')" style="cursor:pointer">
+        <td><strong>${v.sku}</strong></td>
+        <td>${fmt(v.total_qtd)} un.<br><span style="color:var(--muted);font-size:11px">${v.num_pedidos_shinsei + v.num_pedidos_akg} pedidos</span></td>
+        <td>
+          <div class="barra-wrap">
+            <div class="barra"><div class="barra-sh" style="width:${barW}"></div></div>
+            <span class="barra-pcts" style="color:var(--blue)">${v.pct_shinsei}%</span>
+            <span class="barra-pcts" style="color:var(--orange)">${v.pct_akg}%</span>
+          </div>
+        </td>
+        <td>
+          <span style="color:var(--blue)">${fmt(v.qtd_shinsei)}</span><br>
+          <span style="font-size:11px;color:var(--muted)">${v.num_pedidos_shinsei} pedidos</span>
+        </td>
+        <td>
+          <span style="color:var(--orange)">${fmt(v.qtd_akg)}</span><br>
+          <span style="font-size:11px;color:var(--muted)">${v.num_pedidos_akg} pedidos</span>
+        </td>
+        <td class="stock-pill ${estOk ? (v.estoque_desalinhado ? 'stock-bad' : 'stock-ok') : ''}">
+          ${estOk ? fmt(v.estoque_shinsei) : '—'}
+          ${v.qtd_sugerida_shinsei != null ? `<br><span style="font-size:10px;color:var(--muted)">ideal: ${fmt(v.qtd_sugerida_shinsei)}</span>` : ''}
+        </td>
+        <td class="stock-pill ${estOk ? (v.estoque_desalinhado ? 'stock-bad' : 'stock-ok') : ''}">
+          ${estOk ? fmt(v.estoque_akg) : '—'}
+          ${v.qtd_sugerida_akg != null ? `<br><span style="font-size:10px;color:var(--muted)">ideal: ${fmt(v.qtd_sugerida_akg)}</span>` : ''}
+        </td>
+        <td><span class="badge ${cls}">${label}</span></td>
+        <td>${acaoHtml}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderPaginacao() {
+  const total_pags = Math.ceil(_total / _limite);
+  const pg = document.getElementById('paginacao');
+  if (total_pags <= 1) { pg.innerHTML = ''; return; }
+  pg.innerHTML = `
+    <span>${_total} SKUs • Página ${_pagina} de ${total_pags}</span>
+    <button class="btn secondary" onclick="buscar(${_pagina - 1})" ${_pagina <= 1 ? 'disabled' : ''}>◀ Ant</button>
+    <button class="btn secondary" onclick="buscar(${_pagina + 1})" ${_pagina >= total_pags ? 'disabled' : ''}>Próx ▶</button>
+  `;
+}
+
+async function abrirDetalhe(sku) {
+  const backdrop = document.getElementById('modal-backdrop');
+  const content  = document.getElementById('modal-conteudo');
+  document.getElementById('modal-titulo').textContent = `SKU: ${sku}`;
+  content.innerHTML = '<div style="text-align:center;padding:32px"><span class="spinner"></span></div>';
+  backdrop.classList.add('open');
+
+  try {
+    const r = await fetch(`/multiempresa/analitico/sku/${encodeURIComponent(sku)}?dias=180`);
+    const d = await r.json();
+    const a = d.analise;
+    const [cls, label] = BADGE[a.recomendacao] || ['sem-historico', a.recomendacao];
+
+    let serieHtml = '';
+    if (d.serie_mensal.length) {
+      const maxVal = Math.max(...d.serie_mensal.map(m => Math.max(m.shinsei || 0, m.akg || 0)));
+      serieHtml = `
+        <div class="serie-chart">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px">
+            <span style="color:var(--blue)">■</span> Shinsei &nbsp;
+            <span style="color:var(--orange)">■</span> AKG
+          </div>
+          ${d.serie_mensal.map(m => `
+            <div>
+              <div class="serie-bar-row">
+                <span class="mes">${m.mes}</span>
+                <div class="serie-bar-sh" style="width:${Math.max(2, (m.shinsei||0)/maxVal*220)}px"></div>
+                <span>${fmt(m.shinsei||0)}</span>
+              </div>
+              <div class="serie-bar-row">
+                <span class="mes"></span>
+                <div class="serie-bar-ak" style="width:${Math.max(2, (m.akg||0)/maxVal*220)}px"></div>
+                <span>${fmt(m.akg||0)}</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    content.innerHTML = `
+      <div class="detalhe-row">
+        <span class="detalhe-label">Recomendação</span>
+        <span class="badge ${cls}">${label}</span>
+      </div>
+      <div class="detalhe-row">
+        <span class="detalhe-label">Descrição</span>
+        <span class="detalhe-value" style="text-align:right;max-width:60%">${a.descricao}</span>
+      </div>
+      <div class="detalhe-row">
+        <span class="detalhe-label">Total vendido (180d)</span>
+        <span class="detalhe-value">${fmt(a.total_qtd)} unidades</span>
+      </div>
+      <div class="detalhe-row">
+        <span class="detalhe-label">Vendas Shinsei</span>
+        <span class="detalhe-value" style="color:var(--blue)">${fmt(a.qtd_shinsei)} un. (${a.pct_shinsei}%)</span>
+      </div>
+      <div class="detalhe-row">
+        <span class="detalhe-label">Vendas AKG</span>
+        <span class="detalhe-value" style="color:var(--orange)">${fmt(a.qtd_akg)} un. (${a.pct_akg}%)</span>
+      </div>
+      ${a.estoque_shinsei != null ? `
+      <div class="detalhe-row">
+        <span class="detalhe-label">Estoque Shinsei (atual)</span>
+        <span class="detalhe-value" style="color:var(--blue)">${fmt(a.estoque_shinsei)} un.</span>
+      </div>
+      <div class="detalhe-row">
+        <span class="detalhe-label">Estoque AKG (atual)</span>
+        <span class="detalhe-value" style="color:var(--orange)">${fmt(a.estoque_akg)} un.</span>
+      </div>
+      <div class="detalhe-row">
+        <span class="detalhe-label">Total estoque</span>
+        <span class="detalhe-value">${fmt(a.estoque_total)} un.</span>
+      </div>
+      <div class="detalhe-row">
+        <span class="detalhe-label">Ideal Shinsei</span>
+        <span class="detalhe-value">${fmt(a.qtd_sugerida_shinsei)} un. (${a.pct_shinsei}%)</span>
+      </div>
+      <div class="detalhe-row">
+        <span class="detalhe-label">Ideal AKG</span>
+        <span class="detalhe-value">${fmt(a.qtd_sugerida_akg)} un. (${a.pct_akg}%)</span>
+      </div>
+      ${a.qtd_a_transferir ? `
+      <div class="detalhe-row" style="background:rgba(239,68,68,.05);border-radius:6px;padding:10px;margin-top:8px;border:none">
+        <span class="detalhe-label">Ação: transferir</span>
+        <span class="detalhe-value" style="color:var(--red)">${fmt(a.qtd_a_transferir)} un. ${a.direcao_transferencia}</span>
+      </div>` : ''}
+      ` : ''}
+      <div style="margin-top:16px;font-size:12px;color:var(--muted)">Histórico mensal (180 dias)</div>
+      ${serieHtml}
+    `;
+  } catch(e) {
+    content.innerHTML = `<div class="empty">Erro: ${e.message}</div>`;
+  }
+}
+
+function fecharModal(e) {
+  if (e.target === document.getElementById('modal-backdrop')) {
+    document.getElementById('modal-backdrop').classList.remove('open');
+  }
+}
+
+// Inicializa
+carregarResumo();
+</script>
+</body>
+</html>
