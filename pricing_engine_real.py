@@ -155,16 +155,19 @@ def _resolver_preco_por_objetivo(custo_base, frete, taxa_fixa, comissao, imposto
         return (custo_base + frete + taxa_fixa + lucro_alvo) / max(1 - comissao - imposto, 0.0001)
     raise ValueError("Objetivo inválido.")
 
-def _calcular_um_canal(regras: List[Dict], canal: str, custo_base: float, peso: float, imposto: float, objetivo: str, tipo_alvo: str, valor_alvo: float, embalagem: float = 0):
+def _calcular_um_canal(regras: List[Dict], canal: str, custo_base: float, peso: float, imposto: float, objetivo: str, tipo_alvo: str, valor_alvo: float, embalagem: float = 0, frete_logistico_tiktok: float = 0):
     # Para canais Full, embalagem é por conta do ML
     if 'Full' in canal:
         custo_base = custo_base - _safe_float(embalagem, 0)
         custo_base = max(custo_base, 0)
-    preco = max(custo_base * 1.5, 1.0)
+    # Frete logístico TikTok: adicionado ao custo base para que o markup cubra o envio
+    _frete_extra_tiktok = _safe_float(frete_logistico_tiktok, 0) if 'tiktok' in canal.lower() else 0.0
+    custo_base_efetivo = custo_base + _frete_extra_tiktok
+    preco = max(custo_base_efetivo * 1.5, 1.0)
     regra = None
     for _ in range(25):
         regra = _achar_regra(regras, canal, peso, preco)
-        preco_novo = _resolver_preco_por_objetivo(custo_base, regra["taxa_frete"], regra["taxa_fixa"], regra["comissao"], imposto, objetivo, tipo_alvo, valor_alvo)
+        preco_novo = _resolver_preco_por_objetivo(custo_base_efetivo, regra["taxa_frete"], regra["taxa_fixa"], regra["comissao"], imposto, objetivo, tipo_alvo, valor_alvo)
         if abs(preco_novo - preco) < 0.01:
             preco = preco_novo
             break
@@ -176,6 +179,7 @@ def _calcular_um_canal(regras: List[Dict], canal: str, custo_base: float, peso: 
     comissao_pct = regra["comissao"]
     frete_op_api = 0.0
     taxa_source = "regras"
+    custo_base = custo_base_efetivo  # usa custo com frete logístico incorporado
 
     # ── Buscar taxa real por canal e reiterar o cálculo de preço ─────────────
     comissao_api = None
@@ -256,7 +260,7 @@ def _calcular_um_canal(regras: List[Dict], canal: str, custo_base: float, peso: 
         "taxa_source": taxa_source,
     }
 
-def calcular_canais(regras, preco_compra, embalagem, peso, imposto, quantidade, objetivo, tipo_alvo, valor_alvo, intelligence_config=None, historical_data=None, sku=None, score_config=None):
+def calcular_canais(regras, preco_compra, embalagem, peso, imposto, quantidade, objetivo, tipo_alvo, valor_alvo, intelligence_config=None, historical_data=None, sku=None, score_config=None, frete_logistico_tiktok: float = 0):
     custo_base = (_safe_float(preco_compra, 0) * _safe_int(quantidade, 1)) + _safe_float(embalagem, 0)
     peso_usado = _safe_float(peso, 0)
     imposto = _pct_excel(imposto)
@@ -308,7 +312,7 @@ def calcular_canais(regras, preco_compra, embalagem, peso, imposto, quantidade, 
     resultados = []
     for canal in canais:
         try:
-            resultados.append(_calcular_um_canal(regras, canal, custo_base, peso_usado, imposto, objetivo, tipo_alvo, valor_alvo_efetivo, embalagem=_safe_float(embalagem, 0)))
+            resultados.append(_calcular_um_canal(regras, canal, custo_base, peso_usado, imposto, objetivo, tipo_alvo, valor_alvo_efetivo, embalagem=_safe_float(embalagem, 0), frete_logistico_tiktok=_safe_float(frete_logistico_tiktok, 0)))
         except Exception:
             continue
     resultados_ordenados = sorted(resultados, key=lambda x: (x.get("indice_final", 0), x.get("lucro_liquido", 0)), reverse=True)
@@ -738,7 +742,7 @@ def _selecionar_produto_bling_por_sku(client, sku: str) -> dict:
         "sku_informado": sku,
     }
 
-def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto, quantidade, objetivo, tipo_alvo, valor_alvo, peso_override=0, intelligence_config=None, historical_data=None, score_config=None, modo_aprovacao="manual", preco_compra_anterior_bling=0, modo_preco_virtual="percentual_acima", acrescimo_percentual=20, acrescimo_nominal=0, preco_manual=0, arredondamento="sem", regra_estoque=None, produto_prefetchado=None):
+def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto, quantidade, objetivo, tipo_alvo, valor_alvo, peso_override=0, intelligence_config=None, historical_data=None, score_config=None, modo_aprovacao="manual", preco_compra_anterior_bling=0, modo_preco_virtual="percentual_acima", acrescimo_percentual=20, acrescimo_nominal=0, preco_manual=0, arredondamento="sem", regra_estoque=None, produto_prefetchado=None, frete_logistico_tiktok=0):
     from bling_client import BlingClient
     criterio = (criterio or "sku").strip().lower()
     if criterio != "sku":
@@ -817,7 +821,7 @@ def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto,
     configurar_amazon_api(_usar_amazon_api, sku=sku)
     configurar_shopee_api(_usar_shopee_api)
 
-    calculo = calcular_canais(regras, preco_custo, embalagem, peso_usado, imposto, quantidade, objetivo, tipo_alvo, valor_alvo, intelligence_config=intelligence_config, historical_data=historical_data, sku=sku, score_config=_score_cfg if _score_cfg.get("ajuste_ativo") else None)
+    calculo = calcular_canais(regras, preco_custo, embalagem, peso_usado, imposto, quantidade, objetivo, tipo_alvo, valor_alvo, intelligence_config=intelligence_config, historical_data=historical_data, sku=sku, score_config=_score_cfg if _score_cfg.get("ajuste_ativo") else None, frete_logistico_tiktok=_safe_float(frete_logistico_tiktok, 0))
     integracao = gerar_integracao(calculo["canais"], modo_preco_virtual, acrescimo_percentual, acrescimo_nominal, preco_manual, arredondamento, modo_aprovacao=modo_aprovacao, preco_custo_bling=preco_custo, preco_compra_anterior_bling=preco_compra_anterior_bling, estoque=estoque, regra_estoque=regra_estoque)
     melhor_item = integracao["itens"][0] if integracao["itens"] else None
     auditoria = {
