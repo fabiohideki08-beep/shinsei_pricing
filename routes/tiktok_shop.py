@@ -431,6 +431,7 @@ class LoteRequest(BaseModel):
     imposto: float = 4.0                        # Imposto % (ex: 4.0 = 4%)
     markup: float = 1.33                        # Multiplicador de markup (ex: 1.33 = 33%)
     limite: int = 300                           # Limite de anúncios (TikTok BR: 300 para contas novas)
+    frete_logistico: float = 0.0                # Custo de envio por pedido (R$) — somado ao custo base antes do markup
 
 
 def _extrair_custo_bling(prod_detail: dict, hdrs: dict, req) -> float:
@@ -521,7 +522,7 @@ def _ranking_vendas_bling(hdrs: dict, req, dias: int = 90) -> dict:
     return ranking
 
 
-def _publicar_lote_bg(skus: Optional[List[str]], excluir_skus: Optional[List[str]], embalagem: float, imposto: float, markup: float, limite: int):
+def _publicar_lote_bg(skus: Optional[List[str]], excluir_skus: Optional[List[str]], embalagem: float, imposto: float, markup: float, limite: int, frete_logistico: float = 0.0):
     """
     Precifica e publica produtos no TikTok Shop via Bling.
     Fórmula: preco_venda = (custo + embalagem) * (1 + imposto/100) * markup
@@ -625,8 +626,8 @@ def _publicar_lote_bg(skus: Optional[List[str]], excluir_skus: Optional[List[str
                     time.sleep(0.2)
                     continue
 
-                # Fórmula TikTok: (custo + embalagem) * (1 + imposto%) * markup
-                preco_tiktok = round((custo + embalagem) * (1 + imposto / 100) * markup, 2)
+                # Fórmula TikTok: (custo + embalagem + frete_logístico) * (1 + imposto%) * markup
+                preco_tiktok = round((custo + embalagem + frete_logistico) * (1 + imposto / 100) * markup, 2)
 
                 tiktok.criar_anuncio(prod_id, preco_tiktok)
                 _job["publicados"] += 1
@@ -663,12 +664,12 @@ def publicar_lote(
         raise HTTPException(409, "Job de publicação em lote já está rodando")
     background_tasks.add_task(
         _publicar_lote_bg,
-        body.skus, body.excluir_skus, body.embalagem, body.imposto, body.markup, body.limite,
+        body.skus, body.excluir_skus, body.embalagem, body.imposto, body.markup, body.limite, body.frete_logistico,
     )
     return {
         "ok": True,
         "loja_id": tiktok.TIKTOK_LOJA_ID,
-        "formula": f"(custo + {body.embalagem}) * {1 + body.imposto/100:.4f} * {body.markup}",
+        "formula": f"(custo + {body.embalagem} + frete_logistico {body.frete_logistico}) * {1 + body.imposto/100:.4f} * {body.markup}",
         "mensagem": "Publicação em lote iniciada. Consulte GET /tiktok/anuncios/status",
     }
 

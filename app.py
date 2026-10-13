@@ -139,6 +139,9 @@ app.include_router(multiempresas_router)
 from routes.multiempresa_correcao import router as me_correcao_router
 app.include_router(me_correcao_router)
 
+from routes.multiempresa_analitico import router as me_analitico_router
+app.include_router(me_analitico_router)
+
 from routes.copiar_ml import router as copiar_ml_router
 app.include_router(copiar_ml_router)
 from routes.controle_anuncios import router as controle_anuncios_router
@@ -447,6 +450,7 @@ class IntegracaoPayload(BaseModel):
     preco_manual: float = 0
     arredondamento: str = "90"
     preco_compra_anterior_bling: float = 0
+    frete_logistico_tiktok: float = 0  # custo de envio TikTok por pedido (opcional, default 0)
 
 class DebugSkuPayload(BaseModel):
     sku: str
@@ -2326,6 +2330,7 @@ def integracao_preview(payload: IntegracaoPayload):
             preco_compra_anterior_bling=payload.preco_compra_anterior_bling, modo_preco_virtual=payload.modo_preco_virtual,
             acrescimo_percentual=payload.acrescimo_percentual, acrescimo_nominal=payload.acrescimo_nominal, preco_manual=payload.preco_manual,
             arredondamento=payload.arredondamento, regra_estoque=carregar_cfg().get("regra_estoque"),
+            frete_logistico_tiktok=float(payload.frete_logistico_tiktok or 0),
         )
         if resultado.get("erro"):
             preview = {"ok":False,"criterio_usado":"sku","produto":resultado.get("produto_bling") or {},"melhor_canal":"","modo_aprovacao":payload.modo_aprovacao,"marketplaces":{},"auditoria":resultado,"raw":resultado}
@@ -3519,6 +3524,7 @@ class IntegracaoPayload(BaseModel):
     preco_manual: float = 0
     arredondamento: str = "90"
     preco_compra_anterior_bling: float = 0
+    frete_logistico_tiktok: float = 0  # custo de envio TikTok por pedido (opcional, default 0)
 
 @app.post("/shopify/kits/limpar-barcodes")
 def shopify_kits_limpar_barcodes(dry_run: bool = False):

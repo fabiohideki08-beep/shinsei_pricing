@@ -112,6 +112,7 @@
         <div class="field"><label for="embalagem">Embalagem (R$)</label><input id="embalagem" type="number" step="0.01" value="1" /></div>
         <div class="field"><label for="imposto">Imposto (%)</label><input id="imposto" type="number" step="0.01" value="4" /></div>
         <div class="field"><label for="quantidade">Quantidade</label><input id="quantidade" type="number" step="1" value="1" /></div>
+        <div class="field"><label for="frete_logistico_tiktok" title="Custo de envio por pedido TikTok (ex: R$14,10). Opcional — deixe 0 se o TikTok subsidia o frete.">Frete TikTok (R$) <span style="font-size:10px;opacity:.6">opcional</span></label><input id="frete_logistico_tiktok" type="number" step="0.01" value="0" min="0" /></div>
 
         <div class="field"><label for="valor_alvo">Valor alvo</label><input id="valor_alvo" type="number" step="0.01" value="30" /></div>
         <div class="field"><label for="arredondamento">Arredondamento</label><select id="arredondamento"><option value="90" selected>.90</option><option value="99">.99</option><option value="97">.97</option><option value="sem">Sem</option></select></div>
@@ -287,6 +288,7 @@ function obterPayload(){
     embalagem:Number(document.getElementById('embalagem').value||0),
     imposto:Number(document.getElementById('imposto').value||0),
     quantidade:Number(document.getElementById('quantidade').value||1),
+    frete_logistico_tiktok:Number(document.getElementById('frete_logistico_tiktok').value||0),
     objetivo:document.getElementById('objetivo').value,
     tipo_alvo:document.getElementById('tipo_alvo').value,
     valor_alvo:Number(document.getElementById('valor_alvo').value||0),
@@ -687,6 +689,7 @@ function restaurarSimulacao(){
     if(p.embalagem)document.getElementById('embalagem').value=p.embalagem;
     if(p.imposto)document.getElementById('imposto').value=p.imposto;
     if(p.quantidade)document.getElementById('quantidade').value=p.quantidade;
+    if(p.frete_logistico_tiktok)document.getElementById('frete_logistico_tiktok').value=p.frete_logistico_tiktok;
     if(p.objetivo)document.getElementById('objetivo').value=p.objetivo;
     if(p.tipo_alvo)document.getElementById('tipo_alvo').value=p.tipo_alvo;
     if(p.valor_alvo)document.getElementById('valor_alvo').value=p.valor_alvo;
