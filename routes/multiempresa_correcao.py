@@ -725,11 +725,12 @@ def transferir_shinsei_para_akg(dry_run: bool = True, data_corte: str = "2026-09
     }
 
 
-def _varrer_negativos_akg() -> list[dict]:
+def _varrer_negativos_akg(incluir_positivos: bool = False) -> list[dict]:
     """
-    Varre todos os produtos físicos AKG com saldoVirtualTotal < 0.
-    Usa saldoVirtualTotal do listing (sem confirmação por depósito) para ser rápido.
-    Para cada negativo, busca o produto e saldo no Shinsei Geral.
+    Varre todos os produtos físicos AKG com saldoVirtualTotal != 0.
+    incluir_positivos=False (padrão): só negativos (saldo < 0).
+    incluir_positivos=True: todos com saldo != 0 (estratégia depósito virtual).
+    Para cada item, busca o produto e saldo no Shinsei Geral.
     Headers renovados a cada 50 itens para não expirar em varreduras longas.
     """
     import time as _t
@@ -762,7 +763,9 @@ def _varrer_negativos_akg() -> list[dict]:
         for p in prods:
             est = p.get("estoque") or {}
             saldo = float(est.get("saldoVirtualTotal", 0) or 0)
-            if saldo >= 0:
+            if saldo == 0:
+                continue
+            if saldo > 0 and not incluir_positivos:
                 continue
             negativos.append({
                 "sku": p.get("codigo", ""),
@@ -953,15 +956,21 @@ def _job_negativos_shinsei(aplicar: bool, obs_extra: str = "") -> None:
         _negativos_shinsei_cache["concluido_em"] = _agora()
 
 
-def _job_negativos_akg(aplicar: bool, obs_extra: str = "") -> None:
-    """Executa varredura + correção em background; salva resultado no cache global."""
+def _job_negativos_akg(aplicar: bool, obs_extra: str = "",
+                       incluir_positivos: bool = True) -> None:
+    """
+    Sincroniza depósito AKG com Shinsei: mantém AKG em zero.
+    saldo_akg < 0: ENTRADA AKG + SAÍDA Shinsei (repor do estoque pai).
+    saldo_akg > 0: SAÍDA AKG + ENTRADA Shinsei (devolver ao estoque pai).
+    incluir_positivos=True (padrão): trata ambos os casos (estratégia depósito virtual).
+    """
     import time as _t
     import requests as _req
-    import json as _json
 
-    BLING_API = "https://api.bling.com.br/Api/v3"
-    DEP_AKG     = 14889056234
-    OBS = f"Correcao bug multiempresa — componentes de kits AKG nao transferidos{' ' + obs_extra if obs_extra else ''}"
+    BLING_API  = "https://api.bling.com.br/Api/v3"
+    DEP_AKG    = 14889056234
+    DEP_SHIN   = 14636070822
+    OBS_BASE   = f"Sync deposito virtual AKG->Shinsei{' ' + obs_extra if obs_extra else ''}"
 
     hdrs_a = _hdrs(EMPRESA_AKG)
     hdrs_s = _hdrs(EMPRESA_SHINSEI)
@@ -971,7 +980,7 @@ def _job_negativos_akg(aplicar: bool, obs_extra: str = "") -> None:
     _negativos_akg_cache["aplicar"] = aplicar
 
     try:
-        itens = _varrer_negativos_akg()
+        itens = _varrer_negativos_akg(incluir_positivos=incluir_positivos)
         _negativos_akg_cache["itens"] = itens
         _negativos_akg_cache["total_negativos"] = len(itens)
 
@@ -985,28 +994,59 @@ def _job_negativos_akg(aplicar: bool, obs_extra: str = "") -> None:
             if not n.get("id_akg") or not n.get("id_shinsei"):
                 erros.append({"sku": n["sku"], "erro": "sem id em uma das empresas"})
                 continue
-            qtd = min(abs(n["saldo_akg"]), max(0, n.get("saldo_shinsei") or 0))
+
+            saldo = n["saldo_akg"]
+            qtd = int(abs(saldo))
             if qtd == 0:
-                erros.append({"sku": n["sku"], "nome": n["nome"],
-                               "saldo_akg": n["saldo_akg"],
-                               "erro": f"Shinsei insuficiente (saldo={n.get('saldo_shinsei')})"})
                 continue
-            _t.sleep(0.35)
-            re = _req.post(f"{BLING_API}/estoques", headers=hdrs_a, json={
-                "produto": {"id": n["id_akg"]}, "deposito": {"id": DEP_AKG},
-                "tipoOperacao": "E", "quantidade": int(qtd), "observacoes": OBS,
-            }, timeout=30)
-            entrada_ok = re.ok or re.status_code == 504
-            _t.sleep(0.35)
-            rs = _req.post(f"{BLING_API}/estoques", headers=hdrs_s, json={
-                "produto": {"id": n["id_shinsei"]}, "deposito": {"id": 14636070822},
-                "tipoOperacao": "S", "quantidade": int(qtd), "observacoes": OBS,
-            }, timeout=30)
-            saida_ok = rs.ok or rs.status_code == 504
-            entry = {"sku": n["sku"], "nome": n["nome"], "qtd": qtd,
-                     "saldo_akg_antes": n["saldo_akg"],
-                     "entrada_akg": entrada_ok, "saida_shinsei": saida_ok}
-            (corrigidos if entrada_ok else erros).append(entry)
+
+            # saldo < 0: AKG negativo → ENTRADA AKG + SAÍDA Shinsei (repor do pai)
+            # saldo > 0: AKG positivo → SAÍDA AKG + ENTRADA Shinsei (devolver ao pai)
+            if saldo < 0:
+                # Limita pela disponibilidade no Shinsei
+                shin_disp = max(0, n.get("saldo_shinsei") or 0)
+                qtd = min(qtd, int(shin_disp))
+                if qtd == 0:
+                    erros.append({"sku": n["sku"], "nome": n["nome"],
+                                  "saldo_akg": saldo,
+                                  "erro": f"Shinsei insuficiente (saldo={n.get('saldo_shinsei')})"})
+                    continue
+                obs = f"{OBS_BASE}|negativo={saldo}"
+                _t.sleep(0.35)
+                r1 = _req.post(f"{BLING_API}/estoques", headers=hdrs_a, json={
+                    "produto": {"id": n["id_akg"]}, "deposito": {"id": DEP_AKG},
+                    "tipoOperacao": "E", "quantidade": qtd, "observacoes": obs,
+                }, timeout=30)
+                ok1 = r1.ok or r1.status_code == 504
+                _t.sleep(0.35)
+                r2 = _req.post(f"{BLING_API}/estoques", headers=hdrs_s, json={
+                    "produto": {"id": n["id_shinsei"]}, "deposito": {"id": DEP_SHIN},
+                    "tipoOperacao": "S", "quantidade": qtd, "observacoes": obs,
+                }, timeout=30)
+                ok2 = r2.ok or r2.status_code == 504
+                entry = {"sku": n["sku"], "nome": n["nome"], "qtd": qtd,
+                         "saldo_akg_antes": saldo, "direcao": "negativo→zero",
+                         "entrada_akg": ok1, "saida_shinsei": ok2}
+            else:
+                # saldo > 0: AKG positivo → SAÍDA AKG + ENTRADA Shinsei
+                obs = f"{OBS_BASE}|positivo={saldo}"
+                _t.sleep(0.35)
+                r1 = _req.post(f"{BLING_API}/estoques", headers=hdrs_a, json={
+                    "produto": {"id": n["id_akg"]}, "deposito": {"id": DEP_AKG},
+                    "tipoOperacao": "S", "quantidade": qtd, "observacoes": obs,
+                }, timeout=30)
+                ok1 = r1.ok or r1.status_code == 504
+                _t.sleep(0.35)
+                r2 = _req.post(f"{BLING_API}/estoques", headers=hdrs_s, json={
+                    "produto": {"id": n["id_shinsei"]}, "deposito": {"id": DEP_SHIN},
+                    "tipoOperacao": "E", "quantidade": qtd, "observacoes": obs,
+                }, timeout=30)
+                ok2 = r2.ok or r2.status_code == 504
+                entry = {"sku": n["sku"], "nome": n["nome"], "qtd": qtd,
+                         "saldo_akg_antes": saldo, "direcao": "positivo→zero",
+                         "saida_akg": ok1, "entrada_shinsei": ok2}
+
+            (corrigidos if ok1 else erros).append(entry)
 
         _negativos_akg_cache.update({
             "status": "concluido",
