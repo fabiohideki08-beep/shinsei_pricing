@@ -635,6 +635,10 @@ _ultimo_dia_sort: Optional[object] = None
 # Controle do refresh do cache de produtos Shopify (executa às 06:00, diário)
 _ultimo_dia_cache_produtos: Optional[object] = None
 
+# Intervalo para correção de negativos AKG (padrão: 4 horas)
+_INTERVALO_NEGATIVOS_AKG = int(os.getenv("INTERVALO_NEGATIVOS_AKG", str(4 * 3600)))
+_ultima_negativos_akg: Optional[float] = None
+
 
 def _ciclo_gmc_scan() -> None:
     """
@@ -733,6 +737,36 @@ def _ciclo_estoque_auto() -> None:
     except Exception as e:
         logger.exception("[ESTOQUE-AUTO] Erro no ciclo: %s", e)
         _ultima_estoque_auto = agora  # evita loop de retentativas
+
+
+def _ciclo_negativos_akg() -> None:
+    """
+    A cada 4h: corrige negativos AKG causados pela Rota 3 (Shinsei vende → AKG fornece).
+    Para cada SKU AKG com saldo < 0: ENTRADA AKG + SAÍDA Shinsei → AKG volta a 0.
+    Não inicia nova varredura se já houver uma em andamento.
+    """
+    global _ultima_negativos_akg
+
+    agora = time.time()
+    if _ultima_negativos_akg and (agora - _ultima_negativos_akg) < _INTERVALO_NEGATIVOS_AKG:
+        return
+
+    logger.info("[NEGATIVOS-AKG] Iniciando ciclo de correção automática (intervalo=%dh)...",
+                _INTERVALO_NEGATIVOS_AKG // 3600)
+    try:
+        from routes.multiempresa_correcao import _negativos_akg_cache, _job_negativos_akg
+        import threading as _threading
+        if _negativos_akg_cache.get("status") == "em_andamento":
+            logger.info("[NEGATIVOS-AKG] Varredura já em andamento — ciclo ignorado")
+            return
+        t = _threading.Thread(target=_job_negativos_akg, args=(True,), daemon=True,
+                              name="negativos-akg-auto")
+        t.start()
+        _ultima_negativos_akg = agora
+        logger.info("[NEGATIVOS-AKG] Varredura iniciada em background (thread: %s)", t.name)
+    except Exception as e:
+        logger.exception("[NEGATIVOS-AKG] Erro ao iniciar correção: %s", e)
+        _ultima_negativos_akg = agora
 
 
 def _ciclo_limpeza_kits() -> None:
@@ -928,6 +962,12 @@ def _loop():
             job_multiempresa()
         except Exception as e:
             logger.exception("Erro no job multiempresa: %s", e)
+
+        # Correção de negativos AKG (Rota 3: Shinsei vende → AKG fica negativo → corrige a cada 4h)
+        try:
+            _ciclo_negativos_akg()
+        except Exception as e:
+            logger.exception("Erro no ciclo de negativos AKG: %s", e)
 
         # Refresh do cache de produtos Shopify às 06:00 (necessário para o SCBOT)
         try:
