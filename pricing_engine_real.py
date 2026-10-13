@@ -781,6 +781,16 @@ def montar_precificacao_bling(regras, criterio, valor_busca, embalagem, imposto,
         except Exception:
             pass
 
+    # Fallback: peso padrão para kits sem peso cadastrado no Bling
+    # Kits (formato E/V ou SKU U*/AEV-*/MLKIT*) raramente têm pesoLiquido preenchido.
+    # 0.5kg é conservador para kits capilares (coloração+ox+ampola ≈ 0.3–0.7kg).
+    if peso_usado <= 0:
+        _fmt = str(produto.get("formato") or "").upper()
+        _sku_str = str(valor_busca or produto.get("codigo") or "")
+        _is_kit = _fmt in ("E", "V") or _sku_str.startswith(("U", "AEV-", "MLKIT", "MLBK"))
+        if _is_kit:
+            peso_usado = 0.5
+
     _produto_bling = {"id": produto.get("id"), "nome": produto.get("nome"), "codigo": produto.get("codigo"), "preco": produto.get("preco"), "precoCusto": produto.get("precoCusto"), "saldoVirtualTotal": estoque}
 
     if preco_custo <= 0:
