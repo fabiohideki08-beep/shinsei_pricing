@@ -203,6 +203,33 @@ def _get_akg_oauth():
     return _MercadoLivreOAuthAKG(BASE_DIR)
 
 
+@router.get("/ml/pedido/{order_id}")
+def ml_pedido(order_id: int, user_id: str = ""):
+    """
+    Busca pedido no ML pelo ID, escolhendo a conta (Shinsei/AKG) pelo user_id da notificação.
+    Usado pelo Horus Eye — tokens ML são rotativos, só o Shinsei Pricing os renova.
+    """
+    import requests as _req
+    from services.mercado_livre import obter_token_ml
+
+    akg = _get_akg_oauth()
+    akg_tokens = akg._read_json(akg.tokens_file, {})
+    if user_id and str(akg_tokens.get("user_id", "")) == str(user_id):
+        token, conta = akg_tokens.get("access_token", ""), "akg"
+    else:
+        token, conta = obter_token_ml(), "shinsei"
+    if not token:
+        raise HTTPException(status_code=503, detail=f"Token ML {conta} não disponível")
+
+    r = _req.get(f"https://api.mercadolibre.com/orders/{order_id}",
+                 headers={"Authorization": f"Bearer {token}"}, timeout=20)
+    if r.status_code == 404:
+        raise HTTPException(status_code=404, detail=f"Pedido {order_id} não encontrado no ML ({conta})")
+    if not r.ok:
+        raise HTTPException(status_code=502, detail=f"ML API {r.status_code}: {r.text[:200]}")
+    return {"ok": True, "conta": conta, "data": r.json()}
+
+
 @router.get("/ml/login2")
 def ml_login2():
     """Inicia OAuth ML para conta AKG (segunda empresa)."""
