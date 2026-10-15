@@ -150,18 +150,39 @@ def bling_produto_proxy(produto_id: int):
 
 
 @router.get("/bling/token")
-def bling_token_endpoint():
-    """Retorna o access token atual do Bling (uso interno/scripts)."""
+def bling_token_endpoint(empresa: str = "shinsei"):
+    """
+    Retorna o access token atual do Bling.
+    empresa=shinsei → token Shinsei (BlingClient)
+    empresa=akg     → token AKG (BLING_AKG_ACCESS_TOKEN ou bling_tokens_akg.json)
+    """
+    import json as _json, os as _os
+    from pathlib import Path as _Path
+    from fastapi import HTTPException
+
+    if empresa == "akg":
+        token = _os.getenv("BLING_AKG_ACCESS_TOKEN", "")
+        if not token:
+            akg_path = _Path(__file__).parent.parent / "data" / "bling_tokens_akg.json"
+            if akg_path.exists():
+                try:
+                    token = _json.loads(akg_path.read_text(encoding="utf-8")).get("access_token", "")
+                except Exception:
+                    pass
+        if not token:
+            raise HTTPException(status_code=503, detail="Token Bling AKG não disponível.")
+        return {"access_token": token, "empresa": "akg"}
+
     try:
         from bling_client import BlingClient
         client = BlingClient()
         token = client.tokens.get("access_token", "") if hasattr(client, "tokens") else ""
         if not token:
-            from fastapi import HTTPException
             raise HTTPException(status_code=503, detail="Token Bling não disponível.")
-        return {"access_token": token}
+        return {"access_token": token, "empresa": "shinsei"}
+    except HTTPException:
+        raise
     except Exception as e:
-        from fastapi import HTTPException
         raise HTTPException(status_code=503, detail=str(e))
 
 
