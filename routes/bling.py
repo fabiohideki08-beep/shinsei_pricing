@@ -165,6 +165,60 @@ def bling_token_endpoint():
         raise HTTPException(status_code=503, detail=str(e))
 
 
+@router.get("/bling/pedido-venda/{pedido_id}")
+def bling_pedido_venda(pedido_id: int, empresa: str = "shinsei"):
+    """
+    Busca pedido de venda no Bling pelo ID.
+    Parâmetro empresa: shinsei | akg
+    Endpoint público — usado internamente pelo Horus Eye para evitar conflito de tokens rotativos.
+    """
+    import json as _json, os as _os
+    from pathlib import Path as _Path
+    import httpx as _httpx
+    from fastapi import HTTPException as _HTTPEx
+
+    BLING_BASE = "https://api.bling.com.br/Api/v3"
+
+    if empresa == "akg":
+        # Tenta env var primeiro, depois arquivo de tokens AKG
+        token = _os.getenv("BLING_AKG_ACCESS_TOKEN", "")
+        if not token:
+            akg_path = _Path(__file__).parent.parent / "data" / "bling_tokens_akg.json"
+            if akg_path.exists():
+                try:
+                    tok_data = _json.loads(akg_path.read_text(encoding="utf-8"))
+                    token = tok_data.get("access_token", "")
+                except Exception:
+                    pass
+        if not token:
+            raise _HTTPEx(status_code=503, detail="Token Bling AKG não disponível")
+    else:
+        from bling_client import BlingClient
+        client = BlingClient()
+        token = (client.tokens.get("access_token", "") if hasattr(client, "tokens") else "") or _os.getenv("BLING_ACCESS_TOKEN", "")
+        if not token:
+            raise _HTTPEx(status_code=503, detail="Token Bling Shinsei não disponível")
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept":        "application/json",
+        "enable-jwt":    "1",
+    }
+    try:
+        with _httpx.Client(timeout=20) as http:
+            r = http.get(f"{BLING_BASE}/pedidos/vendas/{pedido_id}", headers=headers)
+        if r.status_code == 404:
+            raise _HTTPEx(status_code=404, detail=f"Pedido {pedido_id} não encontrado no Bling ({empresa})")
+        if not r.is_success:
+            raise _HTTPEx(status_code=502, detail=f"Bling API {r.status_code}: {r.text[:200]}")
+        data = r.json()
+        return {"ok": True, "empresa": empresa, "data": data.get("data", data)}
+    except _HTTPEx:
+        raise
+    except Exception as exc:
+        raise _HTTPEx(status_code=502, detail=str(exc))
+
+
 @router.get("/bling", response_class=HTMLResponse)
 def bling_page():
     html = """
