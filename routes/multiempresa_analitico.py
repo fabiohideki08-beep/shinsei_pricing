@@ -49,10 +49,13 @@ def _get_conn() -> sqlite3.Connection:
 
 def _hdrs(empresa: str) -> dict:
     import os
+    # Env vars do processo ficam velhas após cada refresh — usar as fontes renovadas
     if empresa == "shinsei":
-        tok = os.getenv("BLING_ACCESS_TOKEN", "")
+        from bling_client import BlingClient
+        tok = BlingClient().tokens.get("access_token", "") or os.getenv("BLING_ACCESS_TOKEN", "")
     else:
-        tok = os.getenv("BLING_AKG_ACCESS_TOKEN", "")
+        from routes.bling import _token_bling_akg
+        tok = _token_bling_akg()
     return {
         "Authorization": f"Bearer {tok}",
         "Accept": "application/json",

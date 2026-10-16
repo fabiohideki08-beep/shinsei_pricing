@@ -149,6 +149,25 @@ def bling_produto_proxy(produto_id: int):
     return r.json()
 
 
+def _token_bling_akg() -> str:
+    """
+    Token AKG atual. O arquivo vem primeiro: o token_autorefresh grava nele a cada
+    renovação, enquanto a env var BLING_AKG_ACCESS_TOKEN do processo só muda num
+    restart — ler a env primeiro devolvia um token vencido horas depois do refresh.
+    """
+    import json as _json, os as _os
+    from pathlib import Path as _Path
+    akg_path = _Path(__file__).parent.parent / "data" / "bling_tokens_akg.json"
+    if akg_path.exists():
+        try:
+            token = _json.loads(akg_path.read_text(encoding="utf-8")).get("access_token", "")
+            if token:
+                return token
+        except Exception:
+            pass
+    return _os.getenv("BLING_AKG_ACCESS_TOKEN", "")
+
+
 @router.get("/bling/token")
 def bling_token_endpoint(empresa: str = "shinsei"):
     """
@@ -161,14 +180,7 @@ def bling_token_endpoint(empresa: str = "shinsei"):
     from fastapi import HTTPException
 
     if empresa == "akg":
-        token = _os.getenv("BLING_AKG_ACCESS_TOKEN", "")
-        if not token:
-            akg_path = _Path(__file__).parent.parent / "data" / "bling_tokens_akg.json"
-            if akg_path.exists():
-                try:
-                    token = _json.loads(akg_path.read_text(encoding="utf-8")).get("access_token", "")
-                except Exception:
-                    pass
+        token = _token_bling_akg()
         if not token:
             raise HTTPException(status_code=503, detail="Token Bling AKG não disponível.")
         return {"access_token": token, "empresa": "akg"}
@@ -201,16 +213,7 @@ def bling_pedido_venda(pedido_id: int, empresa: str = "shinsei"):
     BLING_BASE = "https://api.bling.com.br/Api/v3"
 
     if empresa == "akg":
-        # Tenta env var primeiro, depois arquivo de tokens AKG
-        token = _os.getenv("BLING_AKG_ACCESS_TOKEN", "")
-        if not token:
-            akg_path = _Path(__file__).parent.parent / "data" / "bling_tokens_akg.json"
-            if akg_path.exists():
-                try:
-                    tok_data = _json.loads(akg_path.read_text(encoding="utf-8"))
-                    token = tok_data.get("access_token", "")
-                except Exception:
-                    pass
+        token = _token_bling_akg()
         if not token:
             raise _HTTPEx(status_code=503, detail="Token Bling AKG não disponível")
     else:
