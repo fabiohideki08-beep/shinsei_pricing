@@ -196,7 +196,9 @@ def _renovar_bling_akg() -> bool:
                 tok = {}
         else:
             tok = {}
-        tok.update({"access_token": access, "refresh_token": refresh, "expires_in": 21600})
+        expires_in = int(new.get("expires_in") or 21600)
+        tok.update({"access_token": access, "refresh_token": refresh, "expires_in": expires_in,
+                    "expires_at": time.time() + expires_in})
         DATA_DIR.mkdir(exist_ok=True)
         akg_path.write_text(_json.dumps(tok, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -234,6 +236,24 @@ def _checar_expiry_bling() -> float:
             tok = raw
         expires_at = tok.get("expires_at", 0)
         return max(0, expires_at - time.time())
+    except Exception:
+        return -1
+
+
+def _checar_expiry_bling_akg() -> float:
+    """Segundos até expirar o token Bling AKG (expires_at do arquivo ou exp do JWT). -1 se desconhecido."""
+    try:
+        akg_path = DATA_DIR / "bling_tokens_akg.json"
+        if not akg_path.exists():
+            return -1
+        tok = json.loads(akg_path.read_text(encoding="utf-8"))
+        expires_at = float(tok.get("expires_at") or 0)
+        if not expires_at:
+            # Token v3 com enable-jwt é JWT: o payload traz "exp"
+            payload = (tok.get("access_token") or "").split(".")[1]
+            payload += "=" * (-len(payload) % 4)
+            expires_at = float(json.loads(base64.urlsafe_b64decode(payload)).get("exp") or 0)
+        return max(0, expires_at - time.time()) if expires_at else -1
     except Exception:
         return -1
 
@@ -442,10 +462,18 @@ def _loop():
             logger.error("Auto-refresh Bling inesperado: %s", e)
 
         # ── Bling AKG ──────────────────────────────────────────────────────────
+        # Mesma regra da Shinsei: expiry (90 min antecipado) OU forçado 3h. Só pelo relógio,
+        # após um restart o token podia vencer antes do próximo ciclo (ocorreu 16/10 01:32 UTC)
         try:
+            restante = _checar_expiry_bling_akg()
             ult = _ultima_renovacao.get("bling_akg", 0)
-            if (agora - ult) > FORCA_BLING:  # FIX: 3h em vez de 4h
-                logger.info("Bling AKG: refresh forcado 3h")
+            razao = ""
+            if restante >= 0 and restante < LIMITE_BLING and (agora - ult) > COOLDOWN:
+                razao = f"expira em {restante/60:.0f} min"
+            elif (agora - ult) > FORCA_BLING:
+                razao = "refresh forcado 3h"
+            if razao:
+                logger.info("Bling AKG: renovando — %s", razao)
                 if _renovar_bling_akg():
                     _ultima_renovacao["bling_akg"] = agora
         except Exception as e:
