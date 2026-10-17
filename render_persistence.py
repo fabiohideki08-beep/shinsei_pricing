@@ -75,7 +75,9 @@ def _patch_env_vars(updates: dict[str, str]) -> bool:
 
             # Mescla: updates sobrescreve vars existentes
             merged = {**existing, **updates}
-            body   = [{"key": k, "value": v} for k, v in merged.items()]
+            # Render só aceita string: um user_id int (ex.: ML_USER_ID vindo do ml_tokens.json)
+            # fazia o PUT inteiro falhar com 400 "invalid JSON" e nenhum token era persistido
+            body   = [{"key": k, "value": "" if v is None else str(v)} for k, v in merged.items()]
             r = _req.put(url, headers=headers, json=body, timeout=15)
 
             if r.status_code in (200, 201):

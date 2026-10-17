@@ -93,6 +93,29 @@ def _renovar_token_ml() -> str:
     return data["access_token"]
 
 
+_cache_validacao: dict[str, tuple[float, bool, str]] = {}
+
+
+def _validar_token_ml(access_token: str) -> tuple[bool, str]:
+    """Pergunta ao ML (/users/me) se o token vale. Cache de 5 min por token."""
+    agora = time.time()
+    hit = _cache_validacao.get(access_token)
+    if hit and agora - hit[0] < 300:
+        return hit[1], hit[2]
+    try:
+        r = requests.get(f"{ML_API}/users/me", headers={"Authorization": f"Bearer {access_token}"}, timeout=8)
+        if r.status_code == 200:
+            resultado = (True, f"ok ({r.json().get('nickname', '')})")
+        elif r.status_code in (401, 403):
+            resultado = (False, f"ML {r.status_code}: token inválido")
+        else:
+            return False, f"ML {r.status_code} (não conclusivo)"     # não cacheia erro transitório
+    except requests.RequestException as e:
+        return False, f"sem resposta do ML: {e.__class__.__name__}"
+    _cache_validacao[access_token] = (agora, *resultado)
+    return resultado
+
+
 def obter_token_ml() -> str:
     """Retorna access_token ML válido, renovando automaticamente se necessário."""
     t = _carregar_tokens_ml()
@@ -343,11 +366,19 @@ class MercadoLivreOAuthService:
     def status(self):
         cfg = MercadoLivreConfigStore(self.base_dir).load()
         tokens = self._read_json(self.tokens_file, {})
+        access = tokens.get("access_token", "")
+        valido, detalhe = _validar_token_ml(access) if access else (False, "sem token")
 
         return {
             "success": True,
             "configurado": bool(cfg.get("client_id") and cfg.get("client_secret") and cfg.get("redirect_uri")),
-            "conectado": bool(tokens.get("access_token")),
+            # "conectado" só é verdadeiro se o ML aceitar o token (antes bastava existir o arquivo:
+            # em 16/10 o token AKG ficou 14h inválido com o status dizendo "conectado")
+            "conectado": valido,
+            "token_valido": valido,
+            "token_detalhe": detalhe,
+            "user_id": tokens.get("user_id"),
+            "expires_at": tokens.get("expires_at"),
             "client_id": cfg.get("client_id", ""),
             "redirect_uri": cfg.get("redirect_uri", "")
         }

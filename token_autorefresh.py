@@ -321,10 +321,13 @@ def _renovar_ml() -> bool:
         tok = json.loads(ml_path.read_text(encoding="utf-8"))
         refresh_token = tok.get("refresh_token", "")
         client_id     = tok.get("client_id", "") or os.getenv("ML_CLIENT_ID", "")
-        client_secret = os.getenv("ML_CLIENT_SECRET", "")
-        user_id       = tok.get("user_id", "")
+        client_secret = os.getenv("ML_CLIENT_SECRET", "") or tok.get("client_secret", "")
+        user_id       = str(tok.get("user_id", "") or "")
 
-        if not refresh_token or not client_id or not client_secret:
+        faltando = [n for n, v in (("refresh_token", refresh_token), ("client_id", client_id),
+                                   ("client_secret", client_secret)) if not v]
+        if faltando:
+            logger.warning("ML auto-refresh: não renovado — falta %s", ", ".join(faltando))
             return False
 
         data = urllib.parse.urlencode({
@@ -344,11 +347,12 @@ def _renovar_ml() -> bool:
         if not user_id:
             user_id = str(new.get("user_id", ""))
 
-        # Atualiza arquivo local
+        # Atualiza arquivo local (expires_at: obter_token_ml usa para decidir se renova)
         tok.update({
             "access_token":  access,
             "refresh_token": refresh or refresh_token,
-            "user_id":       user_id,
+            "user_id":       str(user_id),
+            "expires_at":    time.time() + int(new.get("expires_in") or 21600),
         })
         ml_path.write_text(json.dumps(tok, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -383,11 +387,17 @@ def _renovar_ml_akg() -> bool:
             return False
         tok = json.loads(ml_path.read_text(encoding="utf-8"))
         refresh_token = tok.get("refresh_token", "") or os.getenv("ML_AKG_REFRESH_TOKEN", "")
-        client_id     = tok.get("client_id", "") or os.getenv("ML_AKG_CLIENT_ID", "")
-        client_secret = os.getenv("ML_AKG_CLIENT_SECRET", "")
-        user_id       = tok.get("user_id", "")
+        client_id     = tok.get("client_id", "") or os.getenv("ML_AKG_CLIENT_ID", "") or os.getenv("ML_CLIENT_ID", "")
+        # ML_AKG_CLIENT_SECRET não existe no Render (16/10): sem fallback o refresh falhava em
+        # silêncio e o token AKG vencia 6h após cada boot. A AKG usa o mesmo app ML da Shinsei.
+        client_secret = (tok.get("client_secret", "") or os.getenv("ML_AKG_CLIENT_SECRET", "")
+                         or os.getenv("ML_CLIENT_SECRET", ""))
+        user_id       = str(tok.get("user_id", "") or "")
 
-        if not refresh_token or not client_id or not client_secret:
+        faltando = [n for n, v in (("refresh_token", refresh_token), ("client_id", client_id),
+                                   ("client_secret", client_secret)) if not v]
+        if faltando:
+            logger.warning("ML AKG auto-refresh: não renovado — falta %s", ", ".join(faltando))
             return False
 
         data = urllib.parse.urlencode({
@@ -407,7 +417,8 @@ def _renovar_ml_akg() -> bool:
         if not user_id:
             user_id = str(new.get("user_id", ""))
 
-        tok.update({"access_token": access, "refresh_token": refresh or refresh_token, "user_id": user_id})
+        tok.update({"access_token": access, "refresh_token": refresh or refresh_token, "user_id": str(user_id),
+                    "expires_at": time.time() + int(new.get("expires_in") or 21600)})
         ml_path.write_text(json.dumps(tok, ensure_ascii=False, indent=2), encoding="utf-8")
 
         # Render env vars
