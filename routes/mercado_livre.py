@@ -222,14 +222,26 @@ def ml_pedido(order_id: int, user_id: str = "", com_envio: bool = False):
     if not token:
         raise HTTPException(status_code=503, detail=f"Token ML {conta} não disponível")
 
-    r = _req.get(f"https://api.mercadolibre.com/orders/{order_id}",
-                 headers={"Authorization": f"Bearer {token}"}, timeout=20)
+    auth = {"Authorization": f"Bearer {token}"}
+    r = _req.get(f"https://api.mercadolibre.com/orders/{order_id}", headers=auth, timeout=20)
+    pack_id = None
     if r.status_code == 404:
-        raise HTTPException(status_code=404, detail=f"Pedido {order_id} não encontrado no ML ({conta})")
-    if not r.ok:
-        raise HTTPException(status_code=502, detail=f"ML API {r.status_code}: {r.text[:200]}")
-    ordem = r.json()
-    resposta = {"ok": True, "conta": conta, "data": ordem}
+        # Carrinho: o Bling guarda o pack_id → junta os pedidos do pack num só (itens somados, envio comum)
+        pk = _req.get(f"https://api.mercadolibre.com/packs/{order_id}", headers=auth, timeout=20)
+        ids = [o.get("id") for o in (pk.json().get("orders") or [])] if pk.ok else []
+        ordens = [_req.get(f"https://api.mercadolibre.com/orders/{i}", headers=auth, timeout=20) for i in ids]
+        if not ids or not all(o.ok for o in ordens):
+            raise HTTPException(status_code=404, detail=f"Pedido {order_id} não encontrado no ML ({conta})")
+        pack_id = order_id
+        ordens = [o.json() for o in ordens]
+        ordem = dict(ordens[0], order_items=[i for o in ordens for i in o.get("order_items", [])],
+                     total_amount=sum(float(o.get("total_amount") or 0) for o in ordens), pack_orders=ids)
+    elif not r.ok:
+        raise HTTPException(status_code=r.status_code if r.status_code == 429 else 502,
+                            detail=f"ML API {r.status_code}: {r.text[:200]}")
+    else:
+        ordem = r.json()
+    resposta = {"ok": True, "conta": conta, "data": ordem, "pack_id": pack_id}
     ship_id = (ordem.get("shipping") or {}).get("id")
     if com_envio and ship_id:
         h = {"Authorization": f"Bearer {token}", "x-format-new": "true"}
