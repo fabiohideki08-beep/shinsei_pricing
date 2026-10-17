@@ -204,10 +204,11 @@ def _get_akg_oauth():
 
 
 @router.get("/ml/pedido/{order_id}")
-def ml_pedido(order_id: int, user_id: str = ""):
+def ml_pedido(order_id: int, user_id: str = "", com_envio: bool = False):
     """
     Busca pedido no ML pelo ID, escolhendo a conta (Shinsei/AKG) pelo user_id da notificação.
     Usado pelo Horus Eye — tokens ML são rotativos, só o Shinsei Pricing os renova.
+    com_envio=true inclui o envio: logística (Flex/coleta/Full), peso faturável e custo do vendedor.
     """
     import requests as _req
     from services.mercado_livre import obter_token_ml
@@ -227,7 +228,28 @@ def ml_pedido(order_id: int, user_id: str = ""):
         raise HTTPException(status_code=404, detail=f"Pedido {order_id} não encontrado no ML ({conta})")
     if not r.ok:
         raise HTTPException(status_code=502, detail=f"ML API {r.status_code}: {r.text[:200]}")
-    return {"ok": True, "conta": conta, "data": r.json()}
+    ordem = r.json()
+    resposta = {"ok": True, "conta": conta, "data": ordem}
+    ship_id = (ordem.get("shipping") or {}).get("id")
+    if com_envio and ship_id:
+        h = {"Authorization": f"Bearer {token}", "x-format-new": "true"}
+        envio = {"shipment_id": ship_id, "logistica": None, "peso_kg": None, "custo_vendedor": None, "status": None}
+        try:
+            s = _req.get(f"https://api.mercadolibre.com/shipments/{ship_id}", headers=h, timeout=20)
+            if s.ok:
+                sj = s.json()
+                envio["logistica"] = (sj.get("logistic") or {}).get("type") or sj.get("logistic_type")
+                envio["status"] = sj.get("status")
+                dims = sj.get("dimensions") if isinstance(sj.get("dimensions"), dict) else {}
+                if dims.get("weight"):
+                    envio["peso_kg"] = round(float(dims["weight"]) / 1000, 3)   # peso faturável (g → kg)
+            c = _req.get(f"https://api.mercadolibre.com/shipments/{ship_id}/costs", headers=h, timeout=20)
+            if c.ok:
+                envio["custo_vendedor"] = round(sum(float(x.get("cost") or 0) for x in c.json().get("senders", [])), 2)
+        except Exception as e:
+            envio["erro"] = str(e)[:200]
+        resposta["envio"] = envio
+    return resposta
 
 
 @router.get("/ml/login2")

@@ -1657,3 +1657,46 @@ def bling_verificar_ean_componentes_alfaparf():
 @router.get("/bling/verificar-ean-componentes-alfaparf/status")
 def bling_verificar_ean_componentes_alfaparf_status():
     return _VERIF_EAN_JOB
+
+
+# ── Repasse (escrow) por pedido — ponte para a conferência de taxas do Horus Eye ──
+
+_TAXAS_ESCROW = ("commission_fee", "service_fee", "seller_transaction_fee", "seller_order_processing_fee",
+                 "campaign_fee", "order_ams_commission_fee", "fbs_fee", "sspl_fee")
+
+
+@router.get("/shopee/escrow/{order_sn}")
+def shopee_escrow(order_sn: str):
+    """
+    Taxas reais cobradas pela Shopee num pedido (payment/get_escrow_detail), conta Shinsei.
+    Retorna o order_income bruto + um resumo: preço dos produtos, taxas por tipo e repasse.
+    """
+    import requests as _rq
+    from services.shopee import API_BASE, _assinar, _get_creds, obter_token_shopee
+
+    pid, _, sid = _get_creds()
+    try:
+        token = obter_token_shopee()
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Token Shopee indisponível: {e}")
+    path = "/api/v2/payment/get_escrow_detail"
+    ts = int(time.time())
+    params = {"partner_id": pid, "shop_id": sid, "timestamp": ts, "access_token": token,
+              "sign": _assinar(path, ts, token, sid), "order_sn": order_sn}
+    r = _rq.get(API_BASE + "/payment/get_escrow_detail", params=params, timeout=20)
+    dados = r.json() if r.content else {}
+    if dados.get("error"):
+        status = 404 if "not_found" in str(dados.get("error")) or "not exist" in str(dados.get("message", "")).lower() else 502
+        raise HTTPException(status_code=status, detail=f"Shopee: {dados.get('error')} {dados.get('message', '')}")
+    oi = (dados.get("response") or {}).get("order_income") or {}
+    if not oi:
+        raise HTTPException(status_code=404, detail="Repasse ainda não disponível para este pedido")
+    f = lambda k: float(oi.get(k) or 0)  # noqa: E731
+    itens = [{"sku": it.get("model_sku") or it.get("item_sku"), "quantidade": int(it.get("quantity_purchased") or 1),
+              "preco": float(it.get("discounted_price") or it.get("selling_price") or 0)}
+             for it in (oi.get("items") or [])]
+    preco_produtos = sum(i["preco"] * i["quantidade"] for i in itens) or f("order_selling_price")
+    taxas = {k: f(k) for k in _TAXAS_ESCROW if f(k)}
+    return {"ok": True, "order_sn": order_sn, "preco_produtos": round(preco_produtos, 2), "itens": itens,
+            "taxas": taxas, "total_taxas": round(sum(taxas.values()), 2), "repasse": f("escrow_amount"),
+            "order_income": oi}
