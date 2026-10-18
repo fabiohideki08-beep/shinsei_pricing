@@ -582,6 +582,43 @@ def taxas_status():
         status["shopee"] = {"disponivel": False, "fonte": "tabela_br"}
     return status
 
+
+@app.post("/taxas/refresh")
+def taxas_refresh(api_key: str = Depends(verificar_api_key)):
+    """
+    Força o refresh imediato do cache de taxas de todos os marketplaces.
+    Normalmente roda toda segunda-feira às 03h-05h BRT automaticamente.
+    """
+    resultado = {}
+
+    # ML: limpar cache para forçar re-fetch na próxima simulação
+    try:
+        from pathlib import Path as _Path
+        import json as _json
+        cache_path = _Path(__file__).parent / "data" / "ml_taxas_cache.json"
+        if cache_path.exists():
+            cache = _json.loads(cache_path.read_text(encoding="utf-8"))
+            entradas = len(cache)
+            cache_path.write_text("{}", encoding="utf-8")
+            resultado["ml"] = {"ok": True, "entradas_removidas": entradas, "mensagem": "Cache limpo — re-fetch automático na próxima simulação"}
+        else:
+            resultado["ml"] = {"ok": True, "entradas_removidas": 0, "mensagem": "Cache já vazio"}
+    except Exception as e:
+        resultado["ml"] = {"ok": False, "erro": str(e)}
+
+    resultado["shopee"] = {"ok": True, "mensagem": "Shopee usa pedidos reais — sem ação necessária"}
+    resultado["tiktok"] = {"ok": True, "mensagem": "Tabela hardcoded — verificar manualmente se taxas mudaram"}
+    resultado["amazon"] = {"ok": True, "mensagem": "Tabela hardcoded — verificar manualmente se taxas mudaram"}
+
+    # Resetar o controle do scheduler para que rode hoje se estiver em janela
+    try:
+        import scheduler as _sched
+        _sched._ultima_refresh_taxas_data = None
+    except Exception:
+        pass
+
+    return {"ok": True, "timestamp": __import__("datetime").datetime.now().isoformat(), "canais": resultado}
+
 @app.get("/fila", response_class=HTMLResponse)
 def fila_page():
     html_file = PAGES_DIR / "fila.html"
