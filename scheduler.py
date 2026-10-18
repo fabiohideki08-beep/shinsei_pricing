@@ -615,6 +615,10 @@ _ultima_limpeza_kits: Optional[float] = None
 # Refresh semanal de taxas de marketplace (toda segunda-feira entre 03h-05h BRT)
 _ultima_refresh_taxas_data: Optional[str] = None  # "YYYY-MM-DD" da última execução
 
+# Cancelamento automático de NF para pedidos cancelados (a cada 30 min)
+_INTERVALO_NF_CANCEL = int(os.getenv("INTERVALO_NF_CANCEL", str(30 * 60)))
+_ultima_nf_cancel: Optional[float] = None
+
 # Intervalo para sync da coleção de descontos (padrão: 1 hora)
 _INTERVALO_SYNC_DESCONTOS = int(os.getenv("INTERVALO_SYNC_DESCONTOS", str(3600)))
 _ultima_sync_descontos: Optional[float] = None
@@ -968,6 +972,28 @@ def _ciclo_refresh_cache_produtos() -> None:
         _ultimo_dia_cache_produtos = hoje  # evita loop de retentativas
 
 
+def _ciclo_nf_cancelamento() -> None:
+    """Cancela NF-e de pedidos cancelados nos marketplaces — a cada 30 min."""
+    global _ultima_nf_cancel
+    agora = time.time()
+    if _ultima_nf_cancel and (agora - _ultima_nf_cancel) < _INTERVALO_NF_CANCEL:
+        return
+    try:
+        from routes.nf_cancelamento import executar_cancelamento_automatico
+        res = executar_cancelamento_automatico(dias=3)
+        logger.info(
+            "[NF-Cancel] pedidos_cancelados=%d nfs_encontradas=%d nfs_canceladas=%d nfs_erro=%d",
+            res["total_pedidos_cancelados"],
+            res["total_nfs_encontradas"],
+            res["total_nfs_canceladas"],
+            res["total_nfs_erro"],
+        )
+    except Exception as e:
+        logger.exception("[NF-Cancel] Erro no ciclo automático: %s", e)
+    finally:
+        _ultima_nf_cancel = time.time()
+
+
 def _loop():
 
     logger.info("Scheduler iniciado (intervalo: %ds)", _intervalo())
@@ -1045,6 +1071,12 @@ def _loop():
             _ciclo_carrinhos()
         except Exception as e:
             logger.exception("Erro no ciclo de carrinhos abandonados: %s", e)
+
+        # NF cancelamento: cancela NF-e quando pedido foi cancelado no marketplace (a cada 30min)
+        try:
+            _ciclo_nf_cancelamento()
+        except Exception as e:
+            logger.exception("Erro no ciclo de cancelamento NF: %s", e)
 
         # Aguarda o intervalo em fatias de 5s para poder parar rapidamente
 

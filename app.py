@@ -131,6 +131,8 @@ app.include_router(amazon_router)
 app.include_router(estoque_sync_router)
 app.include_router(shopify_webhooks_router)
 app.include_router(ml_ads_router)
+from routes.nf_cancelamento import router as nf_cancelamento_router
+app.include_router(nf_cancelamento_router)
 from routes.credentials import router as credentials_router
 app.include_router(credentials_router)
 from routes.multiempresas import router as multiempresas_router
