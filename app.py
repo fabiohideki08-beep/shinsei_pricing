@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
-from fastapi import BackgroundTasks, Body, FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import BackgroundTasks, Body, Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel
