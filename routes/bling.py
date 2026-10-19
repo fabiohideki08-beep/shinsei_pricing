@@ -86,7 +86,7 @@ def bling_api_proxy(endpoint: str, pagina: int = 1, limite: int = 100):
         raise HTTPException(status_code=503, detail="Token Bling indisponível.")
     ep = endpoint if endpoint.startswith('/') else f'/{endpoint}'
     r = _req.get(
-        f"https://www.bling.com.br/Api/v3{ep}",
+        f"https://api.bling.com.br/Api/v3{ep}",
         headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
         params={"pagina": pagina, "limite": limite},
         timeout=30
@@ -105,7 +105,7 @@ def bling_api_proxy_post(endpoint: str, body: dict = None):
         raise HTTPException(status_code=503, detail="Token Bling indisponível.")
     ep = endpoint if endpoint.startswith('/') else f'/{endpoint}'
     r = _req.post(
-        f"https://www.bling.com.br/Api/v3{ep}",
+        f"https://api.bling.com.br/Api/v3{ep}",
         headers={"Authorization": f"Bearer {token}", "Accept": "application/json", "Content-Type": "application/json"},
         json=body or {},
         timeout=60

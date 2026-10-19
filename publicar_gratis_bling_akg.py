@@ -23,7 +23,7 @@ DATA_DIR = BASE_DIR / "data"
 TOKEN_PATH = DATA_DIR / "bling_tokens_akg.json"
 PROGRESS_PATH = DATA_DIR / "bling_gratis_akg_progress.json"
 RENDER_BASE = "https://shinsei-pricing.onrender.com"
-BLING_API = "https://www.bling.com.br/Api/v3"
+BLING_API = "https://api.bling.com.br/Api/v3"
 
 RATE_LIMIT_SLEEP = 0.4
 
