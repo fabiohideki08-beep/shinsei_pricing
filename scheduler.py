@@ -612,6 +612,13 @@ _stop_event = threading.Event()
 _INTERVALO_LIMPEZA_KITS = int(os.getenv("INTERVALO_LIMPEZA_KITS", str(7 * 24 * 3600)))
 _ultima_limpeza_kits: Optional[float] = None
 
+# Refresh semanal de taxas de marketplace (toda segunda-feira entre 03h-05h BRT)
+_ultima_refresh_taxas_data: Optional[str] = None  # "YYYY-MM-DD" da última execução
+
+# Cancelamento automático de NF para pedidos cancelados (a cada 30 min)
+_INTERVALO_NF_CANCEL = int(os.getenv("INTERVALO_NF_CANCEL", str(30 * 60)))
+_ultima_nf_cancel: Optional[float] = None
+
 # Intervalo para sync da coleção de descontos (padrão: 1 hora)
 _INTERVALO_SYNC_DESCONTOS = int(os.getenv("INTERVALO_SYNC_DESCONTOS", str(3600)))
 _ultima_sync_descontos: Optional[float] = None
@@ -797,6 +804,56 @@ def _ciclo_limpeza_kits() -> None:
 
 
 
+def _ciclo_refresh_taxas() -> None:
+    """
+    Refresh semanal de taxas de marketplace — toda segunda-feira entre 03h-05h BRT.
+
+    O que faz:
+    - ML: apaga cache ml_taxas_cache.json (força re-fetch via API na próxima simulação)
+    - Shopee: já usa pedidos reais, nada a fazer
+    - TikTok/Amazon: tabelas hardcoded — loga aviso para revisão manual
+    - Shopify: taxas de pagamento fixas, sem ação
+    """
+    global _ultima_refresh_taxas_data
+
+    agora = datetime.now()
+    # Só roda nas segundas-feiras (weekday 0) entre 03h e 05h BRT
+    if agora.weekday() != 0 or not (3 <= agora.hour < 5):
+        return
+
+    hoje_str = agora.strftime("%Y-%m-%d")
+    if _ultima_refresh_taxas_data == hoje_str:
+        return  # Já rodou hoje
+
+    logger.info("[TAXAS] Iniciando refresh semanal de segunda-feira...")
+
+    # ── ML: limpar cache para forçar re-fetch na próxima simulação ──
+    try:
+        cache_path = BASE_DIR / "data" / "ml_taxas_cache.json"
+        if cache_path.exists():
+            import json as _json
+            cache = _json.loads(cache_path.read_text(encoding="utf-8"))
+            entradas = len(cache)
+            cache_path.write_text("{}", encoding="utf-8")
+            logger.info("[TAXAS] ML: cache limpo (%d entradas removidas) — será re-populado sob demanda via API", entradas)
+        else:
+            logger.info("[TAXAS] ML: cache já vazio")
+    except Exception as e:
+        logger.warning("[TAXAS] ML: erro ao limpar cache: %s", e)
+
+    # ── Shopee: taxas via pedidos reais, sem ação necessária ──
+    logger.info("[TAXAS] Shopee: usa pedidos reais — sem ação necessária")
+
+    # ── TikTok: tabela hardcoded — aviso para revisão manual ──
+    logger.info("[TAXAS] TikTok: tabela hardcoded — verificar manualmente se houve mudança de taxas em open.tiktokshop.com")
+
+    # ── Amazon: tabela hardcoded — aviso para revisão manual ──
+    logger.info("[TAXAS] Amazon: tabela hardcoded — verificar manualmente se houve mudança em sellercentral.amazon.com.br")
+
+    _ultima_refresh_taxas_data = hoje_str
+    logger.info("[TAXAS] Refresh semanal concluído em %s", hoje_str)
+
+
 def _ciclo_scbot() -> None:
     """
     Executa o SCBOT (Google Indexing API) às 09:00 e ordena coleções às 04:00.
@@ -970,6 +1027,12 @@ def _loop():
             _ciclo_limpeza_kits()
         except Exception as e:
             logger.exception("Erro no ciclo de limpeza de kits: %s", e)
+
+        # Refresh semanal de taxas de marketplace (toda segunda-feira 03h-05h BRT)
+        try:
+            _ciclo_refresh_taxas()
+        except Exception as e:
+            logger.exception("Erro no refresh semanal de taxas: %s", e)
 
         # Sync da coleção "Descontos acima de 50%" (a cada hora)
         try:
@@ -1173,4 +1236,3 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
 
         logger.info("Interrompido pelo usuário.")
-
