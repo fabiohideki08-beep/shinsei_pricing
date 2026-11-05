@@ -1102,7 +1102,7 @@ def ads_remover_assets_reprovados(payload: dict = {}):
             return {"ok": True, "dry_run": True, "a_remover": reprovados}
 
         # Remover via REST em batches de 20
-        import httpx, requests as _req
+        import requests as _req
         tok = _req.post("https://oauth2.googleapis.com/token", data={
             "client_id":     os.environ.get("GOOGLE_ADS_CLIENT_ID"),
             "client_secret": os.environ.get("GOOGLE_ADS_CLIENT_SECRET"),
@@ -1119,7 +1119,7 @@ def ads_remover_assets_reprovados(payload: dict = {}):
         for i in range(0, len(reprovados), 20):
             batch = reprovados[i:i+20]
             ops = [{"remove": r["rn"]} for r in batch]
-            resp = httpx.post(asset_url, headers=rest_hdrs, json={"operations": ops}, timeout=30)
+            resp = _req.post(asset_url, headers=rest_hdrs, json={"operations": ops}, timeout=30)
             if resp.ok:
                 for r in batch:
                     removidos.append(r["texto"])
