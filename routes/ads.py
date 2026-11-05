@@ -866,32 +866,43 @@ def ads_completar_campanha(campaign_id: str, payload: dict = {}):
         except Exception as e:
             erros.append(f"ad_schedule: {e}")
 
-    # ── 7. Sitelinks (4 sitelinks) ────────────────────────────────────────────
-    if "sitelinks" not in skip:
+    # ── 7-9. Assets: sitelinks, callouts, snippets ───────────────────────────
+    # Uma única query para checar todos os tipos de uma vez
+    if not ({"sitelinks", "callouts", "snippets"} <= skip):
         try:
-            sl_exist = _gaql(client, customer_id, f"""
+            existing_assets_rows = _gaql(client, customer_id, f"""
                 SELECT campaign.id, campaign_asset.field_type FROM campaign_asset
                 WHERE campaign.id = {campaign_id}
-                  AND campaign_asset.field_type = 'SITELINK'
                   AND campaign_asset.status = 'ENABLED'
             """)
-            if len(sl_exist) < 4:
+            existing_ft = {}
+            for row in existing_assets_rows:
+                ft = row.campaign_asset.field_type.name if hasattr(row.campaign_asset.field_type, "name") else str(row.campaign_asset.field_type)
+                existing_ft[ft] = existing_ft.get(ft, 0) + 1
+        except Exception as e:
+            existing_ft = {}
+            erros.append(f"assets_check: {e}")
+
+        asset_svc = client.get_service("AssetService")
+        ca_svc    = client.get_service("CampaignAssetService")
+
+        # ── Sitelinks ─────────────────────────────────────────────────────────
+        if "sitelinks" not in skip and existing_ft.get("SITELINK", 0) < 4:
+            try:
                 sitelinks_data = [
-                    ("Colorações Schwarzkopf", f"{store_url}/collections/schwarzkopf-igora", "Igora Royal e Zero Amm", "Alta cobertura e brilho intenso"),
-                    ("Colorações Alfaparf",    f"{store_url}/collections/alfaparf",           "Evolution e Semi Di Lino", "Fórmula italiana de alta performance"),
-                    ("Frete Grátis SP",        f"{store_url}/frete-gratis",                   "Entrega grátis na Grande SP", "Pedidos a partir de R$29,90"),
-                    ("Mais Vendidos",          f"{store_url}/collections/mais-vendidos",       "Os produtos favoritos dos clientes", "Avaliações 5 estrelas"),
+                    ("Coloracoes Schwarzkopf", f"{store_url}/collections/schwarzkopf-igora", "Igora Royal e Zero Amm", "Alta cobertura e brilho intenso"),
+                    ("Coloracoes Alfaparf",    f"{store_url}/collections/alfaparf",           "Evolution e Semi Di Lino", "Formula italiana alta performance"),
+                    ("Frete Gratis SP",        f"{store_url}/frete-gratis",                   "Entrega gratis na Grande SP", "Pedidos a partir de R$29,90"),
+                    ("Mais Vendidos",          f"{store_url}/collections/mais-vendidos",       "Favoritos dos clientes", "Avaliacoes 5 estrelas"),
                 ]
                 if not dry_run:
-                    asset_svc  = client.get_service("AssetService")
-                    ca_svc     = client.get_service("CampaignAssetService")
-                    for text, url, desc1, desc2 in sitelinks_data:
+                    for text, url_sl, desc1, desc2 in sitelinks_data:
                         op_a = client.get_type("AssetOperation")
                         op_a.create.name = f"SL {text}"
+                        op_a.create.final_urls.append(url_sl)
                         op_a.create.sitelink_asset.link_text = text
                         op_a.create.sitelink_asset.description1 = desc1
                         op_a.create.sitelink_asset.description2 = desc2
-                        op_a.create.sitelink_asset.final_urls.append(url)
                         r_a = asset_svc.mutate_assets(customer_id=customer_id, operations=[op_a])
                         asset_rn = r_a.results[0].resource_name
                         op_ca = client.get_type("CampaignAssetOperation")
@@ -900,28 +911,19 @@ def ads_completar_campanha(campaign_id: str, payload: dict = {}):
                         op_ca.create.field_type = client.enums.AssetFieldTypeEnum.SITELINK
                         ca_svc.mutate_campaign_assets(customer_id=customer_id, operations=[op_ca])
                 aplicados.append("sitelinks_4")
-        except Exception as e:
-            erros.append(f"sitelinks: {e}")
+            except Exception as e:
+                erros.append(f"sitelinks: {e}")
 
-    # ── 8. Callouts (4 textos curtos) ─────────────────────────────────────────
-    if "callouts" not in skip:
-        try:
-            co_exist = _gaql(client, customer_id, f"""
-                SELECT campaign.id, campaign_asset.field_type FROM campaign_asset
-                WHERE campaign.id = {campaign_id}
-                  AND campaign_asset.field_type = 'CALLOUT'
-                  AND campaign_asset.status = 'ENABLED'
-            """)
-            if len(co_exist) < 2:
+        # ── Callouts ──────────────────────────────────────────────────────────
+        if "callouts" not in skip and existing_ft.get("CALLOUT", 0) < 2:
+            try:
                 callouts_data = [
                     "Produtos 100% Originais",
-                    "Frete Grátis na Grande SP",
-                    "Entrega Rápida",
-                    "Maior Variedade de Marcas",
+                    "Frete Gratis Grande SP",
+                    "Entrega Rapida",
+                    "Maior Variedade Marcas",
                 ]
                 if not dry_run:
-                    asset_svc = client.get_service("AssetService")
-                    ca_svc    = client.get_service("CampaignAssetService")
                     for text in callouts_data:
                         op_a = client.get_type("AssetOperation")
                         op_a.create.name = f"CO {text}"
@@ -934,22 +936,13 @@ def ads_completar_campanha(campaign_id: str, payload: dict = {}):
                         op_ca.create.field_type = client.enums.AssetFieldTypeEnum.CALLOUT
                         ca_svc.mutate_campaign_assets(customer_id=customer_id, operations=[op_ca])
                 aplicados.append("callouts_4")
-        except Exception as e:
-            erros.append(f"callouts: {e}")
+            except Exception as e:
+                erros.append(f"callouts: {e}")
 
-    # ── 9. Structured snippets (marcas) ───────────────────────────────────────
-    if "snippets" not in skip:
-        try:
-            sn_exist = _gaql(client, customer_id, f"""
-                SELECT campaign.id, campaign_asset.field_type FROM campaign_asset
-                WHERE campaign.id = {campaign_id}
-                  AND campaign_asset.field_type = 'STRUCTURED_SNIPPET'
-                  AND campaign_asset.status = 'ENABLED'
-            """)
-            if not sn_exist:
+        # ── Snippets ──────────────────────────────────────────────────────────
+        if "snippets" not in skip and existing_ft.get("STRUCTURED_SNIPPET", 0) == 0:
+            try:
                 if not dry_run:
-                    asset_svc = client.get_service("AssetService")
-                    ca_svc    = client.get_service("CampaignAssetService")
                     op_a = client.get_type("AssetOperation")
                     op_a.create.name = "Snippet Marcas"
                     op_a.create.structured_snippet_asset.header = "Marcas"
@@ -964,8 +957,8 @@ def ads_completar_campanha(campaign_id: str, payload: dict = {}):
                     op_ca.create.field_type = client.enums.AssetFieldTypeEnum.STRUCTURED_SNIPPET
                     ca_svc.mutate_campaign_assets(customer_id=customer_id, operations=[op_ca])
                 aplicados.append("structured_snippet_marcas")
-        except Exception as e:
-            erros.append(f"snippets: {e}")
+            except Exception as e:
+                erros.append(f"snippets: {e}")
 
     return {
         "ok":        len(erros) == 0,
