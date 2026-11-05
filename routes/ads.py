@@ -1102,14 +1102,16 @@ def ads_remover_assets_reprovados(payload: dict = {}):
             return {"ok": True, "dry_run": True, "a_remover": reprovados}
 
         # Remover via REST em batches de 20
-        import requests as _req
-        tok = _req.post("https://oauth2.googleapis.com/token", data={
+        tok_resp = _req_http.post("https://oauth2.googleapis.com/token", data={
             "client_id":     os.environ.get("GOOGLE_ADS_CLIENT_ID"),
             "client_secret": os.environ.get("GOOGLE_ADS_CLIENT_SECRET"),
             "refresh_token": os.environ.get("GOOGLE_ADS_REFRESH_TOKEN"),
             "grant_type":    "refresh_token",
         }, timeout=10)
-        access_token = tok.json()["access_token"]
+        tok_data = tok_resp.json()
+        if "access_token" not in tok_data:
+            return {"ok": False, "erro": f"OAuth falhou: {tok_data}"}
+        access_token = tok_data["access_token"]
         dev_token = os.environ.get("GOOGLE_ADS_DEVELOPER_TOKEN", "")
         rest_hdrs = {"Authorization": f"Bearer {access_token}", "developer-token": dev_token,
                      "login-customer-id": customer_id, "Content-Type": "application/json"}
@@ -1119,7 +1121,7 @@ def ads_remover_assets_reprovados(payload: dict = {}):
         for i in range(0, len(reprovados), 20):
             batch = reprovados[i:i+20]
             ops = [{"remove": r["rn"]} for r in batch]
-            resp = _req.post(asset_url, headers=rest_hdrs, json={"operations": ops}, timeout=30)
+            resp = _req_http.post(asset_url, headers=rest_hdrs, json={"operations": ops}, timeout=30)
             if resp.ok:
                 for r in batch:
                     removidos.append(r["texto"])
