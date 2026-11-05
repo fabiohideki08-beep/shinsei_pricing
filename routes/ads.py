@@ -1062,6 +1062,75 @@ def ads_assets_diagnostico():
         return {"ok": False, "erro": str(e)}
 
 
+@router.post("/assets/remover-reprovados")
+def ads_remover_assets_reprovados(payload: dict = {}):
+    """Remove todos os assets DISAPPROVED da conta via AssetService."""
+    dry_run = payload.get("dry_run", False)
+    try:
+        client, customer_id = _build_client()
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+    try:
+        rows = _gaql(client, customer_id, """
+            SELECT asset.id, asset.name, asset.type,
+                   asset.sitelink_asset.link_text,
+                   asset.callout_asset.callout_text,
+                   asset.structured_snippet_asset.header,
+                   asset.policy_summary.approval_status
+            FROM asset
+            WHERE asset.type IN ('SITELINK', 'CALLOUT', 'STRUCTURED_SNIPPET')
+        """)
+        reprovados = []
+        for r in rows:
+            a = r.asset
+            status = a.policy_summary.approval_status.name if hasattr(a.policy_summary.approval_status, "name") else str(a.policy_summary.approval_status)
+            if status == "DISAPPROVED":
+                tipo = a.type_.name if hasattr(a.type_, "name") else str(a.type_)
+                if tipo == "SITELINK":
+                    texto = a.sitelink_asset.link_text
+                elif tipo == "CALLOUT":
+                    texto = a.callout_asset.callout_text
+                else:
+                    texto = a.structured_snippet_asset.header
+                reprovados.append({"id": a.id, "tipo": tipo, "texto": texto,
+                                   "rn": f"customers/{customer_id}/assets/{a.id}"})
+
+        if not reprovados:
+            return {"ok": True, "msg": "Nenhum asset reprovado encontrado", "removidos": 0}
+
+        if dry_run:
+            return {"ok": True, "dry_run": True, "a_remover": reprovados}
+
+        # Remover via REST em batches de 20
+        import httpx, requests as _req
+        tok = _req.post("https://oauth2.googleapis.com/token", data={
+            "client_id":     os.environ.get("GOOGLE_ADS_CLIENT_ID"),
+            "client_secret": os.environ.get("GOOGLE_ADS_CLIENT_SECRET"),
+            "refresh_token": os.environ.get("GOOGLE_ADS_REFRESH_TOKEN"),
+            "grant_type":    "refresh_token",
+        }, timeout=10)
+        access_token = tok.json()["access_token"]
+        dev_token = os.environ.get("GOOGLE_ADS_DEVELOPER_TOKEN", "")
+        rest_hdrs = {"Authorization": f"Bearer {access_token}", "developer-token": dev_token,
+                     "login-customer-id": customer_id, "Content-Type": "application/json"}
+        asset_url = f"https://googleads.googleapis.com/v24/customers/{customer_id}/assets:mutate"
+        removidos = []
+        erros_rem = []
+        for i in range(0, len(reprovados), 20):
+            batch = reprovados[i:i+20]
+            ops = [{"remove": r["rn"]} for r in batch]
+            resp = httpx.post(asset_url, headers=rest_hdrs, json={"operations": ops}, timeout=30)
+            if resp.ok:
+                for r in batch:
+                    removidos.append(r["texto"])
+            else:
+                erros_rem.append(resp.text[:500])
+
+        return {"ok": True, "removidos": len(removidos), "textos": removidos, "erros": erros_rem}
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+
 @router.get("/campanha/{campaign_id}/listing-groups")
 def ads_listing_groups(campaign_id: str):
     """Retorna listing groups e produtos elegíveis de uma campanha Shopping."""
