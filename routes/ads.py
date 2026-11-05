@@ -866,16 +866,18 @@ def ads_completar_campanha(campaign_id: str, payload: dict = {}):
         except Exception as e:
             erros.append(f"ad_schedule: {e}")
 
-    # ── 7-9. Assets: sitelinks, callouts, snippets ───────────────────────────
-    # Uma única query para checar todos os tipos de uma vez
+    # ── 7-9. Assets: sitelinks, callouts, snippets via REST v24 ─────────────
+    # Usamos REST (igual a criar-subdivisions) pois o gRPC SDK tem instabilidades
+    # no mutate_assets com use_proto_plus=True
     if not ({"sitelinks", "callouts", "snippets"} <= skip):
+        # Checar assets existentes
         try:
             existing_assets_rows = _gaql(client, customer_id, f"""
                 SELECT campaign.id, campaign_asset.field_type FROM campaign_asset
                 WHERE campaign.id = {campaign_id}
                   AND campaign_asset.status = 'ENABLED'
             """)
-            existing_ft = {}
+            existing_ft: dict[str, int] = {}
             for row in existing_assets_rows:
                 ft = row.campaign_asset.field_type.name if hasattr(row.campaign_asset.field_type, "name") else str(row.campaign_asset.field_type)
                 existing_ft[ft] = existing_ft.get(ft, 0) + 1
@@ -883,79 +885,86 @@ def ads_completar_campanha(campaign_id: str, payload: dict = {}):
             existing_ft = {}
             erros.append(f"assets_check: {e}")
 
-        asset_svc = client.get_service("AssetService")
-        ca_svc    = client.get_service("CampaignAssetService")
+        # Obter access_token REST
+        try:
+            tok = _req_http.post("https://oauth2.googleapis.com/token", data={
+                "client_id":     os.environ.get("GOOGLE_ADS_CLIENT_ID"),
+                "client_secret": os.environ.get("GOOGLE_ADS_CLIENT_SECRET"),
+                "refresh_token": os.environ.get("GOOGLE_ADS_REFRESH_TOKEN"),
+                "grant_type":    "refresh_token",
+            }, timeout=10)
+            access_token = tok.json()["access_token"]
+            dev_token    = os.environ.get("GOOGLE_ADS_DEVELOPER_TOKEN", "")
+            rest_hdrs    = {
+                "Authorization":     f"Bearer {access_token}",
+                "developer-token":   dev_token,
+                "login-customer-id": str(customer_id),
+                "Content-Type":      "application/json",
+            }
+            asset_url      = f"https://googleads.googleapis.com/v24/customers/{customer_id}/assets:mutate"
+            camp_asset_url = f"https://googleads.googleapis.com/v24/customers/{customer_id}/campaignAssets:mutate"
+        except Exception as e:
+            erros.append(f"rest_token: {e}")
+            rest_hdrs = None
+
+        def _create_asset_rest(op_body: dict) -> str | None:
+            """Cria asset via REST e retorna resource_name, ou None se falhar."""
+            if dry_run:
+                return "dry_run_asset"
+            resp = _req_http.post(asset_url, headers=rest_hdrs, json={"operations": [{"create": op_body}]}, timeout=20)
+            if not resp.ok:
+                raise ValueError(f"asset create HTTP {resp.status_code}: {resp.text[:300]}")
+            return resp.json()["results"][0]["resourceName"]
+
+        def _link_asset_rest(asset_rn: str, field_type: str):
+            if dry_run:
+                return
+            resp = _req_http.post(camp_asset_url, headers=rest_hdrs, json={"operations": [{"create": {
+                "campaign": camp_rn, "asset": asset_rn, "fieldType": field_type
+            }}]}, timeout=20)
+            if not resp.ok:
+                raise ValueError(f"campaign_asset link HTTP {resp.status_code}: {resp.text[:300]}")
 
         # ── Sitelinks ─────────────────────────────────────────────────────────
-        if "sitelinks" not in skip and existing_ft.get("SITELINK", 0) < 4:
+        if rest_hdrs and "sitelinks" not in skip and existing_ft.get("SITELINK", 0) < 4:
             try:
                 sitelinks_data = [
-                    ("Coloracoes Schwarzkopf", f"{store_url}/collections/schwarzkopf-igora", "Igora Royal e Zero Amm", "Alta cobertura e brilho intenso"),
-                    ("Coloracoes Alfaparf",    f"{store_url}/collections/alfaparf",           "Evolution e Semi Di Lino", "Formula italiana alta performance"),
-                    ("Frete Gratis SP",        f"{store_url}/frete-gratis",                   "Entrega gratis na Grande SP", "Pedidos a partir de R$29,90"),
+                    ("Coloracoes Schwarzkopf", f"{store_url}/collections/schwarzkopf-igora", "Igora Royal e Zero Amm", "Alta cobertura brilho intenso"),
+                    ("Coloracoes Alfaparf",    f"{store_url}/collections/alfaparf",           "Evolution e Semi Di Lino", "Formula italiana performance"),
+                    ("Frete Gratis SP",        f"{store_url}/frete-gratis",                   "Entrega gratis na Grande SP", "Pedidos acima de R 29,90"),
                     ("Mais Vendidos",          f"{store_url}/collections/mais-vendidos",       "Favoritos dos clientes", "Avaliacoes 5 estrelas"),
                 ]
-                if not dry_run:
-                    for text, url_sl, desc1, desc2 in sitelinks_data:
-                        op_a = client.get_type("AssetOperation")
-                        op_a.create.name = f"SL {text}"
-                        op_a.create.final_urls.append(url_sl)
-                        op_a.create.sitelink_asset.link_text = text
-                        op_a.create.sitelink_asset.description1 = desc1
-                        op_a.create.sitelink_asset.description2 = desc2
-                        r_a = asset_svc.mutate_assets(customer_id=customer_id, operations=[op_a])
-                        asset_rn = r_a.results[0].resource_name
-                        op_ca = client.get_type("CampaignAssetOperation")
-                        op_ca.create.campaign = camp_rn
-                        op_ca.create.asset = asset_rn
-                        op_ca.create.field_type = client.enums.AssetFieldTypeEnum.SITELINK
-                        ca_svc.mutate_campaign_assets(customer_id=customer_id, operations=[op_ca])
+                for text, url_sl, desc1, desc2 in sitelinks_data:
+                    rn = _create_asset_rest({
+                        "name": f"SL {text}",
+                        "finalUrls": [url_sl],
+                        "sitelinkAsset": {"linkText": text, "description1": desc1, "description2": desc2},
+                    })
+                    if rn:
+                        _link_asset_rest(rn, "SITELINK")
                 aplicados.append("sitelinks_4")
             except Exception as e:
                 erros.append(f"sitelinks: {e}")
 
         # ── Callouts ──────────────────────────────────────────────────────────
-        if "callouts" not in skip and existing_ft.get("CALLOUT", 0) < 2:
+        if rest_hdrs and "callouts" not in skip and existing_ft.get("CALLOUT", 0) < 2:
             try:
-                callouts_data = [
-                    "Produtos 100% Originais",
-                    "Frete Gratis Grande SP",
-                    "Entrega Rapida",
-                    "Maior Variedade Marcas",
-                ]
-                if not dry_run:
-                    for text in callouts_data:
-                        op_a = client.get_type("AssetOperation")
-                        op_a.create.name = f"CO {text}"
-                        op_a.create.callout_asset.callout_text = text
-                        r_a = asset_svc.mutate_assets(customer_id=customer_id, operations=[op_a])
-                        asset_rn = r_a.results[0].resource_name
-                        op_ca = client.get_type("CampaignAssetOperation")
-                        op_ca.create.campaign = camp_rn
-                        op_ca.create.asset = asset_rn
-                        op_ca.create.field_type = client.enums.AssetFieldTypeEnum.CALLOUT
-                        ca_svc.mutate_campaign_assets(customer_id=customer_id, operations=[op_ca])
+                for text in ["Produtos Originais", "Frete Gratis Grande SP", "Entrega Rapida", "Maior Variedade"]:
+                    rn = _create_asset_rest({"name": f"CO {text}", "calloutAsset": {"calloutText": text}})
+                    if rn:
+                        _link_asset_rest(rn, "CALLOUT")
                 aplicados.append("callouts_4")
             except Exception as e:
                 erros.append(f"callouts: {e}")
 
         # ── Snippets ──────────────────────────────────────────────────────────
-        if "snippets" not in skip and existing_ft.get("STRUCTURED_SNIPPET", 0) == 0:
+        if rest_hdrs and "snippets" not in skip and existing_ft.get("STRUCTURED_SNIPPET", 0) == 0:
             try:
-                if not dry_run:
-                    op_a = client.get_type("AssetOperation")
-                    op_a.create.name = "Snippet Marcas"
-                    op_a.create.structured_snippet_asset.header = "Marcas"
-                    op_a.create.structured_snippet_asset.values.extend([
-                        "Schwarzkopf", "Alfaparf", "Igora", "Inoar", "Skala"
-                    ])
-                    r_a = asset_svc.mutate_assets(customer_id=customer_id, operations=[op_a])
-                    asset_rn = r_a.results[0].resource_name
-                    op_ca = client.get_type("CampaignAssetOperation")
-                    op_ca.create.campaign = camp_rn
-                    op_ca.create.asset = asset_rn
-                    op_ca.create.field_type = client.enums.AssetFieldTypeEnum.STRUCTURED_SNIPPET
-                    ca_svc.mutate_campaign_assets(customer_id=customer_id, operations=[op_ca])
+                rn = _create_asset_rest({"name": "Snippet Marcas", "structuredSnippetAsset": {
+                    "header": "Marcas", "values": ["Schwarzkopf", "Alfaparf", "Igora", "Inoar", "Skala"]
+                }})
+                if rn:
+                    _link_asset_rest(rn, "STRUCTURED_SNIPPET")
                 aplicados.append("structured_snippet_marcas")
             except Exception as e:
                 erros.append(f"snippets: {e}")
