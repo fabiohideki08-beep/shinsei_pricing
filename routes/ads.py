@@ -1220,11 +1220,23 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
             }
         })
 
-        # c) UNIT por brand
+        dimensao = payload.get("dimensao", "brand")
+
+        # pré-definir others_case para a dimensão escolhida
+        if dimensao == "product_type_l1":
+            others_case: dict = {"productType": {"level": "LEVEL1"}}
+        else:
+            others_case = {"productBrand": {}}
+
+        # c) UNIT por dimensão (brand ou product_type_l1)
         tmp_id = -2
-        for marca, bid_reais in bids_config.items():
-            if marca == "__outros__":
+        for valor, bid_reais in bids_config.items():
+            if valor == "__outros__":
                 continue
+            if dimensao == "product_type_l1":
+                case_value = {"productType": {"level": "LEVEL1", "value": valor}}
+            else:
+                case_value = {"productBrand": {"value": valor}}
             operations.append({
                 "create": {
                     "resourceName":  _tmp_rn(tmp_id),
@@ -1234,14 +1246,14 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
                     "listingGroup": {
                         "type":                     "UNIT",
                         "parentAdGroupCriterion":   root_rn,
-                        "caseValue": {"productBrand": {"value": marca}},
+                        "caseValue": case_value,
                     },
                 }
             })
-            linhas_criadas.append({"marca": marca, "bid": bid_reais})
+            linhas_criadas.append({"valor": valor, "bid": bid_reais})
             tmp_id -= 1
 
-        # d) UNIT "others" — productBrand:{} (sem value) = "everything else"
+        # d) UNIT "others" — objeto vazio = "everything else"
         operations.append({
             "create": {
                 "resourceName":  _tmp_rn(tmp_id),
@@ -1251,7 +1263,7 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
                 "listingGroup": {
                     "type":                   "UNIT",
                     "parentAdGroupCriterion": root_rn,
-                    "caseValue":              {"productBrand": {}},
+                    "caseValue":              others_case,
                 },
             }
         })
@@ -1273,7 +1285,7 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
 
         return {
             "ok":          True,
-            "dimensao":    "brand",
+            "dimensao":    dimensao,
             "removidos":   len(lg_rows),
             "criados":     criados,
             "linhas":      linhas_criadas,
