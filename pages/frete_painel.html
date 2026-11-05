@@ -299,13 +299,15 @@ function hideNotice(id){ document.getElementById(id).classList.add('hidden'); }
 // Carregar config
 // ---------------------------------------------------------------------------
 var _historico = [];
+var _freteMinimo = null;
 
 function carregarConfig(){
   fetch('/frete/config')
     .then(function(r){ return r.json(); })
     .then(function(cfg){
-      document.getElementById('cfg-primeiro').value       = cfg.subsidio_primeiro_item || 4;
-      document.getElementById('cfg-por-item').value       = cfg.subsidio_por_item      || 8;
+      _freteMinimo = cfg.frete_gratis_minimo;
+      document.getElementById('cfg-primeiro').value       = cfg.subsidio_primeiro_item;
+      document.getElementById('cfg-por-item').value       = cfg.subsidio_por_item;
       document.getElementById('cfg-frete-default').value  = cfg.frete_real_default     || 18;
       document.getElementById('cfg-cep-origem').value     = fmtCep(cfg.cep_origem      || '06036003');
       atualizarPreview();
@@ -317,9 +319,9 @@ function carregarConfig(){
 // Preview de subsídio
 // ---------------------------------------------------------------------------
 function atualizarPreview(){
-  var primeiro  = parseFloat(document.getElementById('cfg-primeiro').value)  || 4;
-  var porItem   = parseFloat(document.getElementById('cfg-por-item').value)   || 8;
-  var freteRef  = parseFloat(document.getElementById('cfg-frete-default').value) || 18;
+  var primeiro  = parseFloat(document.getElementById('cfg-primeiro').value)  || 0;
+  var porItem   = parseFloat(document.getElementById('cfg-por-item').value)   || 0;
+  var freteRef = parseFloat(document.getElementById('cfg-frete-default').value) || 18;
   var html = '';
   var acum = 0;
   for(var q=1; q<=6; q++){
@@ -344,24 +346,49 @@ document.getElementById('cfg-frete-default').addEventListener('input', atualizar
 // ---------------------------------------------------------------------------
 // Salvar config
 // ---------------------------------------------------------------------------
+function chaveApiFrete(){
+  var chave = '';
+  try { chave = sessionStorage.getItem('frete_api_key') || ''; } catch(e){}
+  if(!chave){
+    chave = window.prompt('Informe a API Key para salvar a configuração de frete:') || '';
+    try { if(chave) sessionStorage.setItem('frete_api_key', chave); } catch(e){}
+  }
+  return chave;
+}
+
 function salvarConfig(){
+  var primeiro = parseFloat(document.getElementById('cfg-primeiro').value);
+  var porItem  = parseFloat(document.getElementById('cfg-por-item').value);
+  if(isNaN(primeiro) || isNaN(porItem) || _freteMinimo === null){
+    showNotice('notice-config','Preencha os subsídios e recarregue a página antes de salvar.','err');
+    return;
+  }
+  var chave = chaveApiFrete();
+  if(!chave){ return; }
+
   var btn = document.getElementById('btn-salvar');
   btn.disabled = true; btn.textContent = 'Salvando…';
   hideNotice('notice-config');
 
   var payload = {
-    subsidio_primeiro_item : parseFloat(document.getElementById('cfg-primeiro').value)      || 4,
-    subsidio_por_item      : parseFloat(document.getElementById('cfg-por-item').value)       || 8,
+    subsidio_primeiro_item : primeiro,
+    subsidio_por_item      : porItem,
     frete_real_default     : parseFloat(document.getElementById('cfg-frete-default').value)  || 18,
     cep_origem             : (document.getElementById('cfg-cep-origem').value||'').replace(/\D/g,'') || '06036003',
+    frete_gratis_minimo    : _freteMinimo,
   };
 
   fetch('/frete/config', {
     method:'PUT',
-    headers:{'Content-Type':'application/json'},
+    headers:{'Content-Type':'application/json','X-API-Key':chave},
     body: JSON.stringify(payload)
   })
-  .then(function(r){ return r.json(); })
+  .then(function(r){
+    if(r.status === 401 || r.status === 403){
+      try { sessionStorage.removeItem('frete_api_key'); } catch(e){}
+    }
+    return r.json();
+  })
   .then(function(data){
     btn.disabled=false; btn.textContent='💾 Salvar configuração';
     if(data.ok){

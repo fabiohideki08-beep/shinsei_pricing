@@ -1,12 +1,12 @@
 """
 services/frete.py — Motor de cálculo de frete para Shinsei Market (Shopify/Brasil)
 
-Regras:
-  - Todo produto embute R$8 de subsídio de frete no preço
-  - Subsídio é cumulativo: R$8 × qty_items
-  - Frete final cobrado = max(0, frete_real − R$8 × qty_items)
-  - RMSP: frete_real = R$8 → sempre grátis
-  - Outros: calcula via Melhor Envio ou tabela de fallback
+Regras (valores vigentes em data/frete_config.json):
+  - Subsídio cumulativo: 1º item + (qty_items − 1) × item adicional
+  - Micro-região do depósito: grátis, sem mínimo
+  - RMSP: grátis a partir do mínimo; abaixo dele, R$12,90 fixo
+  - Fora da RMSP: frete final = max(0, frete_real − subsídio), sem mínimo
+  - Frete_real fora da RMSP: Melhor Envio ou tabela de fallback
 """
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ import json
 import logging
 import math
 import os
+import unicodedata
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -30,8 +31,8 @@ logger = logging.getLogger("shinsei.frete")
 # ---------------------------------------------------------------------------
 
 # Defaults de env (fallback se frete_config.json não existir)
-_SUBSIDY_PER_ITEM_DEFAULT: float = float(os.getenv("FRETE_SUBSIDIO_POR_ITEM", "8.0"))
-_SUBSIDY_FIRST_ITEM_DEFAULT: float = float(os.getenv("FRETE_SUBSIDIO_PRIMEIRO_ITEM", "4.0"))
+_SUBSIDY_PER_ITEM_DEFAULT: float = float(os.getenv("FRETE_SUBSIDIO_POR_ITEM", "4.0"))
+_SUBSIDY_FIRST_ITEM_DEFAULT: float = float(os.getenv("FRETE_SUBSIDIO_PRIMEIRO_ITEM", "2.0"))
 _ORIGIN_CEP_DEFAULT: str = os.getenv("FRETE_CEP_ORIGEM", "06036003")
 _FRETE_REAL_DEFAULT_DEFAULT: float = float(os.getenv("FRETE_REAL_DEFAULT", "18.0"))
 
@@ -66,9 +67,8 @@ def salvar_config_frete(cfg: dict) -> None:
         json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
-# Valor mínimo do pedido para qualificar frete grátis
-# (mesma regra do widget JS — aplicada aqui para cobrir o shopify-callback)
-FRETE_GRATIS_MINIMO: float = float(os.getenv("FRETE_GRATIS_MINIMO", "29.0"))
+# Valor mínimo do pedido para frete grátis na RMSP
+FRETE_GRATIS_MINIMO: float = float(os.getenv("FRETE_GRATIS_MINIMO", "29.90"))
 
 MELHOR_ENVIO_TOKEN: str = os.getenv("MELHOR_ENVIO_TOKEN", "")
 MELHOR_ENVIO_SANDBOX: bool = os.getenv("MELHOR_ENVIO_SANDBOX", "false").lower() in ("1", "true", "yes")
@@ -99,7 +99,7 @@ RMSP_MUNICIPALITIES: set[str] = {
     "são paulo", "guarulhos", "osasco", "santo andré", "são bernardo do campo",
     "mauá", "diadema", "carapicuíba", "itaquaquecetuba", "taboão da serra",
     "suzano", "barueri", "embu das artes", "cotia", "francisco morato",
-    "franco da rocha", "jandira", "mairiporã", "santana de parnaíba",
+    "franco da rocha", "itapevi", "jandira", "mairiporã", "santana de parnaíba",
     "caieiras", "cajamar", "pirapora do bom jesus", "arujá", "biritiba mirim",
     "ferraz de vasconcelos", "guararema", "juquitiba", "mogi das cruzes",
     "salesópolis", "santa isabel", "são lourenço da serra", "vargem grande paulista",
@@ -107,7 +107,8 @@ RMSP_MUNICIPALITIES: set[str] = {
     "embu-guaçu", "são caetano do sul",
 }
 
-RMSP_FREIGHT_VALUE: float = 8.0  # valor simbólico usado para RMSP (sempre grátis após subsídio)
+RMSP_FREIGHT_VALUE: float = 8.0  # custo de referência da entrega própria na RMSP
+RMSP_FRETE_ABAIXO_MINIMO: float = 12.90  # cobrado na RMSP em pedidos abaixo do mínimo
 
 # Micro-região do depósito (Osasco e adjacente) — frete grátis sem mínimo de compra.
 # Bairros: Vila Yara, Vila Campesina, Adalgisa, Umuarama, Jardim D'Abril,
@@ -199,6 +200,7 @@ class FreightResult(BaseModel):
     items_for_free_shipping: int
     cheapest_final: float
     is_free: bool
+    is_microregiao: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -258,14 +260,14 @@ def is_rmsp(city: str, state: str) -> bool:
     """Retorna True se a cidade/estado pertencem à Região Metropolitana de SP."""
     if (state or "").upper() != "SP":
         return False
-    normalized = (city or "").strip().lower()
-    # normaliza acentos de forma simples para comparação
-    import unicodedata
-    normalized = unicodedata.normalize("NFKD", normalized)
-    normalized = "".join(c for c in normalized if not unicodedata.combining(c))
-    # também tenta versão original
-    original = (city or "").strip().lower()
-    return normalized in RMSP_MUNICIPALITIES or original in RMSP_MUNICIPALITIES
+    return _normalizar_cidade(city) in {_normalizar_cidade(c) for c in RMSP_MUNICIPALITIES}
+
+
+def _normalizar_cidade(city: str) -> str:
+    """Compara nomes de cidade sem acento, hífen ou diferença de maiúsculas."""
+    texto = unicodedata.normalize("NFKD", (city or "").strip().lower())
+    texto = "".join(c for c in texto if not unicodedata.combining(c))
+    return " ".join(texto.replace("-", " ").split())
 
 
 # ---------------------------------------------------------------------------
@@ -435,7 +437,7 @@ async def calculate_freight(
     Calcula o frete final aplicando a regra de subsídio cumulativo.
 
     Fórmula:
-        subsidy_total = SUBSIDY_PER_ITEM × qty_items
+        subsidy_total = subsidio_primeiro_item + (qty_items − 1) × subsidio_por_item
         price_final   = max(0, price_real − subsidy_total)
     """
     dest_cep = normalize_cep(destination_cep)
@@ -465,7 +467,9 @@ async def calculate_freight(
     cep_info = await get_city_from_cep(dest_cep)
     city = cep_info.get("city") or ""
     state = (cep_info.get("state") or "").upper()
-    rmsp = is_rmsp(city, state)
+    _microregiao = is_microregiao_deposito(dest_cep)
+    # A micro-região é Osasco: continua RMSP mesmo se as consultas de CEP falharem
+    rmsp = is_rmsp(city, state) or _microregiao
 
     subsidy_total = calcular_subsidio_total(qty_items, cfg_frete)
 
@@ -556,47 +560,30 @@ async def calculate_freight(
         items_for_free_shipping=items_for_free if not rmsp else 0,
         cheapest_final=cheapest_final if not rmsp else 0.0,
         is_free=is_free_cart,
+        is_microregiao=_microregiao,
     )
 
-    # ── Regra de mínimo: pedidos abaixo de frete_gratis_minimo não têm frete grátis ──
-    # Aplica-se quando order_value é conhecido (> 0), ou seja, vem do shopify-callback.
-    # Para chamadas do widget sem valor (order_value=0) a regra é aplicada client-side.
-    # RMSP abaixo do mínimo: cobra R$8,00 fixo (custo da entrega própria Shinsei).
+    # ── Regra de mínimo: vale só na RMSP, fora da micro-região do depósito ──
+    # Abaixo do mínimo cobra R$12,90 fixo. Fora da RMSP o frete grátis depende só do subsídio.
+    # Com order_value=0 (widget sem o preço) a regra fica a cargo do widget.
     minimo_gratis = float(cfg_frete.get("frete_gratis_minimo", FRETE_GRATIS_MINIMO))
-    _microregiao = is_microregiao_deposito(dest_cep)
-    if not _microregiao and order_value > 0.0 and order_value < minimo_gratis and result.is_free:
+    if rmsp and not _microregiao and 0.0 < order_value < minimo_gratis:
         logger.info(
-            "calculate_freight: valor=R$%.2f < mínimo=R$%.2f — removendo frete grátis.",
-            order_value, minimo_gratis,
+            "calculate_freight: RMSP valor=R$%.2f < mínimo=R$%.2f — frete fixo R$%.2f.",
+            order_value, minimo_gratis, RMSP_FRETE_ABAIXO_MINIMO,
         )
-        _rmsp_frete_fixo = 12.90  # valor cobrado na RMSP para pedidos abaixo do mínimo
-        opts_corrigidas = []
-        for opt in result.options:
-            if opt.is_free and opt.price_real > 0:
-                preco_cobrado = _rmsp_frete_fixo if rmsp else opt.price_real
-                opts_corrigidas.append(FreightOption(
-                    name=opt.name,
-                    carrier=opt.carrier,
-                    price_real=opt.price_real,
-                    price_final=preco_cobrado,
-                    subsidy=0.0,
-                    delivery_days=opt.delivery_days,
-                    is_free=False,
-                ))
-            else:
-                opts_corrigidas.append(opt)
-        result = FreightResult(
-            destination_cep=result.destination_cep,
-            city=result.city,
-            state=result.state,
-            is_rmsp=result.is_rmsp,
-            qty_items=result.qty_items,
-            subsidy_total=result.subsidy_total,
-            options=opts_corrigidas,
-            items_for_free_shipping=result.items_for_free_shipping,
-            cheapest_final=min((o.price_final for o in opts_corrigidas), default=0.0),
-            is_free=False,
-        )
+        result = result.model_copy(update={
+            "options": [
+                opt.model_copy(update={
+                    "price_final": RMSP_FRETE_ABAIXO_MINIMO,
+                    "subsidy": 0.0,
+                    "is_free": False,
+                })
+                for opt in result.options
+            ],
+            "cheapest_final": RMSP_FRETE_ABAIXO_MINIMO,
+            "is_free": False,
+        })
 
     logger.info(
         "calculate_freight result: city=%s state=%s rmsp=%s subsidy=R$%.2f cheapest_final=R$%.2f free=%s",

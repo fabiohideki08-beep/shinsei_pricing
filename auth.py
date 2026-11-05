@@ -371,10 +371,13 @@ async def verificar_api_key(
     path = request.url.path
 
     # Rotas pÃºblicas â€” passa direto
-    if path in PUBLIC_PATHS:
+    # Alterar a configuracao de frete (subsidio) sempre exige API key
+    escrita_frete = path == "/frete/config" and request.method not in ("GET", "HEAD", "OPTIONS")
+
+    if not escrita_frete and path in PUBLIC_PATHS:
         return await call_next(request)
 
-    if any(path.startswith(prefix) for prefix in PUBLIC_PREFIXES):
+    if not escrita_frete and any(path.startswith(prefix) for prefix in PUBLIC_PREFIXES):
         return await call_next(request)
 
     # Sem API key configurada â€” loga aviso e passa (evita lockout acidental)
