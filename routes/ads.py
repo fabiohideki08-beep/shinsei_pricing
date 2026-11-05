@@ -553,26 +553,26 @@ def ads_auditoria():
     except Exception:
         pass
 
-    # 5. Assets/Extensions — sitelinks, callouts, snippets (campaign-level)
-    assets_por_camp: dict[str, dict] = {cid: {"sitelink": 0, "callout": 0, "structured_snippet": 0} for cid in camp_ids}
+    # 5. Assets/Extensions — sitelinks, callouts, snippets
+    # Shopping campaigns NÃO suportam campaign-level assets; usamos customer_asset (nível de conta)
+    assets_conta: dict[str, int] = {"sitelink": 0, "callout": 0, "structured_snippet": 0}
     try:
-        for row in _gaql(client, customer_id, f"""
-            SELECT campaign.id, campaign_asset.field_type, campaign_asset.status
-            FROM campaign_asset
-            WHERE campaign.id IN ({ids_str})
-              AND campaign_asset.status = 'ENABLED'
+        for row in _gaql(client, customer_id, """
+            SELECT customer_asset.field_type, customer_asset.status
+            FROM customer_asset
+            WHERE customer_asset.status = 'ENABLED'
         """):
-            cid  = str(row.campaign.id)
-            tipo = row.campaign_asset.field_type.name if hasattr(row.campaign_asset.field_type, "name") else str(row.campaign_asset.field_type)
-            if cid in assets_por_camp:
-                if tipo == "SITELINK":
-                    assets_por_camp[cid]["sitelink"] += 1
-                elif tipo == "CALLOUT":
-                    assets_por_camp[cid]["callout"] += 1
-                elif tipo == "STRUCTURED_SNIPPET":
-                    assets_por_camp[cid]["structured_snippet"] += 1
+            tipo = row.customer_asset.field_type.name if hasattr(row.customer_asset.field_type, "name") else str(row.customer_asset.field_type)
+            if tipo == "SITELINK":
+                assets_conta["sitelink"] += 1
+            elif tipo == "CALLOUT":
+                assets_conta["callout"] += 1
+            elif tipo == "STRUCTURED_SNIPPET":
+                assets_conta["structured_snippet"] += 1
     except Exception:
         pass
+    # Replicar contagem para todas as campanhas (assets de conta valem para todas)
+    assets_por_camp: dict[str, dict] = {cid: dict(assets_conta) for cid in camp_ids}
 
     # 6. Ad schedule por campanha
     schedule_por_camp: dict[str, int] = {cid: 0 for cid in camp_ids}
@@ -870,16 +870,15 @@ def ads_completar_campanha(campaign_id: str, payload: dict = {}):
     # Usamos REST (igual a criar-subdivisions) pois o gRPC SDK tem instabilidades
     # no mutate_assets com use_proto_plus=True
     if not ({"sitelinks", "callouts", "snippets"} <= skip):
-        # Checar assets existentes
+        # Checar assets existentes no nível de conta (Shopping não suporta campaign-level assets)
         try:
-            existing_assets_rows = _gaql(client, customer_id, f"""
-                SELECT campaign.id, campaign_asset.field_type FROM campaign_asset
-                WHERE campaign.id = {campaign_id}
-                  AND campaign_asset.status = 'ENABLED'
+            existing_assets_rows = _gaql(client, customer_id, """
+                SELECT customer_asset.field_type FROM customer_asset
+                WHERE customer_asset.status = 'ENABLED'
             """)
             existing_ft: dict[str, int] = {}
             for row in existing_assets_rows:
-                ft = row.campaign_asset.field_type.name if hasattr(row.campaign_asset.field_type, "name") else str(row.campaign_asset.field_type)
+                ft = row.customer_asset.field_type.name if hasattr(row.customer_asset.field_type, "name") else str(row.customer_asset.field_type)
                 existing_ft[ft] = existing_ft.get(ft, 0) + 1
         except Exception as e:
             existing_ft = {}
@@ -902,7 +901,8 @@ def ads_completar_campanha(campaign_id: str, payload: dict = {}):
                 "Content-Type":      "application/json",
             }
             asset_url      = f"https://googleads.googleapis.com/v24/customers/{customer_id}/assets:mutate"
-            camp_asset_url = f"https://googleads.googleapis.com/v24/customers/{customer_id}/campaignAssets:mutate"
+            # Shopping campaigns não suportam campaign-level assets; usar customerAssets (nível de conta)
+            cust_asset_url = f"https://googleads.googleapis.com/v24/customers/{customer_id}/customerAssets:mutate"
         except Exception as e:
             erros.append(f"rest_token: {e}")
             rest_hdrs = None
@@ -919,11 +919,12 @@ def ads_completar_campanha(campaign_id: str, payload: dict = {}):
         def _link_asset_rest(asset_rn: str, field_type: str):
             if dry_run:
                 return
-            resp = _req_http.post(camp_asset_url, headers=rest_hdrs, json={"operations": [{"create": {
-                "campaign": camp_rn, "asset": asset_rn, "fieldType": field_type
+            # Shopping campaigns requerem customer-level assets (não campaign-level)
+            resp = _req_http.post(cust_asset_url, headers=rest_hdrs, json={"operations": [{"create": {
+                "asset": asset_rn, "fieldType": field_type
             }}]}, timeout=20)
             if not resp.ok:
-                raise ValueError(f"campaign_asset link HTTP {resp.status_code}: {resp.text[:2000]}")
+                raise ValueError(f"customer_asset link HTTP {resp.status_code}: {resp.text[:2000]}")
 
         # ── Sitelinks ─────────────────────────────────────────────────────────
         if rest_hdrs and "sitelinks" not in skip and existing_ft.get("SITELINK", 0) < 4:
