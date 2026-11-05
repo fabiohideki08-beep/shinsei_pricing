@@ -463,6 +463,258 @@ def ads_diagnostico():
     return resultado
 
 
+@router.get("/auditoria")
+def ads_auditoria():
+    """
+    Audita todas as campanhas ENABLED contra o checklist obrigatório de 16 itens:
+    budget, lances, rede, geo BR, idioma PT-BR, grupo de anúncios, negativos,
+    anúncio criado, sitelinks ≥4, callouts, snippets, programação, device bids,
+    UTM tracking template, merchant_id e listing groups.
+    """
+    try:
+        client, customer_id = _build_client()
+    except FileNotFoundError:
+        return {"ok": False, "erro": "Credenciais Google Ads ausentes"}
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+    # 1. Listar campanhas ENABLED
+    try:
+        rows_camp = _gaql(client, customer_id, """
+            SELECT
+                campaign.id,
+                campaign.name,
+                campaign.status,
+                campaign.advertising_channel_type,
+                campaign.tracking_url_template,
+                campaign.network_settings.target_google_search,
+                campaign.network_settings.target_content_network,
+                campaign.network_settings.target_partner_search_network,
+                campaign.shopping_setting.merchant_id,
+                campaign_budget.amount_micros
+            FROM campaign
+            WHERE campaign.status = 'ENABLED'
+              AND campaign.advertising_channel_type = 'SHOPPING'
+        """)
+    except Exception as e:
+        return {"ok": False, "erro": f"Erro ao listar campanhas: {e}"}
+
+    if not rows_camp:
+        return {"ok": True, "msg": "Nenhuma campanha ENABLED encontrada", "campanhas": []}
+
+    camp_ids = [str(r.campaign.id) for r in rows_camp]
+    ids_str  = ", ".join(camp_ids)
+    camps_by_id = {str(r.campaign.id): r for r in rows_camp}
+
+    # 2. Geo targets por campanha
+    geo_por_camp: dict[str, list] = {cid: [] for cid in camp_ids}
+    try:
+        for row in _gaql(client, customer_id, f"""
+            SELECT campaign.id, campaign_criterion.location.geo_target_constant,
+                   campaign_criterion.negative
+            FROM campaign_criterion
+            WHERE campaign.id IN ({ids_str})
+              AND campaign_criterion.type = 'LOCATION'
+              AND campaign_criterion.negative = false
+        """):
+            geo_por_camp.setdefault(str(row.campaign.id), []).append(
+                row.campaign_criterion.location.geo_target_constant
+            )
+    except Exception:
+        pass
+
+    # 3. Idiomas por campanha
+    lang_por_camp: dict[str, list] = {cid: [] for cid in camp_ids}
+    try:
+        for row in _gaql(client, customer_id, f"""
+            SELECT campaign.id, campaign_criterion.language.language_constant
+            FROM campaign_criterion
+            WHERE campaign.id IN ({ids_str})
+              AND campaign_criterion.type = 'LANGUAGE'
+        """):
+            lang_por_camp.setdefault(str(row.campaign.id), []).append(
+                row.campaign_criterion.language.language_constant
+            )
+    except Exception:
+        pass
+
+    # 4. Negativos por campanha (campaign-level)
+    neg_por_camp: dict[str, int] = {cid: 0 for cid in camp_ids}
+    try:
+        for row in _gaql(client, customer_id, f"""
+            SELECT campaign.id, campaign_criterion.keyword.text
+            FROM campaign_criterion
+            WHERE campaign.id IN ({ids_str})
+              AND campaign_criterion.negative = true
+              AND campaign_criterion.type = 'KEYWORD'
+        """):
+            cid = str(row.campaign.id)
+            neg_por_camp[cid] = neg_por_camp.get(cid, 0) + 1
+    except Exception:
+        pass
+
+    # 5. Assets/Extensions — sitelinks, callouts, snippets (campaign-level)
+    assets_por_camp: dict[str, dict] = {cid: {"sitelink": 0, "callout": 0, "structured_snippet": 0} for cid in camp_ids}
+    try:
+        for row in _gaql(client, customer_id, f"""
+            SELECT campaign.id, campaign_asset.asset_type, campaign_asset.status
+            FROM campaign_asset
+            WHERE campaign.id IN ({ids_str})
+              AND campaign_asset.status = 'ENABLED'
+        """):
+            cid  = str(row.campaign.id)
+            tipo = row.campaign_asset.asset_type.name if hasattr(row.campaign_asset.asset_type, "name") else str(row.campaign_asset.asset_type)
+            if cid in assets_por_camp:
+                if tipo == "SITELINK":
+                    assets_por_camp[cid]["sitelink"] += 1
+                elif tipo == "CALLOUT":
+                    assets_por_camp[cid]["callout"] += 1
+                elif tipo == "STRUCTURED_SNIPPET":
+                    assets_por_camp[cid]["structured_snippet"] += 1
+    except Exception:
+        pass
+
+    # 6. Ad schedule por campanha
+    schedule_por_camp: dict[str, int] = {cid: 0 for cid in camp_ids}
+    try:
+        for row in _gaql(client, customer_id, f"""
+            SELECT campaign.id, campaign_criterion.type
+            FROM campaign_criterion
+            WHERE campaign.id IN ({ids_str})
+              AND campaign_criterion.type = 'AD_SCHEDULE'
+        """):
+            cid = str(row.campaign.id)
+            schedule_por_camp[cid] = schedule_por_camp.get(cid, 0) + 1
+    except Exception:
+        pass
+
+    # 7. Device bid adjustments por campanha
+    device_por_camp: dict[str, int] = {cid: 0 for cid in camp_ids}
+    try:
+        for row in _gaql(client, customer_id, f"""
+            SELECT campaign.id, campaign_criterion.device.type, campaign_criterion.bid_modifier
+            FROM campaign_criterion
+            WHERE campaign.id IN ({ids_str})
+              AND campaign_criterion.type = 'DEVICE'
+        """):
+            cid = str(row.campaign.id)
+            bm  = row.campaign_criterion.bid_modifier
+            if bm and bm != 1.0:
+                device_por_camp[cid] = device_por_camp.get(cid, 0) + 1
+    except Exception:
+        pass
+
+    # 8. AdGroupAds por campanha (anúncio Shopping criado)
+    ad_por_camp: dict[str, int] = {cid: 0 for cid in camp_ids}
+    try:
+        for row in _gaql(client, customer_id, f"""
+            SELECT campaign.id, ad_group_ad.status, ad_group_ad.ad.type
+            FROM ad_group_ad
+            WHERE campaign.id IN ({ids_str})
+              AND ad_group_ad.status = 'ENABLED'
+        """):
+            cid = str(row.campaign.id)
+            ad_por_camp[cid] = ad_por_camp.get(cid, 0) + 1
+    except Exception:
+        pass
+
+    # 9. Ad groups por campanha
+    ag_por_camp: dict[str, int] = {cid: 0 for cid in camp_ids}
+    try:
+        for row in _gaql(client, customer_id, f"""
+            SELECT campaign.id, ad_group.status
+            FROM ad_group
+            WHERE campaign.id IN ({ids_str})
+              AND ad_group.status = 'ENABLED'
+        """):
+            cid = str(row.campaign.id)
+            ag_por_camp[cid] = ag_por_camp.get(cid, 0) + 1
+    except Exception:
+        pass
+
+    # 10. Listing groups por campanha (produto subdividido)
+    lg_por_camp: dict[str, int] = {cid: 0 for cid in camp_ids}
+    try:
+        for row in _gaql(client, customer_id, f"""
+            SELECT campaign.id, ad_group_criterion.listing_group.type
+            FROM ad_group_criterion
+            WHERE campaign.id IN ({ids_str})
+              AND ad_group_criterion.type = 'LISTING_GROUP'
+              AND ad_group_criterion.status = 'ENABLED'
+        """):
+            cid = str(row.campaign.id)
+            lg_por_camp[cid] = lg_por_camp.get(cid, 0) + 1
+    except Exception:
+        pass
+
+    # Montar checklist por campanha
+    resultado_campanhas = []
+    for cid in camp_ids:
+        r  = camps_by_id[cid]
+        c  = r.campaign
+        b  = r.campaign_budget
+        nome   = c.name
+        budget = (b.amount_micros or 0) / 1e6
+        utm    = c.tracking_url_template or ""
+        merchant = getattr(c.shopping_setting, "merchant_id", None) if hasattr(c, "shopping_setting") else None
+
+        geos   = geo_por_camp.get(cid, [])
+        langs  = lang_por_camp.get(cid, [])
+        negs   = neg_por_camp.get(cid, 0)
+        assets = assets_por_camp.get(cid, {})
+        sched  = schedule_por_camp.get(cid, 0)
+        devs   = device_por_camp.get(cid, 0)
+        ads_n  = ad_por_camp.get(cid, 0)
+        ags_n  = ag_por_camp.get(cid, 0)
+        lgs_n  = lg_por_camp.get(cid, 0)
+
+        geo_br   = any("2076" in g for g in geos)   # 2076 = Brasil geo constant
+        lang_pt  = any("1014" in g for g in langs)  # 1014 = Português (Brasil)
+        sitelinks = assets.get("sitelink", 0)
+        callouts  = assets.get("callout", 0)
+        snippets  = assets.get("structured_snippet", 0)
+
+        checklist = [
+            {"item": "Budget configurado",         "ok": budget > 0,   "detalhe": f"R${budget:.2f}/dia"},
+            {"item": "Grupo de anúncios ativo",    "ok": ags_n > 0,    "detalhe": f"{ags_n} grupo(s)"},
+            {"item": "Anúncio Shopping criado",    "ok": ads_n > 0,    "detalhe": f"{ads_n} anúncio(s)"},
+            {"item": "Listing groups configurados","ok": lgs_n > 0,    "detalhe": f"{lgs_n} listing group(s)"},
+            {"item": "Merchant Center vinculado",  "ok": bool(merchant), "detalhe": f"Merchant ID: {merchant or 'N/A'}"},
+            {"item": "Geo-targeting Brasil",       "ok": geo_br,       "detalhe": f"{len(geos)} geo(s)" if geos else "Nenhum configurado — serve todos os países"},
+            {"item": "Idioma PT-BR",               "ok": lang_pt,      "detalhe": f"{len(langs)} idioma(s)" if langs else "Nenhum configurado"},
+            {"item": "Negativos (keywords)",       "ok": negs >= 5,    "detalhe": f"{negs} negativas" + (" ⚠️ recomendado ≥5" if negs < 5 else "")},
+            {"item": "Sitelinks (≥4)",             "ok": sitelinks >= 4, "detalhe": f"{sitelinks} sitelink(s)"},
+            {"item": "Callouts",                   "ok": callouts >= 2,"detalhe": f"{callouts} callout(s)"},
+            {"item": "Snippets estruturados",      "ok": snippets >= 1,"detalhe": f"{snippets} snippet(s)"},
+            {"item": "Programação de anúncios",    "ok": sched > 0,    "detalhe": f"{sched} horário(s)" if sched else "Sem programação — veiculando 24/7"},
+            {"item": "Ajuste de lance por device", "ok": devs > 0,     "detalhe": f"{devs} ajuste(s)" if devs else "Sem ajuste de dispositivo"},
+            {"item": "UTM tracking template",      "ok": bool(utm),    "detalhe": utm[:60] + "..." if len(utm) > 60 else (utm or "Não configurado")},
+        ]
+
+        ok_count    = sum(1 for x in checklist if x["ok"])
+        total       = len(checklist)
+        score_pct   = round(ok_count / total * 100)
+        pendencias  = [x["item"] for x in checklist if not x["ok"]]
+
+        resultado_campanhas.append({
+            "id":           cid,
+            "nome":         nome,
+            "score":        f"{score_pct}%  ({ok_count}/{total})",
+            "score_pct":    score_pct,
+            "pendencias":   pendencias,
+            "checklist":    checklist,
+        })
+
+    score_total = sum(c["score_pct"] for c in resultado_campanhas) // max(len(resultado_campanhas), 1)
+    return {
+        "ok":             True,
+        "auditado_em":    datetime.utcnow().isoformat(),
+        "total_campanhas": len(resultado_campanhas),
+        "score_medio":    f"{score_total}%",
+        "campanhas":      resultado_campanhas,
+    }
+
+
 @router.get("/campanha/{campaign_id}/listing-groups")
 def ads_listing_groups(campaign_id: str):
     """Retorna listing groups e produtos elegíveis de uma campanha Shopping."""
