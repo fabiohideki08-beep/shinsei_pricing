@@ -1205,8 +1205,12 @@ def ads_criar_subdivisions(campaign_id: str, payload: dict = {}):
         # └── UNIT others (productBrand:{}) [tmp=-4]  ← objeto vazio = "everything else"
         operations = []
 
-        # a) Removes
-        for row in lg_rows:
+        # a) Removes — filhos (UNIT) antes do pai (SUBDIVISION) para evitar LISTING_GROUP_DOES_NOT_EXIST
+        def _lg_type(row) -> str:
+            t = row.ad_group_criterion.listing_group.type_
+            return t.name if hasattr(t, "name") else str(t)
+        units_first = sorted(lg_rows, key=lambda r: 0 if _lg_type(r) != "SUBDIVISION" else 1)
+        for row in units_first:
             operations.append({"remove": row.ad_group_criterion.resource_name})
 
         # b) SUBDIVISION raiz
