@@ -557,13 +557,13 @@ def ads_auditoria():
     assets_por_camp: dict[str, dict] = {cid: {"sitelink": 0, "callout": 0, "structured_snippet": 0} for cid in camp_ids}
     try:
         for row in _gaql(client, customer_id, f"""
-            SELECT campaign.id, campaign_asset.asset_type, campaign_asset.status
+            SELECT campaign.id, campaign_asset.field_type, campaign_asset.status
             FROM campaign_asset
             WHERE campaign.id IN ({ids_str})
               AND campaign_asset.status = 'ENABLED'
         """):
             cid  = str(row.campaign.id)
-            tipo = row.campaign_asset.asset_type.name if hasattr(row.campaign_asset.asset_type, "name") else str(row.campaign_asset.asset_type)
+            tipo = row.campaign_asset.field_type.name if hasattr(row.campaign_asset.field_type, "name") else str(row.campaign_asset.field_type)
             if cid in assets_por_camp:
                 if tipo == "SITELINK":
                     assets_por_camp[cid]["sitelink"] += 1
@@ -892,9 +892,9 @@ def ads_completar_campanha(campaign_id: str, payload: dict = {}):
     if "sitelinks" not in skip:
         try:
             sl_exist = _gaql(client, customer_id, f"""
-                SELECT campaign_asset.asset_type FROM campaign_asset
+                SELECT campaign_asset.field_type FROM campaign_asset
                 WHERE campaign.id = {campaign_id}
-                  AND campaign_asset.asset_type = 'SITELINK'
+                  AND campaign_asset.field_type = 'SITELINK'
                   AND campaign_asset.status = 'ENABLED'
             """)
             if len(sl_exist) < 4:
@@ -929,9 +929,9 @@ def ads_completar_campanha(campaign_id: str, payload: dict = {}):
     if "callouts" not in skip:
         try:
             co_exist = _gaql(client, customer_id, f"""
-                SELECT campaign_asset.asset_type FROM campaign_asset
+                SELECT campaign_asset.field_type FROM campaign_asset
                 WHERE campaign.id = {campaign_id}
-                  AND campaign_asset.asset_type = 'CALLOUT'
+                  AND campaign_asset.field_type = 'CALLOUT'
                   AND campaign_asset.status = 'ENABLED'
             """)
             if len(co_exist) < 2:
@@ -963,9 +963,9 @@ def ads_completar_campanha(campaign_id: str, payload: dict = {}):
     if "snippets" not in skip:
         try:
             sn_exist = _gaql(client, customer_id, f"""
-                SELECT campaign_asset.asset_type FROM campaign_asset
+                SELECT campaign_asset.field_type FROM campaign_asset
                 WHERE campaign.id = {campaign_id}
-                  AND campaign_asset.asset_type = 'STRUCTURED_SNIPPET'
+                  AND campaign_asset.field_type = 'STRUCTURED_SNIPPET'
                   AND campaign_asset.status = 'ENABLED'
             """)
             if not sn_exist:
