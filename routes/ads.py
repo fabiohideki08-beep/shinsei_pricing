@@ -973,6 +973,123 @@ def ads_ativar_campanha(campaign_id: str, payload: dict = {}):
         return {"ok": False, "erro": str(e)}
 
 
+@router.post("/campanha/criar-shopping")
+def ads_criar_campanha_shopping(payload: dict = {}):
+    """
+    Cria uma campanha Shopping Standard.
+    payload: {
+      nome: str,                     # ex: "Igora — Kits Coloração + Ox"
+      budget_diario_reais: float,    # ex: 25
+      cpc_bid_reais: float,          # ex: 0.80
+      merchant_id: int,              # default 5071388981 (GMC Shinsei)
+      product_type_l1_filter: str,   # ex: "Igora" — se informado, cria ListingGroup filtrando por product_type nível 1
+    }
+    Retorna: {ok, campaign_id, campaign_resource}
+    A campanha é criada PAUSADA. Ativar com POST /ads/campanha/{id}/ativar.
+    """
+    import uuid as _uuid
+    try:
+        client, customer_id = _build_client()
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+    try:
+        nome               = payload.get("nome", f"Nova Campanha {_uuid.uuid4().hex[:6]}")
+        budget_reais       = float(payload.get("budget_diario_reais", 20))
+        cpc_micros         = int(float(payload.get("cpc_bid_reais", 0.80)) * 1_000_000)
+        merchant_id        = int(payload.get("merchant_id", 5071388981))
+        pt_filter          = payload.get("product_type_l1_filter", "")
+
+        # 1. Budget
+        budget_svc = client.get_service("CampaignBudgetService")
+        op_b = client.get_type("CampaignBudgetOperation")
+        b = op_b.create
+        b.name = f"Budget {nome} {_uuid.uuid4().hex[:6]}"
+        b.amount_micros = int(budget_reais * 1_000_000)
+        b.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
+        r_b = budget_svc.mutate_campaign_budgets(customer_id=customer_id, operations=[op_b])
+        budget_rn = r_b.results[0].resource_name
+
+        # 2. Campaign
+        camp_svc = client.get_service("CampaignService")
+        op_c = client.get_type("CampaignOperation")
+        c = op_c.create
+        c.name = nome
+        c.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.SHOPPING
+        c.status = client.enums.CampaignStatusEnum.PAUSED
+        c.campaign_budget = budget_rn
+        c.shopping_setting.merchant_id = merchant_id
+        c.shopping_setting.campaign_priority = 0
+        c.shopping_setting.enable_local = False
+        c.manual_cpc.enhanced_cpc_enabled = False
+        r_c = camp_svc.mutate_campaigns(customer_id=customer_id, operations=[op_c])
+        camp_rn = r_c.results[0].resource_name
+        camp_id = camp_rn.split("/")[-1]
+
+        # 3. AdGroup
+        ag_svc = client.get_service("AdGroupService")
+        op_ag = client.get_type("AdGroupOperation")
+        ag = op_ag.create
+        ag.name = f"{nome} — Grupo"
+        ag.campaign = camp_rn
+        ag.status = client.enums.AdGroupStatusEnum.ENABLED
+        ag.cpc_bid_micros = cpc_micros
+        r_ag = ag_svc.mutate_ad_groups(customer_id=customer_id, operations=[op_ag])
+        ag_rn = r_ag.results[0].resource_name
+
+        # 4. AdGroupAd (Shopping Product Ad)
+        agad_svc = client.get_service("AdGroupAdService")
+        op_agad = client.get_type("AdGroupAdOperation")
+        agad = op_agad.create
+        agad.ad_group = ag_rn
+        agad.status = client.enums.AdGroupAdStatusEnum.ENABLED
+        agad.ad.shopping_product_ad.CopyFrom(client.get_type("ShoppingProductAdInfo")())
+        agad_svc.mutate_ad_group_ads(customer_id=customer_id, operations=[op_agad])
+
+        # 5. ListingGroup (opcional — só se product_type_l1_filter informado)
+        if pt_filter:
+            lg_svc = client.get_service("AdGroupCriterionService")
+            # 5a. Root SUBDIVISION
+            op_root = client.get_type("AdGroupCriterionOperation")
+            root = op_root.create
+            root.ad_group = ag_rn
+            root.status = client.enums.AdGroupCriterionStatusEnum.ENABLED
+            root.listing_group.type_ = client.enums.ListingGroupTypeEnum.SUBDIVISION
+            r_root = lg_svc.mutate_ad_group_criteria(customer_id=customer_id, operations=[op_root])
+            root_rn = r_root.results[0].resource_name
+            # 5b. Filho alvo (product_type_l1 = pt_filter) → UNIT
+            op_alvo = client.get_type("AdGroupCriterionOperation")
+            alvo = op_alvo.create
+            alvo.ad_group = ag_rn
+            alvo.status = client.enums.AdGroupCriterionStatusEnum.ENABLED
+            alvo.listing_group.type_ = client.enums.ListingGroupTypeEnum.UNIT
+            alvo.listing_group.parent_ad_group_criterion = root_rn
+            alvo.listing_group.case_value.product_type.level = client.enums.ListingGroupFilterProductTypeLevelEnum.LEVEL1
+            alvo.listing_group.case_value.product_type.value = pt_filter
+            alvo.cpc_bid_micros = cpc_micros
+            # 5c. Outros → excluído
+            op_out = client.get_type("AdGroupCriterionOperation")
+            out = op_out.create
+            out.ad_group = ag_rn
+            out.status = client.enums.AdGroupCriterionStatusEnum.ENABLED
+            out.listing_group.type_ = client.enums.ListingGroupTypeEnum.UNIT
+            out.listing_group.parent_ad_group_criterion = root_rn
+            out.negative = True
+            lg_svc.mutate_ad_group_criteria(customer_id=customer_id, operations=[op_alvo, op_out])
+
+        return {
+            "ok": True,
+            "campaign_id": camp_id,
+            "campaign_resource": camp_rn,
+            "nome": nome,
+            "budget_diario_reais": budget_reais,
+            "cpc_bid_reais": cpc_micros / 1_000_000,
+            "product_type_l1_filter": pt_filter or "todos",
+            "status": "PAUSED — ativar com POST /ads/campanha/{id}/ativar",
+        }
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+
 # ── Simulador Google ADS ──────────────────────────────────────────────────────
 
 @router.get("/simulador", response_class=HTMLResponse)
