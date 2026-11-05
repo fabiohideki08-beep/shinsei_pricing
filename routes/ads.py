@@ -1019,6 +1019,49 @@ def ads_completar_campanha(campaign_id: str, payload: dict = {}):
     }
 
 
+@router.get("/assets/diagnostico")
+def ads_assets_diagnostico():
+    """Diagnóstico de assets (sitelinks/callouts/snippets) com status de aprovação."""
+    try:
+        client, customer_id = _build_client()
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+    try:
+        rows = _gaql(client, customer_id, """
+            SELECT
+                asset.id,
+                asset.name,
+                asset.type,
+                asset.sitelink_asset.link_text,
+                asset.callout_asset.callout_text,
+                asset.structured_snippet_asset.header,
+                asset.policy_summary.approval_status,
+                asset.policy_summary.review_status
+            FROM asset
+            WHERE asset.type IN ('SITELINK', 'CALLOUT', 'STRUCTURED_SNIPPET')
+        """)
+        assets = []
+        reprovados = []
+        for r in rows:
+            a = r.asset
+            tipo = a.type_.name if hasattr(a.type_, "name") else str(a.type_)
+            status = a.policy_summary.approval_status.name if hasattr(a.policy_summary.approval_status, "name") else str(a.policy_summary.approval_status)
+            review = a.policy_summary.review_status.name if hasattr(a.policy_summary.review_status, "name") else str(a.policy_summary.review_status)
+            if tipo == "SITELINK":
+                texto = a.sitelink_asset.link_text
+            elif tipo == "CALLOUT":
+                texto = a.callout_asset.callout_text
+            else:
+                texto = a.structured_snippet_asset.header
+            item = {"id": a.id, "tipo": tipo, "texto": texto, "status": status, "review": review}
+            assets.append(item)
+            if status not in ("APPROVED", "UNSPECIFIED", "UNKNOWN", ""):
+                reprovados.append(item)
+        return {"ok": True, "total": len(assets), "reprovados": reprovados, "todos": assets}
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+
 @router.get("/campanha/{campaign_id}/listing-groups")
 def ads_listing_groups(campaign_id: str):
     """Retorna listing groups e produtos elegíveis de uma campanha Shopping."""
