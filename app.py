@@ -4419,6 +4419,32 @@ def shopify_status():
     token = data.get("access_token", "")
     return {"connected": bool(token) and token != ".", "scope": data.get("scope", ""), "salvo_em": data.get("salvo_em")}
 
+@app.get("/shopify/ping")
+def shopify_ping():
+    """Verifica se o token Shopify está válido fazendo uma chamada real à API."""
+    import json, requests as _req
+    cfg = DATA_DIR / "shopify_config.json"
+    if not cfg.exists():
+        raise HTTPException(status_code=503, detail="shopify_config.json ausente — Shopify não conectado")
+    data = json.loads(cfg.read_text(encoding="utf-8"))
+    token = data.get("access_token", "") or os.getenv("SHOPIFY_ACCESS_TOKEN", "")
+    if not token:
+        raise HTTPException(status_code=503, detail="Token Shopify ausente")
+    try:
+        r = _req.get(
+            "https://pknw4n-eg.myshopify.com/admin/api/2024-01/shop.json",
+            headers={"X-Shopify-Access-Token": token},
+            timeout=10,
+        )
+        if r.status_code == 200:
+            shop = r.json().get("shop", {})
+            return {"ok": True, "shop": shop.get("name"), "plan": shop.get("plan_name"), "salvo_em": data.get("salvo_em")}
+        raise HTTPException(status_code=r.status_code, detail=f"Shopify API retornou {r.status_code}: {r.text[:200]}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
 @app.post("/shopify/install-gtag")
 def shopify_install_gtag():
     """
