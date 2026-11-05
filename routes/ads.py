@@ -715,6 +715,290 @@ def ads_auditoria():
     }
 
 
+@router.post("/campanha/{campaign_id}/completar")
+def ads_completar_campanha(campaign_id: str, payload: dict = {}):
+    """
+    Aplica automaticamente os itens faltantes do checklist na campanha:
+    geo BR, idioma PT-BR, negativos, UTM template, device bid, ad schedule,
+    sitelinks (4), callouts (2), snippets (1).
+
+    payload (todos opcionais):
+      dry_run: bool          — retorna plano sem executar (default False)
+      store_url: str         — URL base da loja (default https://shinsei.com.br)
+      skip: list[str]        — itens a pular (ex: ["ad_schedule"])
+    """
+    try:
+        client, customer_id = _build_client()
+    except Exception as e:
+        return {"ok": False, "erro": str(e)}
+
+    dry_run   = payload.get("dry_run", False)
+    store_url = payload.get("store_url", "https://shinsei.com.br").rstrip("/")
+    skip      = set(payload.get("skip", []))
+
+    # Obter resource_name da campanha
+    camp_rows = _gaql(client, customer_id, f"""
+        SELECT campaign.id, campaign.name, campaign.tracking_url_template
+        FROM campaign WHERE campaign.id = {campaign_id} LIMIT 1
+    """)
+    if not camp_rows:
+        return {"ok": False, "erro": "Campanha não encontrada"}
+    camp_rn   = client.get_service("CampaignService").campaign_path(customer_id, campaign_id)
+    camp_nome = camp_rows[0].campaign.name
+    utm_atual = camp_rows[0].campaign.tracking_url_template or ""
+
+    aplicados: list[str] = []
+    erros:    list[str] = []
+
+    # ── 1. Geo BR (geoTargetConstant/2076 = Brasil) ──────────────────────────
+    if "geo" not in skip:
+        try:
+            geo_existentes = _gaql(client, customer_id, f"""
+                SELECT campaign_criterion.location.geo_target_constant
+                FROM campaign_criterion
+                WHERE campaign.id = {campaign_id}
+                  AND campaign_criterion.type = 'LOCATION'
+                  AND campaign_criterion.negative = false
+            """)
+            if not geo_existentes:
+                if not dry_run:
+                    cc_svc = client.get_service("CampaignCriterionService")
+                    op = client.get_type("CampaignCriterionOperation")
+                    op.create.campaign = camp_rn
+                    op.create.location.geo_target_constant = "geoTargetConstants/2076"
+                    cc_svc.mutate_campaign_criteria(customer_id=customer_id, operations=[op])
+                aplicados.append("geo_br")
+        except Exception as e:
+            erros.append(f"geo_br: {e}")
+
+    # ── 2. Idioma PT-BR (languageConstant/1014) ───────────────────────────────
+    if "idioma" not in skip:
+        try:
+            lang_exist = _gaql(client, customer_id, f"""
+                SELECT campaign_criterion.language.language_constant
+                FROM campaign_criterion
+                WHERE campaign.id = {campaign_id}
+                  AND campaign_criterion.type = 'LANGUAGE'
+            """)
+            if not lang_exist:
+                if not dry_run:
+                    cc_svc = client.get_service("CampaignCriterionService")
+                    op = client.get_type("CampaignCriterionOperation")
+                    op.create.campaign = camp_rn
+                    op.create.language.language_constant = "languageConstants/1014"
+                    cc_svc.mutate_campaign_criteria(customer_id=customer_id, operations=[op])
+                aplicados.append("idioma_pt_br")
+        except Exception as e:
+            erros.append(f"idioma: {e}")
+
+    # ── 3. UTM tracking template ──────────────────────────────────────────────
+    if "utm" not in skip and not utm_atual:
+        try:
+            utm = "{lpurl}?utm_source=google&utm_medium=cpc&utm_campaign={_utmz}&utm_term={keyword}&utm_content={adgroup.name}"
+            if not dry_run:
+                from google.protobuf import field_mask_pb2
+                camp_svc = client.get_service("CampaignService")
+                op = client.get_type("CampaignOperation")
+                op.update.resource_name = camp_rn
+                op.update.tracking_url_template = utm
+                op.update_mask.paths.append("tracking_url_template")
+                camp_svc.mutate_campaigns(customer_id=customer_id, operations=[op])
+            aplicados.append("utm_template")
+        except Exception as e:
+            erros.append(f"utm: {e}")
+
+    # ── 4. Negativos (10 keywords genéricas para cosméticos) ─────────────────
+    if "negativos" not in skip:
+        try:
+            neg_exist = _gaql(client, customer_id, f"""
+                SELECT campaign_criterion.keyword.text
+                FROM campaign_criterion
+                WHERE campaign.id = {campaign_id}
+                  AND campaign_criterion.negative = true
+                  AND campaign_criterion.type = 'KEYWORD'
+            """)
+            if len(neg_exist) < 5:
+                negativos = [
+                    "grátis", "gratuito", "free", "como fazer",
+                    "tutorial", "diy", "receita caseira", "remédio",
+                    "doença", "tratamento médico",
+                ]
+                if not dry_run:
+                    cc_svc = client.get_service("CampaignCriterionService")
+                    ops = []
+                    for kw in negativos:
+                        op = client.get_type("CampaignCriterionOperation")
+                        op.create.campaign = camp_rn
+                        op.create.negative = True
+                        op.create.keyword.text = kw
+                        op.create.keyword.match_type = client.enums.KeywordMatchTypeEnum.BROAD
+                        ops.append(op)
+                    cc_svc.mutate_campaign_criteria(customer_id=customer_id, operations=ops)
+                aplicados.append(f"negativos_{len(negativos)}")
+        except Exception as e:
+            erros.append(f"negativos: {e}")
+
+    # ── 5. Device bid adjustment (mobile -10%) ────────────────────────────────
+    if "device" not in skip:
+        try:
+            dev_exist = _gaql(client, customer_id, f"""
+                SELECT campaign_criterion.device.type, campaign_criterion.bid_modifier
+                FROM campaign_criterion
+                WHERE campaign.id = {campaign_id}
+                  AND campaign_criterion.type = 'DEVICE'
+            """)
+            if not dev_exist:
+                if not dry_run:
+                    cc_svc = client.get_service("CampaignCriterionService")
+                    # Mobile -10% (0.9), Tablet -20% (0.8)
+                    for dev_type, modifier in [("MOBILE", 0.9), ("TABLET", 0.8)]:
+                        op = client.get_type("CampaignCriterionOperation")
+                        op.create.campaign = camp_rn
+                        op.create.device.type_ = client.enums.DeviceEnum[dev_type]
+                        op.create.bid_modifier = modifier
+                        cc_svc.mutate_campaign_criteria(customer_id=customer_id, operations=[op])
+                aplicados.append("device_bids_mobile_tablet")
+        except Exception as e:
+            erros.append(f"device: {e}")
+
+    # ── 6. Ad schedule (Seg-Dom 06h-23h) ─────────────────────────────────────
+    if "ad_schedule" not in skip:
+        try:
+            sched_exist = _gaql(client, customer_id, f"""
+                SELECT campaign_criterion.type
+                FROM campaign_criterion
+                WHERE campaign.id = {campaign_id}
+                  AND campaign_criterion.type = 'AD_SCHEDULE'
+            """)
+            if not sched_exist:
+                if not dry_run:
+                    cc_svc = client.get_service("CampaignCriterionService")
+                    ops = []
+                    for day in range(2, 9):  # MONDAY=2 ... SUNDAY=8
+                        op = client.get_type("CampaignCriterionOperation")
+                        op.create.campaign = camp_rn
+                        op.create.ad_schedule.day_of_week = client.enums.DayOfWeekEnum(day)
+                        op.create.ad_schedule.start_hour = 6
+                        op.create.ad_schedule.start_minute = client.enums.MinuteOfHourEnum.ZERO
+                        op.create.ad_schedule.end_hour = 23
+                        op.create.ad_schedule.end_minute = client.enums.MinuteOfHourEnum.ZERO
+                        ops.append(op)
+                    cc_svc.mutate_campaign_criteria(customer_id=customer_id, operations=ops)
+                aplicados.append("ad_schedule_6h_23h_seg_dom")
+        except Exception as e:
+            erros.append(f"ad_schedule: {e}")
+
+    # ── 7. Sitelinks (4 sitelinks) ────────────────────────────────────────────
+    if "sitelinks" not in skip:
+        try:
+            sl_exist = _gaql(client, customer_id, f"""
+                SELECT campaign_asset.asset_type FROM campaign_asset
+                WHERE campaign.id = {campaign_id}
+                  AND campaign_asset.asset_type = 'SITELINK'
+                  AND campaign_asset.status = 'ENABLED'
+            """)
+            if len(sl_exist) < 4:
+                sitelinks_data = [
+                    ("Colorações Schwarzkopf", f"{store_url}/collections/schwarzkopf-igora", "Igora Royal e Zero Amm", "Alta cobertura e brilho intenso"),
+                    ("Colorações Alfaparf",    f"{store_url}/collections/alfaparf",           "Evolution e Semi Di Lino", "Fórmula italiana de alta performance"),
+                    ("Frete Grátis SP",        f"{store_url}/frete-gratis",                   "Entrega grátis na Grande SP", "Pedidos a partir de R$29,90"),
+                    ("Mais Vendidos",          f"{store_url}/collections/mais-vendidos",       "Os produtos favoritos dos clientes", "Avaliações 5 estrelas"),
+                ]
+                if not dry_run:
+                    asset_svc  = client.get_service("AssetService")
+                    ca_svc     = client.get_service("CampaignAssetService")
+                    for text, url, desc1, desc2 in sitelinks_data:
+                        op_a = client.get_type("AssetOperation")
+                        op_a.create.name = f"SL {text}"
+                        op_a.create.sitelink_asset.link_text = text
+                        op_a.create.sitelink_asset.description1 = desc1
+                        op_a.create.sitelink_asset.description2 = desc2
+                        op_a.create.sitelink_asset.final_urls.append(url)
+                        r_a = asset_svc.mutate_assets(customer_id=customer_id, operations=[op_a])
+                        asset_rn = r_a.results[0].resource_name
+                        op_ca = client.get_type("CampaignAssetOperation")
+                        op_ca.create.campaign = camp_rn
+                        op_ca.create.asset = asset_rn
+                        op_ca.create.field_type = client.enums.AssetFieldTypeEnum.SITELINK
+                        ca_svc.mutate_campaign_assets(customer_id=customer_id, operations=[op_ca])
+                aplicados.append("sitelinks_4")
+        except Exception as e:
+            erros.append(f"sitelinks: {e}")
+
+    # ── 8. Callouts (4 textos curtos) ─────────────────────────────────────────
+    if "callouts" not in skip:
+        try:
+            co_exist = _gaql(client, customer_id, f"""
+                SELECT campaign_asset.asset_type FROM campaign_asset
+                WHERE campaign.id = {campaign_id}
+                  AND campaign_asset.asset_type = 'CALLOUT'
+                  AND campaign_asset.status = 'ENABLED'
+            """)
+            if len(co_exist) < 2:
+                callouts_data = [
+                    "Produtos 100% Originais",
+                    "Frete Grátis na Grande SP",
+                    "Entrega Rápida",
+                    "Maior Variedade de Marcas",
+                ]
+                if not dry_run:
+                    asset_svc = client.get_service("AssetService")
+                    ca_svc    = client.get_service("CampaignAssetService")
+                    for text in callouts_data:
+                        op_a = client.get_type("AssetOperation")
+                        op_a.create.name = f"CO {text}"
+                        op_a.create.callout_asset.callout_text = text
+                        r_a = asset_svc.mutate_assets(customer_id=customer_id, operations=[op_a])
+                        asset_rn = r_a.results[0].resource_name
+                        op_ca = client.get_type("CampaignAssetOperation")
+                        op_ca.create.campaign = camp_rn
+                        op_ca.create.asset = asset_rn
+                        op_ca.create.field_type = client.enums.AssetFieldTypeEnum.CALLOUT
+                        ca_svc.mutate_campaign_assets(customer_id=customer_id, operations=[op_ca])
+                aplicados.append("callouts_4")
+        except Exception as e:
+            erros.append(f"callouts: {e}")
+
+    # ── 9. Structured snippets (marcas) ───────────────────────────────────────
+    if "snippets" not in skip:
+        try:
+            sn_exist = _gaql(client, customer_id, f"""
+                SELECT campaign_asset.asset_type FROM campaign_asset
+                WHERE campaign.id = {campaign_id}
+                  AND campaign_asset.asset_type = 'STRUCTURED_SNIPPET'
+                  AND campaign_asset.status = 'ENABLED'
+            """)
+            if not sn_exist:
+                if not dry_run:
+                    asset_svc = client.get_service("AssetService")
+                    ca_svc    = client.get_service("CampaignAssetService")
+                    op_a = client.get_type("AssetOperation")
+                    op_a.create.name = "Snippet Marcas"
+                    op_a.create.structured_snippet_asset.header = "Marcas"
+                    op_a.create.structured_snippet_asset.values.extend([
+                        "Schwarzkopf", "Alfaparf", "Igora", "Inoar", "Skala"
+                    ])
+                    r_a = asset_svc.mutate_assets(customer_id=customer_id, operations=[op_a])
+                    asset_rn = r_a.results[0].resource_name
+                    op_ca = client.get_type("CampaignAssetOperation")
+                    op_ca.create.campaign = camp_rn
+                    op_ca.create.asset = asset_rn
+                    op_ca.create.field_type = client.enums.AssetFieldTypeEnum.STRUCTURED_SNIPPET
+                    ca_svc.mutate_campaign_assets(customer_id=customer_id, operations=[op_ca])
+                aplicados.append("structured_snippet_marcas")
+        except Exception as e:
+            erros.append(f"snippets: {e}")
+
+    return {
+        "ok":        len(erros) == 0,
+        "campanha":  camp_nome,
+        "dry_run":   dry_run,
+        "aplicados": aplicados,
+        "erros":     erros,
+        "msg":       f"{len(aplicados)} item(ns) aplicado(s), {len(erros)} erro(s)",
+    }
+
+
 @router.get("/campanha/{campaign_id}/listing-groups")
 def ads_listing_groups(campaign_id: str):
     """Retorna listing groups e produtos elegíveis de uma campanha Shopping."""
