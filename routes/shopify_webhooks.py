@@ -273,13 +273,21 @@ def _is_free_shipping(order: dict) -> bool:
 
 
 def _is_rmsp(order: dict) -> bool:
-    """RMSP é atendido por parceiro próprio — não gerar etiqueta ME."""
+    """Entrega própria (micro-região e área Flex) — não gerar etiqueta ME."""
     for line in order.get("shipping_lines", []):
         title = (line.get("title") or line.get("code") or "").upper()
         if "RMSP" in title or "REGIÃO METROPOLITANA" in title:
             return True
+        # Opções de entrega própria oferecidas pelo motor de frete no checkout
+        if any(nome in title for nome in ("ENTREGA HOJE", "RECEBA AMANHA", "SEGUNDA-FEIRA")):
+            return True
     addr = order.get("shipping_address") or {}
     cep = (addr.get("zip") or "").replace("-", "").replace(" ", "")
+    if len(cep) == 8 and cep.isdigit():
+        from services.frete_cobertura import e_entrega_propria
+        coberto = e_entrega_propria(cep)
+        if coberto is not None:
+            return coberto
     if len(cep) >= 5:
         prefix = int(cep[:5])
         # CEPs RMSP: 01000-09999 (SP capital), 06000-06299 (Osasco), 07000-07299 (Guarulhos)

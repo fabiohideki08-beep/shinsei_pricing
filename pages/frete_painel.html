@@ -146,11 +146,15 @@
       <div class="field-row">
         <div class="field">
           <label>1º produto (R$)</label>
-          <input type="number" id="cfg-primeiro" min="0" step="0.5" placeholder="4.00" />
+          <input type="number" id="cfg-primeiro" min="0" step="0.5" placeholder="2.00" />
         </div>
         <div class="field">
-          <label>2º produto em diante (R$)</label>
-          <input type="number" id="cfg-por-item" min="0" step="0.5" placeholder="8.00" />
+          <label>2º produto (R$)</label>
+          <input type="number" id="cfg-segundo" min="0" step="0.5" placeholder="4.00" />
+        </div>
+        <div class="field">
+          <label>3º produto em diante (R$)</label>
+          <input type="number" id="cfg-demais" min="0" step="0.5" placeholder="5.00" />
         </div>
       </div>
 
@@ -300,14 +304,17 @@ function hideNotice(id){ document.getElementById(id).classList.add('hidden'); }
 // ---------------------------------------------------------------------------
 var _historico = [];
 var _freteMinimo = null;
+var _freteMinimoMicro = null;
 
 function carregarConfig(){
   fetch('/frete/config')
     .then(function(r){ return r.json(); })
     .then(function(cfg){
       _freteMinimo = cfg.frete_gratis_minimo;
+      _freteMinimoMicro = cfg.frete_gratis_minimo_micro;
       document.getElementById('cfg-primeiro').value       = cfg.subsidio_primeiro_item;
-      document.getElementById('cfg-por-item').value       = cfg.subsidio_por_item;
+      document.getElementById('cfg-segundo').value        = cfg.subsidio_segundo_item;
+      document.getElementById('cfg-demais').value         = cfg.subsidio_demais_itens;
       document.getElementById('cfg-frete-default').value  = cfg.frete_real_default     || 18;
       document.getElementById('cfg-cep-origem').value     = fmtCep(cfg.cep_origem      || '06036003');
       atualizarPreview();
@@ -320,12 +327,13 @@ function carregarConfig(){
 // ---------------------------------------------------------------------------
 function atualizarPreview(){
   var primeiro  = parseFloat(document.getElementById('cfg-primeiro').value)  || 0;
-  var porItem   = parseFloat(document.getElementById('cfg-por-item').value)   || 0;
+  var segundo   = parseFloat(document.getElementById('cfg-segundo').value)  || 0;
+  var demais    = parseFloat(document.getElementById('cfg-demais').value)   || 0;
   var freteRef = parseFloat(document.getElementById('cfg-frete-default').value) || 18;
   var html = '';
   var acum = 0;
   for(var q=1; q<=6; q++){
-    acum = parseFloat((primeiro + Math.max(0, q-1)*porItem).toFixed(2));
+    acum = parseFloat((primeiro + (q>=2?segundo:0) + Math.max(0, q-2)*demais).toFixed(2));
     var final = Math.max(0, parseFloat((freteRef - acum).toFixed(2)));
     var gratis = final === 0;
     html += '<div class="subsidy-row">'
@@ -340,7 +348,8 @@ function atualizarPreview(){
 }
 
 document.getElementById('cfg-primeiro').addEventListener('input', atualizarPreview);
-document.getElementById('cfg-por-item').addEventListener('input', atualizarPreview);
+document.getElementById('cfg-segundo').addEventListener('input', atualizarPreview);
+document.getElementById('cfg-demais').addEventListener('input', atualizarPreview);
 document.getElementById('cfg-frete-default').addEventListener('input', atualizarPreview);
 
 // ---------------------------------------------------------------------------
@@ -358,8 +367,9 @@ function chaveApiFrete(){
 
 function salvarConfig(){
   var primeiro = parseFloat(document.getElementById('cfg-primeiro').value);
-  var porItem  = parseFloat(document.getElementById('cfg-por-item').value);
-  if(isNaN(primeiro) || isNaN(porItem) || _freteMinimo === null){
+  var segundo  = parseFloat(document.getElementById('cfg-segundo').value);
+  var demais   = parseFloat(document.getElementById('cfg-demais').value);
+  if(isNaN(primeiro) || isNaN(segundo) || isNaN(demais) || _freteMinimo === null || _freteMinimoMicro === null){
     showNotice('notice-config','Preencha os subsídios e recarregue a página antes de salvar.','err');
     return;
   }
@@ -372,10 +382,12 @@ function salvarConfig(){
 
   var payload = {
     subsidio_primeiro_item : primeiro,
-    subsidio_por_item      : porItem,
+    subsidio_segundo_item  : segundo,
+    subsidio_demais_itens  : demais,
     frete_real_default     : parseFloat(document.getElementById('cfg-frete-default').value)  || 18,
     cep_origem             : (document.getElementById('cfg-cep-origem').value||'').replace(/\D/g,'') || '06036003',
     frete_gratis_minimo    : _freteMinimo,
+    frete_gratis_minimo_micro : _freteMinimoMicro,
   };
 
   fetch('/frete/config', {

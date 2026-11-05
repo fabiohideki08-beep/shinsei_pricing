@@ -14,7 +14,6 @@ Endpoints:
 from __future__ import annotations
 
 import logging
-import math
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -23,12 +22,11 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from services.frete import (
-    SUBSIDY_PER_ITEM,
-    SUBSIDY_FIRST_ITEM,
     FreightResult,
     calculate_freight,
     calcular_subsidio_total,
     carregar_config_frete,
+    itens_para_frete_gratis,
     salvar_config_frete,
     registrar_historico_frete,
     ler_historico_frete,
@@ -292,8 +290,6 @@ async def progresso_frete(
     Regra de subsídio lida dinamicamente da configuração.
     """
     cfg = carregar_config_frete()
-    subsidio_primeiro = float(cfg.get("subsidio_primeiro_item", SUBSIDY_FIRST_ITEM))
-    subsidio_por_item = float(cfg.get("subsidio_por_item", SUBSIDY_PER_ITEM))
     frete_real_default = float(cfg.get("frete_real_default", 18.0))
 
     if frete_real <= 0:
@@ -307,11 +303,7 @@ async def progresso_frete(
         itens_faltando = 0
         mensagem = "🎉 Parabéns! Você ganhou frete grátis!"
     else:
-        if frete_real <= subsidio_primeiro:
-            itens_necessarios = 1
-        else:
-            itens_necessarios = 1 + math.ceil((frete_real - subsidio_primeiro) / subsidio_por_item)
-        itens_faltando = max(0, itens_necessarios - qty)
+        itens_faltando = max(0, itens_para_frete_gratis(frete_real, cfg) - qty)
         if itens_faltando == 1:
             mensagem = "Adicione 1 item para frete grátis!"
         else:
@@ -323,8 +315,9 @@ async def progresso_frete(
         "qty_items": qty,
         "frete_real": frete_real,
         "subsidio": subsidio,
-        "subsidio_primeiro_item": subsidio_primeiro,
-        "subsidio_por_item": subsidio_por_item,
+        "subsidio_primeiro_item": cfg.get("subsidio_primeiro_item"),
+        "subsidio_segundo_item": cfg.get("subsidio_segundo_item"),
+        "subsidio_demais_itens": cfg.get("subsidio_demais_itens"),
         "frete_final": frete_final,
         "itens_faltando": itens_faltando,
         "eh_gratis": eh_gratis,
@@ -358,20 +351,24 @@ async def get_frete_config() -> dict:
 
 class FreteConfigPayload(BaseModel):
     subsidio_primeiro_item: float
-    subsidio_por_item: float
+    subsidio_segundo_item: float
+    subsidio_demais_itens: float
     frete_real_default: float
     cep_origem: str = "06036003"
     frete_gratis_minimo: float = 29.90
+    frete_gratis_minimo_micro: float = 10.0
 
 
 @router.put("/config")
 async def put_frete_config(payload: FreteConfigPayload) -> dict:
     cfg = {
         "subsidio_primeiro_item": payload.subsidio_primeiro_item,
-        "subsidio_por_item": payload.subsidio_por_item,
+        "subsidio_segundo_item": payload.subsidio_segundo_item,
+        "subsidio_demais_itens": payload.subsidio_demais_itens,
         "frete_real_default": payload.frete_real_default,
         "cep_origem": payload.cep_origem,
         "frete_gratis_minimo": payload.frete_gratis_minimo,
+        "frete_gratis_minimo_micro": payload.frete_gratis_minimo_micro,
     }
     salvar_config_frete(cfg)
     return {"ok": True, "config": cfg}
