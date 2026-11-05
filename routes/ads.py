@@ -923,7 +923,7 @@ def ads_completar_campanha(campaign_id: str, payload: dict = {}):
                 "campaign": camp_rn, "asset": asset_rn, "fieldType": field_type
             }}]}, timeout=20)
             if not resp.ok:
-                raise ValueError(f"campaign_asset link HTTP {resp.status_code}: {resp.text[:300]}")
+                raise ValueError(f"campaign_asset link HTTP {resp.status_code}: {resp.text[:2000]}")
 
         # ── Sitelinks ─────────────────────────────────────────────────────────
         if rest_hdrs and "sitelinks" not in skip and existing_ft.get("SITELINK", 0) < 4:
