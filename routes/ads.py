@@ -668,27 +668,25 @@ def ads_auditoria():
         ags_n  = ag_por_camp.get(cid, 0)
         lgs_n  = lg_por_camp.get(cid, 0)
 
-        geo_br   = any("2076" in g for g in geos)   # 2076 = Brasil geo constant
-        lang_pt  = any("1014" in g for g in langs)  # 1014 = Português (Brasil)
+        geo_br    = any("2076" in g for g in geos)   # 2076 = Brasil geo constant
         sitelinks = assets.get("sitelink", 0)
         callouts  = assets.get("callout", 0)
         snippets  = assets.get("structured_snippet", 0)
 
         checklist = [
-            {"item": "Budget configurado",         "ok": budget > 0,   "detalhe": f"R${budget:.2f}/dia"},
-            {"item": "Grupo de anúncios ativo",    "ok": ags_n > 0,    "detalhe": f"{ags_n} grupo(s)"},
-            {"item": "Anúncio Shopping criado",    "ok": ads_n > 0,    "detalhe": f"{ads_n} anúncio(s)"},
-            {"item": "Listing groups configurados","ok": lgs_n > 0,    "detalhe": f"{lgs_n} listing group(s)"},
+            {"item": "Budget configurado",         "ok": budget > 0,     "detalhe": f"R${budget:.2f}/dia"},
+            {"item": "Grupo de anúncios ativo",    "ok": ags_n > 0,      "detalhe": f"{ags_n} grupo(s)"},
+            {"item": "Anúncio Shopping criado",    "ok": ads_n > 0,      "detalhe": f"{ads_n} anúncio(s)"},
+            {"item": "Listing groups configurados","ok": lgs_n > 0,      "detalhe": f"{lgs_n} listing group(s)"},
             {"item": "Merchant Center vinculado",  "ok": bool(merchant), "detalhe": f"Merchant ID: {merchant or 'N/A'}"},
-            {"item": "Geo-targeting Brasil",       "ok": geo_br,       "detalhe": f"{len(geos)} geo(s)" if geos else "Nenhum configurado — serve todos os países"},
-            {"item": "Idioma PT-BR",               "ok": lang_pt,      "detalhe": f"{len(langs)} idioma(s)" if langs else "Nenhum configurado"},
-            {"item": "Negativos (keywords)",       "ok": negs >= 5,    "detalhe": f"{negs} negativas" + (" ⚠️ recomendado ≥5" if negs < 5 else "")},
+            {"item": "Geo-targeting Brasil",       "ok": geo_br,         "detalhe": f"{len(geos)} geo(s)" if geos else "Nenhum — serve todos os países"},
+            {"item": "Negativos (keywords)",       "ok": negs >= 5,      "detalhe": f"{negs} negativas" + (" ⚠️ recomendado ≥5" if negs < 5 else "")},
             {"item": "Sitelinks (≥4)",             "ok": sitelinks >= 4, "detalhe": f"{sitelinks} sitelink(s)"},
-            {"item": "Callouts",                   "ok": callouts >= 2,"detalhe": f"{callouts} callout(s)"},
-            {"item": "Snippets estruturados",      "ok": snippets >= 1,"detalhe": f"{snippets} snippet(s)"},
-            {"item": "Programação de anúncios",    "ok": sched > 0,    "detalhe": f"{sched} horário(s)" if sched else "Sem programação — veiculando 24/7"},
-            {"item": "Ajuste de lance por device", "ok": devs > 0,     "detalhe": f"{devs} ajuste(s)" if devs else "Sem ajuste de dispositivo"},
-            {"item": "UTM tracking template",      "ok": bool(utm),    "detalhe": utm[:60] + "..." if len(utm) > 60 else (utm or "Não configurado")},
+            {"item": "Callouts",                   "ok": callouts >= 2,  "detalhe": f"{callouts} callout(s)"},
+            {"item": "Snippets estruturados",      "ok": snippets >= 1,  "detalhe": f"{snippets} snippet(s)"},
+            {"item": "Programação de anúncios",    "ok": sched > 0,      "detalhe": f"{sched} horário(s)" if sched else "Sem programação — veiculando 24/7"},
+            {"item": "Ajuste de lance por device", "ok": devs > 0,       "detalhe": f"{devs} ajuste(s)" if devs else "Sem ajuste (mobile/tablet)"},
+            {"item": "UTM tracking template",      "ok": bool(utm),      "detalhe": utm[:60] + "..." if len(utm) > 60 else (utm or "Não configurado")},
         ]
 
         ok_count    = sum(1 for x in checklist if x["ok"])
@@ -771,27 +769,7 @@ def ads_completar_campanha(campaign_id: str, payload: dict = {}):
         except Exception as e:
             erros.append(f"geo_br: {e}")
 
-    # ── 2. Idioma PT-BR (languageConstant/1014) ───────────────────────────────
-    if "idioma" not in skip:
-        try:
-            lang_exist = _gaql(client, customer_id, f"""
-                SELECT campaign_criterion.language.language_constant
-                FROM campaign_criterion
-                WHERE campaign.id = {campaign_id}
-                  AND campaign_criterion.type = 'LANGUAGE'
-            """)
-            if not lang_exist:
-                if not dry_run:
-                    cc_svc = client.get_service("CampaignCriterionService")
-                    op = client.get_type("CampaignCriterionOperation")
-                    op.create.campaign = camp_rn
-                    op.create.language.language_constant = "languageConstants/1014"
-                    cc_svc.mutate_campaign_criteria(customer_id=customer_id, operations=[op])
-                aplicados.append("idioma_pt_br")
-        except Exception as e:
-            erros.append(f"idioma: {e}")
-
-    # ── 3. UTM tracking template ──────────────────────────────────────────────
+    # ── 2. UTM tracking template ──────────────────────────────────────────────
     if "utm" not in skip and not utm_atual:
         try:
             utm = "{lpurl}?utm_source=google&utm_medium=cpc&utm_campaign={_utmz}&utm_term={keyword}&utm_content={adgroup.name}"
@@ -892,7 +870,7 @@ def ads_completar_campanha(campaign_id: str, payload: dict = {}):
     if "sitelinks" not in skip:
         try:
             sl_exist = _gaql(client, customer_id, f"""
-                SELECT campaign_asset.field_type FROM campaign_asset
+                SELECT campaign.id, campaign_asset.field_type FROM campaign_asset
                 WHERE campaign.id = {campaign_id}
                   AND campaign_asset.field_type = 'SITELINK'
                   AND campaign_asset.status = 'ENABLED'
@@ -929,7 +907,7 @@ def ads_completar_campanha(campaign_id: str, payload: dict = {}):
     if "callouts" not in skip:
         try:
             co_exist = _gaql(client, customer_id, f"""
-                SELECT campaign_asset.field_type FROM campaign_asset
+                SELECT campaign.id, campaign_asset.field_type FROM campaign_asset
                 WHERE campaign.id = {campaign_id}
                   AND campaign_asset.field_type = 'CALLOUT'
                   AND campaign_asset.status = 'ENABLED'
@@ -963,7 +941,7 @@ def ads_completar_campanha(campaign_id: str, payload: dict = {}):
     if "snippets" not in skip:
         try:
             sn_exist = _gaql(client, customer_id, f"""
-                SELECT campaign_asset.field_type FROM campaign_asset
+                SELECT campaign.id, campaign_asset.field_type FROM campaign_asset
                 WHERE campaign.id = {campaign_id}
                   AND campaign_asset.field_type = 'STRUCTURED_SNIPPET'
                   AND campaign_asset.status = 'ENABLED'
