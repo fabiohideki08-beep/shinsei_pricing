@@ -1,7 +1,7 @@
 """
 services/frete_cobertura.py — Cobertura da entrega própria Shinsei, por CEP.
 
-  - Micro-região: até 4 km em linha reta do depósito (coordenadas por CEP da AwesomeAPI).
+  - Micro-região: até 4 km em linha reta do depósito (coordenadas da AwesomeAPI ou OpenStreetMap).
   - RMSP: área onde o Flex do Mercado Livre entrega para a conta Shinsei. A cobertura é por CEP,
     não por cidade, então é consultada em shipping_options de um anúncio Flex com estoque.
 
@@ -34,6 +34,8 @@ _CACHE_MAX = 20000
 DEPOSITO_LAT = -23.5545295
 DEPOSITO_LON = -46.7790483
 RAIO_MICROREGIAO_KM = float(os.getenv("FRETE_RAIO_MICROREGIAO_KM", "4.0"))
+
+_FAIXA_CEP_PROXIMA = (5000000, 6999999)
 
 # Usadas só se a consulta de coordenadas falhar
 _MICROREGIAO_FAIXAS_CEP: list[tuple[int, int]] = [
@@ -96,23 +98,59 @@ def distancia_deposito_km(cep: str) -> float | None:
     achou, valor = _do_cache("geo", cep)
     if achou:
         return valor
-    try:
-        resp = httpx.get(f"https://cep.awesomeapi.com.br/json/{cep}", timeout=3.0)
-        resp.raise_for_status()
-        dados = resp.json()
-        km = round(_haversine_km(DEPOSITO_LAT, DEPOSITO_LON, float(dados["lat"]), float(dados["lng"])), 3)
-    except Exception as exc:
-        logger.warning("Coordenadas indisponíveis para CEP %s: %s", cep, exc)
+    coordenadas = _coordenadas_awesomeapi(cep) or _coordenadas_nominatim(cep)
+    if not coordenadas:
+        logger.warning("Coordenadas indisponíveis para CEP %s", cep)
         return None
+    km = round(_haversine_km(DEPOSITO_LAT, DEPOSITO_LON, *coordenadas), 3)
     _gravar_cache("geo", cep, km)
     return km
 
 
+def _coordenadas_awesomeapi(cep: str) -> tuple[float, float] | None:
+    try:
+        resp = httpx.get(f"https://cep.awesomeapi.com.br/json/{cep}", timeout=2.0)
+        resp.raise_for_status()
+        dados = resp.json()
+        return float(dados["lat"]), float(dados["lng"])
+    except Exception as exc:
+        logger.info("AwesomeAPI sem coordenadas para CEP %s: %s", cep, exc)
+        return None
+
+
+def _coordenadas_nominatim(cep: str) -> tuple[float, float] | None:
+    """Localiza pelo endereço do CEP no OpenStreetMap; em rua longa, o ponto é aproximado."""
+    try:
+        endereco = httpx.get(f"https://viacep.com.br/ws/{cep}/json/", timeout=3.0).json()
+        rua, bairro, cidade = (endereco.get(k) or "" for k in ("logradouro", "bairro", "localidade"))
+        if rua:
+            params = {"street": rua, "city": cidade, "state": "SP", "country": "Brasil"}
+        elif bairro:
+            params = {"q": f"{bairro}, {cidade}, SP, Brasil"}
+        else:
+            return None
+        resp = httpx.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={**params, "format": "json", "limit": 1},
+            headers={"User-Agent": "ShinseiMarket/1.0 (frete; contato@shinseimarket.com.br)"},
+            timeout=3.0,
+        )
+        resp.raise_for_status()
+        resultados = resp.json()
+        return (float(resultados[0]["lat"]), float(resultados[0]["lon"])) if resultados else None
+    except Exception as exc:
+        logger.warning("Nominatim sem coordenadas para CEP %s: %s", cep, exc)
+        return None
+
+
 def esta_na_microregiao(cep: str) -> bool:
+    numero = int(cep) if cep.isdigit() else -1
+    # Só CEPs nessa faixa podem estar no raio; evita consultas externas para o resto do Brasil
+    if not _FAIXA_CEP_PROXIMA[0] <= numero <= _FAIXA_CEP_PROXIMA[1]:
+        return False
     km = distancia_deposito_km(cep)
     if km is not None:
         return km <= RAIO_MICROREGIAO_KM
-    numero = int(cep) if cep.isdigit() else -1
     return any(ini <= numero <= fim for ini, fim in _MICROREGIAO_FAIXAS_CEP)
 
 
