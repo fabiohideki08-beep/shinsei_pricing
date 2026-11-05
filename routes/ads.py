@@ -819,21 +819,38 @@ def ads_completar_campanha(campaign_id: str, payload: dict = {}):
     # ── 5. Device bid adjustment (mobile -10%) ────────────────────────────────
     if "device" not in skip:
         try:
-            dev_exist = _gaql(client, customer_id, f"""
-                SELECT campaign_criterion.device.type, campaign_criterion.bid_modifier
+            dev_rows = _gaql(client, customer_id, f"""
+                SELECT campaign_criterion.resource_name, campaign_criterion.device.type, campaign_criterion.bid_modifier
                 FROM campaign_criterion
                 WHERE campaign.id = {campaign_id}
                   AND campaign_criterion.type = 'DEVICE'
             """)
-            if not dev_exist:
+            # Mapear device type → (resource_name, bid_modifier)
+            dev_map: dict = {}
+            for r in dev_rows:
+                dt = r.campaign_criterion.device.type_.name if hasattr(r.campaign_criterion.device.type_, "name") else str(r.campaign_criterion.device.type_)
+                dev_map[dt] = (r.campaign_criterion.resource_name, r.campaign_criterion.bid_modifier)
+            # Verificar se mobile/tablet já têm ajuste real (!=1.0)
+            needs_device = any(
+                dev_map.get(dt, (None, 1.0))[1] in (None, 0.0, 1.0)
+                for dt in ("MOBILE", "TABLET")
+            )
+            if needs_device:
                 if not dry_run:
                     cc_svc = client.get_service("CampaignCriterionService")
-                    # Mobile -10% (0.9), Tablet -20% (0.8)
                     for dev_type, modifier in [("MOBILE", 0.9), ("TABLET", 0.8)]:
+                        existing = dev_map.get(dev_type)
                         op = client.get_type("CampaignCriterionOperation")
-                        op.create.campaign = camp_rn
-                        op.create.device.type_ = client.enums.DeviceEnum[dev_type]
-                        op.create.bid_modifier = modifier
+                        if existing and existing[0]:
+                            # Atualizar criterion existente
+                            op.update.resource_name = existing[0]
+                            op.update.bid_modifier = modifier
+                            op.update_mask.paths.append("bid_modifier")
+                        else:
+                            # Criar novo
+                            op.create.campaign = camp_rn
+                            op.create.device.type_ = client.enums.DeviceEnum[dev_type]
+                            op.create.bid_modifier = modifier
                         cc_svc.mutate_campaign_criteria(customer_id=customer_id, operations=[op])
                 aplicados.append("device_bids_mobile_tablet")
         except Exception as e:
