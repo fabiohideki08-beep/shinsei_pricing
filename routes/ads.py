@@ -748,6 +748,28 @@ def ads_completar_campanha(campaign_id: str, payload: dict = {}):
     aplicados: list[str] = []
     erros:    list[str] = []
 
+    # ── 0. Reativar ad groups pausados ───────────────────────────────────────
+    if "adgroups" not in skip:
+        try:
+            paused_ags = _gaql(client, customer_id, f"""
+                SELECT ad_group.id, ad_group.resource_name, ad_group.name, ad_group.status
+                FROM ad_group
+                WHERE campaign.id = {campaign_id}
+                  AND ad_group.status = 'PAUSED'
+            """)
+            if paused_ags:
+                if not dry_run:
+                    ag_svc = client.get_service("AdGroupService")
+                    for row in paused_ags:
+                        op = client.get_type("AdGroupOperation")
+                        op.update.resource_name = row.ad_group.resource_name
+                        op.update.status = client.enums.AdGroupStatusEnum.ENABLED
+                        op.update_mask.paths.append("status")
+                        ag_svc.mutate_ad_groups(customer_id=customer_id, operations=[op])
+                aplicados.append(f"adgroups_reativados_{len(paused_ags)}")
+        except Exception as e:
+            erros.append(f"adgroups: {e}")
+
     # ── 1. Geo BR (geoTargetConstant/2076 = Brasil) ──────────────────────────
     if "geo" not in skip:
         try:
