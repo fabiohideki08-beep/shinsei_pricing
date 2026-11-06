@@ -1,6 +1,9 @@
+import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+import requests as _req_ml
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse, HTMLResponse
 from pydantic import BaseModel
 
@@ -278,3 +281,82 @@ def ml_akg_cota_gratis():
         "seller_info": seller_info,
         "available_listing_types": listing_types,
     }
+
+
+# ── Envios: lista pedidos ML por status para o Horus Eye ─────────────────────
+
+def _ml_token_pair(empresa: str) -> tuple[str, str]:
+    """Retorna (access_token, seller_id) para shinsei ou akg."""
+    if empresa == "akg":
+        svc = _get_akg_oauth()
+        t   = svc._read_json(svc.tokens_file, {})
+        return t.get("access_token", ""), str(t.get("user_id", ""))
+    # shinsei: env vars > arquivo local
+    svc    = get_oauth_service()
+    result = svc.ler_tokens()
+    if result["success"]:
+        d = result["data"]
+        return d.get("access_token", ""), str(d.get("user_id", ""))
+    return os.getenv("ML_ACCESS_TOKEN", ""), os.getenv("ML_USER_ID", "")
+
+
+@router.get("/ml/envios")
+def ml_envios(
+    empresa: str = Query("shinsei", description="shinsei ou akg"),
+    dias: int    = Query(30, ge=1, le=90),
+):
+    """
+    Lista pedidos ML com status operacional para o Horus Eye.
+    Retorna order_id, pack_id, status ML, tracking e data.
+    Usado pelo Horus /api/envios/sync para atualizar status_envio.
+    """
+    access_token, seller_id = _ml_token_pair(empresa)
+    if not access_token or not seller_id:
+        raise HTTPException(400, detail=f"ML {empresa} sem token. Acesse /ml/login{'2' if empresa == 'akg' else ''}.")
+
+    hdrs   = {"Authorization": f"Bearer {access_token}"}
+    orders: list[dict] = []
+
+    _STATUS_FILTER = ["ready_to_ship", "shipped", "delivered", "cancelled"]
+
+    for ml_status in _STATUS_FILTER:
+        try:
+            r = _req_ml.get(
+                "https://api.mercadolibre.com/orders/search",
+                headers=hdrs,
+                params={
+                    "seller":       seller_id,
+                    "order.status": ml_status,
+                    "limit":        50,
+                    "sort":         "date_desc",
+                },
+                timeout=15,
+            )
+            if r.status_code != 200:
+                continue
+            for order in r.json().get("results") or []:
+                ship     = order.get("shipping") or {}
+                ship_id  = ship.get("id")
+                tracking = ""
+                if ship_id:
+                    try:
+                        sr = _req_ml.get(
+                            f"https://api.mercadolibre.com/shipments/{ship_id}",
+                            headers=hdrs, timeout=10,
+                        )
+                        if sr.status_code == 200:
+                            tracking = sr.json().get("tracking_number") or ""
+                    except Exception:
+                        pass
+
+                orders.append({
+                    "order_id": str(order.get("id") or ""),
+                    "pack_id":  str(order.get("pack_id") or ""),
+                    "status":   ml_status,
+                    "tracking": tracking,
+                    "data":     order.get("date_created", ""),
+                })
+        except Exception as exc:
+            orders.append({"erro": str(exc), "status": ml_status})
+
+    return {"ok": True, "empresa": empresa, "total": len(orders), "orders": orders}
