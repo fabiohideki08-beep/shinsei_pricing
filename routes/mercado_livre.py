@@ -317,7 +317,18 @@ def ml_envios(
     hdrs   = {"Authorization": f"Bearer {access_token}"}
     orders: list[dict] = []
 
-    _STATUS_FILTER = ["ready_to_ship", "shipped", "delivered", "cancelled"]
+    # ML order.status válidos: "paid" (inclui prontos p/ envio), "shipped", "delivered", "cancelled"
+    # "ready_to_ship" NÃO existe como order.status no ML — o status do ENVIO é diferente do PEDIDO.
+    # Para "paid": mapeamos o status de envio (shipping.status) para identificar ag_etiqueta/ag_coleta.
+    _STATUS_FILTER = ["paid", "shipped", "delivered", "cancelled"]
+
+    # Mapeamento shipping.status → status Horus (apenas para pedidos "paid")
+    _SHIP_STATUS_MAP = {
+        "ready_to_ship": "ready_to_ship",  # etiqueta disponível
+        "handling":      "paid",           # aguardando processamento
+        "shipped":       "shipped",
+        "delivered":     "delivered",
+    }
 
     for ml_status in _STATUS_FILTER:
         try:
@@ -337,6 +348,7 @@ def ml_envios(
             for order in r.json().get("results") or []:
                 ship     = order.get("shipping") or {}
                 ship_id  = ship.get("id")
+                ship_status = ship.get("status", "") or ""
                 tracking = ""
                 if ship_id:
                     try:
@@ -345,16 +357,25 @@ def ml_envios(
                             headers=hdrs, timeout=10,
                         )
                         if sr.status_code == 200:
-                            tracking = sr.json().get("tracking_number") or ""
+                            sd = sr.json()
+                            tracking = sd.get("tracking_number") or ""
+                            if not ship_status:
+                                ship_status = sd.get("status", "") or ""
                     except Exception:
                         pass
 
+                # Para "paid", usar shipping.status para diferenciar ag_etiqueta vs ag_coleta
+                status_final = ml_status
+                if ml_status == "paid":
+                    status_final = _SHIP_STATUS_MAP.get(ship_status, "paid")
+
                 orders.append({
-                    "order_id": str(order.get("id") or ""),
-                    "pack_id":  str(order.get("pack_id") or ""),
-                    "status":   ml_status,
-                    "tracking": tracking,
-                    "data":     order.get("date_created", ""),
+                    "order_id":    str(order.get("id") or ""),
+                    "pack_id":     str(order.get("pack_id") or ""),
+                    "status":      status_final,
+                    "ship_status": ship_status,
+                    "tracking":    tracking,
+                    "data":        order.get("date_created", ""),
                 })
         except Exception as exc:
             orders.append({"erro": str(exc), "status": ml_status})
