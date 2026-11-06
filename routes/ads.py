@@ -1101,7 +1101,7 @@ def ads_remover_assets_reprovados(payload: dict = {}):
         if dry_run:
             return {"ok": True, "dry_run": True, "a_remover": reprovados}
 
-        # Remover via REST em batches de 20
+        # OAuth
         tok_resp = _req_http.post("https://oauth2.googleapis.com/token", data={
             "client_id":     os.environ.get("GOOGLE_ADS_CLIENT_ID"),
             "client_secret": os.environ.get("GOOGLE_ADS_CLIENT_SECRET"),
@@ -1115,20 +1115,48 @@ def ads_remover_assets_reprovados(payload: dict = {}):
         dev_token = os.environ.get("GOOGLE_ADS_DEVELOPER_TOKEN", "")
         rest_hdrs = {"Authorization": f"Bearer {access_token}", "developer-token": dev_token,
                      "login-customer-id": customer_id, "Content-Type": "application/json"}
-        asset_url = f"https://googleads.googleapis.com/v24/customers/{customer_id}/assets:mutate"
+
+        # Buscar CustomerAssets vinculados aos assets reprovados
+        asset_ids = [r["id"] for r in reprovados]
+        asset_rns  = [r["rn"] for r in reprovados]
+        ids_filter = ", ".join(f"'{rn}'" for rn in asset_rns)
+        ca_rows = _gaql(client, customer_id, f"""
+            SELECT customer_asset.resource_name, customer_asset.asset, customer_asset.field_type
+            FROM customer_asset
+            WHERE customer_asset.asset IN ({ids_filter})
+        """)
+        ca_to_remove = [r.customer_asset.resource_name for r in ca_rows]
+
         removidos = []
         erros_rem = []
-        for i in range(0, len(reprovados), 20):
-            batch = reprovados[i:i+20]
-            ops = [{"remove": r["rn"]} for r in batch]
-            resp = _req_http.post(asset_url, headers=rest_hdrs, json={"operations": ops}, timeout=30)
-            if resp.ok:
-                for r in batch:
-                    removidos.append(r["texto"])
-            else:
-                erros_rem.append(resp.text[:500])
 
-        return {"ok": True, "removidos": len(removidos), "textos": removidos, "erros": erros_rem}
+        # Remover CustomerAssets em batches de 20
+        if ca_to_remove:
+            ca_url = f"https://googleads.googleapis.com/v24/customers/{customer_id}/customerAssets:mutate"
+            for i in range(0, len(ca_to_remove), 20):
+                batch_ca = ca_to_remove[i:i+20]
+                ops = [{"remove": rn} for rn in batch_ca]
+                resp = _req_http.post(ca_url, headers=rest_hdrs, json={"operations": ops}, timeout=30)
+                if resp.ok:
+                    removidos.extend(batch_ca)
+                else:
+                    erros_rem.append(resp.text[:500])
+
+        # Se não havia CustomerAssets, tentar remoção direta do asset
+        if not ca_to_remove:
+            asset_url = f"https://googleads.googleapis.com/v24/customers/{customer_id}/assets:mutate"
+            for i in range(0, len(reprovados), 20):
+                batch = reprovados[i:i+20]
+                ops = [{"remove": r["rn"]} for r in batch]
+                resp = _req_http.post(asset_url, headers=rest_hdrs, json={"operations": ops}, timeout=30)
+                if resp.ok:
+                    for r in batch:
+                        removidos.append(r["texto"])
+                else:
+                    erros_rem.append(resp.text[:500])
+
+        return {"ok": True, "removidos": len(removidos), "textos": removidos,
+                "ca_encontrados": len(ca_to_remove), "erros": erros_rem}
     except Exception as e:
         return {"ok": False, "erro": str(e)}
 
