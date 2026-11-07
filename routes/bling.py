@@ -244,7 +244,7 @@ def bling_pedido_venda(pedido_id: int, empresa: str = "shinsei"):
 def bling_nfe_proxy(empresa: str = "shinsei", dias: int = 7):
     """
     Lista NF-e do Bling para o Horus Eye (proxy com token próprio do Pricing).
-    Retorna lista de NFs com situacao, numeroPedidoLoja, numeroPedido, nf_id.
+    Retorna lista de NFs com numeroPedidoLoja (do endpoint de detalhe, buscado em paralelo).
     empresa=shinsei | akg
     """
     import json as _json, os as _os
@@ -252,6 +252,7 @@ def bling_nfe_proxy(empresa: str = "shinsei", dias: int = 7):
     from datetime import datetime as _dt, timedelta as _td
     import httpx as _httpx
     from fastapi import HTTPException as _HTTPEx
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     BLING_BASE = "https://api.bling.com.br/Api/v3"
 
@@ -282,7 +283,8 @@ def bling_nfe_proxy(empresa: str = "shinsei", dias: int = 7):
     desde = (_dt.utcnow() - _td(days=dias)).strftime("%Y-%m-%d")
     ate   = _dt.utcnow().strftime("%Y-%m-%d")
 
-    nfs_total = []
+    # Fase 1: coleta IDs da lista (rápida)
+    nf_ids = []
     pagina = 1
     with _httpx.Client(timeout=20) as http:
         while True:
@@ -290,38 +292,60 @@ def bling_nfe_proxy(empresa: str = "shinsei", dias: int = 7):
                 f"{BLING_BASE}/nfe",
                 headers=headers,
                 params={
-                    "limite":              100,
-                    "pagina":              pagina,
-                    "dataEmissaoInicial":  desde,
-                    "dataEmissaoFinal":    ate,
+                    "limite":             100,
+                    "pagina":             pagina,
+                    "dataEmissaoInicial": desde,
+                    "dataEmissaoFinal":   ate,
                 },
             )
             if r.status_code == 401:
                 raise _HTTPEx(status_code=503, detail=f"Bling {empresa} token inválido (401)")
             if not r.is_success:
                 raise _HTTPEx(status_code=502, detail=f"Bling NF {empresa} HTTP {r.status_code}: {r.text[:200]}")
-            nfs = r.json().get("data", [])
-            if not nfs:
+            page_data = r.json().get("data", [])
+            if not page_data:
                 break
-            for nf in nfs:
-                if not isinstance(nf, dict):
-                    continue  # ignora IDs avulsos que o Bling às vezes mistura na lista
-                sit = nf.get("situacao")
-                if isinstance(sit, dict):
-                    situacao_val = sit.get("valor") or ""
-                else:
-                    situacao_val = str(sit) if sit is not None else ""
-                nfs_total.append({
-                    "id":               str(nf.get("id") or ""),
-                    "numero":           str(nf.get("numero") or ""),
-                    "situacao":         situacao_val,
-                    "situacao_raw":     sit,  # debug — para confirmar o tipo retornado
-                    "numeroPedidoLoja": str(nf.get("numeroPedidoLoja") or "").strip(),
-                    "numeroPedido":     str(nf.get("numeroPedido") or "").strip(),
-                })
-            if len(nfs) < 100:
+            for item in page_data:
+                if isinstance(item, dict):
+                    nf_id = item.get("id")
+                    if nf_id:
+                        nf_ids.append(str(nf_id))
+            if len(page_data) < 100:
                 break
             pagina += 1
+
+    if not nf_ids:
+        return {"empresa": empresa, "total": 0, "nfs": []}
+
+    # Fase 2: busca detalhes em paralelo (numeroPedidoLoja só existe no detalhe)
+    def _fetch_detail(nf_id: str):
+        try:
+            with _httpx.Client(timeout=15) as hc:
+                resp = hc.get(f"{BLING_BASE}/nfe/{nf_id}", headers=headers)
+            if not resp.is_success:
+                return None
+            d = resp.json().get("data", {})
+            if not isinstance(d, dict):
+                return None
+            sit = d.get("situacao")
+            sit_val = str(sit) if sit is not None else ""
+            return {
+                "id":               nf_id,
+                "numero":           str(d.get("numero") or ""),
+                "situacao":         sit_val,
+                "numeroPedidoLoja": str(d.get("numeroPedidoLoja") or "").strip(),
+                "danfe_emitido":    bool(d.get("linkDanfe")),
+            }
+        except Exception:
+            return None
+
+    nfs_total = []
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        futures = {ex.submit(_fetch_detail, nid): nid for nid in nf_ids}
+        for fut in as_completed(futures):
+            result = fut.result()
+            if result:
+                nfs_total.append(result)
 
     return {"empresa": empresa, "total": len(nfs_total), "nfs": nfs_total}
 
