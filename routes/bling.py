@@ -243,16 +243,16 @@ def bling_pedido_venda(pedido_id: int, empresa: str = "shinsei"):
 @router.get("/bling/nfe")
 def bling_nfe_proxy(empresa: str = "shinsei", dias: int = 7):
     """
-    Lista NF-e do Bling para o Horus Eye (proxy com token próprio do Pricing).
-    Retorna lista de NFs com numeroPedidoLoja (do endpoint de detalhe, buscado em paralelo).
+    Lista pedidos/vendas do Bling para o Horus Eye via proxy (token gerido pelo Pricing).
+    Usa /pedidos/vendas que inclui numeroLoja na lista — sem chamadas de detalhe extra.
+    Retorna: {id (pedido), nf_id, numero, numeroPedidoLoja, danfe_emitido=True}
     empresa=shinsei | akg
     """
-    import json as _json, os as _os
+    import json as _json, os as _os, time as _time
     from pathlib import Path as _Path
     from datetime import datetime as _dt, timedelta as _td
     import httpx as _httpx
     from fastapi import HTTPException as _HTTPEx
-    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     BLING_BASE = "https://api.bling.com.br/Api/v3"
 
@@ -280,84 +280,62 @@ def bling_nfe_proxy(empresa: str = "shinsei", dias: int = 7):
         "enable-jwt":    "1",
     }
 
-    # Cutoff em datetime para filtrar no Python (Bling retorna em horário BRT)
-    cutoff = _dt.utcnow() - _td(days=dias)
+    # Cutoff (BRT aproximado: UTC - 3h para compensar fuso)
+    cutoff = _dt.utcnow() - _td(days=dias) - _td(hours=3)
 
-    # Fase 1: coleta IDs da lista paginando sem filtro de data (filtro Bling ignora ou tem bug TZ)
-    # Para quando encontra NF mais antiga que o cutoff
-    import time as _time
-    nf_ids = []
+    # Usa pedidos/vendas: inclui numeroLoja na lista (sem detalhe extra) e situacao
+    # idSituacao=9 = Atendido (pedido com NF emitida)
+    nfs_total = []
     pagina = 1
     done = False
     with _httpx.Client(timeout=20) as http:
         while not done:
             r = http.get(
-                f"{BLING_BASE}/nfe",
+                f"{BLING_BASE}/pedidos/vendas",
                 headers=headers,
-                params={"limite": 100, "pagina": pagina},
+                params={
+                    "limite":      100,
+                    "pagina":      pagina,
+                    "idSituacao":  9,  # Atendido
+                },
             )
             if r.status_code == 401:
                 raise _HTTPEx(status_code=503, detail=f"Bling {empresa} token inválido (401)")
             if r.status_code == 429:
                 _time.sleep(2)
-                continue  # retry na mesma página
+                continue
             if not r.is_success:
-                raise _HTTPEx(status_code=502, detail=f"Bling NF {empresa} HTTP {r.status_code}: {r.text[:200]}")
+                raise _HTTPEx(status_code=502, detail=f"Bling pedidos {empresa} HTTP {r.status_code}: {r.text[:200]}")
             page_data = r.json().get("data", [])
             if not page_data:
                 break
             for item in page_data:
                 if not isinstance(item, dict):
                     continue
-                # Filtro de data em Python (evita bug TZ do filtro Bling)
-                data_emissao = item.get("dataEmissao", "")
-                if data_emissao:
+                # Filtro de data em Python (pedido.data = YYYY-MM-DD em BRT)
+                data_pedido = item.get("data", "")
+                if data_pedido:
                     try:
-                        nf_dt = _dt.strptime(data_emissao[:19], "%Y-%m-%d %H:%M:%S")
-                        if nf_dt < cutoff:
+                        p_dt = _dt.strptime(data_pedido[:10], "%Y-%m-%d")
+                        if p_dt < cutoff:
                             done = True
                             break
                     except Exception:
                         pass
-                nf_id = item.get("id")
-                if nf_id:
-                    nf_ids.append(str(nf_id))
+                num_loja = str(item.get("numeroLoja") or "").strip()
+                pedido_id = str(item.get("id") or "")
+                numero    = str(item.get("numero") or "")
+                if num_loja and pedido_id:
+                    nfs_total.append({
+                        "id":               pedido_id,
+                        "numero":           numero,
+                        "situacao":         "9",         # Atendido = NF emitida
+                        "numeroPedidoLoja": num_loja,
+                        "danfe_emitido":    True,        # Atendido sempre tem DANFE
+                    })
             if len(page_data) < 100:
                 break
             pagina += 1
-
-    if not nf_ids:
-        return {"empresa": empresa, "total": 0, "nfs": []}
-
-    # Fase 2: busca detalhes em paralelo (numeroPedidoLoja só existe no detalhe)
-    def _fetch_detail(nf_id: str):
-        try:
-            with _httpx.Client(timeout=15) as hc:
-                resp = hc.get(f"{BLING_BASE}/nfe/{nf_id}", headers=headers)
-            if not resp.is_success:
-                return None
-            d = resp.json().get("data", {})
-            if not isinstance(d, dict):
-                return None
-            sit = d.get("situacao")
-            sit_val = str(sit) if sit is not None else ""
-            return {
-                "id":               nf_id,
-                "numero":           str(d.get("numero") or ""),
-                "situacao":         sit_val,
-                "numeroPedidoLoja": str(d.get("numeroPedidoLoja") or "").strip(),
-                "danfe_emitido":    bool(d.get("linkDanfe")),
-            }
-        except Exception:
-            return None
-
-    nfs_total = []
-    with ThreadPoolExecutor(max_workers=3) as ex:
-        futures = {ex.submit(_fetch_detail, nid): nid for nid in nf_ids}
-        for fut in as_completed(futures):
-            result = fut.result()
-            if result:
-                nfs_total.append(result)
 
     return {"empresa": empresa, "total": len(nfs_total), "nfs": nfs_total}
 
