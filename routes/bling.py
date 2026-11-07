@@ -304,10 +304,18 @@ def bling_nfe_proxy(empresa: str = "shinsei", dias: int = 7):
             if not nfs:
                 break
             for nf in nfs:
+                if not isinstance(nf, dict):
+                    continue  # ignora IDs avulsos que o Bling às vezes mistura na lista
+                sit = nf.get("situacao")
+                if isinstance(sit, dict):
+                    situacao_val = sit.get("valor") or ""
+                else:
+                    situacao_val = str(sit) if sit is not None else ""
                 nfs_total.append({
                     "id":               str(nf.get("id") or ""),
                     "numero":           str(nf.get("numero") or ""),
-                    "situacao":         (nf.get("situacao") or {}).get("valor") or "",
+                    "situacao":         situacao_val,
+                    "situacao_raw":     sit,  # debug — para confirmar o tipo retornado
                     "numeroPedidoLoja": str(nf.get("numeroPedidoLoja") or "").strip(),
                     "numeroPedido":     str(nf.get("numeroPedido") or "").strip(),
                 })
