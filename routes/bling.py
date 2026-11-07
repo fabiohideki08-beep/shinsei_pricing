@@ -240,6 +240,84 @@ def bling_pedido_venda(pedido_id: int, empresa: str = "shinsei"):
         raise _HTTPEx(status_code=502, detail=str(exc))
 
 
+@router.get("/bling/nfe")
+def bling_nfe_proxy(empresa: str = "shinsei", dias: int = 7):
+    """
+    Lista NF-e do Bling para o Horus Eye (proxy com token próprio do Pricing).
+    Retorna lista de NFs com situacao, numeroPedidoLoja, numeroPedido, nf_id.
+    empresa=shinsei | akg
+    """
+    import json as _json, os as _os
+    from pathlib import Path as _Path
+    from datetime import datetime as _dt, timedelta as _td
+    import httpx as _httpx
+    from fastapi import HTTPException as _HTTPEx
+
+    BLING_BASE = "https://api.bling.com.br/Api/v3"
+
+    if empresa == "akg":
+        token = _os.getenv("BLING_AKG_ACCESS_TOKEN", "")
+        if not token:
+            akg_path = _Path(__file__).parent.parent / "data" / "bling_tokens_akg.json"
+            if akg_path.exists():
+                try:
+                    token = _json.loads(akg_path.read_text(encoding="utf-8")).get("access_token", "")
+                except Exception:
+                    pass
+        if not token:
+            raise _HTTPEx(status_code=503, detail="Token Bling AKG não disponível")
+    else:
+        from bling_client import BlingClient
+        client = BlingClient()
+        token = (client.tokens.get("access_token", "") if hasattr(client, "tokens") else "") or _os.getenv("BLING_ACCESS_TOKEN", "")
+        if not token:
+            raise _HTTPEx(status_code=503, detail="Token Bling Shinsei não disponível")
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept":        "application/json",
+        "enable-jwt":    "1",
+    }
+
+    desde = (_dt.utcnow() - _td(days=dias)).strftime("%Y-%m-%d")
+    ate   = _dt.utcnow().strftime("%Y-%m-%d")
+
+    nfs_total = []
+    pagina = 1
+    with _httpx.Client(timeout=20) as http:
+        while True:
+            r = http.get(
+                f"{BLING_BASE}/nfe",
+                headers=headers,
+                params={
+                    "limite":              100,
+                    "pagina":              pagina,
+                    "dataEmissaoInicial":  desde,
+                    "dataEmissaoFinal":    ate,
+                },
+            )
+            if r.status_code == 401:
+                raise _HTTPEx(status_code=503, detail=f"Bling {empresa} token inválido (401)")
+            if not r.is_success:
+                raise _HTTPEx(status_code=502, detail=f"Bling NF {empresa} HTTP {r.status_code}: {r.text[:200]}")
+            nfs = r.json().get("data", [])
+            if not nfs:
+                break
+            for nf in nfs:
+                nfs_total.append({
+                    "id":               str(nf.get("id") or ""),
+                    "numero":           str(nf.get("numero") or ""),
+                    "situacao":         (nf.get("situacao") or {}).get("valor") or "",
+                    "numeroPedidoLoja": str(nf.get("numeroPedidoLoja") or "").strip(),
+                    "numeroPedido":     str(nf.get("numeroPedido") or "").strip(),
+                })
+            if len(nfs) < 100:
+                break
+            pagina += 1
+
+    return {"empresa": empresa, "total": len(nfs_total), "nfs": nfs_total}
+
+
 @router.get("/bling", response_class=HTMLResponse)
 def bling_page():
     html = """
