@@ -300,6 +300,10 @@ def bling_nfe_proxy(empresa: str = "shinsei", dias: int = 7):
             )
             if r.status_code == 401:
                 raise _HTTPEx(status_code=503, detail=f"Bling {empresa} token inválido (401)")
+            if r.status_code == 429:
+                import time as _time
+                _time.sleep(2)
+                continue  # retry na mesma página
             if not r.is_success:
                 raise _HTTPEx(status_code=502, detail=f"Bling NF {empresa} HTTP {r.status_code}: {r.text[:200]}")
             page_data = r.json().get("data", [])
@@ -340,7 +344,7 @@ def bling_nfe_proxy(empresa: str = "shinsei", dias: int = 7):
             return None
 
     nfs_total = []
-    with ThreadPoolExecutor(max_workers=10) as ex:
+    with ThreadPoolExecutor(max_workers=3) as ex:
         futures = {ex.submit(_fetch_detail, nid): nid for nid in nf_ids}
         for fut in as_completed(futures):
             result = fut.result()
