@@ -283,28 +283,25 @@ def bling_nfe_proxy(empresa: str = "shinsei", dias: int = 7):
         "enable-jwt":    "1",
     }
 
-    desde = (_dt.utcnow() - _td(days=dias)).strftime("%Y-%m-%d")
-    ate   = _dt.utcnow().strftime("%Y-%m-%d")
+    # Cutoff em datetime para filtrar no Python (Bling retorna em horário BRT)
+    cutoff = _dt.utcnow() - _td(days=dias)
 
-    # Fase 1: coleta IDs da lista (rápida)
+    # Fase 1: coleta IDs da lista paginando sem filtro de data (filtro Bling ignora ou tem bug TZ)
+    # Para quando encontra NF mais antiga que o cutoff
+    import time as _time
     nf_ids = []
     pagina = 1
+    done = False
     with _httpx.Client(timeout=20) as http:
-        while True:
+        while not done:
             r = http.get(
                 f"{BLING_BASE}/nfe",
                 headers=headers,
-                params={
-                    "limite":             100,
-                    "pagina":             pagina,
-                    "dataEmissaoInicial": desde,
-                    "dataEmissaoFinal":   ate,
-                },
+                params={"limite": 100, "pagina": pagina},
             )
             if r.status_code == 401:
                 raise _HTTPEx(status_code=503, detail=f"Bling {empresa} token inválido (401)")
             if r.status_code == 429:
-                import time as _time
                 _time.sleep(2)
                 continue  # retry na mesma página
             if not r.is_success:
@@ -313,10 +310,21 @@ def bling_nfe_proxy(empresa: str = "shinsei", dias: int = 7):
             if not page_data:
                 break
             for item in page_data:
-                if isinstance(item, dict):
-                    nf_id = item.get("id")
-                    if nf_id:
-                        nf_ids.append(str(nf_id))
+                if not isinstance(item, dict):
+                    continue
+                # Filtro de data em Python (evita bug TZ do filtro Bling)
+                data_emissao = item.get("dataEmissao", "")
+                if data_emissao:
+                    try:
+                        nf_dt = _dt.strptime(data_emissao[:19], "%Y-%m-%d %H:%M:%S")
+                        if nf_dt < cutoff:
+                            done = True
+                            break
+                    except Exception:
+                        pass
+                nf_id = item.get("id")
+                if nf_id:
+                    nf_ids.append(str(nf_id))
             if len(page_data) < 100:
                 break
             pagina += 1
