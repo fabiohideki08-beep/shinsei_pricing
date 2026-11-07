@@ -283,8 +283,8 @@ def bling_nfe_proxy(empresa: str = "shinsei", dias: int = 7):
         "enable-jwt":    "1",
     }
 
-    # Cutoff (BRT aproximado: UTC - 3h para compensar fuso)
-    cutoff = _dt.utcnow() - _td(days=dias) - _td(hours=3)
+    # Cutoff = data de dias atrás (comparação de datas, sem hora, evita bug de TZ)
+    cutoff_date = (_dt.utcnow() - _td(days=dias)).date()
 
     # Usa pedidos/vendas: inclui numeroLoja na lista (sem detalhe extra) e situacao
     # idSituacao=9 = Atendido (pedido com NF emitida)
@@ -315,12 +315,12 @@ def bling_nfe_proxy(empresa: str = "shinsei", dias: int = 7):
             for item in page_data:
                 if not isinstance(item, dict):
                     continue
-                # Filtro de data em Python (pedido.data = YYYY-MM-DD em BRT)
+                # Filtro de data em Python (pedido.data = YYYY-MM-DD)
                 data_pedido = item.get("data", "")
                 if data_pedido:
                     try:
-                        p_dt = _dt.strptime(data_pedido[:10], "%Y-%m-%d")
-                        if p_dt < cutoff:
+                        p_date = _dt.strptime(data_pedido[:10], "%Y-%m-%d").date()
+                        if p_date < cutoff_date:
                             done = True
                             break
                     except Exception:
