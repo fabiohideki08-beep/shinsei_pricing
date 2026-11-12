@@ -1393,7 +1393,7 @@ def requeue_carrinhos_abandonados(dias: int = 28):
             checkout_url = c.get("abandoned_checkout_url", "")
             total        = c.get("total_price", "0.00")
             customer     = c.get("customer") or {}
-            name  = (customer.get("first_name", "") + " " + customer.get("last_name", "")).strip() or email
+            name  = ((customer.get("first_name") or "") + " " + (customer.get("last_name") or "")).strip() or email
             phone = (c.get("phone") or customer.get("phone") or
                      (c.get("billing_address") or {}).get("phone") or
                      (c.get("shipping_address") or {}).get("phone") or "")
