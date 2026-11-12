@@ -13,7 +13,7 @@ import os
 import smtplib
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -1348,6 +1348,75 @@ def listar_carrinhos():
     if not log_file.exists():
         return {"carrinhos": []}
     return {"carrinhos": json.loads(log_file.read_text(encoding="utf-8"))[-50:]}
+
+
+@router.post("/requeue-carrinhos")
+def requeue_carrinhos_abandonados(dias: int = 28):
+    """
+    Busca checkouts abertos no Shopify (últimos N dias) e enfileira para recuperação.
+    Útil para carrinhos que nunca chegaram via webhook (Render dormindo, etc).
+    """
+    import re as _re2
+    store = "pknw4n-eg.myshopify.com"
+    headers = _shopify_headers()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=dias)
+
+    enfileirados, pulados = [], []
+    page_info = None
+
+    while True:
+        params = {"status": "open", "limit": 250}
+        if page_info:
+            params["page_info"] = page_info
+        r = requests.get(f"https://{store}/admin/api/2024-01/checkouts.json",
+                         headers=headers, params=params, timeout=30)
+        if r.status_code != 200:
+            return {"ok": False, "erro": f"Shopify {r.status_code}: {r.text[:200]}"}
+
+        for c in r.json().get("checkouts", []):
+            email = (c.get("email") or "").strip().lower()
+            if not email:
+                pulados.append({"motivo": "sem_email"}); continue
+
+            try:
+                updated_dt = datetime.fromisoformat(c.get("updated_at", "").replace("Z", "+00:00"))
+                if updated_dt < cutoff:
+                    pulados.append({"motivo": "muito_antigo"}); continue
+            except Exception:
+                pass
+
+            checkout_id    = str(c.get("id", ""))
+            checkout_token = c.get("token", "")
+            if _checkout_converted(checkout_token):
+                pulados.append({"motivo": "convertido"}); continue
+
+            checkout_url = c.get("abandoned_checkout_url", "")
+            total        = c.get("total_price", "0.00")
+            customer     = c.get("customer") or {}
+            name  = (customer.get("first_name", "") + " " + customer.get("last_name", "")).strip() or email
+            phone = (c.get("phone") or customer.get("phone") or
+                     (c.get("billing_address") or {}).get("phone") or
+                     (c.get("shipping_address") or {}).get("phone") or "")
+            items = [{"title": li.get("title", "Produto"), "price": li.get("price", "0")}
+                     for li in (c.get("line_items") or [])]
+
+            if _fila_enfileirar(checkout_id, checkout_token, email, name, phone, items, checkout_url, total):
+                enfileirados.append({"id": checkout_id, "email": email, "total": total})
+                _log_abandoned_cart(checkout_id, email, "enfileirado_requeue")
+            else:
+                pulados.append({"motivo": "ja_na_fila"})
+
+        link = r.headers.get("Link", "")
+        if 'rel="next"' in link:
+            m = _re2.search(r'page_info=([^&>]+)', link.split('rel="next"')[0])
+            page_info = m.group(1) if m else None
+            if not page_info:
+                break
+        else:
+            break
+
+    print(f"[requeue] enfileirados={len(enfileirados)} pulados={len(pulados)}")
+    return {"ok": True, "enfileirados": len(enfileirados), "pulados": len(pulados), "detalhes": enfileirados}
 
 
 @router.post("/test-whatsapp")
