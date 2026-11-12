@@ -1365,7 +1365,7 @@ def requeue_carrinhos_abandonados(dias: int = 28):
     page_info = None
 
     while True:
-        params = {"status": "open", "limit": 250}
+        params = {"limit": 250}
         if page_info:
             params["page_info"] = page_info
         r = requests.get(f"https://{store}/admin/api/2024-01/checkouts.json",
@@ -1387,8 +1387,8 @@ def requeue_carrinhos_abandonados(dias: int = 28):
 
             checkout_id    = str(c.get("id", ""))
             checkout_token = c.get("token", "")
-            if _checkout_converted(checkout_token):
-                pulados.append({"motivo": "convertido"}); continue
+            # não verifica _checkout_converted — confiamos que a API já retorna apenas abertos
+            # e pular conversão remota evita 42 chamadas extras
 
             checkout_url = c.get("abandoned_checkout_url", "")
             total        = c.get("total_price", "0.00")
