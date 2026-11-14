@@ -1130,33 +1130,44 @@ def ads_remover_assets_reprovados(payload: dict = {}):
         removidos = []
         erros_rem = []
 
-        # Remover CustomerAssets em batches de 20
-        if ca_to_remove:
-            ca_url = f"https://googleads.googleapis.com/v24/customers/{customer_id}/customerAssets:mutate"
-            for i in range(0, len(ca_to_remove), 20):
-                batch_ca = ca_to_remove[i:i+20]
-                ops = [{"remove": rn} for rn in batch_ca]
-                resp = _req_http.post(ca_url, headers=rest_hdrs, json={"operations": ops}, timeout=30)
+        def _remove_batch(url, rns):
+            for i in range(0, len(rns), 20):
+                ops = [{"remove": rn} for rn in rns[i:i+20]]
+                resp = _req_http.post(url, headers=rest_hdrs, json={"operations": ops}, timeout=30)
                 if resp.ok:
-                    removidos.extend(batch_ca)
+                    removidos.extend(rns[i:i+20])
                 else:
-                    erros_rem.append(resp.text[:500])
+                    erros_rem.append(resp.text[:300])
 
-        # Se não havia CustomerAssets, tentar remoção direta do asset
-        if not ca_to_remove:
-            asset_url = f"https://googleads.googleapis.com/v24/customers/{customer_id}/assets:mutate"
-            for i in range(0, len(reprovados), 20):
-                batch = reprovados[i:i+20]
-                ops = [{"remove": r["rn"]} for r in batch]
-                resp = _req_http.post(asset_url, headers=rest_hdrs, json={"operations": ops}, timeout=30)
-                if resp.ok:
-                    for r in batch:
-                        removidos.append(r["texto"])
-                else:
-                    erros_rem.append(resp.text[:500])
+        # 1. Remover CustomerAssets
+        if ca_to_remove:
+            _remove_batch(f"https://googleads.googleapis.com/v24/customers/{customer_id}/customerAssets:mutate", ca_to_remove)
+
+        # 2. Remover CampaignAssets vinculados aos assets reprovados
+        camp_rows = _gaql(client, customer_id, f"""
+            SELECT campaign_asset.resource_name, campaign_asset.asset, campaign_asset.field_type
+            FROM campaign_asset
+            WHERE campaign_asset.asset IN ({ids_filter})
+        """)
+        camp_to_remove = [r.campaign_asset.resource_name for r in camp_rows]
+        if camp_to_remove:
+            _remove_batch(f"https://googleads.googleapis.com/v24/customers/{customer_id}/campaignAssets:mutate", camp_to_remove)
+
+        # 3. Remover AdGroupAssets vinculados aos assets reprovados
+        ag_rows = _gaql(client, customer_id, f"""
+            SELECT ad_group_asset.resource_name, ad_group_asset.asset, ad_group_asset.field_type
+            FROM ad_group_asset
+            WHERE ad_group_asset.asset IN ({ids_filter})
+        """)
+        ag_to_remove = [r.ad_group_asset.resource_name for r in ag_rows]
+        if ag_to_remove:
+            _remove_batch(f"https://googleads.googleapis.com/v24/customers/{customer_id}/adGroupAssets:mutate", ag_to_remove)
 
         return {"ok": True, "removidos": len(removidos), "textos": removidos,
-                "ca_encontrados": len(ca_to_remove), "erros": erros_rem}
+                "ca_encontrados": len(ca_to_remove),
+                "camp_encontrados": len(camp_to_remove),
+                "ag_encontrados": len(ag_to_remove),
+                "erros": erros_rem}
     except Exception as e:
         return {"ok": False, "erro": str(e)}
 
