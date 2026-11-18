@@ -1793,6 +1793,167 @@ def diagnostico_skus_sem_estoque_akg(limite: int = 200):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Zeramento estoque AKG simples (inventário multiempresa)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_zerar_cache: dict = {}
+
+
+def _job_zerar_estoque_akg_simples(dry_run: bool):
+    """
+    Varre todos os produtos AKG formato=S no Depósito Geral AKG e zera os saldos.
+    Lei 1: apenas formato=S (simples, sem composição) — kits (formato=E) são pulados.
+    Lei 2: usa POST /estoques tipoOperacao=S — nunca altera cadastro.
+    """
+    import time as _t
+    import requests as _req
+
+    BLING_API_URL = "https://api.bling.com.br/Api/v3"
+    DEP_AKG = 14889056234
+
+    _zerar_cache.clear()
+    _zerar_cache.update({
+        "status": "em_andamento",
+        "dry_run": dry_run,
+        "total_scaneados": 0,
+        "total_simples": 0,
+        "total_com_saldo": 0,
+        "total_zerados": 0,
+        "total_erros": 0,
+        "pulados_composicao": 0,
+        "pulados_sem_saldo": 0,
+        "pulados_formato_desconhecido": 0,
+        "itens": [],
+    })
+
+    def _get(url, hdrs, params=None):
+        for _ in range(4):
+            r = _req.get(url, headers=hdrs, params=params, timeout=25)
+            if r.status_code == 429:
+                _t.sleep(3)
+                continue
+            return r
+        return r
+
+    pagina = 1
+    item_count = 0
+    while True:
+        hdrs_a = _hdrs(EMPRESA_AKG)
+        r = _get(f"{BLING_API_URL}/produtos", hdrs_a,
+                 params={"pagina": pagina, "limite": 100, "situacao": "A", "tipo": "P"})
+        if not r.ok:
+            _zerar_cache["status"] = f"erro_listagem_pagina_{pagina}: HTTP {r.status_code}"
+            break
+        prods = r.json().get("data", [])
+        if not prods:
+            break
+
+        _zerar_cache["total_scaneados"] += len(prods)
+
+        for p in prods:
+            item_count += 1
+            # Renovar token a cada 80 itens
+            if item_count % 80 == 0:
+                hdrs_a = _hdrs(EMPRESA_AKG)
+
+            formato = p.get("formato", "")
+
+            # Lei 1: pular composições (formato=E) e formatos desconhecidos
+            if formato == "E":
+                _zerar_cache["pulados_composicao"] += 1
+                continue
+            if formato != "S":
+                _zerar_cache["pulados_formato_desconhecido"] += 1
+                continue
+
+            _zerar_cache["total_simples"] += 1
+            produto_id = p["id"]
+            sku = p.get("codigo", "")
+            nome = str(p.get("nome", ""))[:80]
+
+            # GET saldo no Depósito Geral AKG
+            _t.sleep(0.2)
+            rs = _get(f"{BLING_API_URL}/estoques/saldos", hdrs_a,
+                      params={"produto": produto_id, "deposito": DEP_AKG})
+
+            saldo = 0.0
+            if rs.ok:
+                saldos_data = rs.json().get("data", [])
+                saldo = float(saldos_data[0].get("saldoVirtualTotal", 0) or 0) if saldos_data else 0.0
+
+            if saldo <= 0:
+                _zerar_cache["pulados_sem_saldo"] += 1
+                continue
+
+            _zerar_cache["total_com_saldo"] += 1
+            item_entry = {"sku": sku, "nome": nome, "id": produto_id, "saldo": saldo, "status": "pendente"}
+
+            if dry_run:
+                item_entry["status"] = "dry_run"
+                _zerar_cache["itens"].append(item_entry)
+                continue
+
+            # POST saída para zerar — Lei 2: apenas POST /estoques, nada no cadastro
+            _t.sleep(0.2)
+            hdrs_a2 = _hdrs(EMPRESA_AKG)
+            payload = {
+                "produto":       {"id": produto_id},
+                "deposito":      {"id": DEP_AKG},
+                "tipoOperacao":  "S",
+                "quantidade":    saldo,
+                "observacoes":   "Zeramento inventario multiempresa 18/11/2026",
+            }
+            rp = _req.post(f"{BLING_API_URL}/estoques",
+                           headers={**hdrs_a2, "Content-Type": "application/json"},
+                           json=payload, timeout=30)
+
+            if rp.ok or rp.status_code == 504:
+                item_entry["status"] = "zerado"
+                _zerar_cache["total_zerados"] += 1
+            else:
+                item_entry["status"] = f"erro_http_{rp.status_code}"
+                item_entry["erro_detalhe"] = rp.text[:200]
+                _zerar_cache["total_erros"] += 1
+
+            _zerar_cache["itens"].append(item_entry)
+
+        pagina += 1
+        _t.sleep(0.5)
+
+    if _zerar_cache.get("status") == "em_andamento":
+        _zerar_cache["status"] = "concluido"
+
+
+@router.post("/multiempresa/zerar-estoque-akg-simples")
+def zerar_estoque_akg_simples(dry_run: bool = True):
+    """
+    Zera o saldo físico de todos os produtos SIMPLES (formato=S) no Depósito Geral AKG.
+    Lei 1: apenas produtos sem composição (formato=S) — kits (formato=E) são pulados.
+    Lei 2: usa POST /estoques tipoOperacao=S — nunca altera cadastro.
+    dry_run=True (padrão): apenas lista o que seria zerado, sem executar.
+    dry_run=False: executa as saídas de estoque.
+    Verificar andamento: GET /multiempresa/zerar-estoque-akg-simples/resultado
+    """
+    if _zerar_cache.get("status") == "em_andamento":
+        return {"ok": False, "msg": "Operação já em andamento", "cache": _zerar_cache}
+
+    import threading
+    t = threading.Thread(target=_job_zerar_estoque_akg_simples, args=(dry_run,), daemon=True)
+    t.start()
+
+    return {"ok": True, "msg": "Iniciado em background", "dry_run": dry_run,
+            "resultado_em": "/multiempresa/zerar-estoque-akg-simples/resultado"}
+
+
+@router.get("/multiempresa/zerar-estoque-akg-simples/resultado")
+def resultado_zerar_estoque_akg():
+    """Retorna o resultado/andamento do zeramento AKG simples."""
+    if not _zerar_cache:
+        return {"ok": False, "msg": "Nenhuma operação iniciada. Use POST /multiempresa/zerar-estoque-akg-simples"}
+    return {"ok": True, **_zerar_cache}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Painel HTML
 # ─────────────────────────────────────────────────────────────────────────────
 
