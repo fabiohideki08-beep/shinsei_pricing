@@ -1803,7 +1803,8 @@ def _job_zerar_estoque_akg_simples(dry_run: bool):
     """
     Varre todos os produtos AKG formato=S no Depósito Geral AKG e zera os saldos.
     Lei 1: apenas formato=S (simples, sem composição) — kits (formato=E) são pulados.
-    Lei 2: usa POST /estoques tipoOperacao=S — nunca altera cadastro.
+    Lei 2: usa POST /estoques tipoOperacao=S (saldo>0) ou E (saldo<0) — nunca altera cadastro.
+    Saldo positivo → saída para zerar. Saldo negativo → entrada para zerar.
     """
     import time as _t
     import requests as _req
@@ -1871,7 +1872,7 @@ def _job_zerar_estoque_akg_simples(dry_run: bool):
             sku = p.get("codigo", "")
             nome = str(p.get("nome", ""))[:80]
 
-            # GET saldo no Depósito Geral AKG
+            # GET saldo no Depósito Geral AKG (pode ser positivo ou negativo)
             _t.sleep(0.2)
             rs = _get(f"{BLING_API_URL}/estoques/saldos", hdrs_a,
                       params={"produto": produto_id, "deposito": DEP_AKG})
@@ -1881,27 +1882,34 @@ def _job_zerar_estoque_akg_simples(dry_run: bool):
                 saldos_data = rs.json().get("data", [])
                 saldo = float(saldos_data[0].get("saldoVirtualTotal", 0) or 0) if saldos_data else 0.0
 
-            if saldo <= 0:
+            # Pular apenas se saldo já é exatamente 0
+            if saldo == 0.0:
                 _zerar_cache["pulados_sem_saldo"] += 1
                 continue
 
             _zerar_cache["total_com_saldo"] += 1
-            item_entry = {"sku": sku, "nome": nome, "id": produto_id, "saldo": saldo, "status": "pendente"}
+            # Determinar operação: saldo>0 → saída (S); saldo<0 → entrada (E) para corrigir negativo
+            tipo_op = "S" if saldo > 0 else "E"
+            quantidade = abs(saldo)
+            item_entry = {
+                "sku": sku, "nome": nome, "id": produto_id,
+                "saldo": saldo, "operacao": tipo_op, "status": "pendente",
+            }
 
             if dry_run:
                 item_entry["status"] = "dry_run"
                 _zerar_cache["itens"].append(item_entry)
                 continue
 
-            # POST saída para zerar — Lei 2: apenas POST /estoques, nada no cadastro
+            # POST estoque — Lei 2: apenas POST /estoques, nunca altera cadastro
             _t.sleep(0.2)
             hdrs_a2 = _hdrs(EMPRESA_AKG)
             payload = {
-                "produto":       {"id": produto_id},
-                "deposito":      {"id": DEP_AKG},
-                "tipoOperacao":  "S",
-                "quantidade":    saldo,
-                "observacoes":   "Zeramento inventario multiempresa 18/11/2026",
+                "produto":      {"id": produto_id},
+                "deposito":     {"id": DEP_AKG},
+                "tipoOperacao": tipo_op,
+                "quantidade":   quantidade,
+                "observacoes":  "Zeramento inventario multiempresa 18/11/2026",
             }
             rp = _req.post(f"{BLING_API_URL}/estoques",
                            headers={**hdrs_a2, "Content-Type": "application/json"},
