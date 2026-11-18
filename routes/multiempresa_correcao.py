@@ -1872,15 +1872,11 @@ def _job_zerar_estoque_akg_simples(dry_run: bool):
             sku = p.get("codigo", "")
             nome = str(p.get("nome", ""))[:80]
 
-            # GET saldo no Depósito Geral AKG (pode ser positivo ou negativo)
-            _t.sleep(0.2)
-            rs = _get(f"{BLING_API_URL}/estoques/saldos", hdrs_a,
-                      params={"produto": produto_id, "deposito": DEP_AKG})
-
-            saldo = 0.0
-            if rs.ok:
-                saldos_data = rs.json().get("data", [])
-                saldo = float(saldos_data[0].get("saldoVirtualTotal", 0) or 0) if saldos_data else 0.0
+            # Saldo total já vem no /produtos (mesmo campo que negativos-akg usa).
+            # GET /estoques/saldos?deposito=X retorna [] se nunca houve movimento nesse depósito,
+            # então usamos saldoVirtualTotal do /produtos como fonte primária.
+            est = p.get("estoque") or {}
+            saldo = float(est.get("saldoVirtualTotal", 0) or 0)
 
             # Pular apenas se saldo já é exatamente 0
             if saldo == 0.0:
