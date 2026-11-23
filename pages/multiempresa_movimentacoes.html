@@ -480,6 +480,40 @@ body {
 .pending-sku { font-family: var(--mono); font-size: 11px; color: var(--amber); }
 .pending-qty { font-family: var(--mono); font-size: 10px; color: var(--muted); }
 
+/* divergências SKU */
+.div-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(255,61,90,.06);
+  border: 1px solid rgba(255,61,90,.2);
+  margin-bottom: 6px;
+}
+.div-item.corrigido { background: rgba(16,208,120,.06); border-color: rgba(16,208,120,.2); }
+.div-sku  { font-family: var(--mono); font-size: 11px; color: var(--red); font-weight: 600; }
+.div-sku.corrigido { color: var(--green); }
+.div-meta { font-size: 10px; color: var(--muted); }
+.div-fix  { display: flex; gap: 6px; align-items: center; margin-top: 2px; }
+.div-fix input {
+  flex: 1; min-width: 0; padding: 3px 6px;
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 4px; color: var(--text); font-family: var(--mono);
+  font-size: 11px;
+}
+.div-fix input:focus { outline: none; border-color: var(--blue); }
+.div-fix button {
+  padding: 3px 10px; border: none; border-radius: 4px;
+  background: var(--blue); color: #fff; font-size: 11px;
+  font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.div-fix button:hover { opacity:.85; }
+.div-fix button.mapped { background: var(--green); }
+.div-result { font-size: 10px; margin-top: 2px; }
+.div-result.ok { color: var(--green); }
+.div-result.err { color: var(--red); }
+
 /* ── TOOLTIPS ─────────────────────────────────────────────── */
 .tag-mov {
   font-family: var(--mono);
@@ -601,6 +635,13 @@ body {
       <div class="pending-list" id="pendingList">
         <div style="color:var(--muted);font-size:11px">Carregando…</div>
       </div>
+    </div>
+
+    <!-- Divergências SKU -->
+    <div class="panel" id="divPanel">
+      <div class="panel-title" style="color:var(--amber)">⚠ Divergências SKU <span id="divBadge"></span></div>
+      <div style="color:var(--muted);font-size:10px;margin-bottom:8px">SKU vendido não encontrado na empresa fornecedora</div>
+      <div id="divList"><div style="color:var(--muted);font-size:11px">Carregando…</div></div>
     </div>
 
   </div><!-- /sidebar -->
@@ -791,6 +832,72 @@ async function pollPendentes() {
   } catch(e) { /* silencioso */ }
 }
 
+async function pollDivergencias() {
+  try {
+    const res  = await fetch('/multiempresa/divergencias', { headers });
+    const data = await res.json();
+    const list = document.getElementById('divList');
+    const items = data.data || [];
+    document.getElementById('divBadge').textContent = items.length > 0 ? `(${items.length})` : '';
+    if (items.length === 0) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:11px">Sem divergências de SKU ✓</div>';
+      return;
+    }
+    list.innerHTML = items.map(it => {
+      const corrigido = !!it.sku_mapeado;
+      const skuClass  = corrigido ? 'div-sku corrigido' : 'div-sku';
+      const itemClass = corrigido ? 'div-item corrigido' : 'div-item';
+      const emp2      = it.empresa_vendedora === 'shinsei' ? 'AKG' : 'Shinsei';
+      return `
+      <div class="${itemClass}" id="div-${it.sku}-${it.empresa_vendedora}">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span class="${skuClass}">${it.sku}</span>
+          <span class="div-meta">${it.total_ocorrencias}× · ${it.total_qtd}un</span>
+        </div>
+        <div class="div-meta">${it.empresa_vendedora} → não encontrado em ${emp2}</div>
+        ${corrigido
+          ? `<div class="div-meta" style="color:var(--green)">✓ Mapeado → <span style="font-family:var(--mono)">${it.sku_mapeado}</span></div>`
+          : `<div class="div-fix">
+               <input id="inp-${it.sku}-${it.empresa_vendedora}" placeholder="SKU em ${emp2}" />
+               <button class="div-fix" onclick="corrigirSku('${it.sku}','${it.empresa_vendedora}',this)">Corrigir</button>
+             </div>`
+        }
+        <div class="div-result" id="res-${it.sku}-${it.empresa_vendedora}"></div>
+      </div>`;
+    }).join('');
+  } catch(e) { /* silencioso */ }
+}
+
+async function corrigirSku(skuOrigem, empresaOrigem, btn) {
+  const inp = document.getElementById(`inp-${skuOrigem}-${empresaOrigem}`);
+  const res = document.getElementById(`res-${skuOrigem}-${empresaOrigem}`);
+  const skuDestino = (inp ? inp.value : '').trim();
+  if (!skuDestino) { res.textContent = 'Informe o SKU correto.'; res.className = 'div-result err'; return; }
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const r = await fetch('/multiempresa/corrigir-sku', {
+      method: 'POST', headers,
+      body: JSON.stringify({ sku_origem: skuOrigem, empresa_origem: empresaOrigem, sku_destino: skuDestino })
+    });
+    const d = await r.json();
+    if (r.ok && d.ok) {
+      res.textContent = `✓ Mapeado. ${d.pedidos_reprocessados} pedido(s) reprocessado(s).`;
+      res.className = 'div-result ok';
+      btn.textContent = '✓';
+      btn.className = 'div-fix mapped';
+      setTimeout(pollDivergencias, 2000);
+    } else {
+      res.textContent = d.detail || 'Erro ao salvar.';
+      res.className = 'div-result err';
+      btn.disabled = false; btn.textContent = 'Corrigir';
+    }
+  } catch(e) {
+    res.textContent = 'Erro de rede.'; res.className = 'div-result err';
+    btn.disabled = false; btn.textContent = 'Corrigir';
+  }
+}
+
 // ── FILTROS ──────────────────────────────────────────────────────────
 function setFilter(f) {
   activeFilter = f;
@@ -882,9 +989,11 @@ async function dispararJob() {
 poll();
 pollRotas();
 pollPendentes();
+pollDivergencias();
 pollTimer = setInterval(poll, POLL_MS);
-setInterval(pollRotas,    15000);
-setInterval(pollPendentes, 10000);
+setInterval(pollRotas,       15000);
+setInterval(pollPendentes,   10000);
+setInterval(pollDivergencias, 30000);
 </script>
 </body>
 </html>

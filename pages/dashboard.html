@@ -150,6 +150,26 @@ footer{text-align:center;padding:20px 0;color:var(--muted);font-size:12px;border
     <div id="sem-vinculo-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px"></div>
   </div>
 
+  <!-- Alerta: Divergências Multiempresa (SKU não encontrado) -->
+  <div id="div-me-section" style="display:none;margin-bottom:28px">
+    <a href="/multiempresa" style="text-decoration:none">
+      <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;cursor:pointer"
+           onmouseover="this.style.borderColor='rgba(245,158,11,.6)'" onmouseout="this.style.borderColor='rgba(245,158,11,.3)'">
+        <div style="display:flex;align-items:center;gap:14px">
+          <span style="font-size:28px">⚠️</span>
+          <div>
+            <div style="font-size:14px;font-weight:700;color:#F59E0B;margin-bottom:2px">Divergências Multiempresa</div>
+            <div id="div-me-desc" style="font-size:12px;color:var(--muted)">SKUs vendidos sem match na empresa fornecedora</div>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div id="div-me-count" style="font-size:28px;font-weight:800;color:#F59E0B">–</div>
+          <div style="font-size:10px;color:var(--muted)">SKUs afetados</div>
+        </div>
+      </div>
+    </a>
+  </div>
+
   <!-- Auditoria de Canais — destaque -->
   <a href="/auditoria/canais" style="display:block;text-decoration:none;margin-bottom:28px">
     <div style="background:linear-gradient(135deg,rgba(239,68,68,.12),rgba(245,158,11,.08));border:1px solid rgba(239,68,68,.3);border-radius:16px;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;transition:all .15s;cursor:pointer"
@@ -490,8 +510,28 @@ function iniciarPolling(){
   }, 2500);
 }
 
+async function loadDivergenciasMe(){
+  try {
+    const API_KEY = document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('api_key='))?.split('=')[1] || '';
+    const hdrs = API_KEY ? {'X-API-Key': API_KEY} : {};
+    const data = await fetch('/multiempresa/divergencias', {headers: hdrs}).then(r=>r.json());
+    const section = document.getElementById('div-me-section');
+    const countEl = document.getElementById('div-me-count');
+    const descEl  = document.getElementById('div-me-desc');
+    const total   = data.total || 0;
+    const ocorr   = data.total_ocorrencias || 0;
+    if(!section) return;
+    if(total === 0){ section.style.display = 'none'; return; }
+    section.style.display = 'block';
+    if(countEl) countEl.textContent = total;
+    if(descEl)  descEl.textContent  = `${ocorr} ocorrência${ocorr!==1?'s':''} em ${total} SKU${total!==1?'s':''} distintos`;
+  } catch(e){ /* silencioso */ }
+}
+
 // Inicia
 carregarDados();
+loadDivergenciasMe();
+setInterval(loadDivergenciasMe, 60000);
 // Verifica se já está rodando
 fetch('/conferencia-sku/status').then(r=>r.json()).then(st=>{
   if(st.status === 'rodando') iniciarPolling();

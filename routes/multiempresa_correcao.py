@@ -230,6 +230,139 @@ def get_pendentes():
     return {"data": [dict(r) for r in rows], "total": len(rows)}
 
 
+@router.get("/multiempresa/divergencias")
+def get_divergencias():
+    """SKUs com divergência de match entre empresas (sem_estoque_akg ou comp_parcial).
+    Inclui mapeamentos de SKU já cadastrados para indicar se a divergência foi corrigida."""
+    init_db()
+    conn = _db()
+    rows = conn.execute(
+        """SELECT
+               a.sku,
+               a.empresa_vendedora,
+               a.status,
+               COUNT(*) as total_ocorrencias,
+               SUM(a.quantidade) as total_qtd,
+               MAX(a.criado_em) as ultima_ocorrencia,
+               m.sku_destino as sku_mapeado
+           FROM me_ajustes a
+           LEFT JOIN me_sku_map m
+               ON m.sku_origem = a.sku AND m.empresa_origem = a.empresa_vendedora
+           WHERE a.status IN ('sem_estoque_akg', 'comp_parcial')
+           GROUP BY a.sku, a.empresa_vendedora, a.status
+           ORDER BY total_ocorrencias DESC, ultima_ocorrencia DESC"""
+    ).fetchall()
+    conn.close()
+    items = [dict(r) for r in rows]
+    return {
+        "data": items,
+        "total": len(items),
+        "total_ocorrencias": sum(i["total_ocorrencias"] for i in items),
+    }
+
+
+@router.post("/multiempresa/corrigir-sku")
+def post_corrigir_sku(body: dict):
+    """Salva mapeamento de SKU e reprocessa os pedidos afetados.
+    Body: {sku_origem, empresa_origem, sku_destino}
+    empresa_destino é derivada da rota (fornecedora da empresa_origem).
+    """
+    sku_origem    = (body.get("sku_origem") or "").strip()
+    empresa_orig  = (body.get("empresa_origem") or "").strip()
+    sku_destino   = (body.get("sku_destino") or "").strip()
+
+    if not sku_origem or not empresa_orig or not sku_destino:
+        raise HTTPException(400, "sku_origem, empresa_origem e sku_destino são obrigatórios")
+    if empresa_orig not in (EMPRESA_SHINSEI, EMPRESA_AKG):
+        raise HTTPException(400, f"empresa_origem inválida: {empresa_orig}")
+
+    # empresa_destino = fornecedora da empresa_origem
+    empresa_dest = EMPRESA_AKG if empresa_orig == EMPRESA_SHINSEI else EMPRESA_SHINSEI
+
+    init_db()
+    conn = _db()
+    try:
+        conn.execute(
+            """INSERT OR REPLACE INTO me_sku_map
+               (sku_origem, empresa_origem, sku_destino, empresa_destino, criado_em)
+               VALUES (?, ?, ?, ?, ?)""",
+            (sku_origem, empresa_orig, sku_destino, empresa_dest, _agora())
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Reprocessar os pedidos com esse SKU que estavam sem estoque
+    pedidos_afetados = []
+    conn2 = _db()
+    rows = conn2.execute(
+        """SELECT DISTINCT id_pedido_bling FROM me_ajustes
+           WHERE sku=? AND empresa_vendedora=? AND status IN ('sem_estoque_akg','comp_parcial')""",
+        (sku_origem, empresa_orig)
+    ).fetchall()
+    conn2.close()
+
+    reprocessados = 0
+    for row in rows:
+        id_ped = row["id_pedido_bling"]
+        try:
+            hdrs = _hdrs(empresa_orig)
+            resp = _req.get(
+                f"https://api.bling.com.br/Api/v3/pedidos/vendas/{id_ped}",
+                headers=hdrs, timeout=20
+            )
+            if resp.ok:
+                pedido = resp.json().get("data") or {}
+                if pedido:
+                    # Resetar o ajuste para permitir reprocessamento
+                    conn3 = _db()
+                    conn3.execute(
+                        "DELETE FROM me_ajustes WHERE id_pedido_bling=? AND empresa_vendedora=? AND sku=? AND status IN ('sem_estoque_akg','comp_parcial')",
+                        (id_ped, empresa_orig, sku_origem)
+                    )
+                    # Resetar me_vendas para reprocessamento
+                    conn3.execute(
+                        "UPDATE me_vendas SET status='pendente', atualizado_em=? WHERE id_pedido_bling=? AND empresa_vendedora=?",
+                        (_agora(), id_ped, empresa_orig)
+                    )
+                    conn3.commit()
+                    conn3.close()
+                    _proc(empresa_orig, pedido)
+                    reprocessados += 1
+                    pedidos_afetados.append(id_ped)
+        except Exception as e:
+            logger.warning("corrigir_sku reprocess [%s/%s]: %s", empresa_orig, id_ped, e)
+
+    return {
+        "ok": True,
+        "mapeamento": {"sku_origem": sku_origem, "empresa_origem": empresa_orig,
+                       "sku_destino": sku_destino, "empresa_destino": empresa_dest},
+        "pedidos_reprocessados": reprocessados,
+        "pedidos": pedidos_afetados,
+    }
+
+
+@router.get("/multiempresa/sku-map")
+def get_sku_map():
+    """Lista todos os mapeamentos de SKU cadastrados."""
+    init_db()
+    conn = _db()
+    rows = conn.execute("SELECT * FROM me_sku_map ORDER BY criado_em DESC").fetchall()
+    conn.close()
+    return {"data": [dict(r) for r in rows], "total": len(rows)}
+
+
+@router.delete("/multiempresa/sku-map/{id_map}")
+def delete_sku_map(id_map: int):
+    """Remove um mapeamento de SKU."""
+    init_db()
+    conn = _db()
+    conn.execute("DELETE FROM me_sku_map WHERE id=?", (id_map,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
 @router.post("/multiempresa/transferir-akg-shinsei")
 def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09-04"):
     """

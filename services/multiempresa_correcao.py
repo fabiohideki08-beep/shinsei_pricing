@@ -144,6 +144,19 @@ def init_db():
     CREATE INDEX IF NOT EXISTS ix_me_ajustes_pedido    ON me_ajustes(id_pedido_bling);
     CREATE INDEX IF NOT EXISTS ix_me_vendas_status     ON me_vendas(status);
     CREATE INDEX IF NOT EXISTS ix_me_rotas_sku         ON me_rotas(sku);
+
+    -- Mapeamento de SKU entre empresas (quando SKU difere entre Shinsei e AKG)
+    CREATE TABLE IF NOT EXISTS me_sku_map (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        sku_origem          TEXT    NOT NULL,
+        empresa_origem      TEXT    NOT NULL,   -- shinsei | akg
+        sku_destino         TEXT    NOT NULL,
+        empresa_destino     TEXT    NOT NULL,   -- shinsei | akg
+        obs                 TEXT,
+        criado_em           TEXT    NOT NULL,
+        UNIQUE(sku_origem, empresa_origem, empresa_destino)
+    );
+    CREATE INDEX IF NOT EXISTS ix_me_sku_map_origem ON me_sku_map(sku_origem, empresa_origem);
     """)
     conn.commit()
 
@@ -264,14 +277,30 @@ def buscar_rota(conn: sqlite3.Connection, sku: str, empresa_vendedora: str,
 # Movimentações de estoque Bling
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _buscar_id_produto(empresa: str, sku: str) -> int | None:
+def _buscar_id_produto(empresa: str, sku: str, empresa_origem: str | None = None) -> int | None:
+    # Checar mapeamento de SKU antes de buscar no Bling
+    sku_busca = sku
+    if empresa_origem and empresa_origem != empresa:
+        try:
+            conn = _db()
+            row = conn.execute(
+                "SELECT sku_destino FROM me_sku_map WHERE sku_origem=? AND empresa_origem=? AND empresa_destino=?",
+                (sku, empresa_origem, empresa)
+            ).fetchone()
+            conn.close()
+            if row:
+                sku_busca = row["sku_destino"]
+                logger.info("sku_map: %s/%s -> %s/%s", empresa_origem, sku, empresa, sku_busca)
+        except Exception:
+            pass
+
     hdrs = _hdrs(empresa)
-    resp = requests.get(f"{BLING_API}/produtos?codigo={sku}&limite=5",
+    resp = requests.get(f"{BLING_API}/produtos?codigo={sku_busca}&limite=5",
                         headers=hdrs, timeout=15)
     if not resp.ok:
         return None
     for item in resp.json().get("data", []):
-        if str(item.get("codigo") or "") == sku:
+        if str(item.get("codigo") or "") == sku_busca:
             return item["id"]
     return None
 
@@ -604,8 +633,8 @@ def processar_pedido(empresa_vendedora: str, pedido: dict) -> dict:
                                        "_pai": sku, "mov_saida": id_mov_s})
                 continue  # próximo item do pedido
 
-        # Produto sem composição — buscar diretamente na AKG
-        id_prod_forn = _buscar_id_produto(emp_forn, sku)
+        # Produto sem composição — buscar no fornecedor (com suporte a mapeamento de SKU)
+        id_prod_forn = _buscar_id_produto(emp_forn, sku, empresa_origem=empresa_vendedora)
         time.sleep(0.15)
         id_prod_vend = (
             _buscar_id_produto(empresa_vendedora, sku)
