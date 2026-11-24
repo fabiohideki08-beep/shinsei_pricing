@@ -1829,6 +1829,46 @@ def rebuild_copy_map_status():
     return _rebuild_state
 
 
+# ── Auditoria de sincronização ────────────────────────────────────────────────
+
+@router.get("/copiar-ml/audit")
+def audit_ml_sync():
+    """Conta anúncios ativos de ambas as contas e compara com o copy-map."""
+    try:
+        token_shin = _token_shinsei()
+        token_akg  = _token_akg()
+
+        seller_shin = _get_seller_id(token_shin)
+        seller_akg  = _get_seller_id(token_akg)
+
+        ids_shin = _get_seller_item_ids(seller_shin, token_shin)
+        ids_akg  = _get_seller_item_ids(seller_akg,  token_akg)
+
+        copy_map = _load_copy_map()
+        shinsei_mapeados = set(copy_map.keys())
+        akg_mapeados     = set(copy_map.values())
+
+        ids_shin_set = set(ids_shin)
+        ids_akg_set  = set(ids_akg)
+
+        shin_com_mapa = ids_shin_set & shinsei_mapeados
+        shin_sem_mapa = sorted(ids_shin_set - shinsei_mapeados)
+
+        return {
+            "shinsei_ativos": len(ids_shin_set),
+            "akg_ativos": len(ids_akg_set),
+            "copy_map_pares": len(copy_map),
+            "copy_map_akg_unicos": len(akg_mapeados),
+            "shinsei_com_copia_mapeada": len(shin_com_mapa),
+            "shinsei_sem_copia_mapeada": len(shin_sem_mapa),
+            "pct_mapeado": round(len(shin_com_mapa) / max(len(ids_shin_set), 1) * 100, 1),
+            "shinsei_sem_mapa_ids": shin_sem_mapa[:50],
+        }
+    except Exception as e:
+        logger.exception("Erro audit_ml_sync")
+        return {"erro": str(e)}
+
+
 # ── Verificação cruzada ───────────────────────────────────────────────────────
 
 @router.get("/copiar-ml/verificar-clone")
