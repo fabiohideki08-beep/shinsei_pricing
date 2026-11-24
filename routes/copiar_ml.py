@@ -1841,22 +1841,46 @@ def audit_ml_sync():
         seller_shin = _get_seller_id(token_shin)
         seller_akg  = _get_seller_id(token_akg)
 
-        # Obter paging.total real (1ª página apenas)
-        def _get_total(seller_id, token):
-            r = _req.get(
-                f"{ML_API}/users/{seller_id}/items/search",
-                params={"limit": 1, "offset": 0},
-                headers=_hdrs(token), timeout=15,
-            )
-            if r.status_code == 200:
-                return r.json().get("paging", {}).get("total", 0)
-            return -1
+        # Obter paging.total por status
+        def _get_total_by_status(seller_id, token):
+            totals = {}
+            for status in ["active", "paused", "closed"]:
+                r = _req.get(
+                    f"{ML_API}/users/{seller_id}/items/search",
+                    params={"limit": 1, "offset": 0, "status": status},
+                    headers=_hdrs(token), timeout=15,
+                )
+                if r.status_code == 200:
+                    totals[status] = r.json().get("paging", {}).get("total", 0)
+            totals["all"] = sum(totals.values())
+            return totals
 
-        total_shin_real = _get_total(seller_shin, token_shin)
-        total_akg_real  = _get_total(seller_akg,  token_akg)
+        totais_shin = _get_total_by_status(seller_shin, token_shin)
+        totais_akg  = _get_total_by_status(seller_akg,  token_akg)
 
-        ids_shin = _get_seller_item_ids(seller_shin, token_shin)
-        ids_akg  = _get_seller_item_ids(seller_akg,  token_akg)
+        # Coletar apenas ativos (limit 1000 da API ML)
+        def _get_active_items(seller_id, token):
+            ids: list[str] = []
+            offset = 0
+            while True:
+                r = _req.get(
+                    f"{ML_API}/users/{seller_id}/items/search",
+                    params={"limit": 100, "offset": offset, "status": "active"},
+                    headers=_hdrs(token), timeout=20,
+                )
+                if r.status_code != 200:
+                    break
+                data = r.json()
+                batch = data.get("results") or []
+                ids.extend(batch)
+                total = data.get("paging", {}).get("total", 0)
+                if len(batch) < 100 or len(ids) >= total or offset >= 900:
+                    break
+                offset += 100
+            return ids
+
+        ids_shin = _get_active_items(seller_shin, token_shin)
+        ids_akg  = _get_active_items(seller_akg,  token_akg)
 
         copy_map = _load_copy_map()
         shinsei_mapeados = set(copy_map.keys())
@@ -1869,16 +1893,16 @@ def audit_ml_sync():
         shin_sem_mapa = sorted(ids_shin_set - shinsei_mapeados)
 
         return {
-            "shinsei_total_ml": total_shin_real,
-            "akg_total_ml": total_akg_real,
-            "shinsei_coletados": len(ids_shin_set),
-            "akg_coletados": len(ids_akg_set),
+            "shinsei_por_status": totais_shin,
+            "akg_por_status": totais_akg,
+            "shinsei_ativos_coletados": len(ids_shin_set),
+            "akg_ativos_coletados": len(ids_akg_set),
             "copy_map_pares": len(copy_map),
             "copy_map_akg_unicos": len(akg_mapeados),
             "shinsei_com_copia_mapeada": len(shin_com_mapa),
-            "shinsei_sem_copia_mapeada": len(shin_sem_mapa),
+            "shinsei_sem_copia_mapeada_no_map": len(shin_sem_mapa),
             "pct_mapeado": round(len(shin_com_mapa) / max(len(ids_shin_set), 1) * 100, 1),
-            "nota": f"copy-map cobre {len(shin_com_mapa)}/{len(ids_shin_set)} Shinsei coletados; total real Shinsei={total_shin_real}",
+            "nota": "ativos coletados limitados a 1000 pelo ML API; por_status = total real",
             "shinsei_sem_mapa_ids": shin_sem_mapa[:50],
         }
     except Exception as e:
