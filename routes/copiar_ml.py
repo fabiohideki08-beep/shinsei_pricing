@@ -1841,6 +1841,20 @@ def audit_ml_sync():
         seller_shin = _get_seller_id(token_shin)
         seller_akg  = _get_seller_id(token_akg)
 
+        # Obter paging.total real (1ª página apenas)
+        def _get_total(seller_id, token):
+            r = _req.get(
+                f"{ML_API}/users/{seller_id}/items/search",
+                params={"limit": 1, "offset": 0},
+                headers=_hdrs(token), timeout=15,
+            )
+            if r.status_code == 200:
+                return r.json().get("paging", {}).get("total", 0)
+            return -1
+
+        total_shin_real = _get_total(seller_shin, token_shin)
+        total_akg_real  = _get_total(seller_akg,  token_akg)
+
         ids_shin = _get_seller_item_ids(seller_shin, token_shin)
         ids_akg  = _get_seller_item_ids(seller_akg,  token_akg)
 
@@ -1855,13 +1869,16 @@ def audit_ml_sync():
         shin_sem_mapa = sorted(ids_shin_set - shinsei_mapeados)
 
         return {
-            "shinsei_ativos": len(ids_shin_set),
-            "akg_ativos": len(ids_akg_set),
+            "shinsei_total_ml": total_shin_real,
+            "akg_total_ml": total_akg_real,
+            "shinsei_coletados": len(ids_shin_set),
+            "akg_coletados": len(ids_akg_set),
             "copy_map_pares": len(copy_map),
             "copy_map_akg_unicos": len(akg_mapeados),
             "shinsei_com_copia_mapeada": len(shin_com_mapa),
             "shinsei_sem_copia_mapeada": len(shin_sem_mapa),
             "pct_mapeado": round(len(shin_com_mapa) / max(len(ids_shin_set), 1) * 100, 1),
+            "nota": f"copy-map cobre {len(shin_com_mapa)}/{len(ids_shin_set)} Shinsei coletados; total real Shinsei={total_shin_real}",
             "shinsei_sem_mapa_ids": shin_sem_mapa[:50],
         }
     except Exception as e:
