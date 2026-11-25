@@ -363,6 +363,110 @@ def delete_sku_map(id_map: int):
     return {"ok": True}
 
 
+@router.post("/multiempresa/reverter-rota5")
+def reverter_rota5(dry_run: bool = True, limit: int = 50):
+    """
+    Reverte as movimentações incorretas criadas pela Rota 5 (Shinsei vende → AKG Geral).
+
+    Para cada ajuste errado (empresa_vendedora='shinsei' com id_mov_entrada_bling):
+      - Cria SAÍDA no Shinsei Geral para desfazer a entrada artificial
+      - Cria ENTRADA no AKG Geral para desfazer a saída errada (se mov_saida existia)
+
+    dry_run=True (padrão): apenas lista o que seria feito, sem movimentar.
+    limit: quantos ajustes processar por chamada (evitar timeout).
+    """
+    from services.multiempresa_correcao import DEP_SHINSEI_GERAL, DEP_AKG_GERAL
+
+    init_db()
+    conn = _db()
+    rows = conn.execute(
+        """SELECT * FROM me_ajustes
+           WHERE empresa_vendedora = 'shinsei'
+             AND id_mov_entrada_bling IS NOT NULL
+             AND status = 'concluido'
+             AND (erro_detalhe IS NULL OR erro_detalhe NOT LIKE '%REVERSAL%')
+           ORDER BY id DESC
+           LIMIT ?""",
+        (limit,)
+    ).fetchall()
+    conn.close()
+
+    resultados = []
+    ok_sh = err_sh = ok_akg = err_akg = skip_akg = 0
+
+    for row in rows:
+        aj = dict(row)
+        sku     = aj["sku"]
+        qtd     = float(aj["quantidade"])
+        pid_v   = aj["id_pedido_bling"]
+        mov_e   = aj["id_mov_entrada_bling"]
+        mov_s   = aj.get("id_mov_saida_bling") or ""
+        aj_id   = aj["id"]
+
+        item = {"ajuste_id": aj_id, "sku": sku, "qtd": qtd, "pedido": pid_v,
+                "shinsei_saida": None, "akg_entrada": None, "erros": []}
+
+        if dry_run:
+            item["shinsei_saida"] = "DRY_RUN"
+            item["akg_entrada"]   = "DRY_RUN" if (mov_s and not mov_s.startswith("ok-504")) else "SKIP"
+            resultados.append(item)
+            continue
+
+        # ── 1. Reverter entrada artificial em Shinsei Geral ──────────────
+        id_prod_sh = _buscar_id_produto("shinsei", sku)
+        if id_prod_sh:
+            obs = f"REVERSAL-SHINSEI:{pid_v}-SKU:{sku}|correcao_rota5"
+            mid, err = _movimentar("shinsei", id_prod_sh, DEP_SHINSEI_GERAL, "S", qtd, obs)
+            if mid:
+                item["shinsei_saida"] = mid
+                ok_sh += 1
+            else:
+                item["erros"].append(f"shinsei_saida: {err}")
+                err_sh += 1
+        else:
+            item["erros"].append("shinsei: produto não encontrado")
+            err_sh += 1
+
+        # ── 2. Reverter saída errada de AKG Geral ────────────────────────
+        if mov_s and not mov_s.startswith("ok-504"):
+            id_prod_akg = _buscar_id_produto("akg", sku)
+            if id_prod_akg:
+                obs = f"REVERSAL-AKG:{pid_v}-SKU:{sku}|correcao_rota5"
+                mid, err = _movimentar("akg", id_prod_akg, DEP_AKG_GERAL, "E", qtd, obs)
+                if mid:
+                    item["akg_entrada"] = mid
+                    ok_akg += 1
+                else:
+                    item["erros"].append(f"akg_entrada: {err}")
+                    err_akg += 1
+            else:
+                item["erros"].append("akg: produto não encontrado")
+                err_akg += 1
+        else:
+            item["akg_entrada"] = "SKIP_504"
+            skip_akg += 1
+
+        # Marcar o ajuste para não reprocessar
+        if not item["erros"]:
+            conn2 = _db()
+            conn2.execute(
+                "UPDATE me_ajustes SET erro_detalhe=?, atualizado_em=? WHERE id=?",
+                (f"REVERSAL concluido em {_agora()}", _agora(), aj_id)
+            )
+            conn2.commit()
+            conn2.close()
+
+        resultados.append(item)
+
+    return {
+        "dry_run": dry_run,
+        "total_encontrados": len(rows),
+        "resumo": {"shinsei_saida_ok": ok_sh, "shinsei_saida_err": err_sh,
+                   "akg_entrada_ok": ok_akg, "akg_entrada_err": err_akg, "akg_skip_504": skip_akg},
+        "itens": resultados[:20],  # limitar resposta
+    }
+
+
 @router.post("/multiempresa/transferir-akg-shinsei")
 def transferir_akg_para_shinsei(dry_run: bool = True, data_corte: str = "2026-09-04"):
     """
