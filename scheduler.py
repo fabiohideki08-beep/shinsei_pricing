@@ -1056,6 +1056,15 @@ def _loop():
         except Exception as e:
             logger.exception("Erro no job_reverter_rota5: %s", e)
 
+        # Enriquecimento autônomo de numero_nf nos ajustes multiempresa
+        try:
+            from services.multiempresa_correcao import job_enriquecer_nf
+            resultado_nf = job_enriquecer_nf(batch=50)
+            if resultado_nf.get("enriquecidos", 0) > 0:
+                logger.info("job_enriquecer_nf: %s", resultado_nf)
+        except Exception as e:
+            logger.exception("Erro no job_enriquecer_nf: %s", e)
+
         # Correção de negativos AKG (Rota 3: Shinsei vende → AKG fica negativo → corrige a cada 4h)
         try:
             _ciclo_negativos_akg()

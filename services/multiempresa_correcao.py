@@ -164,6 +164,16 @@ def init_db():
     # Quando Shinsei vende, o próprio Bling desconta; multiempresa NÃO interfere.
     # A rota padrão Shinsei→AKG foi removida por ser conceitualmente errada.
 
+    # Migrações incrementais (seguro repetir)
+    for migration in [
+        "ALTER TABLE me_ajustes ADD COLUMN numero_nf TEXT",
+    ]:
+        try:
+            conn.execute(migration)
+            conn.commit()
+        except Exception:
+            pass  # coluna já existe
+
     conn.close()
     logger.info("me_*: tabelas inicializadas")
 
@@ -1050,6 +1060,89 @@ def job_reverter_rota5(batch: int = 10) -> dict:
         "sh_ok": ok_sh, "sh_err": err_sh,
         "akg_ok": ok_akg, "akg_err": err_akg, "akg_skip": skip_akg,
     }
+
+
+def job_enriquecer_nf(batch: int = 50) -> dict:
+    """
+    Busca e preenche numero_nf nos me_ajustes que ainda não têm o campo.
+    Chama Bling /pedidos/vendas para obter a lista de NFs por empresa.
+    """
+    import requests as _req
+
+    init_db()
+    conn = _db()
+    # Ajustes sem NF (limitado para não sobrecarregar)
+    rows = conn.execute(
+        """SELECT DISTINCT id_pedido_bling, empresa_vendedora
+           FROM me_ajustes
+           WHERE status = 'concluido'
+             AND numero_nf IS NULL
+             AND id_mov_entrada_bling IS NOT NULL
+           ORDER BY id DESC
+           LIMIT ?""",
+        (batch,)
+    ).fetchall()
+    conn.close()
+
+    if not rows:
+        return {"sem_nf": 0, "enriquecidos": 0}
+
+    # Agrupa por empresa para uma única chamada por empresa
+    por_empresa: dict[str, list[str]] = {}
+    for r in rows:
+        por_empresa.setdefault(r["empresa_vendedora"], []).append(r["id_pedido_bling"])
+
+    mapa_nf: dict[str, str] = {}  # id_pedido_bling -> numero_nf
+
+    for empresa, pedido_ids in por_empresa.items():
+        try:
+            hdrs = _hdrs(empresa)
+            # Busca últimos 180 dias para cobrir o histórico
+            for pagina in range(1, 10):
+                r = _req.get(
+                    "https://www.bling.com.br/Api/v3/pedidos/vendas",
+                    headers=hdrs,
+                    params={
+                        "pagina": pagina, "limite": 100,
+                        "situacao": 9,  # Atendido = NF emitida
+                    },
+                    timeout=15,
+                )
+                if r.status_code != 200:
+                    break
+                data = r.json().get("data", [])
+                if not data:
+                    break
+                for ped in data:
+                    pid = str(ped.get("id", ""))
+                    nfs = ped.get("notasFiscais") or []
+                    if pid in pedido_ids and nfs:
+                        # Pega o primeiro número de NF
+                        num = str(nfs[0].get("numero", "") or nfs[0].get("id", "") or "")
+                        if num:
+                            mapa_nf[pid] = num
+                if len(data) < 100:
+                    break
+                time.sleep(0.3)
+        except Exception as e:
+            logger.warning("job_enriquecer_nf erro empresa=%s: %s", empresa, e)
+
+    if not mapa_nf:
+        return {"sem_nf": len(rows), "enriquecidos": 0}
+
+    conn2 = _db()
+    atualizados = 0
+    for pid, nf in mapa_nf.items():
+        conn2.execute(
+            "UPDATE me_ajustes SET numero_nf=? WHERE id_pedido_bling=? AND numero_nf IS NULL",
+            (nf, pid)
+        )
+        atualizados += conn2.total_changes
+    conn2.commit()
+    conn2.close()
+
+    logger.info("job_enriquecer_nf: %d pedidos -> %d atualizados", len(mapa_nf), atualizados)
+    return {"sem_nf": len(rows), "enriquecidos": atualizados}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
