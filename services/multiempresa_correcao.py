@@ -1062,10 +1062,11 @@ def job_reverter_rota5(batch: int = 10) -> dict:
     }
 
 
-def job_enriquecer_nf(batch: int = 20) -> dict:
+def job_enriquecer_nf(batch: int = 200) -> dict:
     """
     Busca e preenche numero_nf nos me_ajustes que ainda nao tem o campo.
-    Usa /notas-fiscais?idPedidoVenda={id} para cada pedido (endpoint correto Bling v3).
+    Usa /pedidos/vendas?idSituacao=9 — para Bling Atendido, o campo 'numero'
+    do pedido e o numero da NF emitida. Uma chamada por empresa cobre tudo.
     """
     import requests as _req
 
@@ -1073,6 +1074,8 @@ def job_enriquecer_nf(batch: int = 20) -> dict:
 
     init_db()
     conn = _db()
+
+    # Pedidos sem NF agrupados por empresa
     rows = conn.execute(
         """SELECT DISTINCT id_pedido_bling, empresa_vendedora
            FROM me_ajustes
@@ -1088,31 +1091,43 @@ def job_enriquecer_nf(batch: int = 20) -> dict:
     if not rows:
         return {"sem_nf": 0, "enriquecidos": 0}
 
-    mapa_nf: dict[str, str] = {}  # id_pedido_bling -> numero_nf
+    por_empresa: dict[str, set] = {}
+    for r in rows:
+        por_empresa.setdefault(r["empresa_vendedora"], set()).add(r["id_pedido_bling"])
 
-    for row in rows:
-        pid     = row["id_pedido_bling"]
-        empresa = row["empresa_vendedora"]
+    mapa_nf: dict[str, str] = {}  # id_pedido_bling -> numero_nf (numero da NF)
+
+    for empresa, pedido_ids in por_empresa.items():
         try:
             hdrs = _hdrs(empresa)
-            # GET /notas-fiscais?idPedidoVenda={pid} retorna NFs do pedido
-            r = _req.get(
-                f"{BLING_BASE}/notas-fiscais",
-                headers=hdrs,
-                params={"idPedidoVenda": pid, "limite": 10},
-                timeout=15,
-            )
-            if r.status_code == 200:
-                nfs = r.json().get("data", [])
-                if nfs:
-                    num = str(nfs[0].get("numero", "") or nfs[0].get("id", "") or "")
-                    if num:
+            # Pagina /pedidos/vendas idSituacao=9 (Atendido = NF emitida)
+            # O campo 'numero' do pedido atendido = numero da NF emitida
+            for pagina in range(1, 20):
+                r = _req.get(
+                    f"{BLING_BASE}/pedidos/vendas",
+                    headers=hdrs,
+                    params={"limite": 100, "pagina": pagina, "idSituacao": 9},
+                    timeout=20,
+                )
+                if r.status_code == 429:
+                    time.sleep(2)
+                    continue
+                if r.status_code != 200:
+                    break
+                data = r.json().get("data", [])
+                if not data:
+                    break
+                for item in data:
+                    pid = str(item.get("id", ""))
+                    num = str(item.get("numero", "") or "")
+                    if pid in pedido_ids and num:
                         mapa_nf[pid] = num
-            elif r.status_code == 429:
-                time.sleep(2)
+                # Para quando encontramos todos ou chegamos ao fim
+                if len(data) < 100 or pedido_ids.issubset(set(mapa_nf.keys())):
+                    break
+                time.sleep(0.3)
         except Exception as e:
-            logger.warning("job_enriquecer_nf pedido=%s empresa=%s: %s", pid, empresa, e)
-        time.sleep(0.4)  # rate-limit gentil
+            logger.warning("job_enriquecer_nf empresa=%s: %s", empresa, e)
 
     if not mapa_nf:
         return {"sem_nf": len(rows), "enriquecidos": 0}
@@ -1128,7 +1143,7 @@ def job_enriquecer_nf(batch: int = 20) -> dict:
     conn2.commit()
     conn2.close()
 
-    logger.info("job_enriquecer_nf: %d pedidos consultados -> %d NFs preenchidas", len(rows), atualizados)
+    logger.info("job_enriquecer_nf: %d pedidos -> %d NFs preenchidas", len(rows), atualizados)
     return {"sem_nf": len(rows), "enriquecidos": atualizados}
 
 
