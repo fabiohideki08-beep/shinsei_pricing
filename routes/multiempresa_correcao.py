@@ -42,7 +42,7 @@ from fastapi import Request, BackgroundTasks
 from services.multiempresa_correcao import (
     init_db, listar_rotas, criar_rota, atualizar_rota, desativar_rota,
     processar_pedido, estornar_pedido, job_multiempresa, job_reverter_rota5,
-    resetar_processando,
+    job_enriquecer_nf, resetar_processando,
     DB_PATH, EMPRESA_SHINSEI, EMPRESA_AKG, _hdrs,
     _buscar_id_produto, _movimentar, _agora, _expandir_componentes_fornecedor,
 )
@@ -465,6 +465,17 @@ def reverter_rota5(dry_run: bool = True, limit: int = 50):
                    "akg_entrada_ok": ok_akg, "akg_entrada_err": err_akg, "akg_skip_504": skip_akg},
         "itens": resultados[:20],  # limitar resposta
     }
+
+
+@router.post("/multiempresa/enriquecer-nf")
+def enriquecer_nf(batch: int = 20):
+    """
+    Dispara manualmente o enriquecimento de numero_nf nos ajustes multiempresa.
+    Consulta GET /notas-fiscais?idPedidoVenda={id} para cada pedido sem NF.
+    batch: quantos pedidos consultar por chamada (default 20).
+    """
+    resultado = job_enriquecer_nf(batch=batch)
+    return {"ok": True, **resultado}
 
 
 @router.post("/multiempresa/transferir-akg-shinsei")
