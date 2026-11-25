@@ -1047,6 +1047,15 @@ def _loop():
         except Exception as e:
             logger.exception("Erro no job multiempresa: %s", e)
 
+        # Reversão autônoma da Rota 5 (Shinsei→AKG) — roda até zerar os 668 ajustes incorretos
+        try:
+            from services.multiempresa_correcao import job_reverter_rota5
+            resultado = job_reverter_rota5(batch=10)
+            if resultado.get("processados", 0) > 0:
+                logger.info("job_reverter_rota5: %s", resultado)
+        except Exception as e:
+            logger.exception("Erro no job_reverter_rota5: %s", e)
+
         # Correção de negativos AKG (Rota 3: Shinsei vende → AKG fica negativo → corrige a cada 4h)
         try:
             _ciclo_negativos_akg()

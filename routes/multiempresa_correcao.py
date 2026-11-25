@@ -41,7 +41,7 @@ from fastapi import Request, BackgroundTasks
 # Import do serviço
 from services.multiempresa_correcao import (
     init_db, listar_rotas, criar_rota, atualizar_rota, desativar_rota,
-    processar_pedido, estornar_pedido, job_multiempresa,
+    processar_pedido, estornar_pedido, job_multiempresa, job_reverter_rota5,
     resetar_processando,
     DB_PATH, EMPRESA_SHINSEI, EMPRESA_AKG, _hdrs,
     _buscar_id_produto, _movimentar, _agora, _expandir_componentes_fornecedor,

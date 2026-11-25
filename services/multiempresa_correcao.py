@@ -952,6 +952,107 @@ def resetar_processando(empresa: str, limite: int = 200) -> tuple[list, int]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Job autônomo: reverte movimentações incorretas da Rota 5 (Shinsei→AKG)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def job_reverter_rota5(batch: int = 10) -> dict:
+    """
+    Roda automaticamente no scheduler a cada ciclo.
+    Reverte até `batch` ajustes incorretos por ciclo (empresa_vendedora='shinsei'
+    com id_mov_entrada_bling criado pela Rota 5 extinta).
+
+    Para cada ajuste:
+      - Cria SAÍDA no Shinsei Geral (desfaz entrada artificial)
+      - Cria ENTRADA no AKG Geral (desfaz saída errada, se mov_saida era real)
+
+    Retorna imediatamente quando não há mais pendências.
+    """
+    init_db()
+    conn = _db()
+    rows = conn.execute(
+        """SELECT * FROM me_ajustes
+           WHERE empresa_vendedora = 'shinsei'
+             AND id_mov_entrada_bling IS NOT NULL
+             AND status = 'concluido'
+             AND (erro_detalhe IS NULL OR erro_detalhe NOT LIKE 'REVERSAL%')
+           ORDER BY id DESC
+           LIMIT ?""",
+        (batch,)
+    ).fetchall()
+    conn.close()
+
+    if not rows:
+        return {"pendentes": 0, "processados": 0}
+
+    ok_sh = err_sh = ok_akg = err_akg = skip_akg = 0
+
+    for row in rows:
+        aj    = dict(row)
+        sku   = aj["sku"]
+        qtd   = float(aj["quantidade"])
+        pid_v = aj["id_pedido_bling"]
+        mov_s = aj.get("id_mov_saida_bling") or ""
+        aj_id = aj["id"]
+
+        erros = []
+
+        # 1. Reverter entrada artificial em Shinsei Geral
+        id_prod_sh = _buscar_id_produto(EMPRESA_SHINSEI, sku)
+        if id_prod_sh:
+            obs = f"REVERSAL-SHINSEI:{pid_v}-SKU:{sku}|correcao_rota5"
+            mid, err = _movimentar(EMPRESA_SHINSEI, id_prod_sh, DEP_SHINSEI_GERAL, "S", qtd, obs)
+            if mid:
+                ok_sh += 1
+            else:
+                erros.append(f"sh_saida:{err}")
+                err_sh += 1
+        else:
+            erros.append("sh:nao_encontrado")
+            err_sh += 1
+
+        time.sleep(0.3)
+
+        # 2. Reverter saída errada de AKG Geral (apenas se a saída original foi registrada)
+        if mov_s and not mov_s.startswith("ok-504"):
+            id_prod_akg = _buscar_id_produto(EMPRESA_AKG, sku)
+            if id_prod_akg:
+                obs = f"REVERSAL-AKG:{pid_v}-SKU:{sku}|correcao_rota5"
+                mid, err = _movimentar(EMPRESA_AKG, id_prod_akg, DEP_AKG_GERAL, "E", qtd, obs)
+                if mid:
+                    ok_akg += 1
+                else:
+                    erros.append(f"akg_entrada:{err}")
+                    err_akg += 1
+            else:
+                erros.append("akg:nao_encontrado")
+                err_akg += 1
+            time.sleep(0.3)
+        else:
+            skip_akg += 1
+
+        # Marcar o ajuste como revertido para não reprocessar
+        novo_detalhe = f"REVERSAL concluido {_agora()}" if not erros else f"REVERSAL parcial: {'; '.join(erros)}"
+        conn2 = _db()
+        conn2.execute(
+            "UPDATE me_ajustes SET erro_detalhe=?, atualizado_em=? WHERE id=?",
+            (novo_detalhe, _agora(), aj_id)
+        )
+        conn2.commit()
+        conn2.close()
+
+    logger.info(
+        "job_reverter_rota5: processados=%d sh_ok=%d sh_err=%d akg_ok=%d akg_err=%d akg_skip=%d",
+        len(rows), ok_sh, err_sh, ok_akg, err_akg, skip_akg
+    )
+    return {
+        "pendentes": max(0, len(rows) - ok_sh),
+        "processados": len(rows),
+        "sh_ok": ok_sh, "sh_err": err_sh,
+        "akg_ok": ok_akg, "akg_err": err_akg, "akg_skip": skip_akg,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # CRUD de rotas (usado pela rota FastAPI)
 # ─────────────────────────────────────────────────────────────────────────────
 
