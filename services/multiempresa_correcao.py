@@ -1100,32 +1100,36 @@ def job_enriquecer_nf(batch: int = 200) -> dict:
     for empresa, pedido_ids in por_empresa.items():
         try:
             hdrs = _hdrs(empresa)
-            # Pagina /pedidos/vendas idSituacao=9 (Atendido = NF emitida)
-            # O campo 'numero' do pedido atendido = numero da NF emitida
-            for pagina in range(1, 20):
-                r = _req.get(
-                    f"{BLING_BASE}/pedidos/vendas",
-                    headers=hdrs,
-                    params={"limite": 100, "pagina": pagina, "idSituacao": 9},
-                    timeout=20,
-                )
-                if r.status_code == 429:
-                    time.sleep(2)
-                    continue
-                if r.status_code != 200:
-                    break
-                data = r.json().get("data", [])
-                if not data:
-                    break
-                for item in data:
-                    pid = str(item.get("id", ""))
-                    num = str(item.get("numero", "") or "")
-                    if pid in pedido_ids and num:
-                        mapa_nf[pid] = num
-                # Para quando encontramos todos ou chegamos ao fim
-                if len(data) < 100 or pedido_ids.issubset(set(mapa_nf.keys())):
-                    break
-                time.sleep(0.3)
+            # Consulta situações que têm NF emitida:
+            #   9  = Atendido (fluxo Shopify/padrão)
+            #   24 = NF emitida (fluxo AKG TikTok/ML — situação que dispara o motor)
+            #   15 = Faturado (fallback Bling genérico)
+            for situacao in (24, 9, 15):
+                if pedido_ids.issubset(set(mapa_nf.keys())):
+                    break  # todos encontrados
+                for pagina in range(1, 20):
+                    r = _req.get(
+                        f"{BLING_BASE}/pedidos/vendas",
+                        headers=hdrs,
+                        params={"limite": 100, "pagina": pagina, "idSituacao": situacao},
+                        timeout=20,
+                    )
+                    if r.status_code == 429:
+                        time.sleep(2)
+                        continue
+                    if r.status_code != 200:
+                        break
+                    data = r.json().get("data", [])
+                    if not data:
+                        break
+                    for item in data:
+                        pid = str(item.get("id", ""))
+                        num = str(item.get("numero", "") or "")
+                        if pid in pedido_ids and num:
+                            mapa_nf[pid] = num
+                    if len(data) < 100 or pedido_ids.issubset(set(mapa_nf.keys())):
+                        break
+                    time.sleep(0.3)
         except Exception as e:
             logger.warning("job_enriquecer_nf empresa=%s: %s", empresa, e)
 
