@@ -2210,6 +2210,157 @@ def resultado_zerar_estoque_akg():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Zeramento negativos AKG (formato S + E)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_zerar_neg_cache: dict = {}
+
+
+def _job_zerar_negativos_akg(dry_run: bool):
+    """
+    Varre todos os produtos AKG ativos e zera apenas os que têm saldo < 0.
+    Inclui formato=S (simples) e formato=E (variação) — ambos podem ter saldo próprio.
+    Pula formato=V (pai de variações, saldo é das variações) e formato=C (composição/kit).
+    """
+    import time as _t
+    import requests as _req
+
+    BLING_API_URL = "https://api.bling.com.br/Api/v3"
+    DEP_AKG = 14889056234
+
+    _zerar_neg_cache.clear()
+    _zerar_neg_cache.update({
+        "status": "em_andamento",
+        "dry_run": dry_run,
+        "total_scaneados": 0,
+        "total_negativos": 0,
+        "total_zerados": 0,
+        "total_erros": 0,
+        "pulados_sem_negativo": 0,
+        "pulados_formato_V_ou_C": 0,
+        "itens": [],
+    })
+
+    def _get(url, hdrs, params=None):
+        for _ in range(4):
+            r = _req.get(url, headers=hdrs, params=params, timeout=25)
+            if r.status_code == 429:
+                _t.sleep(3)
+                continue
+            return r
+        return r
+
+    pagina = 1
+    item_count = 0
+    while True:
+        hdrs_a = _hdrs(EMPRESA_AKG)
+        r = _get(f"{BLING_API_URL}/produtos", hdrs_a,
+                 params={"pagina": pagina, "limite": 100, "situacao": "A", "tipo": "P"})
+        if not r.ok:
+            _zerar_neg_cache["status"] = f"erro_listagem_pagina_{pagina}: HTTP {r.status_code}"
+            break
+        prods = r.json().get("data", [])
+        if not prods:
+            break
+
+        _zerar_neg_cache["total_scaneados"] += len(prods)
+
+        for p in prods:
+            item_count += 1
+            if item_count % 80 == 0:
+                hdrs_a = _hdrs(EMPRESA_AKG)
+
+            formato = p.get("formato", "")
+
+            # formato=V (pai de variações) não tem saldo próprio
+            # formato=C (composição/kit) não deve ser zerado isoladamente
+            if formato in ("V", "C"):
+                _zerar_neg_cache["pulados_formato_V_ou_C"] += 1
+                continue
+
+            est = p.get("estoque") or {}
+            saldo = float(est.get("saldoVirtualTotal", 0) or 0)
+
+            # Apenas saldo negativo interessa
+            if saldo >= 0.0:
+                _zerar_neg_cache["pulados_sem_negativo"] += 1
+                continue
+
+            _zerar_neg_cache["total_negativos"] += 1
+            produto_id = p["id"]
+            sku = p.get("codigo", "")
+            nome = str(p.get("nome", ""))[:80]
+            quantidade = abs(saldo)
+
+            item_entry = {
+                "sku": sku, "nome": nome, "id": produto_id,
+                "formato": formato, "saldo": saldo, "status": "pendente",
+            }
+
+            if dry_run:
+                item_entry["status"] = "dry_run"
+                _zerar_neg_cache["itens"].append(item_entry)
+                continue
+
+            _t.sleep(0.2)
+            hdrs_a2 = _hdrs(EMPRESA_AKG)
+            payload = {
+                "produto":      {"id": produto_id},
+                "deposito":     {"id": DEP_AKG},
+                "tipoOperacao": "E",  # Entrada para corrigir negativo
+                "quantidade":   quantidade,
+                "observacoes":  "Zeramento negativos AKG 25/11/2026",
+            }
+            rp = _req.post(f"{BLING_API_URL}/estoques",
+                           headers={**hdrs_a2, "Content-Type": "application/json"},
+                           json=payload, timeout=30)
+
+            if rp.ok or rp.status_code == 504:
+                item_entry["status"] = "zerado"
+                _zerar_neg_cache["total_zerados"] += 1
+            else:
+                item_entry["status"] = f"erro_http_{rp.status_code}"
+                item_entry["erro_detalhe"] = rp.text[:200]
+                _zerar_neg_cache["total_erros"] += 1
+
+            _zerar_neg_cache["itens"].append(item_entry)
+
+        pagina += 1
+        _t.sleep(0.5)
+
+    if _zerar_neg_cache.get("status") == "em_andamento":
+        _zerar_neg_cache["status"] = "concluido"
+
+
+@router.post("/multiempresa/zerar-negativos-akg")
+def zerar_negativos_akg(dry_run: bool = True):
+    """
+    Zera o saldo de todos os produtos AKG com saldo < 0 no Depósito Geral AKG.
+    Inclui formato=S e formato=E (variações). Pula formato=V e formato=C.
+    dry_run=True (padrão): lista o que seria zerado sem executar.
+    dry_run=False: executa as entradas de estoque.
+    Verificar andamento: GET /multiempresa/zerar-negativos-akg/resultado
+    """
+    if _zerar_neg_cache.get("status") == "em_andamento":
+        return {"ok": False, "msg": "Operação já em andamento", "cache": _zerar_neg_cache}
+
+    import threading
+    t = threading.Thread(target=_job_zerar_negativos_akg, args=(dry_run,), daemon=True)
+    t.start()
+
+    return {"ok": True, "msg": "Iniciado em background", "dry_run": dry_run,
+            "resultado_em": "/multiempresa/zerar-negativos-akg/resultado"}
+
+
+@router.get("/multiempresa/zerar-negativos-akg/resultado")
+def resultado_zerar_negativos_akg():
+    """Retorna o resultado/andamento do zeramento de negativos AKG."""
+    if not _zerar_neg_cache:
+        return {"ok": False, "msg": "Nenhuma operação iniciada. Use POST /multiempresa/zerar-negativos-akg"}
+    return {"ok": True, **_zerar_neg_cache}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Painel HTML
 # ─────────────────────────────────────────────────────────────────────────────
 
