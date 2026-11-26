@@ -193,7 +193,7 @@ def get_vendas(limit: int = 100, status: str | None = None):
 
 
 @router.get("/multiempresa/ajustes")
-def get_ajustes(limit: int = 200, status: str | None = None, sku: str | None = None):
+def get_ajustes(limit: int = 200, page: int = 1, status: str | None = None, sku: str | None = None):
     init_db()
     conn = _db()
     conditions = []
@@ -203,12 +203,16 @@ def get_ajustes(limit: int = 200, status: str | None = None, sku: str | None = N
     if sku:
         conditions.append("sku=?"); params.append(sku)
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    total = conn.execute(
+        f"SELECT COUNT(*) FROM me_ajustes {where}", params
+    ).fetchone()[0]
+    offset = (page - 1) * limit
     rows = conn.execute(
-        f"SELECT * FROM me_ajustes {where} ORDER BY id DESC LIMIT ?",
-        params + [limit]
+        f"SELECT * FROM me_ajustes {where} ORDER BY id DESC LIMIT ? OFFSET ?",
+        params + [limit, offset]
     ).fetchall()
     conn.close()
-    return {"data": [dict(r) for r in rows], "total": len(rows)}
+    return {"data": [dict(r) for r in rows], "total": total}
 
 
 @router.get("/multiempresa/pendentes")

@@ -1135,11 +1135,11 @@ def job_enriquecer_nf(batch: int = 200) -> dict:
     conn2 = _db()
     atualizados = 0
     for pid, nf in mapa_nf.items():
-        conn2.execute(
+        cur = conn2.execute(
             "UPDATE me_ajustes SET numero_nf=? WHERE id_pedido_bling=? AND numero_nf IS NULL",
             (nf, pid)
         )
-        atualizados += conn2.total_changes
+        atualizados += cur.rowcount
     conn2.commit()
     conn2.close()
 
