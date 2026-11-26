@@ -121,8 +121,11 @@ def _coletar_bling(empresa: str) -> dict[str, dict]:
 # Coleta ML (todos os items ativos)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _coletar_ml(empresa: str) -> dict[str, int]:
-    """Retorna {sku: available_quantity} para itens ML ativos."""
+def _coletar_ml(empresa: str) -> dict[str, dict]:
+    """
+    Retorna {sku: {"qty": N, "item_ids": ["MLB123", ...]}} para itens ML ativos.
+    Um SKU pode ter múltiplos anúncios (item_ids) — todos são registrados.
+    """
     token = _ml_token(empresa)
     if not token:
         return {}
@@ -137,7 +140,7 @@ def _coletar_ml(empresa: str) -> dict[str, int]:
     except Exception:
         return {}
 
-    result: dict[str, int] = {}
+    result: dict[str, dict] = {}
     offset = 0
     limit = 100
     while True:
@@ -165,22 +168,23 @@ def _coletar_ml(empresa: str) -> dict[str, int]:
                 rb = requests.get(
                     f"{ML_BASE}/items",
                     headers={"Authorization": f"Bearer {token}"},
-                    params={"ids": ids_str, "attributes": "id,seller_custom_field,available_quantity,variations"},
+                    params={"ids": ids_str, "attributes": "id,seller_custom_field,available_quantity"},
                     timeout=25,
                 )
                 if not rb.ok:
                     continue
                 for entry in rb.json():
                     item = entry.get("body", {}) if "body" in entry else entry
-                    sku = str(item.get("seller_custom_field") or "").strip()
-                    qty = int(item.get("available_quantity", 0) or 0)
-                    if sku:
-                        # Se já existe (vários items com mesmo SKU), soma
-                        result[sku] = result.get(sku, 0) + qty
-                    # Variações
-                    for v in (item.get("variations") or []):
-                        for attr in (v.get("attribute_combinations") or []):
-                            pass  # SKU de variação fica no seller_custom_field do pai
+                    mlb_id = str(item.get("id") or "").strip()
+                    sku    = str(item.get("seller_custom_field") or "").strip()
+                    qty    = int(item.get("available_quantity", 0) or 0)
+                    if not sku:
+                        continue
+                    if sku not in result:
+                        result[sku] = {"qty": 0, "item_ids": []}
+                    result[sku]["qty"] += qty
+                    if mlb_id and mlb_id not in result[sku]["item_ids"]:
+                        result[sku]["item_ids"].append(mlb_id)
             except Exception:
                 pass
             time.sleep(0.1)
@@ -379,10 +383,14 @@ def _job_estoque_universal():
     for sku, shin_info in shinsei.items():
         shin_saldo = shin_info["saldo"]
 
-        # Canais e seus saldos
-        akg_saldo      = akg.get(sku, {}).get("saldo")     # None = não cadastrado
-        ml_shin_qty    = ml_shin.get(sku)                   # None = não listado
-        ml_akg_qty     = ml_akg_data.get(sku)
+        # Canais e seus saldos — ML retorna {"qty": N, "item_ids": [...]}
+        akg_saldo      = akg.get(sku, {}).get("saldo")          # None = não cadastrado
+        ml_shin_info   = ml_shin.get(sku)
+        ml_akg_info    = ml_akg_data.get(sku)
+        ml_shin_qty    = ml_shin_info["qty"]   if ml_shin_info else None
+        ml_akg_qty     = ml_akg_info["qty"]    if ml_akg_info  else None
+        ml_shin_ids    = ml_shin_info["item_ids"] if ml_shin_info else []
+        ml_akg_ids     = ml_akg_info["item_ids"]  if ml_akg_info  else []
         shopify_qty    = shopify.get(sku)
         shopee_qty     = shopee.get(sku)
 
@@ -424,6 +432,8 @@ def _job_estoque_universal():
             "bling_akg":     akg_saldo,
             "ml_shinsei":    ml_shin_qty,
             "ml_akg":        ml_akg_qty,
+            "ml_shinsei_ids": ml_shin_ids,   # MLBs do canal Shinsei com divergência
+            "ml_akg_ids":     ml_akg_ids,    # MLBs do canal AKG com divergência
             "shopify":       shopify_qty,
             "shopee":        shopee_qty,
             "divergencias":  canais_divergentes,
