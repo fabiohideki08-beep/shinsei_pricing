@@ -14,10 +14,12 @@ Endpoints:
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import threading
 import time
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -25,6 +27,8 @@ from fastapi import APIRouter
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["estoque-universal"])
+
+DATA_DIR = Path(__file__).parent.parent / "data"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Tokens / helpers
@@ -35,8 +39,25 @@ ML_BASE    = "https://api.mercadolibre.com"
 
 
 def _bling_token(empresa: str) -> str:
+    """Lê token Bling dos arquivos locais (tokens frescos, atualizados pelo OAuth)."""
     if empresa == "akg":
+        f = DATA_DIR / "bling_tokens_akg.json"
+        if f.exists():
+            try:
+                return json.loads(f.read_text()).get("access_token", "")
+            except Exception:
+                pass
         return os.getenv("BLING_ACCESS_TOKEN_AKG", "")
+    # Shinsei: usar BlingClient
+    try:
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from bling_client import BlingClient
+        bc = BlingClient()
+        if bc.has_local_tokens():
+            return bc._load_tokens().get("access_token", "")
+    except Exception:
+        pass
     return os.getenv("BLING_ACCESS_TOKEN", "")
 
 
@@ -45,6 +66,21 @@ def _bling_hdrs(empresa: str) -> dict:
 
 
 def _ml_token(empresa: str) -> str:
+    """Lê token ML dos arquivos locais (tokens frescos, atualizados pelo OAuth).
+
+    NÃO usa os.getenv — a env var é definida no startup do Render e expira
+    em ~6h sem redeploy. Os arquivos ml_tokens*.json são atualizados pelo refresh.
+    """
+    if empresa == "akg":
+        f = DATA_DIR / "ml_tokens_akg.json"
+    else:
+        f = DATA_DIR / "ml_tokens.json"
+    if f.exists():
+        try:
+            return json.loads(f.read_text()).get("access_token", "")
+        except Exception:
+            pass
+    # Fallback para env var se arquivo não existir
     if empresa == "akg":
         return os.getenv("ML_ACCESS_TOKEN_AKG", "")
     return os.getenv("ML_ACCESS_TOKEN", "")
