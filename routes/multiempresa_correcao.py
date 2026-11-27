@@ -2361,6 +2361,236 @@ def resultado_zerar_negativos_akg():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Diagnóstico de negativos AKG: identifica causa de cada baixa de estoque
+# ─────────────────────────────────────────────────────────────────────────────
+
+_diag_neg_cache: dict = {}
+
+
+def _job_diagnostico_negativos_akg() -> None:
+    """
+    Para cada produto AKG com saldo < 0:
+    1. Busca as últimas movimentações de estoque no Bling AKG
+    2. Identifica a causa da baixa (venda com NF, venda sem NF, ajuste manual, desconhecido)
+    3. Classifica como:
+       - venda_com_nf    → motor multiempresa vai corrigir (ou já corrigiu e houve nova venda)
+       - venda_sem_nf    → pedido em aberto aguardando faturamento (esperado)
+       - ajuste_manual   → erro: ajuste feito manualmente sem pedido correspondente
+       - sem_movimentacao → negativo sem movimentação registrada (erro de sistema)
+       - indefinido      → não foi possível determinar a causa
+    """
+    import time as _t
+    import requests as _req
+
+    BLING_URL = "https://api.bling.com.br/Api/v3"
+    DEP_AKG = 14889056234
+
+    _diag_neg_cache.clear()
+    _diag_neg_cache.update({"status": "em_andamento", "iniciado_em": _agora(), "itens": []})
+
+    def _get(url, hdrs, params=None):
+        for _ in range(3):
+            r = _req.get(url, headers=hdrs, params=params, timeout=25)
+            if r.status_code == 429:
+                _t.sleep(3)
+                continue
+            return r
+        return r
+
+    hdrs_a = _hdrs(EMPRESA_AKG)
+    negativos = []
+
+    # Varre produtos AKG com saldo < 0
+    pagina = 1
+    while True:
+        hdrs_a = _hdrs(EMPRESA_AKG)
+        r = _get(f"{BLING_URL}/produtos", hdrs_a,
+                 params={"pagina": pagina, "limite": 100, "situacao": "A", "tipo": "P"})
+        if not r.ok:
+            break
+        prods = r.json().get("data", [])
+        if not prods:
+            break
+        _t.sleep(0.25)
+        for p in prods:
+            fmt = (p.get("estoque") or {}).get("tipoEstoque") or ""
+            if fmt in ("V", "C"):
+                continue
+            saldo = float((p.get("estoque") or {}).get("saldoVirtualTotal", 0) or 0)
+            if saldo >= 0:
+                continue
+            negativos.append({
+                "id": p["id"],
+                "sku": p.get("codigo", ""),
+                "nome": p.get("nome", ""),
+                "formato": fmt,
+                "saldo": saldo,
+            })
+        pagina += 1
+
+    _diag_neg_cache["total_negativos"] = len(negativos)
+    logger.info("[DIAG-NEG-AKG] %d produtos negativos encontrados", len(negativos))
+
+    itens = []
+    for neg in negativos:
+        hdrs_a = _hdrs(EMPRESA_AKG)
+        prod_id = neg["id"]
+        item = {**neg, "causa": "indefinido", "detalhes": [], "pedidos_relacionados": []}
+
+        # Busca últimas movimentações de estoque do produto no depósito AKG
+        try:
+            r_mov = _get(f"{BLING_URL}/estoques/movimentacoes", hdrs_a,
+                         params={"idProduto": prod_id, "idDeposito": DEP_AKG, "limite": 20})
+            _t.sleep(0.3)
+            movs = r_mov.json().get("data", []) if r_mov.ok else []
+        except Exception as e:
+            movs = []
+            item["detalhes"].append(f"erro ao buscar movimentações: {e}")
+
+        if not movs:
+            item["causa"] = "sem_movimentacao"
+            item["detalhes"].append("Nenhuma movimentação encontrada — negativo de origem desconhecida")
+            itens.append(item)
+            continue
+
+        # Analisa as últimas saídas (tipo S = saída)
+        saidas = [m for m in movs if m.get("tipoOperacao") == "S"]
+        if not saidas:
+            item["causa"] = "sem_saida"
+            item["detalhes"].append("Movimentações existem mas sem saídas registradas")
+            itens.append(item)
+            continue
+
+        # Para cada saída, tenta identificar o pedido relacionado
+        causas_encontradas = []
+        for mov in saidas[:5]:  # analisa as 5 últimas saídas
+            obs = mov.get("observacoes") or ""
+            id_pedido_mov = mov.get("idPedidoCompra") or mov.get("idPedidoVenda") or None
+
+            # Verifica se a observação referencia um pedido do motor multiempresa
+            motor_ref = None
+            if "VENDA:" in obs:
+                # Formato do motor: VENDA:{id_pedido}-SKU:{sku}
+                import re
+                m = re.search(r'VENDA:(\d+)', obs)
+                if m:
+                    motor_ref = m.group(1)
+
+            if motor_ref or id_pedido_mov:
+                ped_id = motor_ref or str(id_pedido_mov)
+                # Verifica se esse pedido tem NF no Bling AKG
+                try:
+                    r_ped = _get(f"{BLING_URL}/pedidos/vendas/{ped_id}", hdrs_a)
+                    _t.sleep(0.2)
+                    if r_ped.ok:
+                        ped = r_ped.json().get("data", {})
+                        sit = (ped.get("situacao") or {}).get("id", 0)
+                        tem_nf = bool(ped.get("nota") and ped["nota"].get("numero"))
+                        item["pedidos_relacionados"].append({
+                            "id_pedido": ped_id,
+                            "situacao": sit,
+                            "tem_nf": tem_nf,
+                            "numero_nf": (ped.get("nota") or {}).get("numero"),
+                        })
+                        if tem_nf:
+                            causas_encontradas.append("venda_com_nf")
+                        else:
+                            causas_encontradas.append("venda_sem_nf")
+                    else:
+                        causas_encontradas.append("pedido_nao_encontrado")
+                except Exception as e:
+                    causas_encontradas.append("erro_consulta_pedido")
+                    item["detalhes"].append(f"Erro ao consultar pedido {ped_id}: {e}")
+            else:
+                # Saída sem referência a pedido = ajuste manual
+                causas_encontradas.append("ajuste_manual")
+                item["detalhes"].append(f"Saída sem pedido vinculado — obs: {obs[:100]}")
+
+            _t.sleep(0.15)
+
+        # Classificação final: prioriza causas mais graves
+        if "ajuste_manual" in causas_encontradas:
+            item["causa"] = "ajuste_manual"
+        elif "pedido_nao_encontrado" in causas_encontradas and "venda_com_nf" not in causas_encontradas:
+            item["causa"] = "pedido_nao_encontrado"
+        elif "venda_com_nf" in causas_encontradas:
+            item["causa"] = "venda_com_nf"
+        elif "venda_sem_nf" in causas_encontradas:
+            item["causa"] = "venda_sem_nf"
+        else:
+            item["causa"] = "indefinido"
+
+        itens.append(item)
+        _t.sleep(0.2)
+
+    # Resumo por causa
+    from collections import Counter
+    resumo = dict(Counter(i["causa"] for i in itens))
+
+    _diag_neg_cache.update({
+        "status": "concluido",
+        "concluido_em": _agora(),
+        "total_negativos": len(itens),
+        "resumo_causas": resumo,
+        "erros": [i for i in itens if i["causa"] in ("ajuste_manual", "sem_movimentacao", "indefinido")],
+        "aguardando_nf": [i for i in itens if i["causa"] == "venda_sem_nf"],
+        "motor_vai_corrigir": [i for i in itens if i["causa"] == "venda_com_nf"],
+        "todos": itens,
+    })
+    logger.info("[DIAG-NEG-AKG] Concluído: %s", resumo)
+
+
+@router.post("/multiempresa/diagnostico-negativos-akg")
+def iniciar_diagnostico_negativos_akg():
+    """
+    Varre todos os produtos AKG com saldo negativo e identifica a causa de cada baixa.
+    Classifica cada negativo em:
+    - venda_com_nf    → venda legítima com NF — motor multiempresa corrigirá
+    - venda_sem_nf    → pedido aguardando faturamento — será corrigido quando NF emitida
+    - ajuste_manual   → ERRO: baixa sem venda correspondente
+    - sem_movimentacao → ERRO: negativo sem histórico de movimentações
+    - indefinido      → não foi possível determinar a causa
+    Verificar resultado: GET /multiempresa/diagnostico-negativos-akg/resultado
+    """
+    if _diag_neg_cache.get("status") == "em_andamento":
+        return {"ok": False, "msg": "Diagnóstico já em andamento", "cache": _diag_neg_cache}
+
+    import threading
+    t = threading.Thread(target=_job_diagnostico_negativos_akg, daemon=True, name="diag-neg-akg")
+    t.start()
+
+    return {"ok": True, "msg": "Diagnóstico iniciado em background",
+            "resultado_em": "/multiempresa/diagnostico-negativos-akg/resultado"}
+
+
+@router.get("/multiempresa/diagnostico-negativos-akg/resultado")
+def resultado_diagnostico_negativos_akg():
+    """Retorna o resultado/andamento do diagnóstico de negativos AKG."""
+    if not _diag_neg_cache:
+        return {"ok": False, "msg": "Nenhum diagnóstico iniciado. Use POST /multiempresa/diagnostico-negativos-akg"}
+    # Retorna resumo sem o array 'todos' (pode ser grande)
+    r = {k: v for k, v in _diag_neg_cache.items() if k != "todos"}
+    r["total_erros"] = len(_diag_neg_cache.get("erros", []))
+    r["total_aguardando_nf"] = len(_diag_neg_cache.get("aguardando_nf", []))
+    r["total_motor_vai_corrigir"] = len(_diag_neg_cache.get("motor_vai_corrigir", []))
+    return {"ok": True, **r}
+
+
+@router.get("/multiempresa/diagnostico-negativos-akg/detalhes")
+def detalhes_diagnostico_negativos_akg(causa: str | None = None):
+    """
+    Retorna lista detalhada de todos os negativos do último diagnóstico.
+    causa: filtrar por 'ajuste_manual', 'venda_com_nf', 'venda_sem_nf', 'sem_movimentacao', 'indefinido'
+    """
+    if not _diag_neg_cache or _diag_neg_cache.get("status") != "concluido":
+        return {"ok": False, "msg": "Diagnóstico não concluído. Execute POST primeiro."}
+    todos = _diag_neg_cache.get("todos", [])
+    if causa:
+        todos = [i for i in todos if i["causa"] == causa]
+    return {"ok": True, "total": len(todos), "itens": todos}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Painel HTML
 # ─────────────────────────────────────────────────────────────────────────────
 
