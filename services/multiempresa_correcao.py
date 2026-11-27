@@ -44,6 +44,9 @@ DEP_AKG_GERAL     = 14889056234
 # Situação 15 = "Faturado" genérico do Bling (mantido como fallback)
 # Situações 9 (Em andamento), 12 (Verificado), 6 (Em aberto) ainda não têm NF → não processar
 SITUACOES_CONFIRMADAS = {24, 15}   # NF emitida (24=Shinsei real, 15=fallback Bling padrão)
+# Situações extras aceitas por empresa (só processa se o pedido tiver NF vinculada).
+# AKG: pedidos vão para 9 (Atendido) logo após a NF — verificado ao vivo 27/11 (574–588 sit 9 com notaFiscal.id)
+SITUACOES_CONFIRMADAS_EXTRA = {"akg": {9}}
 # Situações que disparam cancelamento/estorno
 SITUACOES_CANCELADAS  = {11, 14, 76}  # Cancelado, Devolvido, etc.
 
@@ -865,14 +868,28 @@ def job_multiempresa():
 
             pedidos = resp.json().get("data", [])
             # Filtrar apenas situação 15 no código (parâmetro pode ser ignorado pelo Bling)
-            pedidos_faturados = [p for p in pedidos if int((p.get("situacao") or {}).get("id") or 0) in SITUACOES_CONFIRMADAS]
+            # AKG: desde 26/11 os pedidos passam de NF emitida (24) para Atendido (9)
+            # antes do job rodar. Sit 9 também tem NF — a trava de nota em
+            # processar_pedido continua garantindo que só processa com NF vinculada.
+            sit_ok = SITUACOES_CONFIRMADAS | SITUACOES_CONFIRMADAS_EXTRA.get(empresa, set())
+            pedidos_faturados = [p for p in pedidos if int((p.get("situacao") or {}).get("id") or 0) in sit_ok]
             logger.info("job_multiempresa [%s]: %d/%d pedidos faturados desde %s", empresa, len(pedidos_faturados), len(pedidos), data_desde)
+
+            # Evita re-buscar detalhe de pedidos sit 9 já concluídos a cada ciclo
+            _c = _db()
+            ja_concluidos = {r["id_pedido_bling"] for r in _c.execute(
+                "SELECT id_pedido_bling FROM me_vendas WHERE empresa_vendedora=? AND status='concluido'",
+                (empresa,)).fetchall()}
+            _c.close()
 
             for pedido in pedidos_faturados:
                 sit = int((pedido.get("situacao") or {}).get("id") or 0)
                 id_ped = str(pedido.get("id") or "")
 
-                if sit in SITUACOES_CONFIRMADAS:
+                if sit not in SITUACOES_CONFIRMADAS and id_ped in ja_concluidos:
+                    continue
+
+                if sit in sit_ok:
                     # Listing não retorna itens — buscar detalhe individual
                     try:
                         det = requests.get(f"{BLING_API}/pedidos/vendas/{id_ped}",
