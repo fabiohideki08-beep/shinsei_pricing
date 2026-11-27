@@ -2361,6 +2361,83 @@ def resultado_zerar_negativos_akg():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Monitoramento de negativos AKG: snapshot rápido do estado atual
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Rastreia quando cada SKU ficou negativo pela primeira vez (desde o último deploy)
+_negativos_akg_primeira_vez: dict = {}   # sku -> ISO timestamp
+
+
+@router.get("/multiempresa/akg-negativos")
+def monitorar_negativos_akg():
+    """
+    Snapshot rápido dos produtos AKG com saldo negativo.
+    Mostra quanto tempo cada produto está negativo (desde o último registro).
+    Negativo por <10 min = esperado (venda recente, motor vai corrigir).
+    Negativo por >10 min = alerta (motor falhou ou causa inválida — rodar diagnóstico).
+    """
+    import requests as _req, time as _t, datetime
+
+    BLING_URL = "https://api.bling.com.br/Api/v3"
+    DEP_AKG = 14889056234
+    ALERTA_MINUTOS = 10
+
+    negativos = []
+    agora = datetime.datetime.utcnow()
+
+    pagina = 1
+    while True:
+        hdrs = _hdrs(EMPRESA_AKG)
+        r = _req.get(f"{BLING_URL}/produtos", headers=hdrs,
+                     params={"pagina": pagina, "limite": 100, "situacao": "A", "tipo": "P"}, timeout=20)
+        if not r.ok:
+            break
+        prods = r.json().get("data", [])
+        if not prods:
+            break
+        _t.sleep(0.2)
+        for p in prods:
+            fmt = (p.get("estoque") or {}).get("tipoEstoque") or ""
+            if fmt in ("V", "C"):
+                continue
+            saldo = float((p.get("estoque") or {}).get("saldoVirtualTotal", 0) or 0)
+            sku = p.get("codigo", "")
+            if saldo < 0:
+                # Registra primeira vez que vimos este SKU negativo
+                if sku not in _negativos_akg_primeira_vez:
+                    _negativos_akg_primeira_vez[sku] = agora.isoformat()
+                primeira_vez = datetime.datetime.fromisoformat(_negativos_akg_primeira_vez[sku])
+                minutos_negativo = round((agora - primeira_vez).total_seconds() / 60, 1)
+                negativos.append({
+                    "sku": sku,
+                    "nome": p.get("nome", "")[:60],
+                    "formato": fmt,
+                    "saldo": saldo,
+                    "negativo_desde": _negativos_akg_primeira_vez[sku],
+                    "minutos_negativo": minutos_negativo,
+                    "alerta": minutos_negativo >= ALERTA_MINUTOS,
+                })
+            else:
+                # SKU voltou ao positivo — remove do rastreamento
+                _negativos_akg_primeira_vez.pop(sku, None)
+        pagina += 1
+
+    alertas = [n for n in negativos if n["alerta"]]
+    esperados = [n for n in negativos if not n["alerta"]]
+
+    return {
+        "ok": True,
+        "timestamp": agora.isoformat(),
+        "total_negativos": len(negativos),
+        "alertas": len(alertas),
+        "esperados_motor_corrigir": len(esperados),
+        "motor_intervalo_min": 5,
+        "alerta_apos_min": ALERTA_MINUTOS,
+        "negativos": negativos,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Diagnóstico de negativos AKG: identifica causa de cada baixa de estoque
 # ─────────────────────────────────────────────────────────────────────────────
 

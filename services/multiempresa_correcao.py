@@ -892,6 +892,42 @@ def job_multiempresa():
         except Exception as e:
             logger.error("job_multiempresa [%s]: %s", empresa, e)
 
+    # Após processar todos, verifica se ainda há negativos no AKG
+    # Negativo pós-motor = ou o motor ainda não processou (normal) ou existe erro
+    _verificar_negativos_pos_motor()
+
+
+def _verificar_negativos_pos_motor():
+    """
+    Verificação rápida pós-motor: loga warnings para qualquer produto AKG ainda negativo.
+    Negativo é esperado por até 2 ciclos (~10 min). Mais que isso = possível erro.
+    Não faz nenhuma alteração — apenas log para diagnóstico.
+    """
+    DEP_AKG = 14889056234
+    try:
+        hdrs = _hdrs(EMPRESA_AKG)
+        r = requests.get(f"{BLING_API}/produtos", headers=hdrs,
+                         params={"pagina": 1, "limite": 100, "situacao": "A", "tipo": "P"}, timeout=15)
+        if not r.ok:
+            return
+        negativos = []
+        for p in r.json().get("data", []):
+            fmt = (p.get("estoque") or {}).get("tipoEstoque") or ""
+            if fmt in ("V", "C"):
+                continue
+            saldo = float((p.get("estoque") or {}).get("saldoVirtualTotal", 0) or 0)
+            if saldo < 0:
+                negativos.append(f"{p.get('codigo','')} ({saldo})")
+        if negativos:
+            logger.warning(
+                "[MONITOR-AKG] %d produto(s) ainda negativos após ciclo do motor: %s",
+                len(negativos), ", ".join(negativos[:10])
+            )
+        else:
+            logger.debug("[MONITOR-AKG] Estoque AKG sem negativos após ciclo do motor ✓")
+    except Exception as e:
+        logger.debug("[MONITOR-AKG] Erro ao verificar negativos pós-motor: %s", e)
+
 
 def _reprocessar_sem_rota(empresa_vendedora: str):
     """Tenta reprocessar ajustes que ficaram pendentes por falta de rota."""
