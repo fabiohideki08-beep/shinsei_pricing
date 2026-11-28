@@ -1796,6 +1796,30 @@ def _run_reprocessar_erros(empresa: str, limite: int):
             qtd = aj["quantidade"]
             chave = aj["chave_idempotencia"] or f"VENDA:{aj['id_pedido_bling']}-SKU:{sku}"
             try:
+                # Kit já processado pelos componentes (ajustes "-PAI:{sku}" do mesmo pedido):
+                # a saída do kit duplicaria a transferência (Erro #28, ajuste 7157 em 28/11/2026).
+                conn_k = _db()
+                irmaos = conn_k.execute(
+                    """SELECT id, sku, status FROM me_ajustes
+                       WHERE id_pedido_bling=? AND empresa_vendedora=? AND id<>?
+                         AND chave_idempotencia LIKE ?""",
+                    (aj["id_pedido_bling"], aj["empresa_vendedora"], aj["id"],
+                     f"VENDA:{aj['id_pedido_bling']}-SKU:%-PAI:{sku}")
+                ).fetchall()
+                if irmaos:
+                    detalhe = ("kit já tratado pelos componentes (ajustes "
+                               + ",".join(str(i["id"]) for i in irmaos) + ") — saída do kit ignorada")
+                    conn_k.execute(
+                        "UPDATE me_ajustes SET status='duplicata_componentes', erro_detalhe=?, aplicado_em=? WHERE id=?",
+                        (detalhe, _agora(), aj["id"])
+                    )
+                    _recalcular_venda_ctrl(conn_k, aj["id_venda_ctrl"])
+                    conn_k.commit(); conn_k.close()
+                    n_inconsistente += 1
+                    logger.warning("reprocessar_erros so_saida: ajuste %d %s", aj["id"], detalhe)
+                    continue
+                conn_k.close()
+
                 id_prod_forn = _buscar_id_produto(emp_forn, sku)
                 _time.sleep(0.2)
                 if not id_prod_forn:
@@ -1816,18 +1840,36 @@ def _run_reprocessar_erros(empresa: str, limite: int):
                     id_mov_s = None
                     erro_s = f"expandir_componentes: GET /produtos/{id_prod_forn} falhou — reprocessar depois"
                 elif comps_forn:
-                    # Produto virtual — mover componentes individualmente
-                    ids_movs_s: list[str] = []
-                    erro_s = None
-                    for comp in comps_forn:
-                        id_c, err_c = _movimentar(emp_forn, comp["id_produto"], dep_forn, "S", comp["quantidade"], obs_saida)
-                        _time.sleep(0.35)
-                        if id_c:
-                            ids_movs_s.append(id_c)
-                        else:
-                            erro_s = err_c
-                            break
-                    id_mov_s = ",".join(ids_movs_s) if (not erro_s and ids_movs_s) else None
+                    # Kit virtual: a "entrada" registrada foi no KIT do vendedor, que não movimenta
+                    # componentes — dar só a saída dos componentes no fornecedor tiraria estoque sem
+                    # contrapartida (Erro #28). Reprocessa o pedido pelo caminho de componentes
+                    # (saída + entrada por componente, chaves "-PAI:") e encerra o ajuste do kit.
+                    try:
+                        processar_pedido(aj["empresa_vendedora"], _fetch_pedido(aj["empresa_vendedora"], aj["id_pedido_bling"]))
+                    except Exception as exc_p:
+                        logger.error("reprocessar_erros kit %s pedido %s: %s", sku, aj["id_pedido_bling"], exc_p)
+                    conn_k = _db()
+                    irmaos = conn_k.execute(
+                        """SELECT id FROM me_ajustes WHERE id_pedido_bling=? AND empresa_vendedora=?
+                             AND id<>? AND chave_idempotencia LIKE ?""",
+                        (aj["id_pedido_bling"], aj["empresa_vendedora"], aj["id"],
+                         f"VENDA:{aj['id_pedido_bling']}-SKU:%-PAI:{sku}")
+                    ).fetchall()
+                    if irmaos:
+                        conn_k.execute(
+                            "UPDATE me_ajustes SET status='duplicata_componentes', erro_detalhe=?, aplicado_em=? WHERE id=?",
+                            ("kit reprocessado pelos componentes (ajustes "
+                             + ",".join(str(i["id"]) for i in irmaos) + ")", _agora(), aj["id"])
+                        )
+                        _recalcular_venda_ctrl(conn_k, aj["id_venda_ctrl"])
+                        n_completo += 1
+                    else:
+                        conn_k.execute("UPDATE me_ajustes SET erro_detalhe=? WHERE id=?",
+                                       ("kit virtual: reprocesso por componentes não gerou ajustes — revisar manualmente", aj["id"]))
+                        n_saida_err += 1
+                    conn_k.commit(); conn_k.close()
+                    _time.sleep(0.5)
+                    continue
                 else:
                     # Produto simples — movimentação direta
                     id_mov_s, erro_s = _movimentar(emp_forn, id_prod_forn, dep_forn, "S", qtd, obs_saida)
