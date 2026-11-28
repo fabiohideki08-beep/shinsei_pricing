@@ -217,8 +217,12 @@ def _coletar_ml(empresa: str) -> dict[str, dict]:
                     if not sku:
                         continue
                     if sku not in result:
-                        result[sku] = {"qty": 0, "item_ids": []}
-                    result[sku]["qty"] += qty
+                        result[sku] = {"qty": 0, "item_ids": [], "qtys": {}}
+                    # Cada anúncio tem o estoque do SKU inteiro — NÃO somar anúncios
+                    # (bug anterior: 2 anúncios do mesmo SKU mostravam o dobro)
+                    if mlb_id:
+                        result[sku]["qtys"][mlb_id] = qty
+                    result[sku]["qty"] = max(result[sku]["qtys"].values() or [qty])
                     if mlb_id and mlb_id not in result[sku]["item_ids"]:
                         result[sku]["item_ids"].append(mlb_id)
             except Exception:
@@ -243,38 +247,48 @@ def _coletar_shopify() -> dict[str, int]:
     store = os.getenv("SHOPIFY_SHOP", "pknw4n-eg")
     base = f"https://{store}.myshopify.com/admin/api/2024-01"
     hdrs = _shopify_hdrs()
-    result: dict[str, int] = {}
+    import re
+    # {sku: {variant_id: qty}} — dedupe por variante (evita somar a mesma variante 2x)
+    por_sku: dict[str, dict] = {}
     page_info = None
+    vistos: set = set()
 
     while True:
-        params: dict = {"limit": 250, "fields": "id,variants"}
+        params: dict = {"limit": 250, "fields": "id,status,variants"}
         if page_info:
-            params = {"limit": 250, "page_info": page_info}
+            params = {"limit": 250, "page_info": page_info, "fields": "id,status,variants"}
         try:
             r = requests.get(f"{base}/products.json", headers=hdrs, params=params, timeout=30)
             if not r.ok:
                 break
             for prod in r.json().get("products", []):
+                if prod.get("status") and prod.get("status") != "active":
+                    continue
                 for v in prod.get("variants", []):
                     sku = str(v.get("sku") or "").strip()
                     qty = int(v.get("inventory_quantity", 0) or 0)
                     if sku:
-                        result[sku] = result.get(sku, 0) + qty
-            # Paginação via Link header
-            link = r.headers.get("Link", "")
-            if 'rel="next"' in link:
-                import re
-                m = re.search(r'page_info=([^&>]+).*rel="next"', link)
-                page_info = m.group(1) if m else None
-            else:
-                page_info = None
+                        por_sku.setdefault(sku, {})[v.get("id")] = qty
+            # Paginação via Link header — pegar SOMENTE o link rel="next"
+            # (bug anterior: regex gulosa pegava o page_info do rel="previous",
+            #  relendo páginas e somando estoque centenas de vezes)
+            page_info = None
+            for parte in r.headers.get("Link", "").split(","):
+                if 'rel="next"' in parte:
+                    m = re.search(r"page_info=([^&>]+)", parte)
+                    page_info = m.group(1) if m else None
+            if page_info in vistos:
+                break
+            if page_info:
+                vistos.add(page_info)
         except Exception:
             break
         if not page_info:
             break
         time.sleep(0.2)
 
-    return result
+    # Uma variante por SKU é o normal; com várias, usa a de maior estoque
+    return {sku: max(vs.values()) for sku, vs in por_sku.items()}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -282,83 +296,65 @@ def _coletar_shopify() -> dict[str, int]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _coletar_shopee() -> dict[str, int]:
-    """Retorna {sku: stock} via Shopee API."""
-    cfg = _shopee_token_shinsei()
-    access_token = cfg.get("access_token", "")
-    shop_id_str  = cfg.get("shop_id", "")
-    partner_id_str = cfg.get("partner_id", "")
-    if not access_token or not shop_id_str:
-        return {}
-
+    """
+    Retorna {sku: stock} da Shopee Shinsei.
+    Usa services.shopee (token do arquivo + auto-refresh) — a versão anterior lia
+    SHOPEE_ACCESS_TOKEN da env var, que fica velha porque o token rotaciona (voltava vazio).
+    Itens com variações: SKU e estoque vêm de get_model_list (model_sku).
+    """
     try:
-        shop_id    = int(shop_id_str)
-        partner_id = int(partner_id_str) if partner_id_str else 0
-    except ValueError:
+        from services.shopee import ShopeeService, obter_token_shopee, API_BASE
+        obter_token_shopee()          # renova se expirado
+        svc = ShopeeService()
+    except Exception as e:
+        logger.warning("estoque_universal Shopee: sem token (%s)", e)
         return {}
 
-    shopee_host = "https://partner.shopeemobile.com"
+    import httpx
+
+    def _stock_model(m: dict) -> int:
+        si = m.get("stock_info_v2") or {}
+        summ = si.get("summary_info") or {}
+        if "total_available_stock" in summ:
+            return int(summ.get("total_available_stock") or 0)
+        return int(sum(int(s.get("stock") or 0) for s in (si.get("seller_stock") or [])))
+
     result: dict[str, int] = {}
     offset = 0
-    page_size = 100
-
     while True:
-        import hashlib, hmac
-        ts = int(time.time())
-        path = "/api/v2/product/get_item_list"
-        base_str = f"{partner_id}{path}{ts}{access_token}{shop_id}"
-        sign = hmac.new(
-            os.getenv("SHOPEE_PARTNER_KEY", "").encode(),
-            base_str.encode(), hashlib.sha256
-        ).hexdigest()
-        params = {
-            "partner_id": partner_id, "shop_id": shop_id,
-            "access_token": access_token, "timestamp": ts, "sign": sign,
-            "offset": offset, "page_size": page_size,
-            "item_status": "NORMAL",
-        }
-        try:
-            r = requests.get(f"{shopee_host}{path}", params=params, timeout=20)
-            if not r.ok:
-                break
-            data = r.json()
-            items = data.get("response", {}).get("item", []) or []
-            if not items:
-                break
-
-            # Buscar estoque de cada item
-            item_ids = [i["item_id"] for i in items]
-            for chunk in [item_ids[i:i+50] for i in range(0, len(item_ids), 50)]:
-                ts2 = int(time.time())
-                path2 = "/api/v2/product/get_item_base_info"
-                base_str2 = f"{partner_id}{path2}{ts2}{access_token}{shop_id}"
-                sign2 = hmac.new(
-                    os.getenv("SHOPEE_PARTNER_KEY", "").encode(),
-                    base_str2.encode(), hashlib.sha256
-                ).hexdigest()
-                params2 = {
-                    "partner_id": partner_id, "shop_id": shop_id,
-                    "access_token": access_token, "timestamp": ts2, "sign": sign2,
-                    "item_id_list": ",".join(str(i) for i in chunk),
-                    "need_tax_info": False, "need_complaint_policy": False,
-                }
-                try:
-                    r2 = requests.get(f"{shopee_host}{path2}", params=params2, timeout=20)
-                    if r2.ok:
-                        for item in r2.json().get("response", {}).get("item_list", []) or []:
-                            sku = str(item.get("item_sku") or "").strip()
-                            stock = int((item.get("stock_info_v2") or {}).get("summary_info", {}).get("total_available_stock", 0) or 0)
-                            if sku:
-                                result[sku] = result.get(sku, 0) + stock
-                except Exception:
-                    pass
-                time.sleep(0.2)
-
-            has_more = data.get("response", {}).get("has_next_page", False)
-            if not has_more:
-                break
-            offset += page_size
-        except Exception:
+        data = svc.listar_produtos(offset=offset, page_size=100)
+        resp = (data or {}).get("response") or {}
+        items = resp.get("item") or []
+        if not items:
+            if data.get("error"):
+                logger.warning("estoque_universal Shopee get_item_list: %s", data.get("message") or data.get("error"))
             break
+        ids = [i["item_id"] for i in items]
+        for i in range(0, len(ids), 50):
+            info = svc.obter_info_items(ids[i:i+50])
+            for it in ((info or {}).get("response") or {}).get("item_list") or []:
+                if it.get("has_model"):
+                    path = "/api/v2/product/get_model_list"
+                    params = svc._params_auth(path)
+                    params["item_id"] = int(it["item_id"])
+                    try:
+                        with httpx.Client(timeout=20) as c:
+                            md = c.get(f"{API_BASE}/product/get_model_list", params=params).json()
+                        for m in (md.get("response") or {}).get("model") or []:
+                            sku = str(m.get("model_sku") or "").strip()
+                            if sku:
+                                result[sku] = max(result.get(sku, 0), _stock_model(m))
+                    except Exception as e:
+                        logger.warning("estoque_universal Shopee models %s: %s", it.get("item_id"), e)
+                    time.sleep(0.1)
+                else:
+                    sku = str(it.get("item_sku") or "").strip()
+                    if sku:
+                        result[sku] = max(result.get(sku, 0), _stock_model(it))
+            time.sleep(0.2)
+        if not resp.get("has_next_page"):
+            break
+        offset = resp.get("next_offset") or (offset + 100)
         time.sleep(0.3)
 
     return result
@@ -423,8 +419,14 @@ def _job_estoque_universal():
         akg_saldo      = akg.get(sku, {}).get("saldo")          # None = não cadastrado
         ml_shin_info   = ml_shin.get(sku)
         ml_akg_info    = ml_akg_data.get(sku)
-        ml_shin_qty    = ml_shin_info["qty"]   if ml_shin_info else None
-        ml_akg_qty     = ml_akg_info["qty"]    if ml_akg_info  else None
+        # Exibe o anúncio mais distante do Bling (o que precisa de atenção)
+        def _pior(info):
+            if not info:
+                return None
+            qs = list((info.get("qtys") or {}).values()) or [info["qty"]]
+            return max(qs, key=lambda q: abs(q - shin_saldo))
+        ml_shin_qty    = _pior(ml_shin_info)
+        ml_akg_qty     = _pior(ml_akg_info)
         ml_shin_ids    = ml_shin_info["item_ids"] if ml_shin_info else []
         ml_akg_ids     = ml_akg_info["item_ids"]  if ml_akg_info  else []
         shopify_qty    = shopify.get(sku)
@@ -432,11 +434,15 @@ def _job_estoque_universal():
 
         # Detectar divergências (canais presentes mas com valor diferente)
         canais_divergentes = []
-        if akg_saldo is not None and akg_saldo != shin_saldo:
+        # Bling AKG: desde 10/10 o estoque físico mora na Shinsei Geral e a rota 6
+        # (AKG vende → sai da Shinsei) mantém a AKG Geral zerada. Esperado = 0;
+        # comparar com o saldo da Shinsei marcava ~690 falsos positivos.
+        if akg_saldo is not None and akg_saldo != 0:
             canais_divergentes.append("bling_akg")
-        if ml_shin_qty is not None and ml_shin_qty != shin_saldo:
+        # ML: diverge se QUALQUER anúncio do SKU estiver diferente do Bling
+        if ml_shin_info and any(q != shin_saldo for q in (ml_shin_info.get("qtys") or {"_": ml_shin_qty}).values()):
             canais_divergentes.append("ml_shinsei")
-        if ml_akg_qty is not None and ml_akg_qty != shin_saldo:
+        if ml_akg_info and any(q != shin_saldo for q in (ml_akg_info.get("qtys") or {"_": ml_akg_qty}).values()):
             canais_divergentes.append("ml_akg")
         if shopify_qty is not None and shopify_qty != shin_saldo:
             canais_divergentes.append("shopify")
