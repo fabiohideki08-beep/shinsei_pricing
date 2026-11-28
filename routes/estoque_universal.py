@@ -417,14 +417,19 @@ def _job_estoque_universal():
 
         # Canais e seus saldos — ML retorna {"qty": N, "item_ids": [...]}
         akg_saldo      = akg.get(sku, {}).get("saldo")          # None = não cadastrado
+        # Referência dos canais = depósito MULTIEMPRESA (Geral Shinsei + Geral AKG).
+        # Confirmado 28/11: Shopify/Shopee/ML batem com a soma (ex.: 42+2=44, 22-4=18).
+        # A API do Bling devolve 0 para o depósito multiempresa, então somamos aqui.
+        # Canal não mostra negativo → piso 0.
+        ref = max(0.0, shin_saldo + (akg_saldo or 0))
         ml_shin_info   = ml_shin.get(sku)
         ml_akg_info    = ml_akg_data.get(sku)
-        # Exibe o anúncio mais distante do Bling (o que precisa de atenção)
+        # Exibe o anúncio mais distante da referência (o que precisa de atenção)
         def _pior(info):
             if not info:
                 return None
             qs = list((info.get("qtys") or {}).values()) or [info["qty"]]
-            return max(qs, key=lambda q: abs(q - shin_saldo))
+            return max(qs, key=lambda q: abs(q - ref))
         ml_shin_qty    = _pior(ml_shin_info)
         ml_akg_qty     = _pior(ml_akg_info)
         ml_shin_ids    = ml_shin_info["item_ids"] if ml_shin_info else []
@@ -432,21 +437,16 @@ def _job_estoque_universal():
         shopify_qty    = shopify.get(sku)
         shopee_qty     = shopee.get(sku)
 
-        # Detectar divergências (canais presentes mas com valor diferente)
+        # Detectar divergências (canal presente mas diferente do multiempresa)
         canais_divergentes = []
-        # Bling AKG: desde 10/10 o estoque físico mora na Shinsei Geral e a rota 6
-        # (AKG vende → sai da Shinsei) mantém a AKG Geral zerada. Esperado = 0;
-        # comparar com o saldo da Shinsei marcava ~690 falsos positivos.
-        if akg_saldo is not None and akg_saldo != 0:
-            canais_divergentes.append("bling_akg")
-        # ML: diverge se QUALQUER anúncio do SKU estiver diferente do Bling
-        if ml_shin_info and any(q != shin_saldo for q in (ml_shin_info.get("qtys") or {"_": ml_shin_qty}).values()):
+        # ML: diverge se QUALQUER anúncio do SKU estiver diferente
+        if ml_shin_info and any(q != ref for q in (ml_shin_info.get("qtys") or {"_": ml_shin_qty}).values()):
             canais_divergentes.append("ml_shinsei")
-        if ml_akg_info and any(q != shin_saldo for q in (ml_akg_info.get("qtys") or {"_": ml_akg_qty}).values()):
+        if ml_akg_info and any(q != ref for q in (ml_akg_info.get("qtys") or {"_": ml_akg_qty}).values()):
             canais_divergentes.append("ml_akg")
-        if shopify_qty is not None and shopify_qty != shin_saldo:
+        if shopify_qty is not None and shopify_qty != ref:
             canais_divergentes.append("shopify")
-        if shopee_qty is not None and shopee_qty != shin_saldo:
+        if shopee_qty is not None and shopee_qty != ref:
             canais_divergentes.append("shopee")
 
         # Canais onde o SKU não foi encontrado
@@ -472,6 +472,7 @@ def _job_estoque_universal():
             "formato": shin_info["formato"],
             "bling_shinsei": shin_saldo,
             "bling_akg":     akg_saldo,
+            "multiempresa":  ref,            # referência dos canais (Geral Shinsei + Geral AKG)
             "ml_shinsei":    ml_shin_qty,
             "ml_akg":        ml_akg_qty,
             "ml_shinsei_ids": ml_shin_ids,   # MLBs do canal Shinsei com divergência
